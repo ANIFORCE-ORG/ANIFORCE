@@ -1,0 +1,63 @@
+# ===== OS =====
+.DS_Store
+.DS_Store?
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ===== IDE =====
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.classpath
+.settings/
+*.code-workspace
+
+# ===== Node.js / 前端 =====
+node_modules/
+dist/
+.output/
+.nuxt/
+*.local
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-store/
+
+# ===== Python / 后端 =====
+venv/
+.venv/
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg-info/
+dist/
+build/
+.eggs/
+*.egg
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+htmlcov/
+.coverage
+.coverage.*
+
+# ===== 环境变量 =====
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# ===== 构建产物 =====
+*.tsbuildinfo
+
+# ===== 其他 =====
+*.bak
+*.tmp
+*.temp
