@@ -22,7 +22,7 @@ function handleLogin() {
           <span class="material-symbols-outlined text-3xl">rocket_launch</span>
         </div>
         <h1 class="text-2xl font-bold">欢迎回来</h1>
-        <p class="text-sm text-slate-500 mt-2">登录 Game Marketing Pro</p>
+        <p class="text-sm text-slate-500 mt-2">登录 ANIMAGUS</p>
       </div>
       <form class="space-y-4" @submit.prevent="handleLogin">
         <div>

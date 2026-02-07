@@ -11,7 +11,7 @@ from app.schemas.base import ErrorResponse, ErrorDetail
 settings = get_settings()
 
 app = FastAPI(
-    title="Game Marketing Pro API",
+    title="ANIMAGUS API",
     description="AD Agent Demo 后端服务",
     version="0.1.0",
     docs_url="/docs" if settings.DEBUG else None,
