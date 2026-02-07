@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed, nextTick } from 'vue'
 import { getDAL } from '@animagus/shared'
 
 const inputText = ref('')
 const loading = ref(false)
+const hasInteracted = ref(false)
+
 const analysisResult = ref<{
   session_id: string
   message: { role: string; content: string }
@@ -50,16 +52,27 @@ const toolCards = [
   },
 ]
 
+const hasContent = computed(() => loading.value || analysisResult.value !== null)
+
+function scrollToBottom() {
+  nextTick(() => {
+    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+  })
+}
+
 async function handleSubmit() {
   if (!inputText.value.trim() || loading.value) return
+  hasInteracted.value = true
   loading.value = true
   analysisResult.value = null
+  scrollToBottom()
   try {
     const dal = getDAL()
     const gameType = quickTags.find(t => inputText.value.includes(t.label))?.label || 'RPG'
     const res = await dal.chat.analyzeGame(inputText.value, gameType)
     if (res.success && res.data) {
       analysisResult.value = res.data
+      scrollToBottom()
     }
   } catch (e) {
     console.error('分析失败:', e)
@@ -74,9 +87,15 @@ function handleTagClick(tag: string) {
 </script>
 
 <template>
-  <main class="flex flex-1 flex-col items-center justify-center px-4 py-12 md:py-24">
+  <main class="flex flex-1 flex-col items-center px-4 pb-8">
+    <!-- Top spacer: pushes content to center when no output -->
+    <div v-if="!hasContent" class="flex-1"></div>
+
     <!-- Greeting -->
-    <div class="max-w-[800px] w-full text-center space-y-4 mb-10">
+    <div
+      class="max-w-[800px] w-full text-center space-y-4 transition-all duration-500"
+      :class="hasContent ? 'pt-8 mb-6 opacity-50 scale-[0.92]' : 'mb-10'"
+    >
       <h1 class="text-slate-900 dark:text-white text-4xl md:text-5xl font-poppins font-semibold tracking-tight">
         又见面啦！有新的投放计划吗？
       </h1>
@@ -85,8 +104,85 @@ function handleTagClick(tag: string) {
       </p>
     </div>
 
-    <!-- Command Bar -->
-    <div class="max-w-[860px] w-full px-4 mb-8">
+    <!-- Output Content Area (above the input bar, only when has content) -->
+    <div v-if="hasContent" class="max-w-[1080px] w-full px-4 space-y-6 mb-6">
+      <!-- Loading State -->
+      <div v-if="loading" class="flex items-center justify-center gap-3 py-8">
+        <div class="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-slate-500 text-sm">AI 正在分析中，请稍候...</span>
+      </div>
+
+      <!-- Analysis Result -->
+      <template v-if="analysisResult">
+        <!-- AI Message -->
+        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
+          <div class="flex items-start gap-3">
+            <div class="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+              <span class="material-symbols-outlined text-primary text-sm">smart_toy</span>
+            </div>
+            <p class="text-slate-700 dark:text-slate-300 leading-relaxed">{{ analysisResult.message.content }}</p>
+          </div>
+        </div>
+
+        <!-- Trends -->
+        <div>
+          <h3 class="text-lg font-bold mb-4 dark:text-white">
+            <span class="material-symbols-outlined text-primary align-middle mr-1">trending_up</span>
+            市场热点趋势
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            <div
+              v-for="trend in analysisResult.analysis.trends"
+              :key="trend.id"
+              class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 hover:border-primary/50 transition-all"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-semibold text-slate-900 dark:text-white">{{ trend.name }}</h4>
+                <span class="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full">
+                  +{{ trend.growth }}%
+                </span>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400">{{ trend.description }}</p>
+            </div>
+          </div>
+        </div>
+
+        <!-- Recommendations -->
+        <div>
+          <h3 class="text-lg font-bold mb-4 dark:text-white">
+            <span class="material-symbols-outlined text-primary align-middle mr-1">lightbulb</span>
+            推荐素材方向
+          </h3>
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div
+              v-for="rec in analysisResult.analysis.recommendations"
+              :key="rec.id"
+              class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
+            >
+              <div class="flex items-center justify-between mb-2">
+                <h4 class="font-semibold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{{ rec.direction }}</h4>
+                <span class="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-full">
+                  CTR {{ rec.ctr_estimate }}%
+                </span>
+              </div>
+              <p class="text-sm text-slate-500 dark:text-slate-400 mb-3">{{ rec.description }}</p>
+              <div class="flex flex-wrap gap-2">
+                <span
+                  v-for="tag in rec.tags"
+                  :key="tag"
+                  class="text-xs px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+                >
+                  {{ tag }}
+                </span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </template>
+    </div>
+
+    <!-- Floating Command Bar (always below output content) -->
+    <div class="max-w-[860px] w-full px-4 mb-6">
       <div class="relative group">
         <!-- Glow effect -->
         <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-blue-400/20 rounded-full blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200"></div>
@@ -118,8 +214,8 @@ function handleTagClick(tag: string) {
         </div>
       </div>
 
-      <!-- Quick Tags -->
-      <div class="flex flex-wrap justify-center gap-3 mt-6">
+      <!-- Quick Tags (hide after interaction) -->
+      <div v-if="!hasContent" class="flex flex-wrap justify-center gap-3 mt-6">
         <button
           v-for="tag in quickTags"
           :key="tag.label"
@@ -132,84 +228,8 @@ function handleTagClick(tag: string) {
       </div>
     </div>
 
-    <!-- Loading State -->
-    <div v-if="loading" class="max-w-[860px] w-full px-4 mb-8">
-      <div class="flex items-center justify-center gap-3 py-8">
-        <div class="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <span class="text-slate-500 text-sm">AI 正在分析中，请稍候...</span>
-      </div>
-    </div>
-
-    <!-- Analysis Result -->
-    <div v-if="analysisResult" class="max-w-[1080px] w-full px-4 mb-8 space-y-6">
-      <!-- AI Message -->
-      <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-6 shadow-sm">
-        <div class="flex items-start gap-3">
-          <div class="h-8 w-8 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-            <span class="material-symbols-outlined text-primary text-sm">smart_toy</span>
-          </div>
-          <p class="text-slate-700 dark:text-slate-300 leading-relaxed">{{ analysisResult.message.content }}</p>
-        </div>
-      </div>
-
-      <!-- Trends -->
-      <div>
-        <h3 class="text-lg font-bold mb-4 dark:text-white">
-          <span class="material-symbols-outlined text-primary align-middle mr-1">trending_up</span>
-          市场热点趋势
-        </h3>
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4">
-          <div
-            v-for="trend in analysisResult.analysis.trends"
-            :key="trend.id"
-            class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 hover:border-primary/50 transition-all"
-          >
-            <div class="flex items-center justify-between mb-2">
-              <h4 class="font-semibold text-slate-900 dark:text-white">{{ trend.name }}</h4>
-              <span class="text-xs font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-2 py-1 rounded-full">
-                +{{ trend.growth }}%
-              </span>
-            </div>
-            <p class="text-sm text-slate-500 dark:text-slate-400">{{ trend.description }}</p>
-          </div>
-        </div>
-      </div>
-
-      <!-- Recommendations -->
-      <div>
-        <h3 class="text-lg font-bold mb-4 dark:text-white">
-          <span class="material-symbols-outlined text-primary align-middle mr-1">lightbulb</span>
-          推荐素材方向
-        </h3>
-        <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <div
-            v-for="rec in analysisResult.analysis.recommendations"
-            :key="rec.id"
-            class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-5 hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
-          >
-            <div class="flex items-center justify-between mb-2">
-              <h4 class="font-semibold text-slate-900 dark:text-white group-hover:text-primary transition-colors">{{ rec.direction }}</h4>
-              <span class="text-xs font-bold text-primary bg-primary/10 px-2 py-1 rounded-full">
-                CTR {{ rec.ctr_estimate }}%
-              </span>
-            </div>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mb-3">{{ rec.description }}</p>
-            <div class="flex flex-wrap gap-2">
-              <span
-                v-for="tag in rec.tags"
-                :key="tag"
-                class="text-xs px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-              >
-                {{ tag }}
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <!-- Tool Cards -->
-    <div v-if="!analysisResult" class="w-full max-w-[1080px] mt-12">
+    <!-- Tool Cards (only show when no content) -->
+    <div v-if="!hasContent && !hasInteracted" class="w-full max-w-[1080px] mt-4">
       <div class="flex items-center justify-between px-6 mb-6">
         <h3 class="text-lg font-bold dark:text-white">推荐工具</h3>
         <a class="text-sm font-semibold text-primary hover:underline" href="#">查看全部</a>
@@ -231,5 +251,8 @@ function handleTagClick(tag: string) {
         </div>
       </div>
     </div>
+
+    <!-- Bottom spacer: pushes content to center when no output -->
+    <div v-if="!hasContent" class="flex-1"></div>
   </main>
 </template>
