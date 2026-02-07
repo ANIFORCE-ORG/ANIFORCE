@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import { ref, nextTick, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+
+const router = useRouter()
 
 interface ChatMessage {
   id: string
@@ -441,6 +444,7 @@ onMounted(() => {
                     ? 'bg-primary hover:bg-primary/90 shadow-lg shadow-primary/30'
                     : 'bg-slate-300 dark:bg-slate-600 cursor-not-allowed'"
                   :disabled="selectedMaterials.size < 3"
+                  @click="router.push('/campaign')"
                 >
                   下一步 →
                 </button>
