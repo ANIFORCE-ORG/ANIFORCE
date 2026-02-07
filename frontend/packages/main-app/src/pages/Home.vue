@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
+import { useRouter } from 'vue-router'
 import { getDAL } from '@animagus/shared'
 
+const router = useRouter()
 const inputText = ref('')
 const loading = ref(false)
 const hasInteracted = ref(false)
@@ -83,6 +85,10 @@ async function handleSubmit() {
 
 function handleTagClick(tag: string) {
   inputText.value = tag
+}
+
+function navigateTo(path: string) {
+  router.push(path)
 }
 </script>
 
@@ -213,6 +219,15 @@ function handleTagClick(tag: string) {
           </div>
         </div>
       </div>
+
+      <!-- Create Material Button (only show after interaction) -->
+      <button
+        v-if="hasInteracted"
+        class="w-full mt-3 py-3 rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-sm font-medium hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-primary transition-all cursor-pointer"
+        @click="navigateTo('/material')"
+      >
+        开始创建素材
+      </button>
 
       <!-- Quick Tags (hide after interaction) -->
       <div v-if="!hasContent" class="flex flex-wrap justify-center gap-3 mt-6">
