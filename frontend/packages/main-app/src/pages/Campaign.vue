@@ -1,0 +1,18 @@
+<script setup lang="ts">
+</script>
+
+<template>
+  <main class="flex-1 px-6 py-12 md:px-12">
+    <div class="mx-auto max-w-5xl">
+      <div class="flex items-center gap-3 mb-8">
+        <span class="material-symbols-outlined text-primary text-3xl">campaign</span>
+        <h1 class="text-3xl font-bold tracking-tight">投放计划</h1>
+      </div>
+      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center">
+        <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-600 mb-4">construction</span>
+        <p class="text-lg text-slate-500 dark:text-slate-400">投放计划功能开发中...</p>
+        <p class="text-sm text-slate-400 dark:text-slate-500 mt-2">智能投放策略规划与预算分配</p>
+      </div>
+    </div>
+  </main>
+</template>

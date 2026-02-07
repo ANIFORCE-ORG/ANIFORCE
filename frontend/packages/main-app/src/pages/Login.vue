@@ -1,13 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
 
 const router = useRouter()
-const email = ref('')
-const password = ref('')
+const auth = useAuthStore()
+const email = ref('admin@animagus.ai')
+const password = ref('admin123')
 
 function handleLogin() {
-  // Demo 模式直接跳转首页
+  auth.fakeLogin()
   router.push('/')
 }
 </script>
