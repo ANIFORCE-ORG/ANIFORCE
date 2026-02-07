@@ -1,6 +1,6 @@
-# ANIMAGUS Demo — Game Marketing Pro
+# ANIMAGUS — Game Marketing Pro
 
-> AI 驱动的游戏全球营销一站式平台 Demo
+> AI 驱动的游戏全球营销一站式平台
 
 ## 技术架构
 
@@ -48,7 +48,7 @@
 ## 代码目录结构
 
 ```
-ANIMAGUS-DEMO/
+ANIMAGUS/
 ├── README.md
 ├── doc/                              # 项目文档
 │   └── 06-技术框架规划文档-详细版.md
