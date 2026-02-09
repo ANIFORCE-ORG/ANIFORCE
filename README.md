@@ -58,7 +58,7 @@ ANIMAGUS/
 │   ├── package.json                  # 根 package（scripts 入口）
 │   ├── pnpm-workspace.yaml           # pnpm workspace 配置
 │   └── packages/
-│       ├── main-app/                 # Vue3 主应用（端口 3000）
+│       ├── main-app/                 # Vue3 主应用（默认端口 3010）
 │       │   ├── index.html
 │       │   ├── vite.config.ts
 │       │   ├── tailwind.config.js
@@ -127,9 +127,47 @@ ANIMAGUS/
 
 - **Node.js** >= 20.0.0
 - **pnpm** >= 9.0.0（若未安装：`npm install -g pnpm`）
-- **Python** >= 3.12
+- **Python** >= 3.10
 
-### 前端启动
+### 一键启动（推荐）
+
+项目提供了一键部署脚本，自动完成环境检测、依赖安装和服务启动：
+
+```bash
+# 默认端口启动（前端:3010 / 后端:8010）
+./run_server.sh
+
+# 自定义端口启动
+./run_server.sh --frontend-port 4000 --backend-port 9000
+
+# 查看帮助
+./run_server.sh --help
+```
+
+脚本会自动：
+1. 检测 Python、Node.js、pnpm 版本
+2. 创建 Python 虚拟环境并安装后端依赖
+3. 安装前端依赖（pnpm install）
+4. 启动后端 FastAPI 服务和前端 Vite 开发服务器
+5. 在浏览器中打开前端页面
+
+### 一键停止
+
+```bash
+# 停止服务（自动读取启动时的端口配置）
+./stop_server.sh
+
+# 指定端口停止
+./stop_server.sh --frontend-port 4000 --backend-port 9000
+```
+
+> 在 `run_server.sh` 运行期间，也可以直接按 `Ctrl+C` 停止所有服务。
+
+### 手动启动
+
+如需分别启动前后端，可按以下步骤操作：
+
+#### 前端
 
 > 前端依赖详情见 [`frontend/dependencies.md`](frontend/dependencies.md)
 
@@ -137,16 +175,19 @@ ANIMAGUS/
 # 1. 进入前端目录
 cd frontend
 
-# 2. 安装依赖（等同于 pip install -r requirements.txt）
+# 2. 安装依赖
 pnpm install
 
-# 3. 启动开发服务器（默认端口 3000）
+# 3. 启动开发服务器（默认端口 3010）
 pnpm dev
+
+# 自定义端口
+VITE_FRONTEND_PORT=4000 VITE_BACKEND_PORT=9000 pnpm dev
 ```
 
-访问 http://localhost:3000 查看首页。
+访问 http://localhost:3010 查看首页。
 
-### 后端启动
+#### 后端
 
 ```bash
 # 1. 进入后端目录
@@ -160,23 +201,23 @@ source venv/bin/activate    # macOS/Linux
 # 3. 安装依赖
 pip install -r requirements.txt
 
-# 4. 启动开发服务器（默认端口 8000）
-uvicorn app.main:app --reload --port 8000
+# 4. 启动开发服务器（默认端口 8010）
+uvicorn app.main:app --reload --port 8010
 ```
 
 ### 验证服务
 
 ```bash
 # 健康检查
-curl http://localhost:8000/health
+curl http://localhost:8010/health
 
 # 登录接口（Demo 模式下任意账号可登录）
-curl -X POST http://localhost:8000/api/v1/auth/login \
+curl -X POST http://localhost:8010/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"demo@example.com","password":"123456"}'
 
 # AI 分析接口
-curl -X POST http://localhost:8000/api/v1/chat/analyze \
+curl -X POST http://localhost:8010/api/v1/chat/analyze \
   -H "Content-Type: application/json" \
   -d '{"game_description":"一款RPG冒险游戏","game_type":"RPG"}'
 ```
@@ -184,8 +225,8 @@ curl -X POST http://localhost:8000/api/v1/chat/analyze \
 ### API 文档
 
 后端启动后（`DEBUG=true` 时），访问：
-- **Swagger UI**: http://localhost:8000/docs
-- **ReDoc**: http://localhost:8000/redoc
+- **Swagger UI**: http://localhost:8010/docs
+- **ReDoc**: http://localhost:8010/redoc
 
 ---
 
@@ -196,7 +237,9 @@ curl -X POST http://localhost:8000/api/v1/chat/analyze \
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | `VITE_DEMO_MODE` | `true` | 是否启用前端 Demo 模式 |
-| `VITE_API_BASE_URL` | `http://localhost:8000/api/v1` | 后端 API 地址 |
+| `VITE_API_BASE_URL` | `http://localhost:8010/api/v1` | 后端 API 地址 |
+| `VITE_FRONTEND_PORT` | `3010` | 前端开发服务器端口 |
+| `VITE_BACKEND_PORT` | `8010` | 后端 API 代理目标端口 |
 
 ### 后端 (`backend/.env`)
 
