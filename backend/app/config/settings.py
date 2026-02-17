@@ -6,6 +6,8 @@ class Settings(BaseSettings):
     DEMO_MODE: bool = True
     DEBUG: bool = False
 
+    CORS_ALLOW_ORIGINS: str = ""
+
     # JWT
     JWT_SECRET: str = "change-me-in-production"
     JWT_ALGORITHM: str = "HS256"

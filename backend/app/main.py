@@ -10,6 +10,15 @@ from app.schemas.base import ErrorResponse, ErrorDetail
 
 settings = get_settings()
 
+allow_origins = [
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://localhost:3002",
+    "http://localhost:3010",
+]
+if settings.CORS_ALLOW_ORIGINS.strip():
+    allow_origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
+
 app = FastAPI(
     title="ANIMAGUS API",
     description="AD Agent Demo 后端服务",
@@ -21,7 +30,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001", "http://localhost:3002", "http://localhost:3010"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

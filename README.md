@@ -163,6 +163,99 @@ ANIMAGUS/
 
 > 在 `run_server.sh` 运行期间，也可以直接按 `Ctrl+C` 停止所有服务。
 
+---
+
+## 云端部署
+
+### 云端启动命令
+
+```bash
+# 云端模式启动（全部服务）
+./run_server.sh --mode cloud
+
+# 云端模式 + 跳过依赖安装（适合已安装依赖的环境）
+./run_server.sh --mode cloud --skip-install
+
+# 仅启动后端
+./run_server.sh --mode cloud --only backend --skip-install
+
+# 仅启动前端
+./run_server.sh --mode cloud --only frontend --skip-install
+
+# 自定义端口
+./run_server.sh --mode cloud --frontend-port 80 --backend-port 8000
+```
+
+### 启动参数说明
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--mode local\|cloud` | 启动模式：`local`（本地开发）/ `cloud`（云端部署） | `local` |
+| `--only all\|backend\|frontend` | 仅启动指定服务 | `all` |
+| `--skip-install` | 跳过依赖安装（云端常用） | 否 |
+| `--host HOST` | 监听地址 | `0.0.0.0` |
+| `--frontend-port PORT` | 前端端口 | `3010` |
+| `--backend-port PORT` | 后端端口 | `8010` |
+
+**云端模式与本地模式的区别**：
+- 云端模式不自动打开浏览器
+- 云端模式后端不启用 `--reload`，启用 `--workers 2`
+- 云端模式若存在环境变量 `PORT` 且未显式指定 `--frontend-port`，将使用 `PORT` 作为前端端口
+
+### 云端环境变量
+
+| 变量 | 说明 | 示例 |
+|------|------|------|
+| `CORS_ALLOW_ORIGINS` | 后端 CORS 允许的来源（逗号分隔） | `https://your-domain.com,http://your-domain.com` |
+| `VITE_BACKEND_HOST` | 前端代理的后端地址（默认 `127.0.0.1`） | `10.0.0.5` |
+| `PORT` | 云平台注入的端口（cloud 模式下自动用于前端） | `8080` |
+
+**示例：云端启动并配置 CORS**
+
+```bash
+CORS_ALLOW_ORIGINS="https://your-domain.com" ./run_server.sh --mode cloud --skip-install
+```
+
+### 云平台端口暴露
+
+不同云平台需要确保端口正确暴露：
+
+| 平台类型 | 操作 |
+|----------|------|
+| **VM/裸机** | 安全组/防火墙放通 `3010`（前端）和 `8010`（后端） |
+| **Docker** | `-p 3010:3010 -p 8010:8010` 或使用 `--network host` |
+| **平台托管（Render/Fly/Heroku）** | 设置环境变量 `PORT`，脚本会自动使用 |
+| **K8s/Ingress** | 配置 Service 暴露端口，Ingress 路由 `/api` 到后端 |
+
+### 单端口部署（Nginx 反代）
+
+如果云平台只允许暴露一个端口，可以用 Nginx 统一入口：
+
+```nginx
+server {
+    listen 80;
+
+    location / {
+        proxy_pass http://127.0.0.1:3010;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8010;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+    }
+
+    location /ws/ {
+        proxy_pass http://127.0.0.1:8010;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+    }
+}
+```
+
+---
+
 ### 手动启动
 
 如需分别启动前后端，可按以下步骤操作：
