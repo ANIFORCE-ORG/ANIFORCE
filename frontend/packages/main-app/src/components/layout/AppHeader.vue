@@ -48,7 +48,7 @@ const handleLogout = () => {
       <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
         <span class="material-symbols-outlined text-xl">rocket_launch</span>
       </div>
-      <h2 class="text-lg font-bold tracking-tight">ANIMAGUS</h2>
+      <h2 class="text-lg font-bold tracking-tight">ANIFORCE</h2>
     </div>
 
     <!-- Navigation -->

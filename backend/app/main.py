@@ -20,7 +20,7 @@ if settings.CORS_ALLOW_ORIGINS.strip():
     allow_origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
 
 app = FastAPI(
-    title="ANIMAGUS API",
+    title="ANIFORCE API",
     description="AD Agent Demo 后端服务",
     version="0.1.0",
     docs_url="/docs" if settings.DEBUG else None,

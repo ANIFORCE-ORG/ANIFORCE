@@ -6,7 +6,7 @@
           <div class="h-2 w-2 rounded-full bg-emerald-500"></div>
           <span class="text-xs font-medium text-slate-500">所有系统在线</span>
         </div>
-        <span class="text-xs text-slate-400">&copy; 2026 ANIMAGUS Ltd.</span>
+        <span class="text-xs text-slate-400">&copy; 2026 ANIFORCE Ltd.</span>
       </div>
       <div class="flex items-center gap-6">
         <a class="text-xs text-slate-500 hover:text-primary" href="#">使用帮助</a>
