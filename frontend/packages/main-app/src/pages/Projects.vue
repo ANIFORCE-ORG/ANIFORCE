@@ -355,7 +355,7 @@ const handleCreateProject = () => {
             </div>
 
             <!-- Tags -->
-            <div class="flex items-center gap-2 flex-wrap">
+            <div class="flex items-center gap-2 flex-wrap mb-3">
               <span
                 v-for="tag in project.tags"
                 :key="tag"
@@ -363,6 +363,16 @@ const handleCreateProject = () => {
               >
                 {{ tag }}
               </span>
+            </div>
+
+            <!-- Actions -->
+            <div class="flex items-center gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
+              <button
+                class="flex-1 px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                @click="router.push(`/projects/${project.id}`)"
+              >
+                查看详情
+              </button>
             </div>
           </div>
         </div>
