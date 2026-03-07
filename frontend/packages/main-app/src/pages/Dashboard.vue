@@ -1,7 +1,9 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 
+const router = useRouter()
 const auth = useAuthStore()
 
 const activePanel = ref('dashboard')
@@ -10,11 +12,11 @@ const chatInput = ref('')
 const timeFilter = ref('today')
 
 const navItems = [
-  { id: 'dashboard', icon: 'pie_chart', label: '数据概览' },
-  { id: 'projects', icon: 'folder_open', label: '项目管理' },
-  { id: 'campaigns', icon: 'ads_click', label: '广告投放' },
-  { id: 'creatives', icon: 'video_library', label: '创意素材' },
-  { id: 'reports', icon: 'bar_chart', label: '数据报表' }
+  { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
+  { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
+  { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaigns' },
+  { id: 'creatives', icon: 'video_library', label: '创意素材', path: '/materials' },
+  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/reports' }
 ]
 
 const sessions = ref([
@@ -105,8 +107,10 @@ const timeFilters = [
   { value: '30days', label: '近30日' }
 ]
 
-const switchPanel = (panelId: string) => {
-  activePanel.value = panelId
+const switchPanel = (item: any) => {
+  if (item.path) {
+    router.push(item.path)
+  }
 }
 
 const switchSession = (sessionId: string) => {
@@ -151,7 +155,7 @@ const handleAlertAction = (alert: any) => {
               :class="activePanel === item.id
                 ? 'bg-primary/10 text-primary font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
-              @click="switchPanel(item.id)"
+              @click="switchPanel(item)"
             >
               <span class="material-symbols-outlined text-lg">{{ item.icon }}</span>
               <span class="text-sm">{{ item.label }}</span>

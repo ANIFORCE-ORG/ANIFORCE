@@ -12,10 +12,10 @@ const showUserMenu = ref(false)
 const navItems = [
   { label: '首页', path: '/', icon: 'home' },
   { label: '数据概览', path: '/dashboard', icon: 'pie_chart' },
-  { label: '市场分析', path: '/market-analysis', icon: 'trending_up' },
-  { label: '素材生产', path: '/material', icon: 'auto_awesome' },
-  { label: '投放计划', path: '/campaign', icon: 'campaign' },
-  { label: '投放数据分析', path: '/monitor', icon: 'analytics' },
+  //{ label: '市场分析', path: '/market-analysis', icon: 'trending_up' },
+  //{ label: '素材生产', path: '/material', icon: 'auto_awesome' },
+  //{ label: '投放计划', path: '/campaign', icon: 'campaign' },
+  //{ label: '投放数据分析', path: '/monitor', icon: 'analytics' },
 ]
 
 const isActive = (path: string) => {
