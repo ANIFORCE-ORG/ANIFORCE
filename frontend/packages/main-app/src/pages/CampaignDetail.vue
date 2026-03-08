@@ -159,7 +159,8 @@ const handleHintClick = (hint: string) => {
 }
 
 const handleBack = () => {
-  router.push(`/projects/${campaign.value.projectId}`)
+  // 使用router.back()返回上一页，智能返回到来源页面
+  router.back()
 }
 
 const handleAddCreative = () => {

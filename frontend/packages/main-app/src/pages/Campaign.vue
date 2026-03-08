@@ -231,7 +231,7 @@ const handleCreateCampaign = () => {
 
 // 查看广告详情
 const handleViewCampaign = (campaignId: string) => {
-  router.push(`/campaign/${campaignId}`)
+  router.push(`/campaigns/${campaignId}`)
 }
 
 // 切换广告状态
