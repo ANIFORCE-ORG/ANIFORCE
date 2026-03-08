@@ -30,6 +30,7 @@ const toolCards = [
     iconColor: 'text-primary',
     title: '市场洞察分析',
     desc: '分析竞品趋势与全球买量大盘，制定投放策略。',
+    path: '/market-analysis',
   },
   {
     icon: 'auto_awesome',
@@ -37,6 +38,7 @@ const toolCards = [
     iconColor: 'text-purple-600 dark:text-purple-400',
     title: 'AI 素材生成',
     desc: '快速生成广告脚本、视频素材与高质量创意海报。',
+    path: '/material',
   },
   {
     icon: 'campaign',
@@ -44,6 +46,7 @@ const toolCards = [
     iconColor: 'text-emerald-600 dark:text-emerald-400',
     title: '快速建站投放',
     desc: '一键同步至多渠道广告平台，自动化管理您的预算。',
+    path: '/campaign',
   },
   {
     icon: 'monitoring',
@@ -51,8 +54,17 @@ const toolCards = [
     iconColor: 'text-orange-600 dark:text-orange-400',
     title: '投放表现追踪',
     desc: '多维度看板实时监控 ROAS 与玩家 LTV 数据表现。',
+    path: '/monitor',
   },
 ]
+
+const dashboardBanner = {
+  icon: 'pie_chart',
+  iconBg: 'bg-gradient-to-br from-primary to-blue-500',
+  title: '数据概览 Dashboard',
+  desc: '实时监控广告投放表现，查看关键指标与异常提醒',
+  path: '/dashboard',
+}
 
 const hasContent = computed(() => loading.value || analysisResult.value !== null)
 
@@ -243,8 +255,37 @@ function navigateTo(path: string) {
       </div>
     </div>
 
+    <!-- Dashboard Banner (only show when no content) -->
+    <div v-if="!hasContent && !hasInteracted" class="w-full max-w-[1080px] mt-4 px-4">
+      <div
+        class="group relative overflow-hidden bg-gradient-to-br from-primary/10 via-blue-500/10 to-purple-500/10 dark:from-primary/20 dark:via-blue-500/20 dark:to-purple-500/20 p-8 rounded-2xl border-2 border-primary/30 hover:border-primary hover:shadow-2xl hover:shadow-primary/20 transition-all cursor-pointer"
+        @click="navigateTo(dashboardBanner.path)"
+      >
+        <!-- Background Pattern -->
+        <div class="absolute inset-0 opacity-5">
+          <div class="absolute inset-0" style="background-image: radial-gradient(circle, currentColor 1px, transparent 1px); background-size: 20px 20px;"></div>
+        </div>
+        
+        <div class="relative flex items-center gap-6">
+          <div class="h-16 w-16 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg" :class="dashboardBanner.iconBg">
+            <span class="material-symbols-outlined text-white text-3xl">{{ dashboardBanner.icon }}</span>
+          </div>
+          <div class="flex-1">
+            <h3 class="text-2xl font-bold text-slate-900 dark:text-white mb-2 group-hover:text-primary transition-colors">
+              {{ dashboardBanner.title }}
+            </h3>
+            <p class="text-slate-600 dark:text-slate-300 text-base">{{ dashboardBanner.desc }}</p>
+          </div>
+          <div class="flex items-center gap-2 text-primary group-hover:translate-x-2 transition-transform">
+            <span class="font-semibold">进入查看</span>
+            <span class="material-symbols-outlined">arrow_forward</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- Tool Cards (only show when no content) -->
-    <div v-if="!hasContent && !hasInteracted" class="w-full max-w-[1080px] mt-4">
+    <div v-if="!hasContent && !hasInteracted" class="w-full max-w-[1080px] mt-8">
       <div class="flex items-center justify-between px-6 mb-6">
         <h3 class="text-lg font-bold dark:text-white">推荐工具</h3>
         <a class="text-sm font-semibold text-primary hover:underline" href="#">查看全部</a>
@@ -254,6 +295,7 @@ function navigateTo(path: string) {
           v-for="card in toolCards"
           :key="card.title"
           class="group bg-white dark:bg-slate-900 p-6 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all cursor-pointer"
+          @click="navigateTo(card.path)"
         >
           <div
             class="h-12 w-12 rounded-lg flex items-center justify-center mb-4 group-hover:scale-110 transition-transform"
