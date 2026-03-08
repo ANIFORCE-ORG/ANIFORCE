@@ -2,6 +2,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import SidebarNav from '@/components/layout/SidebarNav.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -142,9 +143,9 @@ const switchPanel = (item: any) => {
   }
 }
 
-const switchSession = (sessionId: string) => {
-  activeSession.value = sessionId
-  sessions.value.forEach(s => s.active = s.id === sessionId)
+const switchSession = (session: any) => {
+  activeSession.value = session.id
+  sessions.value.forEach(s => s.active = s.id === session.id)
 }
 
 const handleSendMessage = () => {
@@ -179,59 +180,13 @@ const getPlatformColor = (platform: string) => {
   <!-- 三栏布局容器 -->
   <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航抽屉 -->
-    <aside class="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col">
-      <!-- Navigation -->
-      <nav class="flex-1 overflow-y-auto p-4 space-y-6 pt-6">
-        <!-- 功能导航 -->
-        <div>
-          <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 px-2">功能导航</div>
-          <ul class="space-y-1">
-            <li
-              v-for="item in navItems"
-              :key="item.id"
-              class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all"
-              :class="item.id === 'campaigns'
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
-              @click="switchPanel(item)"
-            >
-              <span class="material-symbols-outlined text-lg">{{ item.icon }}</span>
-              <span class="text-sm">{{ item.label }}</span>
-            </li>
-          </ul>
-        </div>
-
-        <!-- 历史会话 -->
-        <div>
-          <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 px-2">历史会话</div>
-          <ul class="space-y-1">
-            <li
-              v-for="session in sessions"
-              :key="session.id"
-              class="group flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all"
-              :class="session.active
-                ? 'bg-primary/10 text-primary'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
-              @click="switchSession(session.id)"
-            >
-              <span class="material-symbols-outlined text-lg">chat</span>
-              <span class="flex-1 truncate text-sm">{{ session.name }}</span>
-            </li>
-          </ul>
-        </div>
-
-        <!-- 系统 -->
-        <div>
-          <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 px-2">系统</div>
-          <ul class="space-y-1">
-            <li class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-all">
-              <span class="material-symbols-outlined text-lg">settings</span>
-              <span class="text-sm">系统设置</span>
-            </li>
-          </ul>
-        </div>
-      </nav>
-    </aside>
+    <SidebarNav 
+      :nav-items="navItems"
+      :sessions="sessions"
+      active-panel="campaigns"
+      @switch-panel="switchPanel"
+      @switch-session="switchSession"
+    />
 
     <!-- 中间广告详情展示区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
