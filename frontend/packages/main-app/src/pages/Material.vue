@@ -46,46 +46,263 @@ const quickHints = [
 
 // Mock素材库数据
 const mockCreatives = [
+  // 游戏素材
   {
-    id: 'creative-001',
-    name: 'Candy Blast - Boss战',
+    id: 'cre_g001',
+    name: 'CB_Gameplay_Level15',
     thumbnail: '/images/creatives/creative_game_001.jpg',
     status: 'running',
-    ctr: 3.2,
-    impressions: '125K',
+    ctr: 1.85,
+    roi: 2.3,
+    impressions: '285K',
     platform: 'Google',
-    tags: ['#Boss挑战', '#暗色调']
+    tags: ['#gameplay', '#level_showcase']
   },
   {
-    id: 'creative-002',
-    name: 'Puzzle Master - 关卡',
+    id: 'cre_g002',
+    name: 'CB_UGC_FailMoment',
     thumbnail: '/images/creatives/creative_game_002.jpg',
     status: 'running',
-    ctr: 2.8,
-    impressions: '98K',
+    ctr: 2.21,
+    roi: 2.8,
+    impressions: '420K',
     platform: 'TikTok',
-    tags: ['#休闲', '#亮色调']
+    tags: ['#ugc', '#fail_moment']
   },
   {
-    id: 'creative-003',
-    name: 'Match 3 - 连击特效',
+    id: 'cre_g003',
+    name: 'CB_Character_CandyQueen',
     thumbnail: '/images/creatives/creative_game_003.jpg',
-    status: 'ready',
-    ctr: 2.5,
-    impressions: '45K',
+    status: 'running',
+    ctr: 1.58,
+    roi: 1.9,
+    impressions: '285K',
     platform: 'Meta',
-    tags: ['#特效', '#快节奏']
+    tags: ['#character', '#story']
   },
   {
-    id: 'creative-004',
-    name: 'Puzzle Quest - 宝石消除',
+    id: 'cre_g004',
+    name: 'CB_Hook_ImpossibleLevel',
     thumbnail: '/images/creatives/creative_game_004.jpg',
-    status: 'fatigue',
-    ctr: 1.8,
-    impressions: '230K',
-    platform: 'Google',
-    tags: ['#宝石', '#消除']
+    status: 'running',
+    ctr: 3.12,
+    roi: 3.2,
+    impressions: '420K',
+    platform: 'TikTok',
+    tags: ['#hook', '#challenge']
   },
+  // AI生成糖果游戏素材
+  {
+    id: 'ai_candy_001',
+    name: 'AI_Candy_Combo',
+    thumbnail: '/images/creatives/ai_candy_combo_001.jpg',
+    status: 'ready',
+    ctr: 1.98,
+    roi: 2.1,
+    impressions: '0',
+    platform: 'Google',
+    tags: ['#combo', '#mega']
+  },
+  {
+    id: 'ai_candy_002',
+    name: 'AI_Candy_Hook',
+    thumbnail: '/images/creatives/ai_candy_hook_001.jpg',
+    status: 'ready',
+    ctr: 2.15,
+    roi: 2.4,
+    impressions: '0',
+    platform: 'TikTok',
+    tags: ['#hook', '#satisfying']
+  },
+  {
+    id: 'ai_candy_003',
+    name: 'AI_Candy_Mix',
+    thumbnail: '/images/creatives/ai_candy_mix_001.jpg',
+    status: 'ready',
+    ctr: 1.85,
+    roi: 2.0,
+    impressions: '0',
+    platform: 'Meta',
+    tags: ['#gameplay', '#mix']
+  },
+  {
+    id: 'ai_candy_004',
+    name: 'AI_Candy_Reaction',
+    thumbnail: '/images/creatives/ai_candy_reaction_001.jpg',
+    status: 'ready',
+    ctr: 2.28,
+    roi: 2.5,
+    impressions: '0',
+    platform: 'TikTok',
+    tags: ['#ugc', '#reaction']
+  },
+  {
+    id: 'ai_candy_005',
+    name: 'AI_Candy_Trend',
+    thumbnail: '/images/creatives/ai_candy_trend_001.jpg',
+    status: 'ready',
+    ctr: 1.92,
+    roi: 2.2,
+    impressions: '0',
+    platform: 'Google',
+    tags: ['#trend', '#viral']
+  },
+  {
+    id: 'ai_candy_006',
+    name: 'AI_Candy_UGC',
+    thumbnail: '/images/creatives/ai_candy_ugc_001.jpg',
+    status: 'ready',
+    ctr: 2.05,
+    roi: 2.3,
+    impressions: '0',
+    platform: 'Meta',
+    tags: ['#ugc', '#authentic']
+  },
+  {
+    id: 'ai_candy_007',
+    name: 'AI_Candy_Victory',
+    thumbnail: '/images/creatives/ai_candy_victory_001.jpg',
+    status: 'ready',
+    ctr: 1.78,
+    roi: 1.9,
+    impressions: '0',
+    platform: 'Google',
+    tags: ['#victory', '#reward']
+  },
+  // 短剧素材
+  {
+    id: 'cre_d001',
+    name: 'DB_Hook_SuspenseCliffhanger',
+    thumbnail: '/images/creatives/creative_drama_001.jpg',
+    status: 'running',
+    ctr: 3.85,
+    roi: 2.8,
+    impressions: '1.25M',
+    platform: 'TikTok',
+    tags: ['#hook', '#suspense']
+  },
+  {
+    id: 'cre_d002',
+    name: 'DB_Romance_EmotionalConflict',
+    thumbnail: '/images/creatives/creative_drama_002.jpg',
+    status: 'running',
+    ctr: 3.21,
+    roi: 2.5,
+    impressions: '820K',
+    platform: 'Meta',
+    tags: ['#romance', '#emotional']
+  },
+  {
+    id: 'cre_d003',
+    name: 'DB_Character_BossReveal',
+    thumbnail: '/images/creatives/creative_drama_003.jpg',
+    status: 'running',
+    ctr: 2.85,
+    roi: 2.1,
+    impressions: '380K',
+    platform: 'Google',
+    tags: ['#character', '#boss']
+  },
+  {
+    id: 'cre_d004',
+    name: 'DB_Story_RevengePlot',
+    thumbnail: '/images/creatives/creative_drama_004.jpg',
+    status: 'fatigue',
+    ctr: 2.48,
+    roi: 2.3,
+    impressions: '2.1M',
+    platform: 'TikTok',
+    tags: ['#story', '#revenge']
+  },
+  // 短剧参考图片
+  {
+    id: 'ref_drama_001',
+    name: 'Short_Drama_Apps_Reference',
+    thumbnail: '/images/creatives/1_The_8_Best_Short_Drama_Apps_in_202.png',
+    status: 'ready',
+    ctr: 0,
+    roi: 0,
+    impressions: '0',
+    platform: 'Reference',
+    tags: ['#reference', '#apps']
+  },
+  {
+    id: 'ref_video_001',
+    name: 'Mobile_Video_Ad_Best_Practices',
+    thumbnail: '/images/creatives/2_Mobile_Video_Ad_Best_Practices_for.png',
+    status: 'ready',
+    ctr: 0,
+    roi: 0,
+    impressions: '0',
+    platform: 'Reference',
+    tags: ['#reference', '#best_practices']
+  },
+  {
+    id: 'ref_video_002',
+    name: 'How_to_Create_Mobile_Video_Ads',
+    thumbnail: '/images/creatives/3_How_to_Create_Mobile_Video_Ads_for.png',
+    status: 'ready',
+    ctr: 0,
+    roi: 0,
+    impressions: '0',
+    platform: 'Reference',
+    tags: ['#reference', '#tutorial']
+  },
+  {
+    id: 'ref_match3_001',
+    name: 'Match_3_Workflow',
+    thumbnail: '/images/creatives/4_What_is_a_Match_3_How_to_do_it_Workflow.png',
+    status: 'ready',
+    ctr: 0,
+    roi: 0,
+    impressions: '0',
+    platform: 'Reference',
+    tags: ['#reference', '#workflow']
+  },
+  {
+    id: 'ref_drama_002',
+    name: 'TikTok_Microdrama_Launch',
+    thumbnail: '/images/creatives/5_TikTok_quietly_launches_a_microdrama.png',
+    status: 'ready',
+    ctr: 0,
+    roi: 0,
+    impressions: '0',
+    platform: 'Reference',
+    tags: ['#reference', '#tiktok']
+  },
+  {
+    id: 'ref_match3_002',
+    name: 'Match_3_Candy_Game_UI',
+    thumbnail: '/images/creatives/6_Match_3_candy_game_ui_interface_background.png',
+    status: 'ready',
+    ctr: 0,
+    roi: 0,
+    impressions: '0',
+    platform: 'Reference',
+    tags: ['#reference', '#ui']
+  },
+  {
+    id: 'ref_drama_003',
+    name: 'Micro_Drama_Watch_Apps',
+    thumbnail: '/images/creatives/7_Micro_Drama_Watch_Short_Dramas_Apps.png',
+    status: 'ready',
+    ctr: 0,
+    roi: 0,
+    impressions: '0',
+    platform: 'Reference',
+    tags: ['#reference', '#apps']
+  },
+  {
+    id: 'ref_drama_004',
+    name: 'TikTok_Micro_Dramas',
+    thumbnail: '/images/creatives/8_TikTok_Is_Jumping_Into_Micro_Dramas.png',
+    status: 'ready',
+    ctr: 0,
+    roi: 0,
+    impressions: '0',
+    platform: 'Reference',
+    tags: ['#reference', '#industry']
+  }
 ]
 
 const creatives = ref(mockCreatives)
