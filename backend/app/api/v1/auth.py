@@ -1,9 +1,13 @@
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timedelta
 from jose import jwt
+from passlib.context import CryptContext
 from app.config.settings import get_settings
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
 from app.schemas.base import ResponseBase
+from app.repositories.factory import get_user_repo
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -22,21 +26,31 @@ def _create_token(user_id: str, email: str, name: str) -> tuple[str, str]:
 
 
 @router.post("/login", response_model=ResponseBase[TokenResponse])
-async def login(request: LoginRequest):
-    """用户登录 — Demo 模式下任意账号均可登录"""
+async def login(
+    req: LoginRequest,
+    user_repo = Depends(get_user_repo)
+):
     settings = get_settings()
-    if settings.DEMO_MODE:
-        user = UserResponse(id="demo-user-001", email=request.email, name="Demo User")
-        access_token, refresh_token = _create_token(user.id, user.email, user.name)
-        return ResponseBase(
-            data=TokenResponse(
-                user=user,
-                access_token=access_token,
-                refresh_token=refresh_token,
-            )
+    
+    # 查询用户
+    user = await user_repo.get_by_email(req.email)
+    if not user:
+        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    
+    # 验证密码
+    if not pwd_context.verify(req.password, user["password_hash"]):
+        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+    
+    # 生成 token
+    access_token, refresh_token = _create_token(user["id"], user["email"], user["name"])
+    
+    return ResponseBase(
+        data=TokenResponse(
+            user=UserResponse(id=user["id"], email=user["email"], name=user["name"]),
+            access_token=access_token,
+            refresh_token=refresh_token,
         )
-    # 生产模式：查询数据库验证
-    raise NotImplementedError("生产模式认证尚未实现")
+    )
 
 
 @router.post("/register", response_model=ResponseBase[TokenResponse], status_code=201)

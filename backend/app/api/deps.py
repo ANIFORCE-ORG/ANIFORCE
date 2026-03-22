@@ -14,9 +14,9 @@ async def get_current_user(
 
     if settings.DEMO_MODE:
         return {
-            "id": "demo-user-001",
-            "email": "demo@example.com",
-            "name": "Demo User",
+            "id": "user_test_001",
+            "email": "test@animagus.com",
+            "name": "测试用户",
         }
 
     if credentials is None:

@@ -49,35 +49,115 @@ const quickHints = [
   '分析广告数据'
 ]
 
-// 广告数据（从后端 API 获取）
-const campaigns = ref<Campaign[]>([])
-
-// 初始化：自动登录并加载数据
-onMounted(async () => {
-  try {
-    loading.value = true
-    error.value = ''
-    
-    // 检查是否已登录，如果没有则自动登录测试账号
-    const token = localStorage.getItem('access_token')
-    if (!token) {
-      console.log('自动登录测试账号...')
-      await login('test@animagus.com', 'test123')
-    }
-    
-    // 加载广告投放数据
-    console.log('加载广告投放数据...')
-    const data = await getCampaigns()
-    campaigns.value = data
-    console.log('广告投放数据加载成功:', data.length, '条')
-  } catch (err: any) {
-    error.value = err.message || '加载数据失败'
-    console.error('加载数据失败:', err)
-  } finally {
-    loading.value = false
+// Mock广告数据
+const mockCampaigns = [
+  {
+    id: 'camp_g001',
+    name: 'CB_US_Android_Install_001',
+    project_id: 'proj_game_001',
+    project_name: 'Candy Blast 美加英投放',
+    platform: 'Google',
+    status: 'running',
+    spend: 22800,
+    installs: 8750,
+    roi: 1.85,
+    budget: 30000,
+    start_date: '2026-02-01'
+  },
+  {
+    id: 'camp_g002',
+    name: 'CB_US_iOS_Install_001',
+    project_id: 'proj_game_001',
+    project_name: 'Candy Blast 美加英投放',
+    platform: 'TikTok',
+    status: 'running',
+    spend: 18900,
+    installs: 7200,
+    roi: 2.1,
+    budget: 25000,
+    start_date: '2026-02-05'
+  },
+  {
+    id: 'camp_g003',
+    name: 'CB_UK_Android_Install_001',
+    project_id: 'proj_game_001',
+    project_name: 'Candy Blast 美加英投放',
+    platform: 'Meta',
+    status: 'review',
+    spend: 10600,
+    installs: 4100,
+    roi: 1.65,
+    budget: 15000,
+    start_date: '2026-03-01'
+  },
+  {
+    id: 'camp_g004',
+    name: 'CB_SEA_Android_Test_001',
+    project_id: 'proj_game_002',
+    project_name: 'Candy Blast 东南亚测试',
+    platform: 'Google',
+    status: 'running',
+    spend: 3200,
+    installs: 2650,
+    roi: 1.45,
+    budget: 5000,
+    start_date: '2026-03-01'
+  },
+  {
+    id: 'camp_d001',
+    name: 'DB_US_Hook_Install_001',
+    project_id: 'proj_drama_001',
+    project_name: 'DramaBox 北美推广',
+    platform: 'TikTok',
+    status: 'running',
+    spend: 45200,
+    installs: 12500,
+    roi: 2.8,
+    budget: 60000,
+    start_date: '2026-01-15'
+  },
+  {
+    id: 'camp_d002',
+    name: 'DB_US_Romance_Install_001',
+    project_id: 'proj_drama_001',
+    project_name: 'DramaBox 北美推广',
+    platform: 'Meta',
+    status: 'running',
+    spend: 32800,
+    installs: 8200,
+    roi: 2.5,
+    budget: 45000,
+    start_date: '2026-01-20'
+  },
+  {
+    id: 'camp_d003',
+    name: 'DB_AU_Drama_Install_001',
+    project_id: 'proj_drama_002',
+    project_name: 'DramaBox 澳洲测试',
+    platform: 'Google',
+    status: 'running',
+    spend: 15600,
+    installs: 3800,
+    roi: 1.9,
+    budget: 20000,
+    start_date: '2026-02-01'
+  },
+  {
+    id: 'camp_d004',
+    name: 'DB_US_BossRomance_Install_001',
+    project_id: 'proj_drama_001',
+    project_name: 'DramaBox 北美推广',
+    platform: 'TikTok',
+    status: 'paused',
+    spend: 8500,
+    installs: 2100,
+    roi: 2.6,
+    budget: 15000,
+    start_date: '2026-03-01'
   }
-})
+]
 
+const campaigns = ref(mockCampaigns)
 
 // 获取唯一的项目列表
 const uniqueProjects = computed(() => {
@@ -287,21 +367,21 @@ const getStatusColor = (status: string) => {
             <div class="grid grid-cols-3 gap-3 mb-3">
               <div class="text-center">
                 <div class="text-xl font-bold text-slate-900 dark:text-white">
-                  ${{ campaign.spent?.toLocaleString() || 0 }}
+                  ${{ campaign.spend.toLocaleString() }}
                 </div>
                 <div class="text-[10px] text-slate-400 mt-0.5">消耗</div>
               </div>
               <div class="text-center">
                 <div class="text-xl font-bold text-slate-900 dark:text-white">
-                  {{ campaign.budget?.toLocaleString() || 0 }}
+                  {{ campaign.installs.toLocaleString() }}
                 </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">预算</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">安装</div>
               </div>
               <div class="text-center">
                 <div class="text-xl font-bold text-slate-900 dark:text-white">
-                  {{ campaign.material_ids?.length || 0 }}
+                  {{ campaign.roi }}x
                 </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">素材</div>
+                <div class="text-[10px] text-slate-400 mt-0.5">ROI</div>
               </div>
             </div>
 
