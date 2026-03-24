@@ -10,9 +10,11 @@ from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.config.database import get_session_maker, Base, get_engine
 from app.models import User, Project, Campaign, Material, Metric
-from app.models.project import ProjectStatus
-from app.models.campaign import CampaignStatus
-from app.models.material import MaterialType
+from app.models.user import User
+from app.models.project import Project, ProjectStatus
+from app.models.campaign import Campaign, CampaignStatus
+from app.models.material import Material, MaterialType, MaterialStatus
+from app.models.metric import Metric
 from passlib.context import CryptContext
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -262,6 +264,7 @@ async def seed_data():
                 "user_id": "user_test_001",
                 "name": "Candy Blast - Boss 战高光",
                 "type": MaterialType.FULL_VIDEO,
+                "status": MaterialStatus.RUNNING,  # 投放中
                 "url": "/images/creative_game_001.jpg",
                 "thumbnail_url": "/images/creative_game_001.jpg",
                 "ctr_estimate": 3.2,
@@ -276,6 +279,7 @@ async def seed_data():
                 "user_id": "user_test_001",
                 "name": "Candy Blast - 装备展示",
                 "type": MaterialType.FULL_VIDEO,
+                "status": MaterialStatus.RUNNING,  # 投放中
                 "url": "/images/creative_game_002.jpg",
                 "thumbnail_url": "/images/creative_game_002.jpg",
                 "ctr_estimate": 2.8,
@@ -290,6 +294,7 @@ async def seed_data():
                 "user_id": "user_test_001",
                 "name": "Candy Blast - PVP 对决",
                 "type": MaterialType.FULL_VIDEO,
+                "status": MaterialStatus.FATIGUE,  # 已疲劳
                 "url": "/images/creative_game_003.jpg",
                 "thumbnail_url": "/images/creative_game_003.jpg",
                 "ctr_estimate": 3.5,
@@ -304,6 +309,7 @@ async def seed_data():
                 "user_id": "user_test_001",
                 "name": "Candy Blast - 糖果连击",
                 "type": MaterialType.FULL_VIDEO,
+                "status": MaterialStatus.READY,  # 待投放
                 "url": "/images/ai_candy_combo_001.jpg",
                 "thumbnail_url": "/images/ai_candy_combo_001.jpg",
                 "ctr_estimate": 4.1,
@@ -318,6 +324,7 @@ async def seed_data():
                 "user_id": "user_test_001",
                 "name": "Candy Blast - 糖果混搭",
                 "type": MaterialType.FULL_VIDEO,
+                "status": MaterialStatus.READY,  # 待投放
                 "url": "/images/ai_candy_mix_001.jpg",
                 "thumbnail_url": "/images/ai_candy_mix_001.jpg",
                 "ctr_estimate": 3.8,
@@ -332,6 +339,7 @@ async def seed_data():
                 "user_id": "user_test_001",
                 "name": "DramaBox - 霸总钩子",
                 "type": MaterialType.FULL_VIDEO,
+                "status": MaterialStatus.RUNNING,  # 投放中
                 "url": "/images/creative_drama_001.jpg",
                 "thumbnail_url": "/images/creative_drama_001.jpg",
                 "ctr_estimate": 4.5,
@@ -346,6 +354,7 @@ async def seed_data():
                 "user_id": "user_test_001",
                 "name": "DramaBox - 情感共鸣",
                 "type": MaterialType.FULL_VIDEO,
+                "status": MaterialStatus.RUNNING,  # 投放中
                 "url": "/images/creative_drama_002.jpg",
                 "thumbnail_url": "/images/creative_drama_002.jpg",
                 "ctr_estimate": 4.2,
@@ -360,6 +369,7 @@ async def seed_data():
                 "user_id": "user_test_001",
                 "name": "DramaBox - 霸总浪漫",
                 "type": MaterialType.FULL_VIDEO,
+                "status": MaterialStatus.FATIGUE,  # 已疲劳
                 "url": "/images/creative_drama_003.jpg",
                 "thumbnail_url": "/images/creative_drama_003.jpg",
                 "ctr_estimate": 4.8,

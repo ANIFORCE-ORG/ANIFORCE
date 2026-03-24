@@ -11,6 +11,7 @@ export interface Material {
   campaign_ids: string[]
   name: string
   type: string
+  status: string  // running | ready | fatigue
   url: string
   thumbnail_url?: string
   ctr_estimate?: number
