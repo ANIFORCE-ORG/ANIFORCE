@@ -57,6 +57,9 @@ htmlcov/
 # ===== 构建产物 =====
 *.tsbuildinfo
 
+# ===== 数据文件 =====
+backend/data/images/
+
 # ===== 其他 =====
 *.bak
 *.tmp

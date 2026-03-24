@@ -20,7 +20,7 @@ class Settings(BaseSettings):
     DEMO_MONITOR_INTERVAL: float = 3.0
 
     # 数据库（Demo 模式下可不配置）
-    DATABASE_URL: str = ""
+    DATABASE_URL: str = ""  # 留空则使用 SQLite
     MONGODB_URL: str = ""
     MONGODB_DB_NAME: str = "animagus"
     REDIS_URL: str = ""

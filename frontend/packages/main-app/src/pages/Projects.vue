@@ -1,12 +1,16 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
+import { getProjects, type Project } from '@/api/projects'
 
 const router = useRouter()
 const auth = useAuthStore()
+
+const loading = ref(false)
+const error = ref<string | null>(null)
 
 const activePanel = ref('projects')
 const activeSession = ref('sess_g001')
@@ -54,72 +58,46 @@ const statusFilters = [
   { value: 'completed', label: '已完成' },
 ]
 
-const projects = ref([
-  {
-    id: 'proj_001',
-    name: 'Candy Blast - 全球推广',
-    status: 'active',
-    platform: 'Meta',
-    budget: '$80,000',
-    spent: '$52,300',
-    roi: '1.88x',
-    installs: '15,420',
-    cpi: '$3.39',
-    progress: 65,
-    startDate: '2024-01-15',
-    endDate: '2024-03-15',
-    manager: '李明',
-    tags: ['休闲游戏', '三消', '北美']
-  },
-  {
-    id: 'proj_002',
-    name: 'DramaBox - 东南亚市场',
-    status: 'active',
-    platform: 'TikTok',
-    budget: '$120,000',
-    spent: '$98,700',
-    roi: '2.15x',
-    installs: '28,350',
-    cpi: '$3.48',
-    progress: 82,
-    startDate: '2024-01-10',
-    endDate: '2024-04-10',
-    manager: '王芳',
-    tags: ['短剧', '娱乐', '东南亚']
-  },
-  {
-    id: 'proj_003',
-    name: 'Puzzle Master - 欧洲测试',
-    status: 'paused',
-    platform: 'Google Ads',
-    budget: '$50,000',
-    spent: '$12,500',
-    roi: '1.45x',
-    installs: '4,200',
-    cpi: '$2.98',
-    progress: 25,
-    startDate: '2024-02-01',
-    endDate: '2024-05-01',
-    manager: '张伟',
-    tags: ['益智', '休闲', '欧洲']
-  },
-  {
-    id: 'proj_004',
-    name: 'Racing Fever - 全球发行',
-    status: 'active',
-    platform: 'Unity Ads',
-    budget: '$150,000',
-    spent: '$45,800',
-    roi: '2.32x',
-    installs: '18,900',
-    cpi: '$2.42',
-    progress: 31,
-    startDate: '2024-02-15',
-    endDate: '2024-06-15',
-    manager: '李明',
-    tags: ['竞速', '重度', '全球']
-  },
-])
+const projects = ref<Project[]>([])
+
+// 加载项目数据
+onMounted(async () => {
+  loading.value = true
+  error.value = null
+  
+  try {
+    console.log('开始加载项目数据...')
+    const data = await getProjects({ limit: 50 })
+    projects.value = data
+    console.log('项目数据加载成功:', data.length, '条')
+  } catch (err: any) {
+    error.value = err.message || '加载数据失败'
+    console.error('加载数据失败:', err)
+  } finally {
+    loading.value = false
+  }
+})
+
+// 筛选后的项目列表
+const filteredProjects = computed(() => {
+  let result = projects.value
+
+  // 按状态筛选
+  if (filterStatus.value !== 'all') {
+    result = result.filter(p => p.status === filterStatus.value)
+  }
+
+  // 按搜索关键词筛选
+  if (searchQuery.value.trim()) {
+    const query = searchQuery.value.toLowerCase()
+    result = result.filter(p => 
+      p.name.toLowerCase().includes(query) ||
+      p.tags.some(tag => tag.toLowerCase().includes(query))
+    )
+  }
+
+  return result
+})
 
 const switchPanel = (item: any) => {
   if (item.path) {
@@ -141,6 +119,15 @@ const handleHintClick = (hint: string) => {
   chatInput.value = hint
 }
 
+const handleSearch = () => {
+  // 筛选逻辑在 computed 中处理
+}
+
+const handleCreateProject = () => {
+  console.log('创建项目')
+  // TODO: 实现创建项目功能
+}
+
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
     active: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
@@ -157,29 +144,6 @@ const getStatusLabel = (status: string) => {
     completed: '已完成'
   }
   return labels[status] || status
-}
-
-const filteredProjects = ref(projects.value)
-
-const handleSearch = () => {
-  let result = projects.value
-  
-  if (searchQuery.value) {
-    result = result.filter(p => 
-      p.name.toLowerCase().includes(searchQuery.value.toLowerCase()) ||
-      p.tags.some(tag => tag.includes(searchQuery.value))
-    )
-  }
-  
-  if (filterStatus.value !== 'all') {
-    result = result.filter(p => p.status === filterStatus.value)
-  }
-  
-  filteredProjects.value = result
-}
-
-const handleCreateProject = () => {
-  console.log('创建新项目')
 }
 </script>
 
@@ -261,11 +225,11 @@ const handleCreateProject = () => {
                   </span>
                   <span class="flex items-center gap-1">
                     <span class="material-symbols-outlined text-sm">calendar_today</span>
-                    {{ project.startDate }} - {{ project.endDate }}
+                    {{ project.start_date }} - {{ project.end_date }}
                   </span>
                   <span class="flex items-center gap-1">
-                    <span class="material-symbols-outlined text-sm">ads_click</span>
-                    {{ project.platform }}
+                    <span class="material-symbols-outlined text-sm">public</span>
+                    {{ project.target_market }}
                   </span>
                 </div>
               </div>
@@ -275,23 +239,23 @@ const handleCreateProject = () => {
             <div class="grid grid-cols-5 gap-4 mb-4">
               <div>
                 <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">预算</div>
-                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project.budget }}</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">${{ project.total_budget.toLocaleString() }}</div>
               </div>
               <div>
                 <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">已消耗</div>
-                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project.spent }}</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">${{ project.spent.toLocaleString() }}</div>
               </div>
               <div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">ROI</div>
-                <div class="text-sm font-semibold text-emerald-600">{{ project.roi }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">进度</div>
+                <div class="text-sm font-semibold text-emerald-600">{{ Math.round((project.spent / project.total_budget) * 100) }}%</div>
               </div>
               <div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">安装数</div>
-                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project.installs }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">类型</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project.game_type }}</div>
               </div>
               <div>
-                <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">CPI</div>
-                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project.cpi }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">状态</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ getStatusLabel(project.status) }}</div>
               </div>
             </div>
 
@@ -299,12 +263,12 @@ const handleCreateProject = () => {
             <div class="mb-3">
               <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
                 <span>预算使用进度</span>
-                <span>{{ project.progress }}%</span>
+                <span>{{ Math.round((project.spent / project.total_budget) * 100) }}%</span>
               </div>
               <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
                 <div
                   class="h-full bg-primary rounded-full transition-all"
-                  :style="{ width: `${project.progress}%` }"
+                  :style="{ width: `${Math.round((project.spent / project.total_budget) * 100)}%` }"
                 ></div>
               </div>
             </div>

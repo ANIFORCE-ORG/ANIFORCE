@@ -99,12 +99,13 @@ trap cleanup SIGINT SIGTERM
 info "========== 环境检测 =========="
 
 # --- Python ---
-if command -v python3 &>/dev/null; then
-  PY="python3"
-elif command -v python &>/dev/null; then
-  PY="python"
+if [ -f "$BACKEND_DIR/venv/bin/python" ]; then
+  PY="$BACKEND_DIR/venv/bin/python"
 else
-  fail "未检测到 Python，请先安装 Python 3.10+"
+  PY=$(command -v python3 || command -v python)
+fi
+if [ -z "$PY" ]; then
+  fail "未找到 Python 3，请先安装 Python"
 fi
 PY_VER=$($PY --version 2>&1 | awk '{print $2}')
 PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
