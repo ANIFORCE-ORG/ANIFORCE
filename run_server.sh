@@ -99,13 +99,12 @@ trap cleanup SIGINT SIGTERM
 info "========== 环境检测 =========="
 
 # --- Python ---
-if [ -f "$BACKEND_DIR/venv/bin/python" ]; then
-  PY="$BACKEND_DIR/venv/bin/python"
+if command -v python3 &>/dev/null; then
+  PY="python3"
+elif command -v python &>/dev/null; then
+  PY="python"
 else
-  PY=$(command -v python3 || command -v python)
-fi
-if [ -z "$PY" ]; then
-  fail "未找到 Python 3，请先安装 Python"
+  fail "未检测到 Python，请先安装 Python 3.10+"
 fi
 PY_VER=$($PY --version 2>&1 | awk '{print $2}')
 PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
@@ -214,7 +213,16 @@ else
 
   cd "$BACKEND_DIR"
 
-# 检查后端端口
+  # 确保虚拟环境已激活并更新 Python 路径
+  if [ -f "venv/bin/activate" ]; then
+    source venv/bin/activate
+    PY="venv/bin/python"
+  elif [ -f "venv/Scripts/activate" ]; then
+    source venv/Scripts/activate
+    PY="venv/Scripts/python.exe"
+  fi
+
+  # 检查后端端口
 if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
   warn "端口 $BACKEND_PORT 已被占用，尝试终止..."
   lsof -ti :$BACKEND_PORT | xargs kill -9 2>/dev/null || true
@@ -259,7 +267,12 @@ if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
 fi
 
   info "启动 Vite 前端 (http://localhost:$FRONTEND_PORT)..."
-  VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-127.0.0.1} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev &
+  # 云端模式下使用 --host 0.0.0.0 以允许外部访问
+  if [ "$MODE" = "cloud" ]; then
+    VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-0.0.0.0} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev --host 0.0.0.0 --port $FRONTEND_PORT &
+  else
+    VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-127.0.0.1} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev &
+  fi
   FRONTEND_PID=$!
   echo "$FRONTEND_PID" >> "$PID_FILE"
   sleep 3
