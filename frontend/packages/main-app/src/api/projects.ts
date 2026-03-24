@@ -7,6 +7,7 @@ import { http } from './http'
 export interface Project {
   id: string
   name: string
+  description?: string
   game_type: string
   target_market: string
   tags: string[]
@@ -82,4 +83,12 @@ export async function updateProject(
  */
 export async function deleteProject(projectId: string): Promise<void> {
   return http.delete<void>(`/projects/${projectId}`)
+}
+
+/**
+ * 获取项目关联的广告投放
+ */
+export async function getProjectCampaigns(projectId: string): Promise<any[]> {
+  const response = await http.get<{ campaigns: any[] }>(`/campaigns?project_id=${projectId}`)
+  return response.campaigns
 }
