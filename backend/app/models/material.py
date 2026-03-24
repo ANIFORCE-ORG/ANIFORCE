@@ -16,6 +16,13 @@ class MaterialType(str, enum.Enum):
     FULL_VIDEO = "full_video"
 
 
+class MaterialStatus(str, enum.Enum):
+    """素材状态"""
+    RUNNING = "running"      # 投放中
+    READY = "ready"          # 待投放
+    FATIGUE = "fatigue"      # 已疲劳
+
+
 class Material(Base):
     __tablename__ = "materials"
     
@@ -29,6 +36,7 @@ class Material(Base):
     # 素材信息
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     type: Mapped[MaterialType] = mapped_column(Enum(MaterialType), nullable=False, index=True)
+    status: Mapped[MaterialStatus] = mapped_column(Enum(MaterialStatus), nullable=False, default=MaterialStatus.READY, index=True)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     

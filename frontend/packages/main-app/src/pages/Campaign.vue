@@ -3,7 +3,7 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
-import { getCampaigns, type Campaign, login } from '@/api'
+import { getCampaigns, updateCampaignStatus, type Campaign, login } from '@/api'
 
 const router = useRouter()
 
@@ -157,11 +157,45 @@ const handleViewCampaign = (campaignId: string) => {
   router.push(`/campaigns/${campaignId}`)
 }
 
-// 切换广告状态
-const handleToggleStatus = (campaign: any) => {
+// 切换广告状态（前后端同步）
+const updatingCampaigns = ref<Set<string>>(new Set())
+
+const handleToggleStatus = async (campaign: Campaign) => {
+  // 防止重复点击
+  if (updatingCampaigns.value.has(campaign.id)) {
+    return
+  }
+
   const newStatus = campaign.status === 'running' ? 'paused' : 'running'
-  campaign.status = newStatus
-  console.log(`广告 ${campaign.name} 已${newStatus === 'running' ? '启动' : '暂停'}`)
+  const oldStatus = campaign.status
+  
+  try {
+    // 添加加载状态
+    updatingCampaigns.value.add(campaign.id)
+    
+    // 乐观更新：先更新前端显示
+    campaign.status = newStatus
+    
+    // 调用后端API更新数据库
+    await updateCampaignStatus(campaign.id, newStatus)
+    
+    console.log(`✅ 广告 ${campaign.name} 已${newStatus === 'running' ? '启动' : '暂停'}`)
+  } catch (err: any) {
+    // 如果失败，回滚前端状态
+    campaign.status = oldStatus
+    console.error('更新广告状态失败:', err)
+    error.value = err.message || '更新状态失败，请重试'
+    
+    // 3秒后清除错误提示
+    setTimeout(() => {
+      if (error.value === (err.message || '更新状态失败，请重试')) {
+        error.value = ''
+      }
+    }, 3000)
+  } finally {
+    // 移除加载状态
+    updatingCampaigns.value.delete(campaign.id)
+  }
 }
 
 // 获取状态文本
@@ -206,6 +240,14 @@ const getStatusColor = (status: string) => {
           <span class="material-symbols-outlined text-lg">add</span>
           <span class="text-sm font-medium">新建广告</span>
         </button>
+      </div>
+
+      <!-- 错误提示 -->
+      <div v-if="error" class="mx-6 mt-4 p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+        <div class="flex items-center gap-2">
+          <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-lg">error</span>
+          <span class="text-sm text-red-600 dark:text-red-400">{{ error }}</span>
+        </div>
       </div>
 
       <!-- 搜索和筛选栏 -->
@@ -314,12 +356,17 @@ const getStatusColor = (status: string) => {
                 查看详情
               </button>
               <button
-                class="px-3 py-1.5 text-xs font-semibold rounded border transition-colors"
-                :class="campaign.status === 'running'
-                  ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/30'
-                  : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30'"
+                class="px-3 py-1.5 text-xs font-semibold rounded border transition-colors flex items-center gap-1"
+                :class="[
+                  campaign.status === 'running'
+                    ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/30'
+                    : 'bg-emerald-50 dark:bg-emerald-900/20 text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-100 dark:hover:bg-emerald-900/30',
+                  updatingCampaigns.has(campaign.id) ? 'opacity-50 cursor-not-allowed' : ''
+                ]"
+                :disabled="updatingCampaigns.has(campaign.id)"
                 @click="handleToggleStatus(campaign)"
               >
+                <span v-if="updatingCampaigns.has(campaign.id)" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
                 {{ campaign.status === 'running' ? '暂停' : '启动' }}
               </button>
             </div>

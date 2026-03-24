@@ -73,7 +73,7 @@ export async function createCampaign(data: {
   status?: string
   material_ids?: string[]
 }): Promise<Campaign> {
-  return http.post<Campaign>('/api/v1/campaigns', data)
+  return http.post<Campaign>('/campaigns', data)
 }
 
 /**
@@ -83,7 +83,7 @@ export async function updateCampaignStatus(
   campaignId: string,
   status: string
 ): Promise<{ message: string }> {
-  return http.put(`/api/v1/campaigns/${campaignId}/status`, { status })
+  return http.put(`/campaigns/${campaignId}/status`, { status })
 }
 
 /**
