@@ -1,0 +1,218 @@
+"""素材管理 API"""
+import os
+import base64
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
+from fastapi.responses import JSONResponse
+from app.repositories.protocols import MaterialRepository
+from app.repositories.factory import get_material_repo
+from app.api.deps import get_current_user
+from app.config.settings import get_settings
+
+router = APIRouter(prefix="/materials", tags=["materials"])
+settings = get_settings()
+
+# 图像存储路径
+IMAGES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "images"
+
+
+@router.get("")
+async def list_materials(
+    project_id: str | None = None,
+    campaign_id: str | None = None,
+    type: str | None = None,
+    limit: int = 50,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """获取素材列表"""
+    if project_id:
+        materials = await material_repo.list_by_project(project_id, limit=limit)
+    elif campaign_id:
+        materials = await material_repo.list_by_campaign(campaign_id, limit=limit)
+    else:
+        materials = await material_repo.list_by_user(
+            current_user["id"], type=type, limit=limit
+        )
+    
+    return {"materials": materials}
+
+
+@router.get("/{material_id}")
+async def get_material(
+    material_id: str,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """获取素材详情"""
+    material = await material_repo.get_by_id(material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    # 验证权限
+    if material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    return material
+
+
+@router.get("/{material_id}/image")
+async def get_material_image(
+    material_id: str,
+    thumbnail: bool = False,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """获取素材图像（Base64编码）"""
+    material = await material_repo.get_by_id(material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    # 验证权限
+    if material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # 获取图像路径
+    image_url = material.get("thumbnail_url") if thumbnail else material.get("url")
+    if not image_url:
+        raise HTTPException(status_code=404, detail="Image not found")
+    
+    # 从URL中提取文件名
+    filename = os.path.basename(image_url)
+    image_path = IMAGES_DIR / filename
+    
+    if not image_path.exists():
+        raise HTTPException(status_code=404, detail="Image file not found")
+    
+    # 读取图像并转换为Base64
+    try:
+        with open(image_path, "rb") as f:
+            image_data = f.read()
+        
+        # 获取文件扩展名以确定MIME类型
+        ext = image_path.suffix.lower()
+        mime_types = {
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".png": "image/png",
+            ".gif": "image/gif",
+            ".webp": "image/webp",
+        }
+        mime_type = mime_types.get(ext, "image/jpeg")
+        
+        # Base64编码
+        base64_data = base64.b64encode(image_data).decode("utf-8")
+        
+        return {
+            "material_id": material_id,
+            "filename": filename,
+            "mime_type": mime_type,
+            "size": len(image_data),
+            "data": f"data:{mime_type};base64,{base64_data}"
+        }
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to read image: {str(e)}")
+
+
+@router.get("/images/list")
+async def list_available_images(
+    current_user: dict = Depends(get_current_user),
+):
+    """列出所有可用的图像文件"""
+    if not IMAGES_DIR.exists():
+        return {"images": []}
+    
+    images = []
+    for file_path in IMAGES_DIR.iterdir():
+        if file_path.is_file() and file_path.suffix.lower() in [".jpg", ".jpeg", ".png", ".gif", ".webp"]:
+            images.append({
+                "filename": file_path.name,
+                "size": file_path.stat().st_size,
+                "url": f"/images/{file_path.name}"
+            })
+    
+    return {"images": images}
+
+
+@router.post("")
+async def create_material(
+    name: str,
+    type: str,
+    url: str,
+    thumbnail_url: str | None = None,
+    project_ids: list[str] | None = None,
+    campaign_ids: list[str] | None = None,
+    tags: list[str] | None = None,
+    ctr_estimate: float | None = None,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """创建新素材"""
+    material = await material_repo.create(
+        user_id=current_user["id"],
+        name=name,
+        type=type,
+        url=url,
+        thumbnail_url=thumbnail_url,
+        project_ids=project_ids or [],
+        campaign_ids=campaign_ids or [],
+        tags=tags or [],
+        ctr_estimate=ctr_estimate,
+    )
+    return material
+
+
+@router.post("/{material_id}/projects/{project_id}")
+async def add_material_to_project(
+    material_id: str,
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """添加素材到项目"""
+    material = await material_repo.get_by_id(material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    if material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    await material_repo.add_to_project(material_id, project_id)
+    return {"message": "Material added to project successfully"}
+
+
+@router.delete("/{material_id}/projects/{project_id}")
+async def remove_material_from_project(
+    material_id: str,
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """从项目移除素材"""
+    material = await material_repo.get_by_id(material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    if material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    await material_repo.remove_from_project(material_id, project_id)
+    return {"message": "Material removed from project successfully"}
+
+
+@router.delete("/{material_id}")
+async def delete_material(
+    material_id: str,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """删除素材"""
+    material = await material_repo.get_by_id(material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    
+    if material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    await material_repo.delete(material_id)
+    return {"message": "Material deleted successfully"}

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
+import { getMaterialImage } from '@/api/materials'
 
 const router = useRouter()
 const route = useRoute()
@@ -18,6 +19,7 @@ const error = ref<string | null>(null)
 
 const campaign = ref<Campaign | null>(null)
 const materials = ref<any[]>([])
+const materialImages = ref<Map<string, string>>(new Map())
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -72,12 +74,26 @@ const loadCampaignData = async () => {
     const materialsData = await getCampaignMaterials(campaignId.value)
     materials.value = materialsData
     console.log('关联素材加载成功:', materialsData.length, '条')
+    
+    // 加载素材图像（Base64）
+    for (const material of materialsData) {
+      try {
+        const imageData = await getMaterialImage(material.id, true)
+        materialImages.value.set(material.id, imageData.data)
+      } catch (err) {
+        console.error('加载素材图像失败:', material.id, err)
+      }
+    }
   } catch (err: any) {
     error.value = err.message || '加载数据失败'
     console.error('加载数据失败:', err)
   } finally {
     loading.value = false
   }
+}
+
+const getMaterialImageSrc = (materialId: string): string | undefined => {
+  return materialImages.value.get(materialId)
 }
 
 const switchPanel = (item: any) => {
@@ -155,11 +171,11 @@ const getPlatformColor = (platform: string) => {
           <div class="grid grid-cols-2 gap-4">
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">所属项目</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white text-right">{{ campaign?.projectName }}</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white text-right">{{ campaign?.project_name }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">投放平台</span>
-              <span class="text-sm font-medium" :class="getPlatformColor(campaign?.platform)">{{ campaign?.platform }}</span>
+              <span class="text-sm font-medium" :class="getPlatformColor(campaign?.platform || '')">{{ campaign?.platform }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">预算</span>
@@ -210,8 +226,8 @@ const getPlatformColor = (platform: string) => {
               <!-- Material Image -->
               <div class="aspect-[9/16] bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
                 <img
-                  v-if="material.file_url"
-                  :src="material.file_url"
+                  v-if="getMaterialImageSrc(material.id)"
+                  :src="getMaterialImageSrc(material.id)"
                   :alt="material.name"
                   class="w-full h-full object-cover"
                 />
