@@ -561,12 +561,6 @@ const getStatusLabel = (status: string) => {
                     video_library
                   </span>
                 </div>
-                <!-- 播放按钮 -->
-                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
-                  <div class="w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-primary">
-                    <span class="material-symbols-outlined text-2xl">play_arrow</span>
-                  </div>
-                </div>
                 <!-- 状态标签 -->
                 <div class="absolute top-2 right-2">
                   <span 
@@ -575,6 +569,19 @@ const getStatusLabel = (status: string) => {
                   >
                     {{ getStatusLabel(creative.status) }}
                   </span>
+                </div>
+                <!-- AI生成标签 -->
+                <div class="absolute bottom-2 right-2">
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg">
+                    <span class="material-symbols-outlined text-xs">auto_awesome</span>
+                    <span>AI生成</span>
+                  </span>
+                </div>
+                <!-- 播放按钮 -->
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                  <div class="w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-primary">
+                    <span class="material-symbols-outlined text-2xl">play_arrow</span>
+                  </div>
                 </div>
               </div>
 
