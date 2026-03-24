@@ -1,10 +1,18 @@
 """广告投放管理 API"""
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.protocols import CampaignRepository, ProjectRepository
 from app.repositories.factory import get_campaign_repo, get_project_repo
+from app.config.database import get_db
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
+
+
+class UpdateStatusRequest(BaseModel):
+    """更新状态请求模型"""
+    status: str
 
 
 @router.get("")
@@ -105,10 +113,11 @@ async def create_campaign(
 @router.put("/{campaign_id}/status")
 async def update_campaign_status(
     campaign_id: str,
-    status: str,
+    request: UpdateStatusRequest,
     current_user: dict = Depends(get_current_user),
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """更新广告投放状态"""
     campaign = await campaign_repo.get_by_id(campaign_id)
@@ -120,7 +129,8 @@ async def update_campaign_status(
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
     
-    await campaign_repo.update_status(campaign_id, status)
+    await campaign_repo.update_status(campaign_id, request.status)
+    await session.commit()  # 提交事务到数据库
     return {"message": "Campaign status updated successfully"}
 
 

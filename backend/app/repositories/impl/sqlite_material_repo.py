@@ -21,6 +21,7 @@ class SqliteMaterialRepository:
             "campaign_ids": material.get_campaign_ids(),
             "name": material.name,
             "type": material.type.value,
+            "status": material.status.value,
             "url": material.url,
             "thumbnail_url": material.thumbnail_url,
             "ctr_estimate": material.ctr_estimate,

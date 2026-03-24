@@ -1,8 +1,10 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
+import { getMaterials, getMaterialImage, type Material } from '@/api/materials'
+import { login } from '@/api'
 
 const router = useRouter()
 
@@ -10,6 +12,10 @@ const activeSession = ref('sess_g001')
 const chatInput = ref('')
 const filterTab = ref('all')
 const searchQuery = ref('')
+const loading = ref(false)
+const error = ref('')
+const materials = ref<Material[]>([])
+const materialImages = ref<Map<string, string>>(new Map())
 
 // 导航项配置
 const navItems = [
@@ -44,7 +50,48 @@ const quickHints = [
   'AI生成新素材'
 ]
 
-// Mock素材库数据
+// 初始化：加载素材数据
+onMounted(async () => {
+  try {
+    loading.value = true
+    error.value = ''
+    
+    // 检查是否已登录
+    const token = localStorage.getItem('access_token')
+    if (!token) {
+      console.log('自动登录测试账号...')
+      await login('test@animagus.com', 'test123')
+    }
+    
+    // 加载素材数据
+    console.log('加载素材数据...')
+    const data = await getMaterials()
+    materials.value = data
+    console.log('素材数据加载成功:', data.length, '条')
+    
+    // 加载素材图像（Base64）
+    for (const material of data) {
+      try {
+        const imageData = await getMaterialImage(material.id, true)
+        materialImages.value.set(material.id, imageData.data)
+      } catch (err) {
+        console.error('加载素材图像失败:', material.id, err)
+      }
+    }
+  } catch (err: any) {
+    error.value = err.message || '加载数据失败'
+    console.error('加载数据失败:', err)
+  } finally {
+    loading.value = false
+  }
+})
+
+// 获取素材图像
+const getMaterialImageSrc = (materialId: string): string | undefined => {
+  return materialImages.value.get(materialId)
+}
+
+// Mock素材库数据（保留作为后备）
 const mockCreatives = [
   // 游戏素材
   {
@@ -307,21 +354,21 @@ const mockCreatives = [
 
 const creatives = ref(mockCreatives)
 
-// 过滤后的素材列表
+// 过滤后的素材列表（使用真实数据）
 const filteredCreatives = computed(() => {
-  let result = creatives.value
+  let result = materials.value
 
   // 按状态筛选
   if (filterTab.value !== 'all') {
-    result = result.filter(c => c.status === filterTab.value)
+    result = result.filter(m => m.status === filterTab.value)
   }
 
   // 按搜索关键词筛选
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
-    result = result.filter(c => 
-      c.name.toLowerCase().includes(query) ||
-      c.tags.some(tag => tag.toLowerCase().includes(query))
+    result = result.filter(m => 
+      m.name.toLowerCase().includes(query) ||
+      (m.tags && m.tags.some((tag: string) => tag.toLowerCase().includes(query)))
     )
   }
 
@@ -387,6 +434,7 @@ const handleFeatureClick = (featureId: string) => {
   console.log('点击功能卡片:', featureId)
 }
 
+// 获取状态颜色样式
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
     running: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
@@ -396,6 +444,7 @@ const getStatusColor = (status: string) => {
   return colors[status] || 'bg-slate-50 dark:bg-slate-800 text-slate-600'
 }
 
+// 获取状态文本标签
 const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
     running: '投放中',
@@ -502,8 +551,8 @@ const getStatusLabel = (status: string) => {
               <!-- 缩略图 - 竖向比例 9:16 -->
               <div class="aspect-[9/16] bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
                 <img 
-                  v-if="creative.thumbnail"
-                  :src="creative.thumbnail" 
+                  v-if="getMaterialImageSrc(creative.id)"
+                  :src="getMaterialImageSrc(creative.id)" 
                   :alt="creative.name"
                   class="w-full h-full object-cover"
                 />
@@ -511,12 +560,6 @@ const getStatusLabel = (status: string) => {
                   <span class="material-symbols-outlined text-6xl text-slate-400 dark:text-slate-500">
                     video_library
                   </span>
-                </div>
-                <!-- 播放按钮 -->
-                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
-                  <div class="w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-primary">
-                    <span class="material-symbols-outlined text-2xl">play_arrow</span>
-                  </div>
                 </div>
                 <!-- 状态标签 -->
                 <div class="absolute top-2 right-2">
@@ -529,9 +572,16 @@ const getStatusLabel = (status: string) => {
                 </div>
                 <!-- AI生成标签 -->
                 <div class="absolute bottom-2 right-2">
-                  <span class="text-xs font-semibold px-2 py-1 rounded-md bg-purple-500/90 text-white backdrop-blur-sm">
-                    AI生成
+                  <span class="inline-flex items-center gap-1 text-[10px] font-bold px-2 py-1 rounded-full bg-gradient-to-r from-purple-500 to-pink-500 text-white shadow-lg">
+                    <span class="material-symbols-outlined text-xs">auto_awesome</span>
+                    <span>AI生成</span>
                   </span>
+                </div>
+                <!-- 播放按钮 -->
+                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                  <div class="w-12 h-12 rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-primary">
+                    <span class="material-symbols-outlined text-2xl">play_arrow</span>
+                  </div>
                 </div>
               </div>
 
@@ -541,20 +591,20 @@ const getStatusLabel = (status: string) => {
                 
                 <!-- 时长和标签 -->
                 <div class="flex items-center gap-2 mb-2 text-xs text-slate-500 dark:text-slate-400">
-                  <span>15s</span>
-                  <span>·</span>
-                  <span>{{ creative.tags[0] }}</span>
+                  <span v-if="creative.duration">{{ creative.duration }}s</span>
+                  <span v-if="creative.duration && creative.tags && creative.tags.length > 0">·</span>
+                  <span v-if="creative.tags && creative.tags.length > 0">{{ creative.tags[0] }}</span>
                 </div>
 
                 <!-- 数据指标 -->
                 <div class="grid grid-cols-2 gap-2">
                   <div class="text-left">
-                    <div class="text-[10px] text-slate-400 mb-0.5">CTR</div>
-                    <div class="text-xs font-bold text-slate-900 dark:text-white">{{ creative.ctr }}%</div>
+                    <div class="text-[10px] text-slate-400 mb-0.5">CTR预估</div>
+                    <div class="text-xs font-bold text-slate-900 dark:text-white">{{ creative.ctr_estimate?.toFixed(1) || 'N/A' }}%</div>
                   </div>
                   <div class="text-left">
-                    <div class="text-[10px] text-slate-400 mb-0.5">ROI</div>
-                    <div class="text-xs font-bold text-slate-900 dark:text-white">{{ (creative.ctr * 0.8).toFixed(1) }}x</div>
+                    <div class="text-[10px] text-slate-400 mb-0.5">文件大小</div>
+                    <div class="text-xs font-bold text-slate-900 dark:text-white">{{ creative.file_size ? (creative.file_size / 1024).toFixed(0) + 'KB' : 'N/A' }}</div>
                   </div>
                 </div>
               </div>
