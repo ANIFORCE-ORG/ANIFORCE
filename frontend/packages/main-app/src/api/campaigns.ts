@@ -51,7 +51,15 @@ export async function getCampaigns(params?: {
  * 获取广告投放详情
  */
 export async function getCampaignDetail(campaignId: string): Promise<Campaign> {
-  return http.get<Campaign>(`/api/v1/campaigns/${campaignId}`)
+  return http.get<Campaign>(`/campaigns/${campaignId}`)
+}
+
+/**
+ * 获取广告投放关联的素材
+ */
+export async function getCampaignMaterials(campaignId: string): Promise<any[]> {
+  const response = await http.get<{ materials: any[] }>(`/campaigns/${campaignId}/materials`)
+  return response.materials
 }
 
 /**
@@ -81,6 +89,6 @@ export async function updateCampaignStatus(
 /**
  * 删除广告投放
  */
-export async function deleteCampaign(campaignId: string): Promise<{ message: string }> {
-  return http.delete(`/api/v1/campaigns/${campaignId}`)
+export async function deleteCampaign(campaignId: string): Promise<void> {
+  return http.delete<void>(`/campaigns/${campaignId}`)
 }

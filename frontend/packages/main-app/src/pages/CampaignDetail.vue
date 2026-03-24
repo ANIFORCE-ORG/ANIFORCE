@@ -4,6 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
+import { getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
 
 const router = useRouter()
 const route = useRoute()
@@ -12,42 +13,11 @@ const auth = useAuthStore()
 const campaignId = ref(route.params.id as string)
 const activeSession = ref('sess_g001')
 const chatInput = ref('')
+const loading = ref(false)
+const error = ref<string | null>(null)
 
-const campaign = ref({
-  id: '',
-  name: '',
-  projectId: '',
-  projectName: '',
-  platform: '',
-  budget: '',
-  spend: '',
-  installs: '',
-  roi: '',
-  targetCPA: '',
-  startDate: '',
-  status: 'running'
-})
-
-const creatives = ref([
-  {
-    id: 'creative_001',
-    name: '游戏玩法展示-紫色主题',
-    image: '/images/creatives/creative_game_001.jpg',
-    status: 'running'
-  },
-  {
-    id: 'creative_002',
-    name: '游戏失败场景-黄色主题',
-    image: '/images/creatives/creative_game_002.jpg',
-    status: 'running'
-  },
-  {
-    id: 'creative_003',
-    name: '游戏爆炸特效-紫色主题',
-    image: '/images/creatives/creative_game_003.jpg',
-    status: 'running'
-  }
-])
+const campaign = ref<Campaign | null>(null)
+const materials = ref<any[]>([])
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -61,7 +31,7 @@ const messages = ref([
     role: 'assistant',
     author: 'ANIFORCE助手',
     time: '刚刚',
-    content: `您好${auth.user?.name || '李明'}！我是ANIFORCE智能助手。\n\n当前正在查看"${campaign.value.name}"广告详情。\n\n我可以帮您：\n• 分析素材表现\n• 优化投放策略\n• 素材创意建议\n• 预算调整建议\n\n请告诉我您需要什么帮助？`
+    content: `您好${auth.user?.name || '李明'}！我是ANIFORCE智能助手。\n\n我可以帮您：\n• 分析素材表现\n• 优化投放策略\n• 素材创意建议\n• 预算调整建议\n\n请告诉我您需要什么帮助？`
   }
 ])
 
@@ -82,59 +52,31 @@ const navItems = [
   { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
 ]
 
-onMounted(() => {
-  loadCampaignData()
+onMounted(async () => {
+  await loadCampaignData()
 })
 
-const loadCampaignData = () => {
-  const mockCampaigns: Record<string, any> = {
-    'camp_001': {
-      id: 'camp_001',
-      name: 'CB_US_Android_Install_001',
-      projectId: 'proj_001',
-      projectName: 'Candy Blast - 全球推广',
-      platform: 'Google',
-      budget: '$35,000',
-      spend: '$22,800',
-      installs: '8,750',
-      roi: '1.85x',
-      targetCPA: '$2.5',
-      startDate: '2026-02-01',
-      status: 'running'
-    },
-    'camp_002': {
-      id: 'camp_002',
-      name: 'CB_US_iOS_Install_001',
-      projectId: 'proj_001',
-      projectName: 'Candy Blast - 全球推广',
-      platform: 'TikTok',
-      budget: '$30,000',
-      spend: '$18,900',
-      installs: '7,200',
-      roi: '2.1x',
-      targetCPA: '$2.8',
-      startDate: '2026-02-01',
-      status: 'running'
-    },
-    'camp_003': {
-      id: 'camp_003',
-      name: 'CB_UK_Android_Install_001',
-      projectId: 'proj_001',
-      projectName: 'Candy Blast - 全球推广',
-      platform: 'Meta',
-      budget: '$25,000',
-      spend: '$10,600',
-      installs: '4,100',
-      roi: '1.65x',
-      targetCPA: '$3.0',
-      startDate: '2026-02-05',
-      status: 'running'
-    }
-  }
+const loadCampaignData = async () => {
+  loading.value = true
+  error.value = null
   
-  const campaignData = mockCampaigns[campaignId.value]
-  if (campaignData) {
+  try {
+    console.log('加载广告投放详情:', campaignId.value)
+    
+    // 加载广告投放详情
+    const campaignData = await getCampaignDetail(campaignId.value)
     campaign.value = campaignData
+    console.log('广告投放详情加载成功:', campaignData)
+    
+    // 加载关联的素材
+    const materialsData = await getCampaignMaterials(campaignId.value)
+    materials.value = materialsData
+    console.log('关联素材加载成功:', materialsData.length, '条')
+  } catch (err: any) {
+    error.value = err.message || '加载数据失败'
+    console.error('加载数据失败:', err)
+  } finally {
+    loading.value = false
   }
 }
 
@@ -202,7 +144,7 @@ const getPlatformColor = (platform: string) => {
             <span class="text-sm font-medium">返回广告列表</span>
           </button>
           <div class="h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
-          <h3 class="font-bold text-slate-900 dark:text-white">{{ campaign.name }}</h3>
+          <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">{{ campaign?.name }}</h2>
         </div>
       </div>
 
@@ -213,35 +155,35 @@ const getPlatformColor = (platform: string) => {
           <div class="grid grid-cols-2 gap-4">
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">所属项目</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white text-right">{{ campaign.projectName }}</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white text-right">{{ campaign?.projectName }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">投放平台</span>
-              <span class="text-sm font-medium" :class="getPlatformColor(campaign.platform)">{{ campaign.platform }}</span>
+              <span class="text-sm font-medium" :class="getPlatformColor(campaign?.platform)">{{ campaign?.platform }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">预算</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign.budget }}</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">${{ campaign?.budget?.toLocaleString() }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">已消耗</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign.spend }}</span>
+              <span class="text-sm text-slate-500 dark:text-slate-400">消耗</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">${{ campaign?.spent?.toLocaleString() }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">安装数</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign.installs }}</span>
+              <span class="text-sm text-slate-500 dark:text-slate-400">进度</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign ? Math.round((campaign.spent / campaign.budget) * 100) : 0 }}%</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">ROI</span>
-              <span class="text-sm font-medium text-emerald-600">{{ campaign.roi }}</span>
-            </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">目标CPA</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign.targetCPA }}</span>
+              <span class="text-sm text-slate-500 dark:text-slate-400">状态</span>
+              <span class="text-sm font-medium text-emerald-600">{{ campaign?.status }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">开始日期</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign.startDate }}</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign?.start_date }}</span>
+            </div>
+            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
+              <span class="text-sm text-slate-500 dark:text-slate-400">结束日期</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign?.end_date || '未设置' }}</span>
             </div>
           </div>
         </div>
@@ -249,7 +191,7 @@ const getPlatformColor = (platform: string) => {
         <!-- 投放素材列表 -->
         <div>
           <div class="flex items-center justify-between mb-4">
-            <h4 class="text-sm font-semibold text-slate-900 dark:text-white">投放素材 ({{ creatives.length }})</h4>
+            <h4 class="text-sm font-semibold text-slate-900 dark:text-white">投放素材 ({{ materials.length }})</h4>
             <button
               class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
               @click="handleAddCreative"
@@ -261,24 +203,28 @@ const getPlatformColor = (platform: string) => {
           
           <div class="grid grid-cols-3 gap-4">
             <div
-              v-for="creative in creatives"
-              :key="creative.id"
+              v-for="material in materials"
+              :key="material.id"
               class="rounded-md border border-slate-200 dark:border-slate-800 overflow-hidden hover:border-primary/50 transition-all cursor-pointer"
             >
-              <!-- Creative Image -->
+              <!-- Material Image -->
               <div class="aspect-[9/16] bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
                 <img
-                  :src="creative.image"
-                  :alt="creative.name"
+                  v-if="material.file_url"
+                  :src="material.file_url"
+                  :alt="material.name"
                   class="w-full h-full object-cover"
                 />
+                <div v-else class="w-full h-full flex items-center justify-center">
+                  <span class="material-symbols-outlined text-6xl text-slate-300">movie</span>
+                </div>
               </div>
-              <!-- Creative Info -->
+              <!-- Material Info -->
               <div class="p-3 bg-white dark:bg-slate-900">
-                <div class="text-sm font-medium text-slate-900 dark:text-white mb-1 truncate">{{ creative.name }}</div>
+                <div class="text-sm font-medium text-slate-900 dark:text-white mb-1 truncate">{{ material.name }}</div>
                 <div class="flex items-center justify-between">
                   <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600">
-                    {{ creative.status === 'running' ? '投放中' : '待投放' }}
+                    {{ material.status }}
                   </span>
                 </div>
               </div>
@@ -286,9 +232,9 @@ const getPlatformColor = (platform: string) => {
           </div>
 
           <!-- Empty State -->
-          <div v-if="creatives.length === 0" class="flex flex-col items-center justify-center py-16">
+          <div v-if="materials.length === 0" class="flex flex-col items-center justify-center py-16">
             <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">movie</span>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">暂无素材</p>
+            <p class="text-sm text-slate-500 dark:text-slate-400">{{ campaign?.project_name }}</p>
             <button
               class="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
               @click="handleAddCreative"
