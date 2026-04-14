@@ -1,10 +1,24 @@
 """项目管理 API"""
 from fastapi import APIRouter, Depends, HTTPException
+from pydantic import BaseModel
 from app.repositories.protocols import ProjectRepository
 from app.repositories.factory import get_project_repo
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/projects", tags=["projects"])
+
+
+class CreateProjectRequest(BaseModel):
+    """创建项目请求模型"""
+    name: str
+    total_budget: float
+    description: str | None = None
+    game_type: str | None = None
+    target_market: str | None = None
+    tags: list[str] | None = None
+    manager: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
 
 
 @router.get("")
@@ -43,25 +57,25 @@ async def get_project(
 
 @router.post("")
 async def create_project(
-    name: str,
-    total_budget: float,
-    game_type: str | None = None,
-    target_market: str | None = None,
-    tags: list[str] | None = None,
-    manager: str | None = None,
+    request: CreateProjectRequest,
     current_user: dict = Depends(get_current_user),
     project_repo: ProjectRepository = Depends(get_project_repo),
 ):
     """创建新项目"""
     project = await project_repo.create(
         user_id=current_user["id"],
-        name=name,
-        total_budget=total_budget,
-        game_type=game_type,
-        target_market=target_market,
-        tags=tags,
-        manager=manager,
+        name=request.name,
+        total_budget=request.total_budget,
+        description=request.description,
+        game_type=request.game_type,
+        target_market=request.target_market,
+        tags=request.tags,
+        manager=request.manager,
+        start_date=request.start_date,
+        end_date=request.end_date,
     )
+    # 提交事务以确保数据持久化
+    await project_repo.session.commit()
     return project
 
 

@@ -1,5 +1,6 @@
 """项目 Repository SQLite 实现"""
 import json
+from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Project
@@ -45,6 +46,15 @@ class SqliteProjectRepository:
         status = kwargs.pop("status", None)
         if status and isinstance(status, str):
             kwargs["status"] = ProjectStatus(status)
+        
+        # 处理日期字符串转换
+        start_date = kwargs.pop("start_date", None)
+        if start_date and isinstance(start_date, str):
+            kwargs["start_date"] = datetime.fromisoformat(start_date).date()
+        
+        end_date = kwargs.pop("end_date", None)
+        if end_date and isinstance(end_date, str):
+            kwargs["end_date"] = datetime.fromisoformat(end_date).date()
         
         project = Project(
             user_id=user_id,

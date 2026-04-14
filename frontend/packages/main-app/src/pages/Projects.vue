@@ -4,13 +4,16 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
-import { getProjects, type Project } from '@/api/projects'
+import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
+import { getProjects, createProject, type Project } from '@/api/projects'
 
 const router = useRouter()
 const auth = useAuthStore()
 
 const loading = ref(false)
 const error = ref<string | null>(null)
+const showCreateModal = ref(false)
+const createModalRef = ref<InstanceType<typeof CreateProjectModal> | null>(null)
 
 const activePanel = ref('projects')
 const activeSession = ref('sess_g001')
@@ -124,8 +127,31 @@ const handleSearch = () => {
 }
 
 const handleCreateProject = () => {
-  console.log('创建项目')
-  // TODO: 实现创建项目功能
+  showCreateModal.value = true
+}
+
+const handleCloseModal = () => {
+  showCreateModal.value = false
+}
+
+const handleSubmitProject = async (data: any) => {
+  try {
+    console.log('创建项目:', data)
+    const newProject = await createProject(data)
+    console.log('项目创建成功:', newProject)
+    
+    // 添加到项目列表
+    projects.value.unshift(newProject)
+    
+    // 关闭弹窗并重置表单
+    showCreateModal.value = false
+    createModalRef.value?.resetForm()
+  } catch (err: any) {
+    console.error('创建项目失败:', err)
+    alert(err.message || '创建项目失败，请重试')
+  } finally {
+    createModalRef.value?.setSubmitting(false)
+  }
 }
 
 const getStatusColor = (status: string) => {
@@ -312,6 +338,14 @@ const getStatusLabel = (status: string) => {
       @send-message="handleSendMessage"
       @hint-click="handleHintClick"
       @update:chat-input="chatInput = $event"
+    />
+
+    <!-- 创建项目弹窗 -->
+    <CreateProjectModal
+      ref="createModalRef"
+      :show="showCreateModal"
+      @close="handleCloseModal"
+      @submit="handleSubmitProject"
     />
   </div>
 </template>
