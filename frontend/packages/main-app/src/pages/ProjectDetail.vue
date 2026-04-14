@@ -105,7 +105,10 @@ const handleBack = () => {
 }
 
 const handleCreateCampaign = () => {
-  console.log('创建新广告')
+  router.push({
+    path: '/campaigns/create',
+    query: { projectId: projectId.value }
+  })
 }
 
 const handleViewCampaign = (campaignId: string) => {

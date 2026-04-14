@@ -15,6 +15,16 @@ class UpdateStatusRequest(BaseModel):
     status: str
 
 
+class CreateCampaignRequest(BaseModel):
+    """创建广告计划请求模型"""
+    project_id: str
+    name: str
+    platform: str
+    budget: float
+    status: str | None = "draft"
+    material_ids: list[str] | None = None
+
+
 @router.get("")
 async def list_campaigns(
     project_id: str | None = None,
@@ -81,32 +91,32 @@ async def get_campaign(
 
 @router.post("")
 async def create_campaign(
-    project_id: str,
-    name: str,
-    platform: str,
-    budget: float,
-    status: str | None = "DRAFT",
-    material_ids: list[str] | None = None,
+    request: CreateCampaignRequest,
     current_user: dict = Depends(get_current_user),
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """创建新广告投放"""
     # 验证项目权限
-    project = await project_repo.get_by_id(project_id)
+    project = await project_repo.get_by_id(request.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
     
     campaign = await campaign_repo.create(
-        project_id=project_id,
-        name=name,
-        platform=platform,
-        budget=budget,
-        status=status,
-        material_ids=material_ids or [],
+        project_id=request.project_id,
+        name=request.name,
+        platform=request.platform,
+        budget=request.budget,
+        status=request.status or "draft",
+        material_ids=request.material_ids or [],
     )
+    
+    # 提交事务以确保数据持久化
+    await session.commit()
+    
     return campaign
 
 
