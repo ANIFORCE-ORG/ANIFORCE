@@ -59,6 +59,7 @@ htmlcov/
 
 # ===== 数据文件 =====
 backend/data/images/
+backend/data/sqlite/
 
 # ===== 其他 =====
 *.bak

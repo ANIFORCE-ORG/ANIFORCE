@@ -3,7 +3,7 @@ import json
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Campaign, Material
-from app.models.campaign import CampaignStatus
+from app.models.campaign import CampaignStatus, Platform
 
 
 class SqliteCampaignRepository:
@@ -19,7 +19,7 @@ class SqliteCampaignRepository:
             "project_id": campaign.project_id,
             "name": campaign.name,
             "description": campaign.description,
-            "platform": campaign.platform,
+            "platform": campaign.platform.value,
             "budget": campaign.budget,
             "spent": campaign.spent,
             "status": campaign.status.value,
@@ -49,6 +49,10 @@ class SqliteCampaignRepository:
         status = kwargs.pop("status", None)
         if status and isinstance(status, str):
             kwargs["status"] = CampaignStatus(status)
+        
+        # 处理 platform
+        if isinstance(platform, str):
+            platform = Platform(platform)
         
         campaign = Campaign(
             project_id=project_id,

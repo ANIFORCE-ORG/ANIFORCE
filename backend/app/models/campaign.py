@@ -17,6 +17,13 @@ class CampaignStatus(str, enum.Enum):
     COMPLETED = "completed"
 
 
+class Platform(str, enum.Enum):
+    """投放平台"""
+    TikTok = "TikTok"
+    Google = "Google"
+    Meta = "Meta"
+
+
 class Campaign(Base):
     __tablename__ = "campaigns"
     
@@ -26,10 +33,10 @@ class Campaign(Base):
     description: Mapped[str | None] = mapped_column(Text, nullable=True)
     
     # 投放配置
-    platform: Mapped[str] = mapped_column(String(50), nullable=False, index=True)
+    platform: Mapped[Platform] = mapped_column(Enum(Platform, native_enum=False), nullable=False, index=True)
     budget: Mapped[float] = mapped_column(Float, nullable=False)
     spent: Mapped[float] = mapped_column(Float, default=0.0)
-    status: Mapped[CampaignStatus] = mapped_column(Enum(CampaignStatus), default=CampaignStatus.DRAFT, index=True)
+    status: Mapped[CampaignStatus] = mapped_column(Enum(CampaignStatus, native_enum=False), default=CampaignStatus.DRAFT, index=True)
     
     # 素材管理
     material_ids: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 数组

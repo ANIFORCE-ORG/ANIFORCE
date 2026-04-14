@@ -149,7 +149,8 @@ const handleHintClick = (hint: string) => {
 
 // 创建广告
 const handleCreateCampaign = () => {
-  console.log('创建新广告')
+  // 跳转到创建广告页面，不传projectId参数，让用户在页面中选择项目
+  router.push('/campaigns/create')
 }
 
 // 查看广告详情
