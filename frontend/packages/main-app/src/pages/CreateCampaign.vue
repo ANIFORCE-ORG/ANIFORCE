@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue'
+import { ref, onMounted, computed, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import SelectGroupModal from '@/components/campaigns/SelectGroupModal.vue'
+import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
 import { getProjectDetail, type Project } from '@/api/projects'
 import { createCampaign } from '@/api/campaigns'
+import { type Material, getMaterialImage } from '@/api/materials'
 
 const router = useRouter()
 const route = useRoute()
@@ -40,6 +42,7 @@ const steps = [
 const selectedGroup = ref<Project | null>(null)
 const selectedPlatform = ref('')
 const showGroupModal = ref(false)
+const showMaterialModal = ref(false)
 const platforms = [
   { id: 'Google', name: 'Google Ads', icon: 'G', description: '搜索广告、展示广告、应用广告' },
   { id: 'TikTok', name: 'TikTok Ads', icon: '♪', description: '信息流广告、开屏广告、挑战赛' },
@@ -78,13 +81,36 @@ const startDate = ref('')
 const endDate = ref('')
 
 // 执行阶段数据
-const selectedMaterials = ref<string[]>([])
-const materials = ref([
-  { id: 'mat_001', name: 'CB_Victory_Dance', type: 'image', ctr: 5.8, roi: 2.8 },
-  { id: 'mat_002', name: 'CB_AI_ComboPlay', type: 'image', ctr: 4.2, roi: 3.0 },
-  { id: 'mat_003', name: 'DB_AI_NewScene', type: 'image', ctr: 6.2, roi: 3.0 },
-  { id: 'mat_004', name: 'DB_AI_EmotionHook', type: 'image', ctr: 6.1, roi: 3.0 }
-])
+const selectedMaterials = ref<Material[]>([])
+const materialThumbnails = ref<Record<string, string>>({})
+
+const removeMaterial = (materialId: string) => {
+  const index = selectedMaterials.value.findIndex(m => m.id === materialId)
+  if (index > -1) {
+    selectedMaterials.value.splice(index, 1)
+  }
+}
+
+// 加载素材缩略图
+const loadMaterialThumbnails = async (materials: Material[]) => {
+  for (const material of materials) {
+    if (!materialThumbnails.value[material.id]) {
+      try {
+        const imageData = await getMaterialImage(material.id, true)
+        materialThumbnails.value[material.id] = imageData.data
+      } catch (err) {
+        console.error(`加载素材${material.id}缩略图失败:`, err)
+      }
+    }
+  }
+}
+
+// 监听selectedMaterials变化，自动加载缩略图
+watch(selectedMaterials, (newMaterials) => {
+  if (newMaterials.length > 0) {
+    loadMaterialThumbnails(newMaterials)
+  }
+}, { deep: true })
 
 const targetRegions = ref<string[]>([])
 const regions = ['美国', '英国', '加拿大', '澳洲', '日本', '韩国', '新加坡', '泰国', '印度', '巴西']
@@ -101,7 +127,7 @@ const canProceedStep1 = computed(() => {
 })
 
 const canProceedStep2 = computed(() => {
-  return campaignObjective.value !== '' && dailyBudget.value > 0
+  return campaignObjective.value !== '' && dailyBudget.value > 0 && startDate.value !== '' && endDate.value !== ''
 })
 
 const canProceedStep3 = computed(() => {
@@ -118,21 +144,16 @@ const canProceed = computed(() => {
 const nextStep = () => {
   if (currentStep.value < totalSteps && canProceed.value) {
     currentStep.value++
+    // 滚动到页面顶部
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 }
 
 const prevStep = () => {
   if (currentStep.value > 1) {
     currentStep.value--
-  }
-}
-
-const toggleMaterial = (materialId: string) => {
-  const index = selectedMaterials.value.indexOf(materialId)
-  if (index > -1) {
-    selectedMaterials.value.splice(index, 1)
-  } else {
-    selectedMaterials.value.push(materialId)
+    // 滚动到页面顶部
+    window.scrollTo({ top: 0, behavior: 'smooth' })
   }
 }
 
@@ -180,7 +201,7 @@ const handleSubmit = async () => {
       platform: selectedPlatform.value,
       budget: dailyBudget.value,
       status: 'draft',
-      material_ids: selectedMaterials.value
+      material_ids: selectedMaterials.value.map(m => m.id)
     })
     
     console.log('广告计划创建成功:', campaign)
@@ -210,6 +231,21 @@ const handleCloseGroupModal = () => {
 const handleSelectGroup = (project: Project) => {
   selectedGroup.value = project
   console.log('选择分组:', project)
+}
+
+const handleOpenMaterialModal = () => {
+  showMaterialModal.value = true
+}
+
+const handleCloseMaterialModal = () => {
+  showMaterialModal.value = false
+}
+
+const handleSelectMaterials = (materials: Material[]) => {
+  selectedMaterials.value = materials
+  console.log('选择素材:', materials)
+  // 关闭弹窗后自动关闭
+  showMaterialModal.value = false
 }
 
 // 页面加载时，如果有projectId参数，自动加载该项目作为默认分组
@@ -508,29 +544,51 @@ onMounted(async () => {
             <h3 class="text-lg font-semibold text-slate-900 dark:text-white">选择素材</h3>
             <span class="text-sm text-slate-500 dark:text-slate-400">选择需要投放的创意素材，可多选</span>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          
+          <!-- 已选择的素材列表 -->
+          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-2 gap-4 mb-4">
             <div
-              v-for="material in materials"
+              v-for="material in selectedMaterials"
               :key="material.id"
-              class="p-4 rounded-lg border-2 transition-all cursor-pointer"
-              :class="selectedMaterials.includes(material.id) 
-                ? 'border-primary bg-primary/5' 
-                : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'"
-              @click="toggleMaterial(material.id)"
+              class="p-4 rounded-lg border-2 border-primary bg-primary/5 relative"
             >
               <div class="flex items-center gap-3">
-                <div class="w-16 h-16 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                  <span class="material-symbols-outlined text-2xl text-slate-400">image</span>
+                <div class="w-16 h-16 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                  <img
+                    v-if="materialThumbnails[material.id]"
+                    :src="materialThumbnails[material.id]"
+                    :alt="material.name"
+                    class="w-full h-full object-cover"
+                  />
+                  <span v-else class="material-symbols-outlined text-2xl text-slate-400">
+                    {{ material.type === 'video' ? 'videocam' : 'image' }}
+                  </span>
                 </div>
                 <div class="flex-1">
                   <div class="font-medium text-slate-900 dark:text-white text-sm mb-1">{{ material.name }}</div>
                   <div class="text-xs text-slate-500 dark:text-slate-400">
-                    {{ material.type }} · CTR {{ material.ctr }}% · ROI {{ material.roi }}x
+                    {{ material.type === 'video' ? '视频' : '图片' }} · CTR {{ material.ctr_estimate || 0 }}%
                   </div>
                 </div>
               </div>
+              <!-- 移除按钮 -->
+              <button
+                @click="removeMaterial(material.id)"
+                class="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"
+              >
+                <span class="material-symbols-outlined text-sm">close</span>
+              </button>
             </div>
           </div>
+          
+          <!-- 添加素材按钮 -->
+          <button
+            @click="handleOpenMaterialModal"
+            class="w-full px-4 py-3 rounded-md border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+          >
+            <span class="material-symbols-outlined">add_circle</span>
+            <span>添加素材</span>
+          </button>
         </div>
 
         <!-- 定向配置 - 投放地区 -->
@@ -763,6 +821,14 @@ onMounted(async () => {
       :show="showGroupModal"
       @close="handleCloseGroupModal"
       @select="handleSelectGroup"
+    />
+    
+    <!-- 选择素材弹窗 -->
+    <SelectMaterialModal
+      :show="showMaterialModal"
+      :selected-ids="selectedMaterials.map(m => m.id)"
+      @close="handleCloseMaterialModal"
+      @select="handleSelectMaterials"
     />
     </div>
   </div>
