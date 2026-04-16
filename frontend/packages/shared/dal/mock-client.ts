@@ -41,7 +41,7 @@ export class MockChatClient implements IChatClient {
 
   async getHistory(_sessionId: string) {
     await delay(500)
-    return ok({ messages: [{ role: 'ai', content: '欢迎使用ANIMAGUS智能投放平台！', timestamp: Date.now() }] })
+    return ok({ messages: [{ role: 'ai', content: '欢迎使用ANIFORCE智能投放平台！', timestamp: Date.now() }] })
   }
 }
 

@@ -18,7 +18,7 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = {
       id: 'admin-001',
       name: 'Admin',
-      email: 'admin@animagus.ai',
+      email: 'admin@aniforce.ai',
     }
     token.value = 'fake-jwt-token-demo'
   }

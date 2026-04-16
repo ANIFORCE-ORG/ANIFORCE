@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
-const email = ref('admin@animagus.ai')
+const email = ref('admin@aniforce.ai')
 const password = ref('admin123')
 
 function handleLogin() {
@@ -22,7 +22,7 @@ function handleLogin() {
           <span class="material-symbols-outlined text-3xl">rocket_launch</span>
         </div>
         <h1 class="text-2xl font-bold">欢迎回来</h1>
-        <p class="text-sm text-slate-500 mt-2">登录 ANIMAGUS</p>
+        <p class="text-sm text-slate-500 mt-2">登录 ANIFORCE</p>
       </div>
       <form class="space-y-4" @submit.prevent="handleLogin">
         <div>

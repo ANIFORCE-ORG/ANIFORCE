@@ -6,7 +6,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'home',
-      component: () => import('@/pages/Home.vue'),
+      redirect: '/dashboard',
     },
     {
       path: '/market-analysis',
@@ -57,6 +57,27 @@ const router = createRouter({
       path: '/login',
       name: 'login',
       component: () => import('@/pages/Login.vue'),
+    },
+    // AI生成素材路由
+    {
+      path: '/material/ai-generate/new',
+      name: 'ai-generate-new',
+      component: () => import('@/pages/AIGenerateNew.vue'),
+    },
+    {
+      path: '/material/ai-generate/remix',
+      name: 'ai-generate-remix',
+      component: () => import('@/pages/AIGenerateRemix.vue'),
+    },
+    {
+      path: '/material/ai-generate/hot',
+      name: 'ai-generate-hot',
+      component: () => import('@/pages/AIGenerateHot.vue'),
+    },
+    {
+      path: '/material/ai-generate/mix',
+      name: 'ai-generate-mix',
+      component: () => import('@/pages/AIGenerateMix.vue'),
     },
   ],
 })
