@@ -19,6 +19,13 @@ export interface Material {
   duration?: number
   file_size?: number
   created_at: string
+  // 新增字段
+  media_type?: string
+  fatigue?: number
+  is_hero?: boolean
+  roi?: number
+  spend?: number
+  campaign_id?: string
 }
 
 export interface MaterialImage {

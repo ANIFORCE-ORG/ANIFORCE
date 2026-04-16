@@ -22,7 +22,12 @@ class SqliteCampaignRepository:
             "platform": campaign.platform.value,
             "budget": campaign.budget,
             "spent": campaign.spent,
+            "target_cpa": campaign.target_cpa,
             "status": campaign.status.value,
+            "pipeline_step": campaign.pipeline_step,
+            "learning_phase": campaign.learning_phase,
+            "auto_optimize_enabled": campaign.auto_optimize_enabled,
+            "optimization_rules": campaign.get_optimization_rules(),
             "material_ids": campaign.get_material_ids(),
             "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
             "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
@@ -39,21 +44,26 @@ class SqliteCampaignRepository:
         material_ids = kwargs.pop("material_ids", None)
         if material_ids and isinstance(material_ids, list):
             kwargs["material_ids"] = json.dumps(material_ids)
-        
+
+        # 处理 optimization_rules
+        optimization_rules = kwargs.pop("optimization_rules", None)
+        if optimization_rules and isinstance(optimization_rules, list):
+            kwargs["optimization_rules"] = json.dumps(optimization_rules)
+
         # 处理 config
         config = kwargs.pop("config", None)
         if config and isinstance(config, dict):
             kwargs["config"] = json.dumps(config)
-        
+
         # 处理 status
         status = kwargs.pop("status", None)
         if status and isinstance(status, str):
             kwargs["status"] = CampaignStatus(status)
-        
+
         # 处理 platform
         if isinstance(platform, str):
             platform = Platform(platform)
-        
+
         campaign = Campaign(
             project_id=project_id,
             name=name,
@@ -63,7 +73,7 @@ class SqliteCampaignRepository:
         )
         self.session.add(campaign)
         await self.session.flush()
-        
+
         return self._to_dict(campaign)
     
     async def get_by_id(self, campaign_id: str) -> dict | None:
@@ -82,16 +92,65 @@ class SqliteCampaignRepository:
     ) -> list[dict]:
         """查询项目的广告投放列表"""
         query = select(Campaign).where(Campaign.project_id == project_id)
-        
+
         if status:
             query = query.where(Campaign.status == CampaignStatus(status))
-        
+
         query = query.order_by(Campaign.created_at.desc()).limit(limit)
-        
+
         result = await self.session.execute(query)
         campaigns = result.scalars().all()
-        
+
         return [self._to_dict(c) for c in campaigns]
+
+    async def list_by_pipeline_step(
+        self, project_id: str, pipeline_step: str, limit: int = 20
+    ) -> list[dict]:
+        """按 Pipeline 阶段查询广告投放列表"""
+        query = select(Campaign).where(
+            Campaign.project_id == project_id,
+            Campaign.pipeline_step == pipeline_step
+        ).order_by(Campaign.created_at.desc()).limit(limit)
+
+        result = await self.session.execute(query)
+        campaigns = result.scalars().all()
+
+        return [self._to_dict(c) for c in campaigns]
+
+    async def update(self, campaign_id: str, **kwargs) -> None:
+        """更新广告投放"""
+        result = await self.session.execute(
+            select(Campaign).where(Campaign.id == campaign_id)
+        )
+        campaign = result.scalar_one_or_none()
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+
+        # 处理 material_ids
+        if "material_ids" in kwargs and isinstance(kwargs["material_ids"], list):
+            kwargs["material_ids"] = json.dumps(kwargs["material_ids"])
+
+        # 处理 optimization_rules
+        if "optimization_rules" in kwargs and isinstance(kwargs["optimization_rules"], list):
+            kwargs["optimization_rules"] = json.dumps(kwargs["optimization_rules"])
+
+        # 处理 config
+        if "config" in kwargs and isinstance(kwargs["config"], dict):
+            kwargs["config"] = json.dumps(kwargs["config"])
+
+        # 处理 status
+        if "status" in kwargs and isinstance(kwargs["status"], str):
+            kwargs["status"] = CampaignStatus(kwargs["status"])
+
+        # 处理 platform
+        if "platform" in kwargs and isinstance(kwargs["platform"], str):
+            kwargs["platform"] = Platform(kwargs["platform"])
+
+        for key, value in kwargs.items():
+            if hasattr(campaign, key):
+                setattr(campaign, key, value)
+
+        await self.session.flush()
     
     async def update_status(self, campaign_id: str, status: str) -> None:
         """更新广告投放状态"""

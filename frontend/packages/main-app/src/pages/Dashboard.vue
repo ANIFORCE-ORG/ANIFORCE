@@ -1,9 +1,13 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
+import TimeRangeSelector from '@/components/dashboard/TimeRangeSelector.vue'
+import PlatformList from '@/components/dashboard/PlatformList.vue'
+import CreativeRanking from '@/components/dashboard/CreativeRanking.vue'
+import { getTimeMultiplier, TIME_RANGES } from '@/utils/timeRange'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -66,6 +70,63 @@ const stats = ref({
   cpi: { value: '$3.3', label: '平均CPI', change: '-$0.2', trend: 'down' }
 })
 
+// 基础数据（用于计算不同时间范围的数据）
+const baseStats = {
+  spend: 151000,
+  roi: 2.0,
+  installs: 45850,
+  cpi: 3.3
+}
+
+// 根据时间范围计算统计数据
+const computedStats = computed(() => {
+  const multiplier = getTimeMultiplier(timeFilter.value)
+
+  const spend = baseStats.spend * multiplier
+  const installs = Math.floor(baseStats.installs * multiplier)
+  const roi = baseStats.roi
+  const cpi = spend / installs
+
+  // 计算变化趋势（模拟对比上一周期）
+  const prevMultiplier = multiplier * 0.89
+  const prevSpend = baseStats.spend * prevMultiplier
+  const prevInstalls = Math.floor(baseStats.installs * 0.93 * multiplier)
+  const prevRoi = roi - 0.15
+  const prevCpi = cpi + 0.30
+
+  const spendChange = ((spend - prevSpend) / prevSpend * 100).toFixed(0)
+  const installChange = ((installs - prevInstalls) / prevInstalls * 100).toFixed(0)
+  const roiChange = (roi - prevRoi).toFixed(2)
+  const cpiChange = (cpi - prevCpi).toFixed(2)
+
+  return {
+    spend: {
+      value: `$${spend.toLocaleString('en-US', { maximumFractionDigits: 0 })}`,
+      label: '总消耗',
+      change: `${spendChange >= 0 ? '+' : ''}${spendChange}%`,
+      trend: parseFloat(spendChange) >= 0 ? 'up' : 'down'
+    },
+    roi: {
+      value: `${roi.toFixed(2)}x`,
+      label: '整体ROI',
+      change: `${roiChange >= 0 ? '+' : ''}${roiChange}`,
+      trend: parseFloat(roiChange) >= 0 ? 'up' : 'down'
+    },
+    installs: {
+      value: installs.toLocaleString('en-US'),
+      label: '总安装数',
+      change: `${installChange >= 0 ? '+' : ''}${installChange}%`,
+      trend: parseFloat(installChange) >= 0 ? 'up' : 'down'
+    },
+    cpi: {
+      value: `$${cpi.toFixed(2)}`,
+      label: '平均CPI',
+      change: `${cpiChange >= 0 ? '+' : ''}$${Math.abs(parseFloat(cpiChange)).toFixed(2)}`,
+      trend: parseFloat(cpiChange) <= 0 ? 'up' : 'down' // CPI 下降是好事
+    }
+  }
+})
+
 const alerts = ref([
   {
     id: 1,
@@ -101,13 +162,7 @@ const alerts = ref([
   }
 ])
 
-const timeFilters = [
-  { value: 'realtime', label: '实时' },
-  { value: 'today', label: '今日' },
-  { value: 'yesterday', label: '昨日' },
-  { value: '7days', label: '近7日' },
-  { value: '30days', label: '近30日' }
-]
+const timeFilters = TIME_RANGES
 
 const switchPanel = (item: any) => {
   if (item.path) {
@@ -130,12 +185,40 @@ const handleHintClick = (hint: string) => {
 }
 
 const handleRefresh = () => {
-  console.log('刷新数据')
+  console.log('刷新数据，当前时间范围:', timeFilter.value)
+  // TODO: 调用 API 刷新数据
+}
+
+const handleTimeRangeChange = (value: string) => {
+  console.log('时间范围变更:', value)
+  // 数据会通过 computedStats 自动更新
 }
 
 const handleAlertAction = (alert: any) => {
   console.log('处理提醒:', alert)
 }
+
+// Mock campaigns data for platform list
+const mockCampaigns = ref([
+  { id: 'c1', name: 'CB_US_iOS_Install_001', platform: 'Meta', status: 'running', spent: 25000, installs: 8500, roi: 2.1 },
+  { id: 'c2', name: 'CB_US_Android_Install_002', platform: 'Google', status: 'running', spent: 18000, installs: 6200, roi: 1.9 },
+  { id: 'c3', name: 'CB_UK_iOS_Install_003', platform: 'TikTok', status: 'running', spent: 9300, installs: 3100, roi: 2.3 },
+  { id: 'c4', name: 'DB_US_iOS_Install_001', platform: 'Meta', status: 'running', spent: 42000, installs: 15000, roi: 2.2 },
+  { id: 'c5', name: 'DB_US_Android_Install_002', platform: 'Google', status: 'running', spent: 31000, installs: 11500, roi: 1.8 },
+  { id: 'c6', name: 'DB_UK_iOS_Install_003', platform: 'TikTok', status: 'running', spent: 25700, installs: 9200, roi: 2.0 },
+  { id: 'c7', name: 'Test_Campaign', platform: 'Meta', status: 'paused', spent: 5000, installs: 1500, roi: 1.5 }
+])
+
+// Mock materials data for creative ranking
+const mockMaterials = ref([
+  { id: 'm1', name: 'CB_Character_CandyQueen', thumbnail_url: '', ctr: 0.045, spend: 12000, roi: 2.5, status: 'running' },
+  { id: 'm2', name: 'CB_Gameplay_Level50', thumbnail_url: '', ctr: 0.038, spend: 9500, roi: 2.3, status: 'running' },
+  { id: 'm3', name: 'DB_Drama_Episode1', thumbnail_url: '', ctr: 0.052, spend: 18000, roi: 2.8, status: 'running' },
+  { id: 'm4', name: 'DB_Character_CEO', thumbnail_url: '', ctr: 0.041, spend: 15000, roi: 2.4, status: 'running' },
+  { id: 'm5', name: 'CB_Feature_PowerUps', thumbnail_url: '', ctr: 0.035, spend: 8000, roi: 2.1, status: 'running' },
+  { id: 'm6', name: 'DB_Scene_Office', thumbnail_url: '', ctr: 0.048, spend: 13500, roi: 2.6, status: 'running' },
+  { id: 'm7', name: 'Test_Material', thumbnail_url: '', ctr: 0.025, spend: 3000, roi: 1.6, status: 'paused' }
+])
 </script>
 
 <template>
@@ -157,14 +240,11 @@ const handleAlertAction = (alert: any) => {
         <h3 class="font-bold text-slate-900 dark:text-white">数据概览</h3>
         <div class="flex items-center gap-2">
           <!-- Time Filter -->
-          <select
+          <TimeRangeSelector
             v-model="timeFilter"
-            class="text-sm px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
-          >
-            <option v-for="filter in timeFilters" :key="filter.value" :value="filter.value">
-              {{ filter.label }}
-            </option>
-          </select>
+            :options="timeFilters"
+            @change="handleTimeRangeChange"
+          />
           <!-- Refresh Button -->
           <button
             class="h-8 w-8 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
@@ -180,7 +260,7 @@ const handleAlertAction = (alert: any) => {
         <!-- Stats Grid -->
         <div class="grid grid-cols-2 gap-3">
           <div
-            v-for="(stat, key) in stats"
+            v-for="(stat, key) in computedStats"
             :key="key"
             class="p-4 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50"
           >
@@ -207,6 +287,27 @@ const handleAlertAction = (alert: any) => {
             </div>
             <div class="text-xl font-bold text-slate-900 dark:text-white mb-1">{{ stat.value }}</div>
             <div class="text-xs text-slate-500 dark:text-slate-400">{{ stat.label }}</div>
+          </div>
+        </div>
+
+        <!-- Platform List & Creative Ranking -->
+        <div class="grid grid-cols-2 gap-6">
+          <!-- Platform List -->
+          <div>
+            <div class="flex items-center gap-2 mb-4">
+              <span class="material-symbols-outlined text-primary">ads_click</span>
+              <h4 class="font-semibold text-slate-900 dark:text-white">平台列表</h4>
+            </div>
+            <PlatformList :campaigns="mockCampaigns" />
+          </div>
+
+          <!-- Creative Ranking -->
+          <div>
+            <div class="flex items-center gap-2 mb-4">
+              <span class="material-symbols-outlined text-primary">emoji_events</span>
+              <h4 class="font-semibold text-slate-900 dark:text-white">素材排行榜</h4>
+            </div>
+            <CreativeRanking :materials="mockMaterials" />
           </div>
         </div>
 

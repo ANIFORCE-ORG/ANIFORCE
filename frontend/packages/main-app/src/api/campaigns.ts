@@ -19,6 +19,15 @@ export interface Campaign {
   config?: any
   created_at: string
   updated_at: string
+  // 新增字段
+  installs?: number
+  cpi?: number
+  roi?: number
+  target_cpa?: number
+  pipeline_step?: string
+  learning_phase?: string
+  auto_optimize_enabled?: boolean
+  optimization_rules?: any
 }
 
 export interface CampaignsResponse {
