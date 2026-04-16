@@ -24,11 +24,6 @@ const router = createRouter({
       component: () => import('@/pages/Campaign.vue'),
     },
     {
-      path: '/monitor',
-      name: 'monitor',
-      component: () => import('@/pages/Monitor.vue'),
-    },
-    {
       path: '/dashboard',
       name: 'dashboard',
       component: () => import('@/pages/Dashboard.vue'),

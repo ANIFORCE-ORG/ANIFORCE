@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import axios from 'axios'
 
 const emit = defineEmits<{
   next: [data: any]
@@ -7,7 +8,17 @@ const emit = defineEmits<{
   skip: []
 }>()
 
-const platforms = ref([
+interface Platform {
+  id: string
+  name: string
+  description: string
+  icon: string
+  color: string
+  textColor?: string
+  connected: boolean
+}
+
+const platforms = ref<Platform[]>([
   {
     id: 'meta',
     name: 'Meta Ads',
@@ -35,16 +46,62 @@ const platforms = ref([
   }
 ])
 
-const handleConnect = (platform: any) => {
-  // 模拟连接
-  platform.connected = true
-  console.log('连接平台:', platform.id)
+const connectingPlatform = ref<string | null>(null)
+
+const fetchConnectedAccounts = async () => {
+  try {
+    const response = await axios.get('/api/v1/platform/accounts')
+    const accounts = response.data
+
+    // 更新平台连接状态
+    platforms.value.forEach(platform => {
+      platform.connected = accounts.some((acc: any) =>
+        acc.platform === platform.id && acc.status === 'active'
+      )
+    })
+  } catch (error) {
+    console.error('Failed to fetch accounts:', error)
+  }
+}
+
+const handleConnect = async (platform: Platform) => {
+  connectingPlatform.value = platform.id
+  try {
+    const response = await axios.post(`/api/v1/platform/connect?platform=${platform.id}`)
+    const { auth_url } = response.data
+
+    // 打开 OAuth 授权窗口
+    const authWindow = window.open(auth_url, '_blank', 'width=600,height=700')
+
+    // 监听授权完成（实际应用中需要实现回调处理）
+    // 这里简化处理，直接标记为已连接
+    setTimeout(() => {
+      platform.connected = true
+      connectingPlatform.value = null
+    }, 2000)
+  } catch (error) {
+    console.error('Failed to connect platform:', error)
+    connectingPlatform.value = null
+  }
+}
+
+const addTestAccount = async (platform: Platform) => {
+  try {
+    await axios.post(`/api/v1/platform/accounts/test?platform=${platform.id}`)
+    platform.connected = true
+  } catch (error) {
+    console.error('Failed to add test account:', error)
+  }
 }
 
 const handleNext = () => {
   const connectedPlatforms = platforms.value.filter(p => p.connected)
   emit('next', { platforms: connectedPlatforms })
 }
+
+onMounted(() => {
+  fetchConnectedAccounts()
+})
 </script>
 
 <template>
@@ -89,18 +146,26 @@ const handleNext = () => {
           </div>
 
           <!-- Status -->
-          <div class="flex items-center gap-2">
+          <div class="flex flex-col items-end gap-2">
             <div v-if="platform.connected" class="flex items-center gap-1 text-emerald-600">
               <span class="material-symbols-outlined text-lg">check_circle</span>
               <span class="text-xs font-semibold">已连接</span>
             </div>
-            <button
-              v-else
-              class="px-3 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
-              @click="handleConnect(platform)"
-            >
-              立即连接
-            </button>
+            <template v-else>
+              <button
+                class="px-3 py-1.5 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors disabled:opacity-50"
+                :disabled="connectingPlatform === platform.id"
+                @click="handleConnect(platform)"
+              >
+                {{ connectingPlatform === platform.id ? '连接中...' : '立即连接' }}
+              </button>
+              <button
+                class="px-3 py-1.5 rounded-md border border-slate-300 dark:border-slate-700 text-slate-700 dark:text-slate-300 text-xs font-medium hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+                @click="addTestAccount(platform)"
+              >
+                添加测试账号
+              </button>
+            </template>
           </div>
         </div>
       </div>
