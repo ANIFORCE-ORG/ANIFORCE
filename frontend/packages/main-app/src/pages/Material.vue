@@ -65,7 +65,7 @@ onMounted(async () => {
     const token = localStorage.getItem('access_token')
     if (!token) {
       console.log('自动登录测试账号...')
-      await login('test@aniforce.com', 'test123')
+      await login('test@animagus.com', 'test123')
     }
     
     // 加载素材数据

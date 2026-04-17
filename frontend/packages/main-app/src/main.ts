@@ -1,6 +1,6 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
-import { createDAL } from '@aniforce/shared'
+import { createDAL } from '@animagus/shared'
 import App from './App.vue'
 import router from './router'
 import './styles/global.css'

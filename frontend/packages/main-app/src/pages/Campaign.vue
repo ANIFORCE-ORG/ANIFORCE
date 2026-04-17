@@ -51,7 +51,7 @@ const sessions = ref([
 const messages = ref([
   {
     role: 'ai',
-    author: 'ANIFORCE助手',
+    author: 'ANIMAGUS助手',
     time: '刚刚',
     content: '您好！我可以帮您创建广告计划、优化投放策略或分析广告数据。请问需要什么帮助？'
   }
@@ -77,7 +77,7 @@ onMounted(async () => {
     const token = localStorage.getItem('access_token')
     if (!token) {
       console.log('自动登录测试账号...')
-      await login('test@aniforce.com', 'test123')
+      await login('test@animagus.com', 'test123')
     }
     
     // 加载广告投放数据
