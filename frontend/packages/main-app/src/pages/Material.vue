@@ -3,8 +3,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
-import MaterialUpload from '@/components/materials/MaterialUpload.vue'
-import AddToCampaign from '@/components/materials/AddToCampaign.vue'
 import { getMaterials, getMaterialImage, type Material } from '@/api/materials'
 import { login } from '@/api'
 
@@ -18,9 +16,6 @@ const loading = ref(false)
 const error = ref('')
 const materials = ref<Material[]>([])
 const materialImages = ref<Map<string, string>>(new Map())
-const showUploadDialog = ref(false)
-const showAddToCampaignDialog = ref(false)
-const selectedMaterial = ref<Material | null>(null)
 
 // 导航项配置
 const navItems = [
@@ -437,21 +432,6 @@ const handleHintClick = (hint: string) => {
 
 const handleFeatureClick = (featureId: string) => {
   console.log('点击功能卡片:', featureId)
-
-  // 根据功能ID跳转到对应页面
-  switch (featureId) {
-    case 'hot-creatives':
-      router.push('/materials/hot')
-      break
-    case 'remix':
-      router.push('/materials/remix')
-      break
-    case 'ai-generate':
-      router.push('/materials/ai-generate')
-      break
-    default:
-      console.log('未知功能:', featureId)
-  }
 }
 
 // 获取状态颜色样式
@@ -473,39 +453,6 @@ const getStatusLabel = (status: string) => {
   }
   return labels[status] || status
 }
-
-// 上传相关
-const handleUploadClick = () => {
-  showUploadDialog.value = true
-}
-
-const handleUploadComplete = (files: any[]) => {
-  console.log('上传完成:', files)
-  // TODO: 调用API保存素材到数据库
-  // 暂时添加到本地列表
-  showUploadDialog.value = false
-}
-
-const handleCloseUpload = () => {
-  showUploadDialog.value = false
-}
-
-// 添加到投放计划相关
-const handleAddToCampaign = (material: Material) => {
-  selectedMaterial.value = material
-  showAddToCampaignDialog.value = true
-}
-
-const handleAddComplete = () => {
-  console.log('添加到投放计划完成')
-  showAddToCampaignDialog.value = false
-  selectedMaterial.value = null
-}
-
-const handleCloseAddToCampaign = () => {
-  showAddToCampaignDialog.value = false
-  selectedMaterial.value = null
-}
 </script>
 
 <template>
@@ -523,15 +470,8 @@ const handleCloseAddToCampaign = () => {
     <!-- 中间核心工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
+      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center px-6">
         <h1 class="text-xl font-bold text-slate-900 dark:text-white">创意素材</h1>
-        <button
-          class="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
-          @click="handleUploadClick"
-        >
-          <span class="material-symbols-outlined text-lg">upload</span>
-          <span class="text-sm font-medium">上传素材</span>
-        </button>
       </div>
 
       <!-- Content -->
@@ -657,58 +597,15 @@ const handleCloseAddToCampaign = () => {
                 </div>
 
                 <!-- 数据指标 -->
-                <div class="grid grid-cols-3 gap-2 mb-2">
+                <div class="grid grid-cols-2 gap-2">
                   <div class="text-left">
-                    <div class="text-[10px] text-slate-400 mb-0.5">ROI</div>
-                    <div class="text-xs font-bold" :class="creative.roi && creative.roi >= 2.0 ? 'text-emerald-600' : 'text-slate-900 dark:text-white'">
-                      {{ creative.roi ? `${creative.roi.toFixed(2)}x` : 'N/A' }}
-                    </div>
-                  </div>
-                  <div class="text-left">
-                    <div class="text-[10px] text-slate-400 mb-0.5">消耗</div>
-                    <div class="text-xs font-bold text-slate-900 dark:text-white">
-                      {{ creative.spend ? `$${creative.spend.toLocaleString()}` : 'N/A' }}
-                    </div>
-                  </div>
-                  <div class="text-left">
-                    <div class="text-[10px] text-slate-400 mb-0.5">CTR</div>
+                    <div class="text-[10px] text-slate-400 mb-0.5">CTR预估</div>
                     <div class="text-xs font-bold text-slate-900 dark:text-white">{{ creative.ctr_estimate?.toFixed(1) || 'N/A' }}%</div>
                   </div>
-                </div>
-
-                <!-- 关联投放计划 -->
-                <div v-if="creative.campaign_ids && creative.campaign_ids.length > 0" class="mb-2">
-                  <div class="text-[10px] text-slate-400 mb-1">关联计划</div>
-                  <div class="text-xs text-slate-600 dark:text-slate-400">
-                    {{ creative.campaign_ids.length }} 个投放计划
+                  <div class="text-left">
+                    <div class="text-[10px] text-slate-400 mb-0.5">文件大小</div>
+                    <div class="text-xs font-bold text-slate-900 dark:text-white">{{ creative.file_size ? (creative.file_size / 1024).toFixed(0) + 'KB' : 'N/A' }}</div>
                   </div>
-                </div>
-
-                <!-- 疲劳度标签 -->
-                <div v-if="creative.fatigue && creative.fatigue > 3.0" class="mb-2">
-                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full bg-orange-50 dark:bg-orange-900/30 text-orange-600">
-                    <span class="material-symbols-outlined text-xs">warning</span>
-                    疲劳度 {{ creative.fatigue.toFixed(1) }}
-                  </span>
-                </div>
-
-                <!-- Hero素材标签 -->
-                <div v-if="creative.is_hero">
-                  <span class="inline-flex items-center gap-1 text-[10px] font-semibold px-2 py-1 rounded-full bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600">
-                    <span class="material-symbols-outlined text-xs">star</span>
-                    跑量素材
-                  </span>
-                </div>
-
-                <!-- 操作按钮 -->
-                <div class="mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
-                  <button
-                    class="w-full px-3 py-2 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors flex items-center justify-center gap-1"
-                    @click="handleAddToCampaign(creative)"
-                  >
-                    <span class="material-symbols-outlined text-sm">add_circle</span>
-                    添加到投放计划
-                  </button>
                 </div>
               </div>
             </div>
@@ -735,21 +632,6 @@ const handleCloseAddToCampaign = () => {
       @send-message="handleSendMessage"
       @hint-click="handleHintClick"
       @update:chat-input="chatInput = $event"
-    />
-
-    <!-- 上传素材对话框 -->
-    <MaterialUpload
-      v-if="showUploadDialog"
-      @upload-complete="handleUploadComplete"
-      @close="handleCloseUpload"
-    />
-
-    <!-- 添加到投放计划对话框 -->
-    <AddToCampaign
-      v-if="showAddToCampaignDialog"
-      :material="selectedMaterial"
-      @add-complete="handleAddComplete"
-      @close="handleCloseAddToCampaign"
     />
   </div>
 </template>

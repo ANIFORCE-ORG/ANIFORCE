@@ -21,14 +21,11 @@ class SqliteMaterialRepository:
             "campaign_ids": material.get_campaign_ids(),
             "name": material.name,
             "type": material.type.value,
-            "media_type": material.media_type,
             "status": material.status.value,
             "url": material.url,
             "thumbnail_url": material.thumbnail_url,
             "ctr_estimate": material.ctr_estimate,
-            "fatigue": material.fatigue,
-            "is_hero": material.is_hero,
-            "tags": material.get_tags(),
+            "tags": json.loads(material.tags) if material.tags else [],
             "duration": material.duration,
             "file_size": material.file_size,
             "created_at": material.created_at.isoformat(),
@@ -84,75 +81,16 @@ class SqliteMaterialRepository:
     ) -> list[dict]:
         """查询用户的素材列表"""
         query = select(Material).where(Material.user_id == user_id)
-
+        
         if type:
             query = query.where(Material.type == MaterialType(type))
-
+        
         query = query.order_by(Material.created_at.desc()).limit(limit)
-
+        
         result = await self.session.execute(query)
         materials = result.scalars().all()
-
+        
         return [self._to_dict(m) for m in materials]
-
-    async def list_by_fatigue(
-        self, user_id: str, min_fatigue: float = 0.0, limit: int = 50
-    ) -> list[dict]:
-        """按疲劳度查询素材列表"""
-        query = select(Material).where(
-            Material.user_id == user_id,
-            Material.fatigue >= min_fatigue
-        ).order_by(Material.fatigue.desc()).limit(limit)
-
-        result = await self.session.execute(query)
-        materials = result.scalars().all()
-
-        return [self._to_dict(m) for m in materials]
-
-    async def list_hero_materials(
-        self, user_id: str, limit: int = 50
-    ) -> list[dict]:
-        """查询英雄素材列表"""
-        query = select(Material).where(
-            Material.user_id == user_id,
-            Material.is_hero == True
-        ).order_by(Material.created_at.desc()).limit(limit)
-
-        result = await self.session.execute(query)
-        materials = result.scalars().all()
-
-        return [self._to_dict(m) for m in materials]
-
-    async def update(self, material_id: str, **kwargs) -> None:
-        """更新素材"""
-        result = await self.session.execute(
-            select(Material).where(Material.id == material_id)
-        )
-        material = result.scalar_one_or_none()
-        if not material:
-            raise ValueError(f"Material {material_id} not found")
-
-        # 处理 project_ids
-        if "project_ids" in kwargs and isinstance(kwargs["project_ids"], list):
-            kwargs["project_ids"] = json.dumps(kwargs["project_ids"])
-
-        # 处理 campaign_ids
-        if "campaign_ids" in kwargs and isinstance(kwargs["campaign_ids"], list):
-            kwargs["campaign_ids"] = json.dumps(kwargs["campaign_ids"])
-
-        # 处理 tags
-        if "tags" in kwargs and isinstance(kwargs["tags"], list):
-            kwargs["tags"] = json.dumps(kwargs["tags"])
-
-        # 处理 type
-        if "type" in kwargs and isinstance(kwargs["type"], str):
-            kwargs["type"] = MaterialType(kwargs["type"])
-
-        for key, value in kwargs.items():
-            if hasattr(material, key):
-                setattr(material, key, value)
-
-        await self.session.flush()
     
     async def list_by_project(self, project_id: str, limit: int = 50) -> list[dict]:
         """查询项目的素材列表"""

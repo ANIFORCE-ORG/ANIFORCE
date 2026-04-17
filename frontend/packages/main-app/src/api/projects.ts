@@ -19,12 +19,6 @@ export interface Project {
   end_date: string
   created_at: string
   updated_at: string
-  product_type?: string
-  region?: string | string[]
-  target_roi?: number
-  current_roi?: number
-  installs?: number
-  campaign_count?: number
 }
 
 interface ProjectsResponse {
@@ -79,9 +73,6 @@ export async function updateProject(
     name?: string
     total_budget?: number
     status?: string
-    product_type?: string
-    region?: string[]
-    target_roi?: number
   }
 ): Promise<Project> {
   return http.put<Project>(`/projects/${projectId}`, data)

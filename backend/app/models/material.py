@@ -3,7 +3,7 @@ import uuid
 import enum
 import json
 from datetime import datetime
-from sqlalchemy import String, Float, DateTime, Enum, Text, Integer, Boolean, ForeignKey
+from sqlalchemy import String, Float, DateTime, Enum, Text, Integer, ForeignKey
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.config.database import Base
 
@@ -36,15 +36,12 @@ class Material(Base):
     # 素材信息
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     type: Mapped[MaterialType] = mapped_column(Enum(MaterialType), nullable=False, index=True)
-    media_type: Mapped[str | None] = mapped_column(String(20), nullable=True, index=True)  # 媒体类型：video/image
     status: Mapped[MaterialStatus] = mapped_column(Enum(MaterialStatus), nullable=False, default=MaterialStatus.READY, index=True)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
-
-    # 预估数据和性能
+    
+    # 预估数据
     ctr_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
-    fatigue: Mapped[float] = mapped_column(Float, default=0.0, index=True)  # 疲劳度
-    is_hero: Mapped[bool] = mapped_column(Boolean, default=False)  # 是否英雄素材
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 数组
     
     # 元数据
@@ -103,13 +100,3 @@ class Material(Base):
         if campaign_id in ids:
             ids.remove(campaign_id)
             self.set_campaign_ids(ids)
-
-    def get_tags(self) -> list[str]:
-        """获取标签列表"""
-        if not self.tags:
-            return []
-        return json.loads(self.tags)
-
-    def set_tags(self, tags: list[str]) -> None:
-        """设置标签列表"""
-        self.tags = json.dumps(tags)

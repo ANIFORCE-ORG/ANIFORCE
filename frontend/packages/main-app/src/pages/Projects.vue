@@ -5,9 +5,7 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
-import ProjectEditDialog from '@/components/projects/ProjectEditDialog.vue'
-import ProductTypeChart from '@/components/projects/ProductTypeChart.vue'
-import { getProjects, createProject, updateProject, type Project } from '@/api/projects'
+import { getProjects, createProject, type Project } from '@/api/projects'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -16,9 +14,6 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 const showCreateModal = ref(false)
 const createModalRef = ref<InstanceType<typeof CreateProjectModal> | null>(null)
-const showEditModal = ref(false)
-const editModalRef = ref<InstanceType<typeof ProjectEditDialog> | null>(null)
-const editingProject = ref<Project | null>(null)
 
 const activePanel = ref('projects')
 const activeSession = ref('sess_g001')
@@ -144,10 +139,10 @@ const handleSubmitProject = async (data: any) => {
     console.log('创建项目:', data)
     const newProject = await createProject(data)
     console.log('项目创建成功:', newProject)
-
+    
     // 添加到项目列表
     projects.value.unshift(newProject)
-
+    
     // 关闭弹窗并重置表单
     showCreateModal.value = false
     createModalRef.value?.resetForm()
@@ -156,42 +151,6 @@ const handleSubmitProject = async (data: any) => {
     alert(err.message || '创建项目失败，请重试')
   } finally {
     createModalRef.value?.setSubmitting(false)
-  }
-}
-
-const handleEditProject = (project: Project) => {
-  editingProject.value = project
-  showEditModal.value = true
-}
-
-const handleCloseEditModal = () => {
-  showEditModal.value = false
-  editingProject.value = null
-}
-
-const handleSubmitEditProject = async (data: any) => {
-  if (!editingProject.value) return
-
-  try {
-    console.log('更新项目:', editingProject.value.id, data)
-    const updatedProject = await updateProject(editingProject.value.id, data)
-    console.log('项目更新成功:', updatedProject)
-
-    // 更新项目列表中的数据
-    const index = projects.value.findIndex(p => p.id === editingProject.value!.id)
-    if (index !== -1) {
-      projects.value[index] = updatedProject
-    }
-
-    // 关闭弹窗并重置表单
-    showEditModal.value = false
-    editModalRef.value?.resetForm()
-    editingProject.value = null
-  } catch (err: any) {
-    console.error('更新项目失败:', err)
-    alert(err.message || '更新项目失败，请重试')
-  } finally {
-    editModalRef.value?.setSubmitting(false)
   }
 }
 
@@ -267,19 +226,6 @@ const getStatusLabel = (status: string) => {
 
       <!-- Projects List -->
       <div class="flex-1 overflow-y-auto p-6">
-        <!-- Product Type Visualization -->
-        <div class="mb-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">category</span>
-            <h4 class="font-semibold text-slate-900 dark:text-white">产品类型分布</h4>
-          </div>
-          <ProductTypeChart :projects="projects" />
-        </div>
-
-        <!-- Projects Grid -->
-        <div class="mb-4">
-          <h4 class="font-semibold text-slate-900 dark:text-white mb-4">项目列表</h4>
-        </div>
         <div class="grid gap-4">
           <div
             v-for="project in filteredProjects"
@@ -372,12 +318,6 @@ const getStatusLabel = (status: string) => {
               >
                 查看详情
               </button>
-              <button
-                class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                @click.stop="handleEditProject(project)"
-              >
-                编辑
-              </button>
             </div>
           </div>
         </div>
@@ -406,15 +346,6 @@ const getStatusLabel = (status: string) => {
       :show="showCreateModal"
       @close="handleCloseModal"
       @submit="handleSubmitProject"
-    />
-
-    <!-- 编辑项目弹窗 -->
-    <ProjectEditDialog
-      ref="editModalRef"
-      :show="showEditModal"
-      :project="editingProject"
-      @close="handleCloseEditModal"
-      @submit="handleSubmitEditProject"
     />
   </div>
 </template>

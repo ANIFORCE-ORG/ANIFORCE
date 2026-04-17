@@ -188,24 +188,6 @@ const getPlatformColor = (platform: string) => {
               <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project ? Math.round((project.spent / project.total_budget) * 100) : 0 }}%</div>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">目标ROI</div>
-              <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project?.target_roi ? `${project.target_roi}x` : '-' }}</div>
-            </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">当前ROI</div>
-              <div class="text-sm font-semibold" :class="project?.current_roi && project?.target_roi && project.current_roi >= project.target_roi ? 'text-emerald-600' : 'text-red-600'">
-                {{ project?.current_roi ? `${project.current_roi}x` : '-' }}
-              </div>
-            </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">安装数</div>
-              <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project?.installs?.toLocaleString() || '-' }}</div>
-            </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">广告计划数</div>
-              <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project?.campaign_count || 0 }}</div>
-            </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">标签</div>
               <div class="flex gap-1 flex-wrap">
                 <span

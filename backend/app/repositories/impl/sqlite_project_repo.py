@@ -21,13 +21,10 @@ class SqliteProjectRepository:
             "name": project.name,
             "description": project.description,
             "game_type": project.game_type,
-            "product_type": project.product_type,
             "target_market": project.target_market,
-            "region": json.loads(project.region) if project.region else [],
             "tags": json.loads(project.tags) if project.tags else [],
             "total_budget": project.total_budget,
             "spent": project.spent,
-            "target_roi": project.target_roi,
             "status": project.status.value,
             "manager": project.manager,
             "start_date": project.start_date.isoformat() if project.start_date else None,
@@ -44,26 +41,21 @@ class SqliteProjectRepository:
         tags = kwargs.pop("tags", None)
         if tags and isinstance(tags, list):
             kwargs["tags"] = json.dumps(tags)
-
-        # 处理 region
-        region = kwargs.pop("region", None)
-        if region and isinstance(region, list):
-            kwargs["region"] = json.dumps(region)
-
+        
         # 处理 status
         status = kwargs.pop("status", None)
         if status and isinstance(status, str):
             kwargs["status"] = ProjectStatus(status)
-
+        
         # 处理日期字符串转换
         start_date = kwargs.pop("start_date", None)
         if start_date and isinstance(start_date, str):
             kwargs["start_date"] = datetime.fromisoformat(start_date).date()
-
+        
         end_date = kwargs.pop("end_date", None)
         if end_date and isinstance(end_date, str):
             kwargs["end_date"] = datetime.fromisoformat(end_date).date()
-
+        
         project = Project(
             user_id=user_id,
             name=name,
@@ -72,7 +64,7 @@ class SqliteProjectRepository:
         )
         self.session.add(project)
         await self.session.flush()
-
+        
         return self._to_dict(project)
     
     async def get_by_id(self, project_id: str) -> dict | None:
@@ -110,23 +102,19 @@ class SqliteProjectRepository:
         project = result.scalar_one_or_none()
         if not project:
             raise ValueError(f"Project {project_id} not found")
-
+        
         # 处理 tags
         if "tags" in kwargs and isinstance(kwargs["tags"], list):
             kwargs["tags"] = json.dumps(kwargs["tags"])
-
-        # 处理 region
-        if "region" in kwargs and isinstance(kwargs["region"], list):
-            kwargs["region"] = json.dumps(kwargs["region"])
-
+        
         # 处理 status
         if "status" in kwargs and isinstance(kwargs["status"], str):
             kwargs["status"] = ProjectStatus(kwargs["status"])
-
+        
         for key, value in kwargs.items():
             if hasattr(project, key):
                 setattr(project, key, value)
-
+        
         await self.session.flush()
     
     async def update_spent(self, project_id: str, amount: float) -> None:
