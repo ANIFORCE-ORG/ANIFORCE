@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
-import { useRouter, useRoute } from 'vue-router'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import TodayOverview from './workspace/TodayOverview.vue'
@@ -9,10 +9,8 @@ import QuickActions from './workspace/QuickActions.vue'
 import DataTrends from './workspace/DataTrends.vue'
 import BasicInsights from './workspace/BasicInsights.vue'
 import PlatformStatus from './workspace/PlatformStatus.vue'
-import ReportsContent from './workspace/ReportsContent.vue'
 
 const router = useRouter()
-const route = useRoute()
 
 const activePanel = ref('dashboard')
 const activeSession = ref('sess_001')
@@ -23,7 +21,7 @@ const navItems = [
   { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
   { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
   { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
-  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/dashboard?panel=reports' }
+  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' }
 ]
 
 const sessions = ref([
@@ -47,13 +45,7 @@ const quickHints = [
 ]
 
 const switchPanel = (item: any) => {
-  if (item.id === 'reports') {
-    activePanel.value = 'reports'
-    router.push('/dashboard?panel=reports')
-  } else if (item.id === 'dashboard') {
-    activePanel.value = 'dashboard'
-    router.push('/dashboard')
-  } else if (item.path) {
+  if (item.path) {
     router.push(item.path)
   }
 }
@@ -71,15 +63,6 @@ const handleSendMessage = (message: string) => {
 const handleHintClick = (hint: string) => {
   chatInput.value = hint
 }
-
-// Watch route query to update active panel
-watch(() => route.query.panel, (newPanel) => {
-  if (newPanel === 'reports') {
-    activePanel.value = 'reports'
-  } else {
-    activePanel.value = 'dashboard'
-  }
-}, { immediate: true })
 </script>
 
 <template>
@@ -98,9 +81,7 @@ watch(() => route.query.panel, (newPanel) => {
       <!-- Header -->
       <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
         <div>
-          <h3 class="font-bold text-slate-900 dark:text-white">
-            {{ activePanel === 'reports' ? '数据报表' : '工作台' }}
-          </h3>
+          <h3 class="font-bold text-slate-900 dark:text-white">工作台</h3>
           <p class="text-xs text-slate-500 dark:text-slate-400">
             {{ new Date().toLocaleDateString('zh-CN', { year: 'numeric', month: 'long', day: 'numeric', weekday: 'long' }) }}
           </p>
@@ -114,30 +95,24 @@ watch(() => route.query.panel, (newPanel) => {
       </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto p-6">
-        <!-- Dashboard Content -->
-        <div v-if="activePanel === 'dashboard'" class="space-y-6">
-          <!-- Today Overview -->
-          <TodayOverview />
+      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+        <!-- Today Overview -->
+        <TodayOverview />
 
-          <!-- Action Items -->
-          <ActionItems />
+        <!-- Action Items -->
+        <ActionItems />
 
-          <!-- Quick Actions & Data Trends -->
-          <div class="grid grid-cols-2 gap-3">
-            <QuickActions />
-            <DataTrends />
-          </div>
-
-          <!-- Basic Insights -->
-          <BasicInsights />
-
-          <!-- Platform Status -->
-          <PlatformStatus />
+        <!-- Quick Actions & Data Trends -->
+        <div class="grid grid-cols-2 gap-3">
+          <QuickActions />
+          <DataTrends />
         </div>
 
-        <!-- Reports Content -->
-        <ReportsContent v-else-if="activePanel === 'reports'" />
+        <!-- Basic Insights -->
+        <BasicInsights />
+
+        <!-- Platform Status -->
+        <PlatformStatus />
       </div>
     </main>
 

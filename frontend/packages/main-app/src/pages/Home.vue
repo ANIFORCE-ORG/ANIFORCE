@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
-import { getDAL } from '@animagus/shared'
+import { getDAL } from '@aniforce/shared'
 
 const router = useRouter()
 const inputText = ref('')
