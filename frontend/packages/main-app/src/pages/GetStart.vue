@@ -1,17 +1,7 @@
 <script setup lang="ts">
-import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/store/auth'
 
 const router = useRouter()
-const auth = useAuthStore()
-
-// 检查登录状态,已登录则跳转到/home
-onMounted(() => {
-  if (auth.isLoggedIn) {
-    router.push('/home')
-  }
-})
 
 const handleGetStarted = () => {
   router.push('/login')
