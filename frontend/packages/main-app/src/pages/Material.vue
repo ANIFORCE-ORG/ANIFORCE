@@ -24,6 +24,7 @@ const navItems = [
   { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
   { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
   { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
+  { id: 'settings', icon: 'settings', label: '账户设置', path: '/settings' }
 ]
 
 // 历史会话
@@ -482,7 +483,7 @@ const getStatusLabel = (status: string) => {
             <div
               v-for="card in featureCards"
               :key="card.id"
-              class="group p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-primary hover:shadow-lg transition-all cursor-pointer"
+              class="group p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-primary hover:shadow-lg transition-all cursor-pointer"
               @click="handleFeatureClick(card.id)"
             >
               <div class="flex items-center justify-between">
@@ -514,7 +515,7 @@ const getStatusLabel = (status: string) => {
         <!-- 素材库区域 -->
         <div>
           <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold text-slate-900 dark:text-white">素材库</h2>
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white">素材广场</h2>
           </div>
 
           <!-- 搜索和筛选栏 -->

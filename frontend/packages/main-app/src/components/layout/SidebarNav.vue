@@ -1,6 +1,6 @@
 <script setup lang="ts">
+import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/store/auth'
 
 interface NavItem {
   id: string
@@ -40,7 +40,16 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const route = useRoute()
-const auth = useAuthStore()
+
+// 折叠状态 - 从localStorage读取初始值
+const SIDEBAR_COLLAPSED_KEY = 'animagus_sidebar_collapsed'
+const isCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
+
+const toggleCollapse = () => {
+  isCollapsed.value = !isCollapsed.value
+  // 保存到localStorage
+  localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed.value))
+}
 
 const isActivePanel = (itemId: string) => {
   if (props.activePanel) {
@@ -65,30 +74,58 @@ const handleSessionClick = (session: Session) => {
 </script>
 
 <template>
-  <aside class="w-64 bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col">
+  <aside 
+    class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
+    :class="isCollapsed ? 'w-16' : 'w-64'"
+  >
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto p-4 space-y-6 pt-6">
+    <nav class="flex-1 overflow-y-auto pb-0 p-4 pt-6 space-y-6 overflow-x-hidden">
       <!-- 功能导航 -->
       <div>
-        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 px-2">功能导航</div>
+        <div 
+          class="mb-2"
+          :class="isCollapsed ? '' : 'flex items-center justify-between px-2'"
+        >
+          <span v-if="!isCollapsed" class="text-xs font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
+          <button
+            class="rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
+            :class="isCollapsed ? 'w-full py-3' : 'p-1.5'"
+            @click="toggleCollapse"
+          >
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-lg">
+              {{ isCollapsed ? 'menu' : 'menu_open' }}
+            </span>
+          </button>
+        </div>
         <ul class="space-y-1">
           <li
             v-for="item in navItems"
             :key="item.id"
-            class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all"
-            :class="isActivePanel(item.id)
-              ? 'bg-primary/10 text-primary font-semibold'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+            class="flex items-center rounded-lg cursor-pointer transition-all relative group"
+            :class="[
+              isCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-3 py-2',
+              isActivePanel(item.id)
+                ? 'bg-primary/10 text-primary font-semibold'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            ]"
             @click="handleNavClick(item)"
           >
             <span class="material-symbols-outlined text-lg">{{ item.icon }}</span>
-            <span class="text-sm">{{ item.label }}</span>
+            <span v-if="!isCollapsed" class="text-sm">{{ item.label }}</span>
+            
+            <!-- Tooltip for collapsed state -->
+            <div
+              v-if="isCollapsed"
+              class="absolute left-full ml-2 px-3 py-2 bg-slate-900 dark:bg-slate-700 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
+            >
+              {{ item.label }}
+            </div>
           </li>
         </ul>
       </div>
 
       <!-- 历史会话 -->
-      <div v-if="sessions.length > 0">
+      <div v-if="sessions.length > 0 && !isCollapsed">
         <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 px-2">历史会话</div>
         <ul class="space-y-1">
           <li
