@@ -5,6 +5,11 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      name: 'get-start',
+      component: () => import('@/pages/GetStart.vue'),
+    },
+    {
+      path: '/home',
       name: 'home',
       component: () => import('@/pages/Home.vue'),
     },

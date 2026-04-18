@@ -10,7 +10,7 @@ const password = ref('admin123')
 
 function handleLogin() {
   auth.fakeLogin()
-  router.push('/')
+  router.push('/home')
 }
 </script>
 
