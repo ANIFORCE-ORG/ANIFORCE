@@ -6,28 +6,20 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
 import { getProjects, createProject, type Project } from '@/api/projects'
+import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 const auth = useAuthStore()
 
-const loading = ref(false)
-const error = ref<string | null>(null)
-const showCreateModal = ref(false)
-const createModalRef = ref<InstanceType<typeof CreateProjectModal> | null>(null)
-
-const activePanel = ref('projects')
 const activeSession = ref('sess_g001')
 const chatInput = ref('')
+const showCreateModal = ref(false)
+const loading = ref(false)
+const error = ref<string | null>(null)
+const projects = ref<Project[]>([])
 const searchQuery = ref('')
 const filterStatus = ref('all')
-
-const navItems = [
-  { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
-  { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
-  { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
-  { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
-  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
-]
+const createModalRef = ref<any>(null)
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -60,8 +52,6 @@ const statusFilters = [
   { value: 'paused', label: '已暂停' },
   { value: 'completed', label: '已完成' },
 ]
-
-const projects = ref<Project[]>([])
 
 // 加载项目数据
 onMounted(async () => {
@@ -180,7 +170,6 @@ const getStatusLabel = (status: string) => {
     <SidebarNav 
       :nav-items="navItems"
       :sessions="sessions"
-      :active-panel="activePanel"
       @switch-panel="switchPanel"
       @switch-session="switchSession"
     />

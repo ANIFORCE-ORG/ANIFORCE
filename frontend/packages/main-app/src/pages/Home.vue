@@ -2,11 +2,40 @@
 import { ref, computed, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { getDAL } from '@animagus/shared'
+import SidebarNav from '@/components/layout/SidebarNav.vue'
+import ChatPanel from '@/components/layout/ChatPanel.vue'
+import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 const inputText = ref('')
 const loading = ref(false)
 const hasInteracted = ref(false)
+
+// 侧边栏相关状态
+const activeSession = ref('sess_h001')
+const chatInput = ref('')
+
+const sessions = ref([
+  { id: 'sess_h001', name: '新投放计划', active: true },
+  { id: 'sess_h002', name: 'RPG游戏分析', active: false },
+  { id: 'sess_h003', name: '素材优化建议', active: false },
+])
+
+const messages = ref([
+  {
+    role: 'assistant',
+    author: 'ANIFORCE助手',
+    time: '刚刚',
+    content: '您好！我是ANIFORCE智能助手。\n\n我可以帮您分析市场趋势、生成创意素材、制定投放策略。请告诉我您的投放目标？'
+  }
+])
+
+const quickHints = [
+  '分析RPG游戏市场',
+  '生成广告素材',
+  '制定投放计划',
+  '优化广告效果'
+]
 
 const analysisResult = ref<{
   session_id: string
@@ -58,14 +87,6 @@ const toolCards = [
   },
 ]
 
-const dashboardBanner = {
-  icon: 'pie_chart',
-  iconBg: 'bg-gradient-to-br from-primary to-blue-500',
-  title: '数据概览 Dashboard',
-  desc: '实时监控广告投放表现，查看关键指标与异常提醒',
-  path: '/dashboard',
-}
-
 const hasContent = computed(() => loading.value || analysisResult.value !== null)
 
 function scrollToBottom() {
@@ -102,17 +123,56 @@ function handleTagClick(tag: string) {
 function navigateTo(path: string) {
   router.push(path)
 }
+
+const switchPanel = (item: any) => {
+  if (item.path) {
+    router.push(item.path)
+  }
+}
+
+const switchSession = (session: any) => {
+  activeSession.value = session.id
+  sessions.value.forEach(s => s.active = s.id === session.id)
+}
+
+const handleSendMessage = (message: string) => {
+  console.log('发送消息:', message)
+  messages.value.push({
+    role: 'user',
+    author: '用户',
+    time: '刚刚',
+    content: message
+  })
+  chatInput.value = ''
+}
+
+const handleHintClick = (hint: string) => {
+  chatInput.value = hint
+}
 </script>
 
 <template>
-  <main class="flex flex-1 flex-col items-center px-4 pb-8">
+  <!-- 三栏布局容器 -->
+  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <!-- 左侧功能导航 -->
+    <SidebarNav 
+      :nav-items="navItems"
+      :sessions="sessions"
+      @switch-panel="switchPanel"
+      @switch-session="switchSession"
+    />
+
+    <!-- 中间核心工作区 -->
+    <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+      <div class="flex-1 overflow-y-auto">
+        <div class="flex flex-col items-center px-4 pb-8">
     <!-- Top spacer: pushes content to center when no output -->
-    <div v-if="!hasContent" class="flex-1"></div>
+    <div v-if="!hasContent" class="flex-1 min-h-[120px]"></div>
 
     <!-- Greeting -->
     <div
-      class="max-w-[800px] w-full text-center space-y-4 transition-all duration-500"
-      :class="hasContent ? 'pt-8 mb-6 opacity-50 scale-[0.92]' : 'mb-10'"
+      class="max-w-[800px] w-full text-center space-y-6 transition-all duration-500"
+      :class="hasContent ? 'pt-8 mb-6 opacity-50 scale-[0.92]' : 'mb-12'"
     >
       <h1 class="text-slate-900 dark:text-white text-4xl md:text-5xl font-poppins font-semibold tracking-tight">
         又见面啦！有新的投放计划吗？
@@ -255,40 +315,11 @@ function navigateTo(path: string) {
       </div>
     </div>
 
-    <!-- Dashboard Banner (only show when no content) -->
-    <div v-if="!hasContent && !hasInteracted" class="w-full max-w-[1080px] mt-4 px-4">
-      <div
-        class="group relative overflow-hidden bg-gradient-to-br from-primary/10 via-blue-500/10 to-purple-500/10 dark:from-primary/20 dark:via-blue-500/20 dark:to-purple-500/20 p-8 rounded-2xl border-2 border-primary/30 hover:border-primary hover:shadow-2xl hover:shadow-primary/20 transition-all cursor-pointer"
-        @click="navigateTo(dashboardBanner.path)"
-      >
-        <!-- Background Pattern -->
-        <div class="absolute inset-0 opacity-5">
-          <div class="absolute inset-0" style="background-image: radial-gradient(circle, currentColor 1px, transparent 1px); background-size: 20px 20px;"></div>
-        </div>
-        
-        <div class="relative flex items-center gap-6">
-          <div class="h-16 w-16 rounded-2xl flex items-center justify-center group-hover:scale-110 transition-transform shadow-lg" :class="dashboardBanner.iconBg">
-            <span class="material-symbols-outlined text-white text-3xl">{{ dashboardBanner.icon }}</span>
-          </div>
-          <div class="flex-1">
-            <h3 class="text-2xl font-bold text-slate-900 dark:text-white mb-2 group-hover:text-primary transition-colors">
-              {{ dashboardBanner.title }}
-            </h3>
-            <p class="text-slate-600 dark:text-slate-300 text-base">{{ dashboardBanner.desc }}</p>
-          </div>
-          <div class="flex items-center gap-2 text-primary group-hover:translate-x-2 transition-transform">
-            <span class="font-semibold">进入查看</span>
-            <span class="material-symbols-outlined">arrow_forward</span>
-          </div>
-        </div>
-      </div>
-    </div>
-
     <!-- Tool Cards (only show when no content) -->
     <div v-if="!hasContent && !hasInteracted" class="w-full max-w-[1080px] mt-8">
       <div class="flex items-center justify-between px-6 mb-6">
         <h3 class="text-lg font-bold dark:text-white">推荐工具</h3>
-        <a class="text-sm font-semibold text-primary hover:underline" href="#">查看全部</a>
+        <!--  <a class="text-sm font-semibold text-primary hover:underline" href="#">查看全部</a> -->
       </div>
       <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 px-4">
         <div
@@ -311,5 +342,8 @@ function navigateTo(path: string) {
 
     <!-- Bottom spacer: pushes content to center when no output -->
     <div v-if="!hasContent" class="flex-1"></div>
-  </main>
+        </div>
+      </div>
+    </main>
+  </div>
 </template>

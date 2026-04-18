@@ -5,6 +5,7 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { getMaterials, getMaterialImage, type Material } from '@/api/materials'
 import { login } from '@/api'
+import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 
@@ -17,14 +18,10 @@ const error = ref('')
 const materials = ref<Material[]>([])
 const materialImages = ref<Map<string, string>>(new Map())
 
-// 导航项配置
-const navItems = [
-  { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
-  { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
-  { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
-  { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
-  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
-]
+// 上传素材相关状态
+const showUploadModal = ref(false)
+const uploadFiles = ref<File[]>([])
+const isDragging = ref(false)
 
 // 历史会话
 const sessions = ref([
@@ -453,6 +450,82 @@ const getStatusLabel = (status: string) => {
   }
   return labels[status] || status
 }
+
+// 上传素材相关函数
+const openUploadModal = () => {
+  showUploadModal.value = true
+  uploadFiles.value = []
+}
+
+const closeUploadModal = () => {
+  showUploadModal.value = false
+  uploadFiles.value = []
+  isDragging.value = false
+}
+
+const handleFileSelect = (event: Event) => {
+  const target = event.target as HTMLInputElement
+  if (target.files) {
+    const files = Array.from(target.files)
+    addFiles(files)
+  }
+}
+
+const handleDrop = (event: DragEvent) => {
+  event.preventDefault()
+  isDragging.value = false
+  
+  if (event.dataTransfer?.files) {
+    const files = Array.from(event.dataTransfer.files)
+    addFiles(files)
+  }
+}
+
+const handleDragOver = (event: DragEvent) => {
+  event.preventDefault()
+  isDragging.value = true
+}
+
+const handleDragLeave = () => {
+  isDragging.value = false
+}
+
+const addFiles = (files: File[]) => {
+  const validFiles = files.filter(file => {
+    const validTypes = ['image/jpeg', 'image/png', 'image/gif', 'video/mp4', 'video/quicktime']
+    const maxSize = 100 * 1024 * 1024 // 100MB
+    
+    if (!validTypes.includes(file.type)) {
+      alert(`文件 ${file.name} 格式不支持`)
+      return false
+    }
+    
+    if (file.size > maxSize) {
+      alert(`文件 ${file.name} 超过100MB限制`)
+      return false
+    }
+    
+    return true
+  })
+  
+  uploadFiles.value = [...uploadFiles.value, ...validFiles]
+}
+
+const removeFile = (index: number) => {
+  uploadFiles.value.splice(index, 1)
+}
+
+const completeUpload = async () => {
+  if (uploadFiles.value.length === 0) {
+    alert('请先选择要上传的文件')
+    return
+  }
+  
+  console.log('开始上传文件:', uploadFiles.value)
+  // TODO: 实现实际的上传逻辑
+  alert(`准备上传 ${uploadFiles.value.length} 个文件`)
+  closeUploadModal()
+}
 </script>
 
 <template>
@@ -470,8 +543,15 @@ const getStatusLabel = (status: string) => {
     <!-- 中间核心工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center px-6">
+      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
         <h1 class="text-xl font-bold text-slate-900 dark:text-white">创意素材</h1>
+        <button
+          class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
+          @click="openUploadModal"
+        >
+          <span class="material-symbols-outlined text-lg">upload</span>
+          <span class="font-medium">上传素材</span>
+        </button>
       </div>
 
       <!-- Content -->
@@ -482,7 +562,7 @@ const getStatusLabel = (status: string) => {
             <div
               v-for="card in featureCards"
               :key="card.id"
-              class="group p-5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-primary hover:shadow-lg transition-all cursor-pointer"
+              class="group p-3 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl hover:border-primary hover:shadow-lg transition-all cursor-pointer"
               @click="handleFeatureClick(card.id)"
             >
               <div class="flex items-center justify-between">
@@ -514,7 +594,7 @@ const getStatusLabel = (status: string) => {
         <!-- 素材库区域 -->
         <div>
           <div class="flex items-center justify-between mb-4">
-            <h2 class="text-lg font-bold text-slate-900 dark:text-white">素材库</h2>
+            <h2 class="text-lg font-bold text-slate-900 dark:text-white">素材广场</h2>
           </div>
 
           <!-- 搜索和筛选栏 -->
@@ -633,5 +713,111 @@ const getStatusLabel = (status: string) => {
       @hint-click="handleHintClick"
       @update:chat-input="chatInput = $event"
     />
+
+    <!-- 上传素材对话框 -->
+    <div
+      v-if="showUploadModal"
+      class="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+      @click.self="closeUploadModal"
+    >
+      <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl mx-4">
+        <!-- Header -->
+        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <h2 class="text-xl font-bold text-slate-900 dark:text-white">上传素材</h2>
+          <button
+            class="p-2 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            @click="closeUploadModal"
+          >
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">close</span>
+          </button>
+        </div>
+
+        <!-- Content -->
+        <div class="p-6">
+          <!-- Upload Area -->
+          <div
+            class="border-2 border-dashed rounded-xl p-12 text-center transition-colors"
+            :class="isDragging 
+              ? 'border-primary bg-primary/5' 
+              : 'border-slate-300 dark:border-slate-600 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-700/50'"
+            @drop="handleDrop"
+            @dragover="handleDragOver"
+            @dragleave="handleDragLeave"
+          >
+            <div class="flex flex-col items-center gap-4">
+              <div class="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-700 flex items-center justify-center">
+                <span class="material-symbols-outlined text-4xl text-slate-400 dark:text-slate-500">cloud_upload</span>
+              </div>
+              
+              <div>
+                <p class="text-slate-700 dark:text-slate-300 mb-2">
+                  拖拽文件到此处,或
+                  <label class="text-primary hover:text-primary/80 cursor-pointer font-medium">
+                    点击浏览
+                    <input
+                      type="file"
+                      multiple
+                      accept="image/jpeg,image/png,image/gif,video/mp4,video/quicktime"
+                      class="hidden"
+                      @change="handleFileSelect"
+                    />
+                  </label>
+                </p>
+                <p class="text-sm text-slate-500 dark:text-slate-400">
+                  支持 JPG, PNG, GIF, MP4, MOV 格式，最大 100MB
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- File List -->
+          <div v-if="uploadFiles.length > 0" class="mt-6 space-y-2">
+            <div class="text-sm font-medium text-slate-700 dark:text-slate-300 mb-3">
+              已选择 {{ uploadFiles.length }} 个文件
+            </div>
+            <div
+              v-for="(file, index) in uploadFiles"
+              :key="index"
+              class="flex items-center justify-between p-3 bg-slate-50 dark:bg-slate-700 rounded-lg"
+            >
+              <div class="flex items-center gap-3 flex-1 min-w-0">
+                <span class="material-symbols-outlined text-slate-400">
+                  {{ file.type.startsWith('video/') ? 'videocam' : 'image' }}
+                </span>
+                <div class="flex-1 min-w-0">
+                  <p class="text-sm font-medium text-slate-900 dark:text-white truncate">{{ file.name }}</p>
+                  <p class="text-xs text-slate-500 dark:text-slate-400">
+                    {{ (file.size / 1024 / 1024).toFixed(2) }} MB
+                  </p>
+                </div>
+              </div>
+              <button
+                class="p-1 hover:bg-slate-200 dark:hover:bg-slate-600 rounded transition-colors"
+                @click="removeFile(index)"
+              >
+                <span class="material-symbols-outlined text-sm text-slate-600 dark:text-slate-400">close</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+          <button
+            class="px-4 py-2 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 rounded-lg transition-colors"
+            @click="closeUploadModal"
+          >
+            取消
+          </button>
+          <button
+            class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+            :disabled="uploadFiles.length === 0"
+            @click="completeUpload"
+          >
+            完成上传 ({{ uploadFiles.length }})
+          </button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>

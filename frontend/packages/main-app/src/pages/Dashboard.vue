@@ -4,22 +4,14 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
+import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 const auth = useAuthStore()
 
-const activePanel = ref('dashboard')
 const activeSession = ref('sess_g001')
 const chatInput = ref('')
-const timeFilter = ref('today')
-
-const navItems = [
-  { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
-  { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
-  { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
-  { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
-  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' }
-]
+const timeFilter = ref('7d')
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -145,7 +137,6 @@ const handleAlertAction = (alert: any) => {
     <SidebarNav 
       :nav-items="navItems"
       :sessions="sessions"
-      :active-panel="activePanel"
       @switch-panel="switchPanel"
       @switch-session="switchSession"
     />
