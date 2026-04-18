@@ -1,18 +1,105 @@
 <script setup lang="ts">
+import { ref } from 'vue'
+import { useRouter } from 'vue-router'
+import SidebarNav from '@/components/layout/SidebarNav.vue'
+import ChatPanel from '@/components/layout/ChatPanel.vue'
+import { navItems } from '@/config/navigation'
+
+const router = useRouter()
+
+const activeSession = ref('sess_m001')
+const chatInput = ref('')
+
+const sessions = ref([
+  { id: 'sess_m001', name: '数据分析咨询', active: true },
+  { id: 'sess_m002', name: '优化建议', active: false },
+  { id: 'sess_m003', name: '效果监控', active: false },
+])
+
+const messages = ref([
+  {
+    role: 'assistant',
+    author: 'ANIFORCE助手',
+    time: '刚刚',
+    content: '您好！我是ANIFORCE智能助手。\n\n我可以帮您分析投放数据、监控广告效果、提供优化建议。请告诉我您需要什么帮助？'
+  }
+])
+
+const quickHints = [
+  '分析投放效果',
+  '优化建议',
+  '数据对比',
+  '趋势预测'
+]
+
+const switchPanel = (item: any) => {
+  if (item.path) {
+    router.push(item.path)
+  }
+}
+
+const switchSession = (session: any) => {
+  activeSession.value = session.id
+  sessions.value.forEach(s => s.active = s.id === session.id)
+}
+
+const handleSendMessage = (message: string) => {
+  console.log('发送消息:', message)
+  messages.value.push({
+    role: 'user',
+    author: '用户',
+    time: '刚刚',
+    content: message
+  })
+  chatInput.value = ''
+}
+
+const handleHintClick = (hint: string) => {
+  chatInput.value = hint
+}
 </script>
 
 <template>
-  <main class="flex-1 px-6 py-12 md:px-12">
-    <div class="mx-auto max-w-5xl">
-      <div class="flex items-center gap-3 mb-8">
-        <span class="material-symbols-outlined text-primary text-3xl">analytics</span>
-        <h1 class="text-3xl font-bold tracking-tight">投放数据分析</h1>
+  <!-- 三栏布局容器 -->
+  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <!-- 左侧功能导航 -->
+    <SidebarNav 
+      :nav-items="navItems"
+      :sessions="sessions"
+      @switch-panel="switchPanel"
+      @switch-session="switchSession"
+    />
+
+    <!-- 中间核心工作区 -->
+    <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+      <!-- Header -->
+      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center px-6">
+        <div class="flex items-center gap-3">
+          <span class="material-symbols-outlined text-primary text-2xl">analytics</span>
+          <h1 class="text-xl font-bold text-slate-900 dark:text-white">投放数据分析</h1>
+        </div>
       </div>
-      <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center">
-        <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-600 mb-4">construction</span>
-        <p class="text-lg text-slate-500 dark:text-slate-400">投放数据分析功能开发中...</p>
-        <p class="text-sm text-slate-400 dark:text-slate-500 mt-2">实时监控投放效果与 AI 优化建议</p>
+
+      <!-- Content -->
+      <div class="flex-1 overflow-y-auto p-6">
+        <div class="max-w-5xl mx-auto">
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center">
+            <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-600 mb-4">construction</span>
+            <p class="text-lg text-slate-500 dark:text-slate-400">投放数据分析功能开发中...</p>
+            <p class="text-sm text-slate-400 dark:text-slate-500 mt-2">实时监控投放效果与 AI 优化建议</p>
+          </div>
+        </div>
       </div>
-    </div>
-  </main>
+    </main>
+
+    <!-- 右侧对话区 -->
+    <ChatPanel
+      :messages="messages"
+      :quick-hints="quickHints"
+      :chat-input="chatInput"
+      @send-message="handleSendMessage"
+      @hint-click="handleHintClick"
+      @update:chat-input="chatInput = $event"
+    />
+  </div>
 </template>

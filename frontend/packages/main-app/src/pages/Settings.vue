@@ -194,7 +194,7 @@ onMounted(() => {
                   class="px-4 py-2 rounded-md border border-primary text-primary hover:bg-primary/10 transition-colors text-sm font-medium"
                   @click="handleUpgradePlan"
                 >
-                  Upgrade plan
+                  升级套餐
                 </button>
               </div>
 
@@ -288,7 +288,7 @@ onMounted(() => {
                       : 'border border-primary text-primary hover:bg-primary/10'"
                     @click="handleConnectAdAccount(account.id)"
                   >
-                    {{ account.connected ? 'Disconnect' : 'Connect' }}
+                    {{ account.connected ? '取消连接' : '立即连接' }}
                   </button>
                 </div>
               </div>
