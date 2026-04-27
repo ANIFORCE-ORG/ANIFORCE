@@ -366,3 +366,103 @@ cp backend/.env.example backend/.env
 - 生产环境会配置数据库密码、第三方 API Key 等敏感凭证
 - Git 历史永久保留，即使后续删除也需要 `git filter-branch` 才能彻底清除
 - 每位开发者的本地配置不同，提交会导致频繁合并冲突
+
+---
+
+## 🔌 广告平台 API 对接
+
+### 已完成平台
+
+#### ✅ Meta (Facebook) Ads API
+- **状态**: 完全验证通过
+- **功能**:
+  - OAuth 2.0 认证
+  - 广告账户管理
+  - Campaign/AdSet/Ad 创建
+  - 素材上传（图片/视频）
+  - 数据洞察获取
+  - 预算和状态管理
+- **测试结果**: 成功连接 2 个广告账户
+- **文档**: [Meta API 测试报告](backend/META_API_SUCCESS.md)
+
+#### ⏳ Google Ads API
+- **状态**: 代码完成，等待 Developer Token 激活
+- **功能**:
+  - OAuth 2.0 认证
+  - Campaign/AdGroup 管理
+  - 广告创建
+  - GAQL 查询支持
+  - 数据洞察获取
+- **文档**: [Google API 测试报告](backend/GOOGLE_API_TEST_RESULT.md)
+
+### API 端点
+
+**平台认证**
+```
+POST   /api/v1/platform/connect          # 获取 OAuth URL
+POST   /api/v1/platform/callback         # OAuth 回调处理
+GET    /api/v1/platform/accounts         # 获取已连接账号
+POST   /api/v1/platform/accounts/test    # 添加测试账号
+DELETE /api/v1/platform/accounts/{id}    # 断开账号连接
+```
+
+**广告管理**
+```
+POST   /api/v1/campaigns                 # 创建广告系列
+GET    /api/v1/campaigns                 # 获取广告列表
+PUT    /api/v1/campaigns/{id}            # 更新广告
+GET    /api/v1/campaigns/{id}/insights   # 获取数据洞察
+```
+
+**素材管理**
+```
+POST   /api/v1/materials/upload          # 上传素材
+GET    /api/v1/materials                 # 获取素材列表
+```
+
+### 测试工具
+
+```bash
+cd backend
+source venv/bin/activate
+
+# 快速测试（推荐）
+python3 scripts/quick_test.py
+
+# 完整测试
+python3 scripts/test_platform_api.py
+```
+
+### 配置凭证
+
+详细的凭证获取指南：[API 测试指南](backend/API_TEST_GUIDE.md)
+
+**Meta (Facebook)**
+- App ID 和 App Secret
+- Access Token（包含 ads_management 权限）
+
+**Google Ads**
+- Client ID 和 Client Secret
+- Developer Token（需要经理账号）
+- Customer ID
+
+### 测试报告
+
+- [API 测试指南](backend/API_TEST_GUIDE.md) - 如何获取凭证和测试
+- [后端 API 测试报告](backend/TEST_REPORT.md) - 后端框架验证
+- [Meta API 成功报告](backend/META_API_SUCCESS.md) - Meta 平台完整测试
+- [Google API 测试结果](backend/GOOGLE_API_TEST_RESULT.md) - Google 平台测试
+- [最终测试报告](backend/FINAL_API_TEST_REPORT.md) - 完整测试总结
+
+---
+
+## 📝 更新日志
+
+### 2026-04-27 - 广告平台 API 对接
+- ✅ 完成 Meta (Facebook) Ads API 对接和测试
+- ✅ 完成 Google Ads API 代码实现
+- ✅ 创建 API 测试工具和完整文档
+- ✅ 验证后端 API 框架正常运行
+- ✅ 成功连接 Meta 广告账户（2个账户）
+
+---
