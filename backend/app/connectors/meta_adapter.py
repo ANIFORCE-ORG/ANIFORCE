@@ -5,6 +5,7 @@ ANIFORCE Meta Ads API 适配器
 
 import aiohttp
 import asyncio
+from urllib.parse import urlencode
 from typing import Dict, List, Optional
 from datetime import datetime, timedelta
 import json
@@ -19,10 +20,11 @@ class MetaAdsAdapter:
     def __init__(self, config: Dict):
         self.api_version = config.get('api_version', 'v19.0')
         self.base_url = f"https://graph.facebook.com/{self.api_version}"
-        self.app_id = config['app_id']
-        self.app_secret = config['app_secret']
-        self.access_token = None
-        self.ad_account_id = None
+        self.app_id = config.get('app_id', '')
+        self.app_secret = config.get('app_secret', '')
+        self.access_token = config.get('access_token')
+        self.ad_account_id = config.get('ad_account_id')
+        self.proxy_url = config.get('proxy_url') or None
 
     # ==================== 认证模块 ====================
 
@@ -47,7 +49,7 @@ class MetaAdsAdapter:
         if state:
             params['state'] = state
 
-        query_string = '&'.join([f"{k}={v}" for k, v in params.items()])
+        query_string = urlencode(params)
         return f"https://www.facebook.com/{self.api_version}/dialog/oauth?{query_string}"
 
     async def exchange_code_for_token(self, code: str, redirect_uri: str) -> Dict:
@@ -73,8 +75,9 @@ class MetaAdsAdapter:
             'code': code
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params) as response:
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, params=params, proxy=self.proxy_url) as response:
                 if response.status == 200:
                     data = await response.json()
                     self.access_token = data['access_token']
@@ -107,8 +110,9 @@ class MetaAdsAdapter:
             'fb_exchange_token': short_lived_token
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params) as response:
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, params=params, proxy=self.proxy_url) as response:
                 if response.status == 200:
                     data = await response.json()
                     self.access_token = data['access_token']
@@ -118,6 +122,26 @@ class MetaAdsAdapter:
                     error = await response.json()
                     logger.error(f"Failed to get long-lived token: {error}")
                     raise Exception(f"Token exchange error: {error}")
+
+    async def debug_token(self, input_token: str) -> Dict:
+        """校验 token 并返回 Meta 调试信息。"""
+        if not self.app_id or not self.app_secret:
+            raise Exception("Meta app_id/app_secret are required to debug token.")
+
+        url = f"{self.base_url}/debug_token"
+        params = {
+            "input_token": input_token,
+            "access_token": f"{self.app_id}|{self.app_secret}",
+        }
+
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, params=params, proxy=self.proxy_url) as response:
+                data = await response.json()
+                if response.status == 200:
+                    return data.get("data", data)
+                logger.error(f"Failed to debug token: {data}")
+                raise Exception(f"Token debug error: {data}")
 
     async def get_ad_accounts(self) -> List[Dict]:
         """
@@ -139,8 +163,9 @@ class MetaAdsAdapter:
             'fields': 'id,name,account_status,currency,timezone_name,amount_spent'
         }
 
-        async with aiohttp.ClientSession() as session:
-            async with session.get(url, params=params) as response:
+        timeout = aiohttp.ClientTimeout(total=15)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.get(url, params=params, proxy=self.proxy_url) as response:
                 if response.status == 200:
                     data = await response.json()
                     return data.get('data', [])
@@ -182,6 +207,8 @@ class MetaAdsAdapter:
         """
         if not self.ad_account_id:
             raise Exception("Ad account not set. Call set_ad_account() first.")
+        if not self.access_token:
+            raise Exception("Access token not set.")
 
         url = f"{self.base_url}/{self.ad_account_id}/campaigns"
 
@@ -190,7 +217,9 @@ class MetaAdsAdapter:
             'name': params['name'],
             'objective': params.get('objective', 'OUTCOME_SALES'),
             'status': params.get('status', 'PAUSED'),
-            'special_ad_categories': params.get('special_ad_categories', []),
+            'buying_type': params.get('buying_type', 'AUCTION'),
+            'is_adset_budget_sharing_enabled': str(params.get('is_adset_budget_sharing_enabled', False)).lower(),
+            'special_ad_categories': json.dumps(params.get('special_ad_categories', [])),
             'access_token': self.access_token
         }
 
@@ -204,8 +233,9 @@ class MetaAdsAdapter:
         if params.get('bid_strategy'):
             data['bid_strategy'] = params['bid_strategy']
 
-        async with aiohttp.ClientSession() as session:
-            async with session.post(url, data=data) as response:
+        timeout = aiohttp.ClientTimeout(total=20)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            async with session.post(url, data=data, proxy=self.proxy_url) as response:
                 if response.status == 200:
                     result = await response.json()
                     logger.info(f"Campaign created: {result['id']}")

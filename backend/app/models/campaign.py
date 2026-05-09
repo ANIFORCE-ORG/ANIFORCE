@@ -39,6 +39,16 @@ class Campaign(Base):
     target_cpa: Mapped[float | None] = mapped_column(Float, nullable=True)  # 目标 CPA
     status: Mapped[CampaignStatus] = mapped_column(Enum(CampaignStatus, native_enum=False), default=CampaignStatus.DRAFT, index=True)
     pipeline_step: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)  # Pipeline 阶段
+    platform_account_id: Mapped[str | None] = mapped_column(ForeignKey("platform_accounts.id", ondelete="SET NULL"), nullable=True, index=True)
+    external_campaign_id: Mapped[str | None] = mapped_column(String(128), nullable=True, index=True)
+    external_status: Mapped[str | None] = mapped_column(String(50), nullable=True, index=True)
+    objective: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    budget_type: Mapped[str | None] = mapped_column(String(32), nullable=True)
+    daily_budget: Mapped[float | None] = mapped_column(Float, nullable=True)
+    lifetime_budget: Mapped[float | None] = mapped_column(Float, nullable=True)
+    bid_strategy: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    last_synced_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_sync_error: Mapped[str | None] = mapped_column(Text, nullable=True)
 
     # 学习和优化
     learning_phase: Mapped[str | None] = mapped_column(String(50), nullable=True)  # 学习阶段

@@ -27,6 +27,14 @@ class Settings(BaseSettings):
 
     # 外部服务
     OPENAI_API_KEY: str = ""
+    META_APP_ID: str = ""
+    META_APP_SECRET: str = ""
+    META_OAUTH_REDIRECT_URI: str = "http://127.0.0.1:8010/api/v1/platform/meta/oauth/callback"
+    META_PROXY_URL: str = ""
+    FRONTEND_BASE_URL: str = "http://localhost:3010"
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_DEVELOPER_TOKEN: str = ""
 
     class Config:
         env_file = ".env"

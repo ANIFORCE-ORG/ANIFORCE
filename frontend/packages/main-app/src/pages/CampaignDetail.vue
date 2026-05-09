@@ -1,11 +1,12 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { computed, ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
-import { getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
-import { getMaterialImage } from '@/api/materials'
+import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
+import { addMaterialToCampaign, getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
+import { getMaterialImage, type Material } from '@/api/materials'
 
 const router = useRouter()
 const route = useRoute()
@@ -20,6 +21,16 @@ const error = ref<string | null>(null)
 const campaign = ref<Campaign | null>(null)
 const materials = ref<any[]>([])
 const materialImages = ref<Map<string, string>>(new Map())
+const showMaterialModal = ref(false)
+const addingMaterials = ref(false)
+
+const formatMoney = (value?: number) => `$${Math.round(value || 0).toLocaleString()}`
+const formatRate = (value?: number) => `${Math.round((value || 0) * 100)}%`
+
+const campaignBudgetRate = computed(() => {
+  if (!campaign.value?.budget) return 0
+  return (campaign.value.spent || 0) / campaign.value.budget
+})
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -122,7 +133,32 @@ const handleBack = () => {
 }
 
 const handleAddCreative = () => {
-  console.log('添加素材')
+  showMaterialModal.value = true
+}
+
+const handleCloseMaterialModal = () => {
+  showMaterialModal.value = false
+}
+
+const handleSelectMaterials = async (selectedMaterials: Material[]) => {
+  if (!campaign.value) return
+  const existingIds = new Set(materials.value.map(material => material.id))
+  const newMaterials = selectedMaterials.filter(material => !existingIds.has(material.id))
+  if (newMaterials.length === 0) {
+    handleCloseMaterialModal()
+    return
+  }
+
+  try {
+    addingMaterials.value = true
+    await Promise.all(newMaterials.map(material => addMaterialToCampaign(campaign.value!.id, material.id)))
+    await loadCampaignData()
+    handleCloseMaterialModal()
+  } catch (err: any) {
+    error.value = err.message || '添加素材失败，请重试'
+  } finally {
+    addingMaterials.value = false
+  }
 }
 
 const getPlatformColor = (platform: string) => {
@@ -132,6 +168,26 @@ const getPlatformColor = (platform: string) => {
     'Meta': 'text-blue-500'
   }
   return colors[platform] || 'text-slate-600'
+}
+
+const getStatusLabel = (status?: string) => {
+  const labels: Record<string, string> = {
+    draft: '草稿',
+    running: '投放中',
+    review: '审核中',
+    paused: '已暂停',
+    completed: '已完成'
+  }
+  return labels[status || ''] || status || '-'
+}
+
+const getPacingLabel = (status?: string) => {
+  const labels: Record<string, string> = {
+    fast: '消耗偏快',
+    slow: '消耗偏慢',
+    normal: '节奏正常'
+  }
+  return labels[status || 'normal'] || '节奏正常'
 }
 </script>
 
@@ -168,6 +224,70 @@ const getPlatformColor = (platform: string) => {
       <div class="flex-1 overflow-y-auto p-6">
         <!-- 广告配置详情 -->
         <div class="mb-6 p-5 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+          <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-5">
+            <div class="rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">计划预算</div>
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(campaign?.budget) }}</div>
+            </div>
+            <div class="rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">已消耗</div>
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(campaign?.spent) }}</div>
+            </div>
+            <div class="rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">剩余预算</div>
+              <div class="text-sm font-semibold text-emerald-600">{{ formatMoney(campaign?.budget_remaining) }}</div>
+            </div>
+            <div class="rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">CPI / 目标</div>
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">
+                ${{ campaign?.cpi?.toFixed(2) || '0.00' }} / ${{ campaign?.target_cpa?.toFixed(2) || '-' }}
+              </div>
+            </div>
+            <div class="rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">ROI</div>
+              <div class="text-sm font-semibold" :class="campaign?.roi && campaign.roi >= 2 ? 'text-emerald-600' : 'text-red-600'">
+                {{ campaign?.roi ? `${campaign.roi.toFixed(2)}x` : '-' }}
+              </div>
+            </div>
+          </div>
+          <div
+            v-if="campaign?.external_campaign_id || campaign?.platform_account_id"
+            class="mb-5 rounded-md border border-blue-100 bg-blue-50 px-4 py-3"
+          >
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-3 text-sm">
+              <div>
+                <div class="text-xs text-blue-600 mb-1">平台广告账户</div>
+                <div class="font-semibold text-slate-900">{{ campaign?.platform_account_id || '-' }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-blue-600 mb-1">外部 Campaign ID</div>
+                <div class="font-semibold text-slate-900">{{ campaign?.external_campaign_id || '-' }}</div>
+              </div>
+              <div>
+                <div class="text-xs text-blue-600 mb-1">平台状态 / 同步</div>
+                <div class="font-semibold text-slate-900">
+                  {{ campaign?.external_status || '-' }}
+                  <span v-if="campaign?.last_synced_at" class="text-xs text-slate-500 ml-2">{{ campaign.last_synced_at.slice(0, 16).replace('T', ' ') }}</span>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mb-5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 px-4 py-3">
+            <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
+              <span>预算进度 {{ formatRate(campaign?.budget_usage_rate || campaignBudgetRate) }}</span>
+              <span>时间进度 {{ formatRate(campaign?.elapsed_rate) }} · {{ getPacingLabel(campaign?.pacing_status) }}</span>
+            </div>
+            <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+              <div class="h-full bg-primary rounded-full" :style="{ width: `${Math.min(Math.round(((campaign?.budget_usage_rate || campaignBudgetRate) * 100)), 100)}%` }"></div>
+            </div>
+            <div class="mt-3 flex items-start gap-2 text-sm text-slate-700 dark:text-slate-300">
+              <span class="material-symbols-outlined text-primary text-base mt-0.5">smart_toy</span>
+              <div>
+                <div class="font-semibold">{{ campaign?.agent_action?.label || '保持观察' }}</div>
+                <div class="text-xs text-slate-500 dark:text-slate-400">{{ campaign?.agent_action?.reason || '暂无自动化动作建议' }}</div>
+              </div>
+            </div>
+          </div>
           <div class="grid grid-cols-2 gap-4">
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">所属项目</span>
@@ -179,19 +299,19 @@ const getPlatformColor = (platform: string) => {
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">预算</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">${{ campaign?.budget?.toLocaleString() }}</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ formatMoney(campaign?.budget) }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">消耗</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">${{ campaign?.spent?.toLocaleString() }}</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ formatMoney(campaign?.spent) }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">进度</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign ? Math.round((campaign.spent / campaign.budget) * 100) : 0 }}%</span>
+              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ formatRate(campaign?.budget_usage_rate || campaignBudgetRate) }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">状态</span>
-              <span class="text-sm font-medium text-emerald-600">{{ campaign?.status }}</span>
+              <span class="text-sm font-medium text-emerald-600">{{ getStatusLabel(campaign?.status) }}</span>
             </div>
             <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
               <span class="text-sm text-slate-500 dark:text-slate-400">开始日期</span>
@@ -271,6 +391,13 @@ const getPlatformColor = (platform: string) => {
       @send-message="handleSendMessage"
       @hint-click="handleHintClick"
       @update:chat-input="chatInput = $event"
+    />
+
+    <SelectMaterialModal
+      :show="showMaterialModal"
+      :selected-ids="materials.map(material => material.id)"
+      @close="handleCloseMaterialModal"
+      @select="handleSelectMaterials"
     />
   </div>
 </template>

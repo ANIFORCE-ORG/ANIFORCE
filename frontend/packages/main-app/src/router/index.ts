@@ -2,6 +2,9 @@ import { createRouter, createWebHistory } from 'vue-router'
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior() {
+    return { top: 0 }
+  },
   routes: [
     {
       path: '/',
@@ -24,9 +27,49 @@ const router = createRouter({
       component: () => import('@/pages/Campaign.vue'),
     },
     {
+      path: '/platform-accounts',
+      name: 'platform-accounts',
+      component: () => import('@/pages/MediaOps.vue'),
+    },
+    {
+      path: '/platform-accounts/manage',
+      name: 'platform-accounts-manage',
+      component: () => import('@/pages/PlatformAccounts.vue'),
+    },
+    {
+      path: '/media-ops',
+      name: 'media-ops',
+      redirect: '/platform-accounts',
+    },
+    {
+      path: '/platform-connections',
+      name: 'platform-connections',
+      component: () => import('@/pages/PlatformConnections.vue'),
+    },
+    {
+      path: '/platform-accounts/callback',
+      name: 'platform-accounts-callback',
+      component: () => import('@/pages/PlatformAccountsCallback.vue'),
+    },
+    {
       path: '/dashboard',
       name: 'dashboard',
       component: () => import('@/pages/Dashboard.vue'),
+    },
+    {
+      path: '/settings',
+      name: 'settings',
+      component: () => import('@/pages/Settings.vue'),
+    },
+    {
+      path: '/reports',
+      name: 'reports',
+      component: () => import('@/pages/Reports.vue'),
+    },
+    {
+      path: '/monitor',
+      name: 'monitor',
+      redirect: '/reports',
     },
     {
       path: '/projects',

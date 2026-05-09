@@ -43,6 +43,9 @@ class Material(Base):
 
     # 预估数据和性能
     ctr_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
+    roi: Mapped[float | None] = mapped_column(Float, nullable=True)
+    spend: Mapped[float | None] = mapped_column(Float, nullable=True)
+    campaign_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     fatigue: Mapped[float] = mapped_column(Float, default=0.0, index=True)  # 疲劳度
     is_hero: Mapped[bool] = mapped_column(Boolean, default=False)  # 是否英雄素材
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 数组

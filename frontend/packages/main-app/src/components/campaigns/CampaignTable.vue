@@ -1,39 +1,26 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
-interface Campaign {
-  id: string
-  name: string
-  project_name: string
-  platform: string
-  status: string
-  spent?: number
-  installs?: number
-  cpi?: number
-  roi?: number
-  target_cpa?: number
-  start_date?: string
-  end_date?: string
-  material_ids?: string[]
-}
+import type { Campaign } from '@/api/campaigns'
 
 interface Props {
   campaigns?: Campaign[]
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 const emit = defineEmits<{
   (e: 'view', campaignId: string): void
   (e: 'toggle-status', campaign: Campaign): void
   (e: 'select', campaignId: string): void
+  (e: 'add-material', campaign: Campaign): void
 }>()
 
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
+    draft: '草稿',
     running: '进行中',
     review: '审核中',
-    paused: '已暂停'
+    paused: '已暂停',
+    completed: '已完成'
   }
   return statusMap[status] || status
 }
@@ -41,11 +28,25 @@ const getStatusText = (status: string) => {
 // 获取状态颜色
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
+    draft: 'text-slate-600 bg-slate-50 dark:bg-slate-900/30',
     running: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30',
     review: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30',
-    paused: 'text-slate-600 bg-slate-50 dark:bg-slate-900/30'
+    paused: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30',
+    completed: 'text-slate-600 bg-slate-50 dark:bg-slate-900/30'
   }
   return colors[status] || 'text-slate-600 bg-slate-50'
+}
+
+const formatMoney = (value?: number) => `$${Math.round(value || 0).toLocaleString()}`
+const formatRate = (value?: number) => `${Math.round((value || 0) * 100)}%`
+
+const getPacingText = (status?: string) => {
+  const labels: Record<string, string> = {
+    fast: '偏快',
+    slow: '偏慢',
+    normal: '正常'
+  }
+  return labels[status || 'normal'] || '正常'
 }
 
 const handleView = (campaignId: string) => {
@@ -58,6 +59,10 @@ const handleToggleStatus = (campaign: Campaign) => {
 
 const handleSelect = (campaignId: string) => {
   emit('select', campaignId)
+}
+
+const handleAddMaterial = (campaign: Campaign) => {
+  emit('add-material', campaign)
 }
 </script>
 
@@ -76,10 +81,13 @@ const handleSelect = (campaignId: string) => {
           <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">项目</th>
           <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">平台</th>
           <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">状态</th>
-          <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">消耗</th>
+          <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">预算</th>
+          <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">消耗/进度</th>
+          <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">剩余</th>
           <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">安装数</th>
           <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">CPI</th>
           <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">ROI</th>
+          <th class="px-4 py-3 text-left font-semibold text-slate-700 dark:text-slate-300">Agent建议</th>
           <th class="px-4 py-3 text-right font-semibold text-slate-700 dark:text-slate-300">素材数</th>
           <th class="px-4 py-3 text-center font-semibold text-slate-700 dark:text-slate-300">操作</th>
         </tr>
@@ -99,6 +107,9 @@ const handleSelect = (campaignId: string) => {
           </td>
           <td class="px-4 py-3">
             <div class="font-medium text-slate-900 dark:text-white">{{ campaign.name }}</div>
+            <div v-if="campaign.external_campaign_id" class="text-xs text-blue-600 mt-1">
+              ID {{ campaign.external_campaign_id }}
+            </div>
             <div v-if="campaign.start_date" class="text-xs text-slate-500 dark:text-slate-400 mt-1">
               {{ campaign.start_date }} - {{ campaign.end_date || '持续' }}
             </div>
@@ -115,7 +126,16 @@ const handleSelect = (campaignId: string) => {
             </span>
           </td>
           <td class="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">
-            ${{ campaign.spent?.toLocaleString() || 0 }}
+            {{ formatMoney(campaign.budget) }}
+          </td>
+          <td class="px-4 py-3 text-right">
+            <div class="font-semibold text-slate-900 dark:text-white">{{ formatMoney(campaign.spent) }}</div>
+            <div class="text-xs text-slate-500 dark:text-slate-400">
+              {{ formatRate(campaign.budget_usage_rate) }} · {{ getPacingText(campaign.pacing_status) }}
+            </div>
+          </td>
+          <td class="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">
+            {{ formatMoney(campaign.budget_remaining) }}
           </td>
           <td class="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">
             {{ campaign.installs?.toLocaleString() || 0 }}
@@ -130,6 +150,14 @@ const handleSelect = (campaignId: string) => {
           >
             {{ campaign.roi ? `${campaign.roi.toFixed(2)}x` : '-' }}
           </td>
+          <td class="px-4 py-3 max-w-[220px]">
+            <div class="text-xs font-semibold text-slate-900 dark:text-white truncate">
+              {{ campaign.agent_action?.label || '保持观察' }}
+            </div>
+            <div class="text-xs text-slate-500 dark:text-slate-400 truncate">
+              {{ campaign.agent_action?.reason || '暂无动作建议' }}
+            </div>
+          </td>
           <td class="px-4 py-3 text-right font-semibold text-slate-900 dark:text-white">
             {{ campaign.material_ids?.length || 0 }}
           </td>
@@ -140,6 +168,12 @@ const handleSelect = (campaignId: string) => {
                 @click="handleView(campaign.id)"
               >
                 详情
+              </button>
+              <button
+                class="px-3 py-1 text-xs font-medium rounded bg-primary/10 text-primary hover:bg-primary/15 transition-colors"
+                @click="handleAddMaterial(campaign)"
+              >
+                添加素材
               </button>
               <button
                 class="px-3 py-1 text-xs font-semibold rounded transition-colors"

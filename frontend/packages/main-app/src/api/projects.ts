@@ -3,6 +3,7 @@
  */
 
 import { http } from './http'
+import type { PlatformAccount } from './platformAccounts'
 
 export interface Project {
   id: string
@@ -25,6 +26,34 @@ export interface Project {
   current_roi?: number
   installs?: number
   campaign_count?: number
+}
+
+export interface ProjectPlatformAccount {
+  id: string
+  project_id: string
+  platform_account_id: string
+  role: string
+  status: string
+  spend_cap?: number
+  daily_cap?: number
+  note?: string
+  account?: PlatformAccount
+}
+
+export interface AgentAction {
+  id: string
+  project_id: string
+  platform_account_id?: string
+  campaign_id?: string
+  action_type: string
+  risk_level: 'L0' | 'L1' | 'L2' | 'L3' | 'L4'
+  status: string
+  title: string
+  summary?: string
+  evidence: Record<string, any>
+  payload: Record<string, any>
+  expected_impact: Record<string, any>
+  created_at: string
 }
 
 interface ProjectsResponse {
@@ -100,4 +129,44 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function getProjectCampaigns(projectId: string): Promise<any[]> {
   const response = await http.get<{ campaigns: any[] }>(`/campaigns?project_id=${projectId}`)
   return response.campaigns
+}
+
+export async function getProjectPlatformAccounts(projectId: string): Promise<ProjectPlatformAccount[]> {
+  return http.get<ProjectPlatformAccount[]>(`/projects/${projectId}/platform-accounts`)
+}
+
+export async function bindProjectPlatformAccount(
+  projectId: string,
+  data: {
+    platform_account_id: string
+    role?: string
+    spend_cap?: number
+    daily_cap?: number
+    note?: string
+  }
+): Promise<ProjectPlatformAccount> {
+  return http.post<ProjectPlatformAccount>(`/projects/${projectId}/platform-accounts`, data)
+}
+
+export async function unbindProjectPlatformAccount(
+  projectId: string,
+  platformAccountId: string
+): Promise<{ message: string }> {
+  return http.delete(`/projects/${projectId}/platform-accounts/${platformAccountId}`)
+}
+
+export async function getProjectAgentActions(projectId: string): Promise<AgentAction[]> {
+  return http.get<AgentAction[]>(`/projects/${projectId}/agent-actions`)
+}
+
+export async function generateProjectAgentActions(projectId: string): Promise<{ actions: AgentAction[] }> {
+  return http.post<{ actions: AgentAction[] }>(`/projects/${projectId}/agent-actions/generate`)
+}
+
+export async function confirmProjectAgentAction(projectId: string, actionId: string): Promise<AgentAction> {
+  return http.post<AgentAction>(`/projects/${projectId}/agent-actions/${actionId}/confirm`)
+}
+
+export async function rejectProjectAgentAction(projectId: string, actionId: string): Promise<AgentAction> {
+  return http.post<AgentAction>(`/projects/${projectId}/agent-actions/${actionId}/reject`)
 }

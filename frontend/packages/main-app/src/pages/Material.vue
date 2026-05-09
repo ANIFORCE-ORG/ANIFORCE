@@ -5,7 +5,7 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import MaterialUpload from '@/components/materials/MaterialUpload.vue'
 import AddToCampaign from '@/components/materials/AddToCampaign.vue'
-import { getMaterials, getMaterialImage, type Material } from '@/api/materials'
+import { getMaterials, getMaterialImage, uploadMaterialFile, type Material } from '@/api/materials'
 import { login } from '@/api'
 
 const router = useRouter()
@@ -55,6 +55,21 @@ const quickHints = [
   'AI生成新素材'
 ]
 
+const loadMaterials = async () => {
+  const data = await getMaterials({ limit: 100 })
+  materials.value = data
+  materialImages.value = new Map()
+
+  for (const material of data) {
+    try {
+      const imageData = await getMaterialImage(material.id, true)
+      materialImages.value.set(material.id, imageData.data)
+    } catch (err) {
+      console.error('加载素材图像失败:', material.id, err)
+    }
+  }
+}
+
 // 初始化：加载素材数据
 onMounted(async () => {
   try {
@@ -70,19 +85,8 @@ onMounted(async () => {
     
     // 加载素材数据
     console.log('加载素材数据...')
-    const data = await getMaterials()
-    materials.value = data
-    console.log('素材数据加载成功:', data.length, '条')
-    
-    // 加载素材图像（Base64）
-    for (const material of data) {
-      try {
-        const imageData = await getMaterialImage(material.id, true)
-        materialImages.value.set(material.id, imageData.data)
-      } catch (err) {
-        console.error('加载素材图像失败:', material.id, err)
-      }
-    }
+    await loadMaterials()
+    console.log('素材数据加载成功:', materials.value.length, '条')
   } catch (err: any) {
     error.value = err.message || '加载数据失败'
     console.error('加载数据失败:', err)
@@ -95,269 +99,6 @@ onMounted(async () => {
 const getMaterialImageSrc = (materialId: string): string | undefined => {
   return materialImages.value.get(materialId)
 }
-
-// Mock素材库数据（保留作为后备）
-const mockCreatives = [
-  // 游戏素材
-  {
-    id: 'cre_g001',
-    name: 'CB_Gameplay_Level15',
-    thumbnail: '/images/creatives/creative_game_001.jpg',
-    status: 'running',
-    ctr: 1.85,
-    roi: 2.3,
-    impressions: '285K',
-    platform: 'Google',
-    tags: ['#gameplay', '#level_showcase']
-  },
-  {
-    id: 'cre_g002',
-    name: 'CB_UGC_FailMoment',
-    thumbnail: '/images/creatives/creative_game_002.jpg',
-    status: 'running',
-    ctr: 2.21,
-    roi: 2.8,
-    impressions: '420K',
-    platform: 'TikTok',
-    tags: ['#ugc', '#fail_moment']
-  },
-  {
-    id: 'cre_g003',
-    name: 'CB_Character_CandyQueen',
-    thumbnail: '/images/creatives/creative_game_003.jpg',
-    status: 'running',
-    ctr: 1.58,
-    roi: 1.9,
-    impressions: '285K',
-    platform: 'Meta',
-    tags: ['#character', '#story']
-  },
-  {
-    id: 'cre_g004',
-    name: 'CB_Hook_ImpossibleLevel',
-    thumbnail: '/images/creatives/creative_game_004.jpg',
-    status: 'running',
-    ctr: 3.12,
-    roi: 3.2,
-    impressions: '420K',
-    platform: 'TikTok',
-    tags: ['#hook', '#challenge']
-  },
-  // AI生成糖果游戏素材
-  {
-    id: 'ai_candy_001',
-    name: 'AI_Candy_Combo',
-    thumbnail: '/images/creatives/ai_candy_combo_001.jpg',
-    status: 'ready',
-    ctr: 1.98,
-    roi: 2.1,
-    impressions: '0',
-    platform: 'Google',
-    tags: ['#combo', '#mega']
-  },
-  {
-    id: 'ai_candy_002',
-    name: 'AI_Candy_Hook',
-    thumbnail: '/images/creatives/ai_candy_hook_001.jpg',
-    status: 'ready',
-    ctr: 2.15,
-    roi: 2.4,
-    impressions: '0',
-    platform: 'TikTok',
-    tags: ['#hook', '#satisfying']
-  },
-  {
-    id: 'ai_candy_003',
-    name: 'AI_Candy_Mix',
-    thumbnail: '/images/creatives/ai_candy_mix_001.jpg',
-    status: 'ready',
-    ctr: 1.85,
-    roi: 2.0,
-    impressions: '0',
-    platform: 'Meta',
-    tags: ['#gameplay', '#mix']
-  },
-  {
-    id: 'ai_candy_004',
-    name: 'AI_Candy_Reaction',
-    thumbnail: '/images/creatives/ai_candy_reaction_001.jpg',
-    status: 'ready',
-    ctr: 2.28,
-    roi: 2.5,
-    impressions: '0',
-    platform: 'TikTok',
-    tags: ['#ugc', '#reaction']
-  },
-  {
-    id: 'ai_candy_005',
-    name: 'AI_Candy_Trend',
-    thumbnail: '/images/creatives/ai_candy_trend_001.jpg',
-    status: 'ready',
-    ctr: 1.92,
-    roi: 2.2,
-    impressions: '0',
-    platform: 'Google',
-    tags: ['#trend', '#viral']
-  },
-  {
-    id: 'ai_candy_006',
-    name: 'AI_Candy_UGC',
-    thumbnail: '/images/creatives/ai_candy_ugc_001.jpg',
-    status: 'ready',
-    ctr: 2.05,
-    roi: 2.3,
-    impressions: '0',
-    platform: 'Meta',
-    tags: ['#ugc', '#authentic']
-  },
-  {
-    id: 'ai_candy_007',
-    name: 'AI_Candy_Victory',
-    thumbnail: '/images/creatives/ai_candy_victory_001.jpg',
-    status: 'ready',
-    ctr: 1.78,
-    roi: 1.9,
-    impressions: '0',
-    platform: 'Google',
-    tags: ['#victory', '#reward']
-  },
-  // 短剧素材
-  {
-    id: 'cre_d001',
-    name: 'DB_Hook_SuspenseCliffhanger',
-    thumbnail: '/images/creatives/creative_drama_001.jpg',
-    status: 'running',
-    ctr: 3.85,
-    roi: 2.8,
-    impressions: '1.25M',
-    platform: 'TikTok',
-    tags: ['#hook', '#suspense']
-  },
-  {
-    id: 'cre_d002',
-    name: 'DB_Romance_EmotionalConflict',
-    thumbnail: '/images/creatives/creative_drama_002.jpg',
-    status: 'running',
-    ctr: 3.21,
-    roi: 2.5,
-    impressions: '820K',
-    platform: 'Meta',
-    tags: ['#romance', '#emotional']
-  },
-  {
-    id: 'cre_d003',
-    name: 'DB_Character_BossReveal',
-    thumbnail: '/images/creatives/creative_drama_003.jpg',
-    status: 'running',
-    ctr: 2.85,
-    roi: 2.1,
-    impressions: '380K',
-    platform: 'Google',
-    tags: ['#character', '#boss']
-  },
-  {
-    id: 'cre_d004',
-    name: 'DB_Story_RevengePlot',
-    thumbnail: '/images/creatives/creative_drama_004.jpg',
-    status: 'fatigue',
-    ctr: 2.48,
-    roi: 2.3,
-    impressions: '2.1M',
-    platform: 'TikTok',
-    tags: ['#story', '#revenge']
-  },
-  // 短剧参考图片
-  {
-    id: 'ref_drama_001',
-    name: 'Short_Drama_Apps_Reference',
-    thumbnail: '/images/creatives/1_The_8_Best_Short_Drama_Apps_in_202.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#apps']
-  },
-  {
-    id: 'ref_video_001',
-    name: 'Mobile_Video_Ad_Best_Practices',
-    thumbnail: '/images/creatives/2_Mobile_Video_Ad_Best_Practices_for.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#best_practices']
-  },
-  {
-    id: 'ref_video_002',
-    name: 'How_to_Create_Mobile_Video_Ads',
-    thumbnail: '/images/creatives/3_How_to_Create_Mobile_Video_Ads_for.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#tutorial']
-  },
-  {
-    id: 'ref_match3_001',
-    name: 'Match_3_Workflow',
-    thumbnail: '/images/creatives/4_What_is_a_Match_3_How_to_do_it_Workflow.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#workflow']
-  },
-  {
-    id: 'ref_drama_002',
-    name: 'TikTok_Microdrama_Launch',
-    thumbnail: '/images/creatives/5_TikTok_quietly_launches_a_microdrama.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#tiktok']
-  },
-  {
-    id: 'ref_match3_002',
-    name: 'Match_3_Candy_Game_UI',
-    thumbnail: '/images/creatives/6_Match_3_candy_game_ui_interface_background.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#ui']
-  },
-  {
-    id: 'ref_drama_003',
-    name: 'Micro_Drama_Watch_Apps',
-    thumbnail: '/images/creatives/7_Micro_Drama_Watch_Short_Dramas_Apps.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#apps']
-  },
-  {
-    id: 'ref_drama_004',
-    name: 'TikTok_Micro_Dramas',
-    thumbnail: '/images/creatives/8_TikTok_Is_Jumping_Into_Micro_Dramas.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#industry']
-  }
-]
-
-const creatives = ref(mockCreatives)
 
 // 过滤后的素材列表（使用真实数据）
 const filteredCreatives = computed(() => {
@@ -383,12 +124,12 @@ const filteredCreatives = computed(() => {
 // 功能卡片配置
 const featureCards = [
   {
-    id: 'hot-creatives',
-    icon: 'trending_up',
-    iconColor: 'text-red-500',
-    iconBg: 'bg-red-50 dark:bg-red-900/30',
-    title: '热门素材监控',
-    desc: '查看行业热门素材趋势'
+    id: 'new',
+    icon: 'auto_awesome',
+    iconColor: 'text-purple-500',
+    iconBg: 'bg-purple-50 dark:bg-purple-900/30',
+    title: '全新生成',
+    desc: '按产品卖点生成投放素材'
   },
   {
     id: 'remix',
@@ -399,12 +140,20 @@ const featureCards = [
     desc: '基于优质素材生成变体'
   },
   {
-    id: 'ai-generate',
-    icon: 'auto_awesome',
-    iconColor: 'text-purple-500',
-    iconBg: 'bg-purple-50 dark:bg-purple-900/30',
-    title: 'AI生成素材',
-    desc: '自动生成投放素材'
+    id: 'hot',
+    icon: 'trending_up',
+    iconColor: 'text-red-500',
+    iconBg: 'bg-red-50 dark:bg-red-900/30',
+    title: '热点复刻',
+    desc: '查看行业热门素材趋势'
+  },
+  {
+    id: 'mix',
+    icon: 'movie_filter',
+    iconColor: 'text-emerald-500',
+    iconBg: 'bg-emerald-50 dark:bg-emerald-900/30',
+    title: '智能混剪',
+    desc: '组合片段生成新素材'
   }
 ]
 
@@ -440,14 +189,17 @@ const handleFeatureClick = (featureId: string) => {
 
   // 根据功能ID跳转到对应页面
   switch (featureId) {
-    case 'hot-creatives':
-      router.push('/materials/hot')
+    case 'new':
+      router.push('/material/ai-generate/new')
       break
     case 'remix':
-      router.push('/materials/remix')
+      router.push('/material/ai-generate/remix')
       break
-    case 'ai-generate':
-      router.push('/materials/ai-generate')
+    case 'hot':
+      router.push('/material/ai-generate/hot')
+      break
+    case 'mix':
+      router.push('/material/ai-generate/mix')
       break
     default:
       console.log('未知功能:', featureId)
@@ -479,11 +231,23 @@ const handleUploadClick = () => {
   showUploadDialog.value = true
 }
 
-const handleUploadComplete = (files: any[]) => {
-  console.log('上传完成:', files)
-  // TODO: 调用API保存素材到数据库
-  // 暂时添加到本地列表
-  showUploadDialog.value = false
+const handleUploadComplete = async (files: any[]) => {
+  try {
+    loading.value = true
+    error.value = ''
+
+    for (const item of files) {
+      const file = item.file as File
+      await uploadMaterialFile(file)
+    }
+
+    await loadMaterials()
+    showUploadDialog.value = false
+  } catch (err: any) {
+    error.value = err.message || '上传素材保存失败'
+  } finally {
+    loading.value = false
+  }
 }
 
 const handleCloseUpload = () => {
@@ -496,8 +260,9 @@ const handleAddToCampaign = (material: Material) => {
   showAddToCampaignDialog.value = true
 }
 
-const handleAddComplete = () => {
+const handleAddComplete = async () => {
   console.log('添加到投放计划完成')
+  await loadMaterials()
   showAddToCampaignDialog.value = false
   selectedMaterial.value = null
 }
@@ -538,7 +303,7 @@ const handleCloseAddToCampaign = () => {
       <div class="flex-1 overflow-y-auto p-6">
         <!-- 功能卡片区域 -->
         <div class="mb-8">
-          <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+          <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
             <div
               v-for="card in featureCards"
               :key="card.id"
@@ -747,7 +512,7 @@ const handleCloseAddToCampaign = () => {
     <!-- 添加到投放计划对话框 -->
     <AddToCampaign
       v-if="showAddToCampaignDialog"
-      :material="selectedMaterial"
+      :material="selectedMaterial || undefined"
       @add-complete="handleAddComplete"
       @close="handleCloseAddToCampaign"
     />

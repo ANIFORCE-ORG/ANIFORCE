@@ -75,3 +75,4 @@ def get_metric_repo(session: AsyncSession = Depends(get_db)) -> MetricRepository
         # Demo 模式暂时也使用 SQLite
         return SqliteMetricRepository(session)
     return SqliteMetricRepository(session)
+

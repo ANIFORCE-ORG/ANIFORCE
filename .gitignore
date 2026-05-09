@@ -60,8 +60,11 @@ htmlcov/
 # ===== 数据文件 =====
 backend/data/images/
 backend/data/sqlite/
+agent-ads-os/geo-diagnosis/data/
 
 # ===== 其他 =====
 *.bak
 *.tmp
 *.temp
+*.icloud
+backend/certs/

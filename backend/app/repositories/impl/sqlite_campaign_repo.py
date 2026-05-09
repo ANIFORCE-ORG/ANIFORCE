@@ -1,5 +1,6 @@
 """广告投放 Repository SQLite 实现"""
 import json
+from datetime import datetime
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Campaign, Material
@@ -14,6 +15,11 @@ class SqliteCampaignRepository:
     
     def _to_dict(self, campaign: Campaign) -> dict:
         """将 ORM 对象转换为字典"""
+        config = json.loads(campaign.config) if campaign.config else {}
+        platform_account_id = campaign.platform_account_id or config.get("platform_account_id")
+        external_campaign_id = campaign.external_campaign_id or config.get("remote_campaign_id")
+        objective = campaign.objective or config.get("objective")
+        budget_type = campaign.budget_type or config.get("budget_type")
         return {
             "id": campaign.id,
             "project_id": campaign.project_id,
@@ -25,13 +31,23 @@ class SqliteCampaignRepository:
             "target_cpa": campaign.target_cpa,
             "status": campaign.status.value,
             "pipeline_step": campaign.pipeline_step,
+            "platform_account_id": platform_account_id,
+            "external_campaign_id": external_campaign_id,
+            "external_status": campaign.external_status,
+            "objective": objective,
+            "budget_type": budget_type,
+            "daily_budget": campaign.daily_budget,
+            "lifetime_budget": campaign.lifetime_budget,
+            "bid_strategy": campaign.bid_strategy,
+            "last_synced_at": campaign.last_synced_at.isoformat() if campaign.last_synced_at else None,
+            "last_sync_error": campaign.last_sync_error,
             "learning_phase": campaign.learning_phase,
             "auto_optimize_enabled": campaign.auto_optimize_enabled,
             "optimization_rules": campaign.get_optimization_rules(),
             "material_ids": campaign.get_material_ids(),
             "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
             "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
-            "config": json.loads(campaign.config) if campaign.config else {},
+            "config": config,
             "created_at": campaign.created_at.isoformat(),
             "updated_at": campaign.updated_at.isoformat(),
         }
@@ -63,6 +79,11 @@ class SqliteCampaignRepository:
         # 处理 platform
         if isinstance(platform, str):
             platform = Platform(platform)
+
+        for date_field in ("start_date", "end_date"):
+            date_value = kwargs.get(date_field)
+            if date_value and isinstance(date_value, str):
+                kwargs[date_field] = datetime.fromisoformat(date_value).date()
 
         campaign = Campaign(
             project_id=project_id,
@@ -145,6 +166,11 @@ class SqliteCampaignRepository:
         # 处理 platform
         if "platform" in kwargs and isinstance(kwargs["platform"], str):
             kwargs["platform"] = Platform(kwargs["platform"])
+
+        for date_field in ("start_date", "end_date"):
+            date_value = kwargs.get(date_field)
+            if date_value and isinstance(date_value, str):
+                kwargs[date_field] = datetime.fromisoformat(date_value).date()
 
         for key, value in kwargs.items():
             if hasattr(campaign, key):

@@ -4,9 +4,10 @@ import { useRouter, useRoute } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import SelectGroupModal from '@/components/campaigns/SelectGroupModal.vue'
 import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
-import { getProjectDetail, type Project } from '@/api/projects'
+import { getProjectCampaigns, getProjectDetail, getProjectPlatformAccounts, type Project } from '@/api/projects'
 import { createCampaign } from '@/api/campaigns'
 import { type Material, getMaterialImage } from '@/api/materials'
+import { createMetaCampaign, getPlatformAccounts, type PlatformAccount } from '@/api/platformAccounts'
 
 const router = useRouter()
 const route = useRoute()
@@ -15,12 +16,14 @@ const projectId = ref(route.query.projectId as string || '')
 
 const currentStep = ref(1)
 const totalSteps = 4
+const contentScrollRef = ref<HTMLElement | null>(null)
 
 // 导航配置
 const navItems = [
   { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
   { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
   { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
+  { id: 'accounts', icon: 'account_balance_wallet', label: '广告账户', path: '/platform-accounts' },
   { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
   { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
 ]
@@ -40,7 +43,11 @@ const steps = [
 
 // 准备阶段数据
 const selectedGroup = ref<Project | null>(null)
+const projectCampaigns = ref<any[]>([])
 const selectedPlatform = ref('')
+const platformAccounts = ref<PlatformAccount[]>([])
+const projectPlatformAccounts = ref<PlatformAccount[]>([])
+const selectedPlatformAccountId = ref('')
 const showGroupModal = ref(false)
 const showMaterialModal = ref(false)
 const platforms = [
@@ -56,6 +63,18 @@ const accountChecks = [
   { id: 'payment', label: '支付方式已设置', checked: true }
 ]
 
+const availablePlatformAccounts = computed(() => {
+  const platform = selectedPlatform.value.toLowerCase()
+  const scopedAccounts = projectPlatformAccounts.value.length > 0
+    ? projectPlatformAccounts.value
+    : platformAccounts.value
+  return scopedAccounts.filter(account =>
+    account.platform === platform &&
+    account.status === 'active' &&
+    account.has_token
+  )
+})
+
 // 创建阶段数据
 const campaignObjective = ref('install')
 const objectives = [
@@ -66,7 +85,7 @@ const objectives = [
 ]
 
 const budgetType = ref('daily')
-const dailyBudget = ref(10000)
+const campaignBudget = ref(10000)
 
 const biddingStrategy = ref('auto')
 const biddingStrategies = [
@@ -79,6 +98,84 @@ const biddingStrategies = [
 const targetCPA = ref(8.0)
 const startDate = ref('')
 const endDate = ref('')
+
+const formatMoney = (value?: number) => `$${Math.round(value || 0).toLocaleString()}`
+
+const flightDays = computed(() => {
+  if (!startDate.value || !endDate.value) return 0
+  const start = new Date(startDate.value)
+  const end = new Date(endDate.value)
+  const diff = Math.floor((end.getTime() - start.getTime()) / 86400000) + 1
+  return Number.isFinite(diff) ? Math.max(diff, 0) : 0
+})
+
+const allocatedBudget = computed(() => {
+  return projectCampaigns.value.reduce((sum, campaign) => sum + (campaign.budget || 0), 0)
+})
+
+const projectSpent = computed(() => selectedGroup.value?.spent || 0)
+const projectTotalBudget = computed(() => selectedGroup.value?.total_budget || 0)
+const projectUnallocatedBudget = computed(() => Math.max(projectTotalBudget.value - allocatedBudget.value, 0))
+const projectRemainingCash = computed(() => Math.max(projectTotalBudget.value - projectSpent.value, 0))
+const projectedTotalBudget = computed(() => {
+  if (budgetType.value === 'daily' && flightDays.value > 0) {
+    return campaignBudget.value * flightDays.value
+  }
+  return campaignBudget.value
+})
+
+const budgetErrors = computed(() => {
+  const errors: string[] = []
+  if (campaignBudget.value <= 0) errors.push('请输入大于 0 的预算')
+  if (!startDate.value || !endDate.value) errors.push('请选择完整投放时间')
+  if (startDate.value && endDate.value && flightDays.value <= 0) errors.push('结束日期不能早于开始日期')
+  if (projectTotalBudget.value > 0 && projectedTotalBudget.value > projectUnallocatedBudget.value) {
+    errors.push(`计划预算超出项目未分配预算，可用额度 ${formatMoney(projectUnallocatedBudget.value)}`)
+  }
+  if (projectRemainingCash.value > 0 && projectedTotalBudget.value > projectRemainingCash.value) {
+    errors.push(`计划预算高于项目现金剩余额度 ${formatMoney(projectRemainingCash.value)}`)
+  }
+  return errors
+})
+
+const budgetPacingHint = computed(() => {
+  if (!flightDays.value || !projectTotalBudget.value) return '选择时间后可计算预算节奏'
+  const daily = budgetType.value === 'daily' ? campaignBudget.value : projectedTotalBudget.value / flightDays.value
+  const remainingDays = Math.max(flightDays.value, 1)
+  const projectDailyCapacity = projectRemainingCash.value / remainingDays
+  if (daily > projectDailyCapacity * 1.2) return '日消耗目标高于项目剩余额度节奏，建议降低预算或缩短投放目标'
+  if (daily < projectDailyCapacity * 0.35) return '日消耗目标偏保守，若素材表现达标可预留自动加预算空间'
+  return '预算节奏与项目剩余额度匹配'
+})
+
+const loadProjectCampaigns = async (projectId: string) => {
+  try {
+    projectCampaigns.value = await getProjectCampaigns(projectId)
+  } catch (err) {
+    console.error('加载项目广告计划失败:', err)
+    projectCampaigns.value = []
+  }
+}
+
+const loadProjectPlatformAccounts = async (projectId: string) => {
+  try {
+    const links = await getProjectPlatformAccounts(projectId)
+    projectPlatformAccounts.value = links
+      .map(link => link.account)
+      .filter(Boolean) as PlatformAccount[]
+  } catch (err) {
+    console.error('加载项目绑定广告账户失败:', err)
+    projectPlatformAccounts.value = []
+  }
+}
+
+const loadPlatformAccounts = async () => {
+  try {
+    platformAccounts.value = await getPlatformAccounts()
+  } catch (err) {
+    console.error('加载平台账户失败:', err)
+  }
+}
 
 // 执行阶段数据
 const selectedMaterials = ref<Material[]>([])
@@ -123,11 +220,15 @@ const interests = ['游戏', '短视频', '电商购物', '社交媒体', '音�
 
 // 验证逻辑
 const canProceedStep1 = computed(() => {
-  return selectedGroup.value !== null && selectedPlatform.value !== ''
+  if (!selectedGroup.value || !selectedPlatform.value) return false
+  if (selectedPlatform.value === 'Meta') {
+    return Boolean(selectedPlatformAccountId.value)
+  }
+  return true
 })
 
 const canProceedStep2 = computed(() => {
-  return campaignObjective.value !== '' && dailyBudget.value > 0 && startDate.value !== '' && endDate.value !== ''
+  return campaignObjective.value !== '' && budgetErrors.value.length === 0
 })
 
 const canProceedStep3 = computed(() => {
@@ -141,19 +242,23 @@ const canProceed = computed(() => {
   return true
 })
 
+const scrollStepToTop = () => {
+  requestAnimationFrame(() => {
+    contentScrollRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+  })
+}
+
 const nextStep = () => {
   if (currentStep.value < totalSteps && canProceed.value) {
     currentStep.value++
-    // 滚动到页面顶部
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    scrollStepToTop()
   }
 }
 
 const prevStep = () => {
   if (currentStep.value > 1) {
     currentStep.value--
-    // 滚动到页面顶部
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    scrollStepToTop()
   }
 }
 
@@ -191,18 +296,54 @@ const handleSubmit = async () => {
   submitting.value = true
   
   try {
+    if (budgetErrors.value.length > 0) {
+      alert(budgetErrors.value[0])
+      return
+    }
+
     // 构建广告计划名称
     const campaignName = `${selectedGroup.value.name} - ${platforms.find(p => p.id === selectedPlatform.value)?.name}`
-    
-    // 调用API创建广告计划
-    const campaign = await createCampaign({
-      project_id: selectedGroup.value.id,
-      name: campaignName,
-      platform: selectedPlatform.value,
-      budget: dailyBudget.value,
-      status: 'draft',
-      material_ids: selectedMaterials.value.map(m => m.id)
-    })
+
+    let campaign
+    if (selectedPlatform.value === 'Meta') {
+      if (!selectedPlatformAccountId.value) {
+        alert('请选择 Meta 广告账户')
+        return
+      }
+      const result = await createMetaCampaign({
+        platform_account_id: selectedPlatformAccountId.value,
+        project_id: selectedGroup.value.id,
+        name: campaignName,
+        objective: campaignObjective.value === 'engagement' ? 'OUTCOME_AWARENESS' : 'OUTCOME_TRAFFIC',
+        status: 'PAUSED',
+        budget: projectedTotalBudget.value,
+        budget_type: budgetType.value === 'daily' ? 'daily' : 'lifetime',
+        special_ad_categories: [],
+        create_local_record: true,
+      })
+      campaign = result.local_campaign
+    } else {
+      // 调用API创建广告计划
+      campaign = await createCampaign({
+        project_id: selectedGroup.value.id,
+        name: campaignName,
+        platform: selectedPlatform.value,
+        budget: projectedTotalBudget.value,
+        budget_type: budgetType.value as 'daily' | 'total',
+        status: 'draft',
+        objective: campaignObjective.value,
+        bidding_strategy: biddingStrategy.value,
+        target_cpa: biddingStrategy.value === 'target_cpa' ? targetCPA.value : undefined,
+        start_date: startDate.value,
+        end_date: endDate.value,
+        target_regions: targetRegions.value,
+        age_range: ageRange.value,
+        gender: gender.value,
+        target_interests: targetInterests.value,
+        material_ids: selectedMaterials.value.map(m => m.id),
+        auto_optimize_enabled: true
+      })
+    }
     
     console.log('广告计划创建成功:', campaign)
     
@@ -230,6 +371,9 @@ const handleCloseGroupModal = () => {
 
 const handleSelectGroup = (project: Project) => {
   selectedGroup.value = project
+  loadProjectCampaigns(project.id)
+  loadProjectPlatformAccounts(project.id)
+  selectedPlatformAccountId.value = ''
   console.log('选择分组:', project)
 }
 
@@ -250,10 +394,13 @@ const handleSelectMaterials = (materials: Material[]) => {
 
 // 页面加载时，如果有projectId参数，自动加载该项目作为默认分组
 onMounted(async () => {
+  await loadPlatformAccounts()
   if (projectId.value) {
     try {
       const project = await getProjectDetail(projectId.value)
       selectedGroup.value = project
+      await loadProjectCampaigns(project.id)
+      await loadProjectPlatformAccounts(project.id)
       console.log('自动设置默认分组:', project.name)
     } catch (err) {
       console.error('加载项目详情失败:', err)
@@ -333,7 +480,7 @@ onMounted(async () => {
     </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto">
+      <div ref="contentScrollRef" class="flex-1 overflow-y-auto">
         <div class="max-w-7xl mx-auto px-6 py-8">
       <!-- Step 1: 准备 -->
       <div v-if="currentStep === 1" class="space-y-6">
@@ -352,12 +499,32 @@ onMounted(async () => {
           >
             <div v-if="selectedGroup">
               <div class="font-semibold">{{ selectedGroup.name }}</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ selectedGroup.game_type }}</div>
+              <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">
+                {{ selectedGroup.game_type }} · 总预算 {{ formatMoney(selectedGroup.total_budget) }} · 已消耗 {{ formatMoney(selectedGroup.spent) }}
+              </div>
             </div>
             <div v-else class="text-center text-primary">
               请选择分组
             </div>
           </button>
+          <div v-if="selectedGroup" class="grid grid-cols-2 lg:grid-cols-4 gap-3 mt-4">
+            <div class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">项目总预算</div>
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(projectTotalBudget) }}</div>
+            </div>
+            <div class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">已分配计划</div>
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(allocatedBudget) }}</div>
+            </div>
+            <div class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">未分配额度</div>
+              <div class="text-sm font-semibold text-emerald-600">{{ formatMoney(projectUnallocatedBudget) }}</div>
+            </div>
+            <div class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+              <div class="text-xs text-slate-500 dark:text-slate-400">现金剩余额度</div>
+              <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(projectRemainingCash) }}</div>
+            </div>
+          </div>
         </div>
 
         <!-- 投放平台 -->
@@ -384,6 +551,27 @@ onMounted(async () => {
                   <div class="font-semibold text-slate-900 dark:text-white">{{ platform.name }}</div>
                   <div class="text-sm text-slate-500 dark:text-slate-400">{{ platform.description }}</div>
                 </div>
+              </div>
+            </div>
+          </div>
+
+          <div v-if="selectedPlatform === 'Meta'" class="mt-5 rounded-md border border-slate-200 dark:border-slate-700 p-4">
+            <div class="flex items-center gap-2 text-sm font-medium text-slate-800 dark:text-slate-200">
+              <span class="material-symbols-outlined text-primary text-base">verified_user</span>
+              Meta 计划将直接创建到真实广告账户
+            </div>
+            <div class="mt-3">
+              <select v-model="selectedPlatformAccountId" class="w-full px-3 py-2 rounded-md border text-sm">
+                <option value="">选择 Meta 广告账户</option>
+                <option v-for="account in availablePlatformAccounts" :key="account.id" :value="account.id">
+                  {{ account.account_name }} · {{ account.account_id }}
+                </option>
+              </select>
+              <div v-if="availablePlatformAccounts.length === 0" class="mt-2 text-xs text-amber-600">
+                该项目暂无可用 Meta 账户，请先在项目详情绑定广告账户，或到“设置 / 平台连接”完成授权。
+              </div>
+              <div v-else-if="projectPlatformAccounts.length === 0" class="mt-2 text-xs text-slate-500">
+                当前项目尚未绑定账户，已临时显示全部可用 Meta 账户。创建成功后系统会自动绑定该账户。
               </div>
             </div>
           </div>
@@ -464,13 +652,40 @@ onMounted(async () => {
                 {{ budgetType === 'daily' ? '日预算金额 ($)' : '总预算金额 ($)' }}
               </label>
               <input
-                v-model.number="dailyBudget"
+                v-model.number="campaignBudget"
                 type="number"
                 min="0"
                 step="100"
                 placeholder="例如: 10000"
                 class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
               />
+            </div>
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+              <div class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+                <div class="text-xs text-slate-500 dark:text-slate-400">预计计划总预算</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(projectedTotalBudget) }}</div>
+              </div>
+              <div class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+                <div class="text-xs text-slate-500 dark:text-slate-400">投放天数</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ flightDays || '-' }} 天</div>
+              </div>
+              <div class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+                <div class="text-xs text-slate-500 dark:text-slate-400">未分配额度</div>
+                <div class="text-sm font-semibold text-emerald-600">{{ formatMoney(projectUnallocatedBudget) }}</div>
+              </div>
+              <div class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2">
+                <div class="text-xs text-slate-500 dark:text-slate-400">预算节奏</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white truncate">{{ budgetPacingHint }}</div>
+              </div>
+            </div>
+            <div
+              v-if="budgetErrors.length > 0"
+              class="rounded-md border border-red-200 dark:border-red-900/50 bg-red-50 dark:bg-red-900/20 px-3 py-2"
+            >
+              <div v-for="item in budgetErrors" :key="item" class="flex items-center gap-2 text-sm text-red-600 dark:text-red-300">
+                <span class="material-symbols-outlined text-base">error</span>
+                <span>{{ item }}</span>
+              </div>
             </div>
           </div>
         </div>
@@ -698,9 +913,17 @@ onMounted(async () => {
             </div>
             <div>
               <div class="text-slate-500 dark:text-slate-400 mb-1">账户状态</div>
-              <div class="flex items-center gap-1 text-emerald-600">
+              <div class="flex items-center gap-1" :class="selectedPlatform === 'Meta' ? 'text-blue-600' : 'text-emerald-600'">
                 <span class="material-symbols-outlined text-sm">check_circle</span>
-                <span class="font-medium">全部就绪</span>
+                <span class="font-medium">
+                  {{ selectedPlatform === 'Meta' ? '将创建到 Meta' : '本地草稿' }}
+                </span>
+              </div>
+            </div>
+            <div v-if="selectedPlatform === 'Meta'">
+              <div class="text-slate-500 dark:text-slate-400 mb-1">Meta 账户</div>
+              <div class="font-medium text-slate-900 dark:text-white">
+                {{ availablePlatformAccounts.find(a => a.id === selectedPlatformAccountId)?.account_name || '-' }}
               </div>
             </div>
           </div>
@@ -722,8 +945,16 @@ onMounted(async () => {
             <div class="flex justify-between">
               <span class="text-slate-500 dark:text-slate-400">预算</span>
               <span class="font-medium text-slate-900 dark:text-white">
-                {{ budgetType === 'daily' ? '日预算' : '总预算' }} ${{ dailyBudget.toLocaleString() }}
+                {{ budgetType === 'daily' ? '日预算' : '总预算' }} {{ formatMoney(campaignBudget) }}
               </span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500 dark:text-slate-400">计划占用预算</span>
+              <span class="font-medium text-slate-900 dark:text-white">{{ formatMoney(projectedTotalBudget) }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500 dark:text-slate-400">项目未分配额度</span>
+              <span class="font-medium text-slate-900 dark:text-white">{{ formatMoney(projectUnallocatedBudget) }}</span>
             </div>
             <div class="flex justify-between">
               <span class="text-slate-500 dark:text-slate-400">出价策略</span>

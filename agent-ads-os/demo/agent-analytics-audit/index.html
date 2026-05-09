@@ -1,0 +1,945 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ANIFORCE Agent Analytics Audit</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #05070b;
+      --panel: #0b111d;
+      --panel-2: #0f1726;
+      --line: #1f2a3d;
+      --text: #eef4ff;
+      --muted: #8ea0b8;
+      --soft: #c4d0e3;
+      --green: #31f2a5;
+      --blue: #4c8dff;
+      --amber: #ffb84d;
+      --red: #ff6370;
+      --purple: #b079ff;
+      --shadow: 0 20px 70px rgba(0, 0, 0, 0.36);
+    }
+
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      letter-spacing: 0;
+    }
+
+    button, input, textarea, select {
+      font: inherit;
+    }
+
+    .app {
+      min-height: 100vh;
+      display: grid;
+      grid-template-columns: 360px minmax(0, 1fr);
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: #070a11;
+      padding: 24px;
+      position: sticky;
+      top: 0;
+      height: 100vh;
+      overflow: auto;
+    }
+
+    main {
+      padding: 24px 28px 40px;
+      overflow: hidden;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 28px;
+    }
+
+    .mark {
+      width: 34px;
+      height: 34px;
+      border: 1px solid rgba(49, 242, 165, 0.45);
+      background: linear-gradient(135deg, rgba(49, 242, 165, 0.22), rgba(76, 141, 255, 0.14));
+      display: grid;
+      place-items: center;
+      color: var(--green);
+      font-size: 14px;
+      font-weight: 800;
+    }
+
+    .brand strong {
+      display: block;
+      font-size: 15px;
+      line-height: 1.2;
+    }
+
+    .brand span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 2px;
+    }
+
+    h1, h2, h3, p { margin: 0; }
+
+    h1 {
+      font-size: 30px;
+      line-height: 1.08;
+      max-width: 860px;
+    }
+
+    .subhead {
+      color: var(--muted);
+      margin-top: 10px;
+      font-size: 14px;
+      max-width: 880px;
+      line-height: 1.55;
+    }
+
+    .form {
+      display: grid;
+      gap: 16px;
+    }
+
+    label {
+      display: block;
+      color: var(--soft);
+      font-size: 12px;
+      font-weight: 700;
+      margin-bottom: 7px;
+    }
+
+    input, textarea, select {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #0c1320;
+      color: var(--text);
+      padding: 11px 12px;
+      outline: none;
+      border-radius: 6px;
+    }
+
+    textarea {
+      min-height: 76px;
+      resize: vertical;
+      line-height: 1.45;
+    }
+
+    input:focus, textarea:focus, select:focus {
+      border-color: rgba(49, 242, 165, 0.72);
+      box-shadow: 0 0 0 3px rgba(49, 242, 165, 0.08);
+    }
+
+    .btn {
+      border: 0;
+      background: var(--green);
+      color: #03110b;
+      font-weight: 800;
+      padding: 12px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    .btn.secondary {
+      background: #111a2b;
+      color: var(--soft);
+      border: 1px solid var(--line);
+    }
+
+    .actions {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 4px;
+    }
+
+    .hint {
+      margin-top: 16px;
+      padding: 12px;
+      border: 1px solid var(--line);
+      background: #0b111c;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+      border-radius: 6px;
+    }
+
+    .hero {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+
+    .status {
+      min-width: 240px;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      padding: 14px;
+      border-radius: 6px;
+    }
+
+    .status .label {
+      color: var(--muted);
+      font-size: 11px;
+      font-weight: 800;
+      text-transform: uppercase;
+    }
+
+    .status .value {
+      margin-top: 7px;
+      font-size: 22px;
+      font-weight: 850;
+      color: var(--green);
+    }
+
+    .grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .kpis {
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      margin-bottom: 14px;
+    }
+
+    .card {
+      border: 1px solid var(--line);
+      background: var(--panel);
+      border-radius: 8px;
+      box-shadow: var(--shadow);
+    }
+
+    .card.pad {
+      padding: 18px;
+    }
+
+    .kpi {
+      padding: 16px;
+      min-height: 128px;
+    }
+
+    .kpi .top {
+      display: flex;
+      justify-content: space-between;
+      gap: 10px;
+      align-items: center;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 700;
+    }
+
+    .kpi .num {
+      margin-top: 16px;
+      font-size: 34px;
+      font-weight: 900;
+      line-height: 1;
+    }
+
+    .kpi .desc {
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 10px;
+      line-height: 1.35;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      padding: 0 8px;
+      border-radius: 999px;
+      font-size: 11px;
+      font-weight: 800;
+      background: rgba(49, 242, 165, 0.11);
+      color: var(--green);
+      border: 1px solid rgba(49, 242, 165, 0.24);
+      white-space: nowrap;
+    }
+
+    .pill.warn {
+      color: var(--amber);
+      background: rgba(255, 184, 77, 0.12);
+      border-color: rgba(255, 184, 77, 0.25);
+    }
+
+    .pill.bad {
+      color: var(--red);
+      background: rgba(255, 99, 112, 0.12);
+      border-color: rgba(255, 99, 112, 0.25);
+    }
+
+    .cols {
+      display: grid;
+      grid-template-columns: 1.2fr 0.8fr;
+      gap: 14px;
+      align-items: start;
+    }
+
+    .section-title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding-bottom: 14px;
+      border-bottom: 1px solid var(--line);
+      margin-bottom: 14px;
+    }
+
+    .section-title h2 {
+      font-size: 16px;
+    }
+
+    .section-title span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 13px;
+    }
+
+    th {
+      color: var(--muted);
+      text-align: left;
+      font-size: 11px;
+      text-transform: uppercase;
+      padding: 0 10px 9px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    td {
+      padding: 12px 10px;
+      border-bottom: 1px solid rgba(31, 42, 61, 0.72);
+      vertical-align: top;
+      color: var(--soft);
+    }
+
+    tr:last-child td { border-bottom: 0; }
+
+    .bar {
+      height: 8px;
+      background: #172133;
+      border-radius: 999px;
+      overflow: hidden;
+      margin-top: 8px;
+    }
+
+    .bar > i {
+      display: block;
+      height: 100%;
+      width: var(--w, 50%);
+      background: var(--c, var(--green));
+      border-radius: inherit;
+    }
+
+    .agent-list {
+      display: grid;
+      gap: 11px;
+    }
+
+    .agent {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      padding: 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .agent strong {
+      font-size: 13px;
+    }
+
+    .agent small {
+      display: block;
+      color: var(--muted);
+      margin-top: 4px;
+      font-size: 11px;
+    }
+
+    .fixes {
+      display: grid;
+      gap: 10px;
+    }
+
+    .fix {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      padding: 12px;
+      background: var(--panel-2);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+    }
+
+    .rank {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      background: rgba(49, 242, 165, 0.12);
+      color: var(--green);
+      font-weight: 900;
+      border-radius: 5px;
+      font-size: 12px;
+    }
+
+    .fix strong {
+      display: block;
+      font-size: 13px;
+      margin-bottom: 4px;
+    }
+
+    .fix p {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.42;
+    }
+
+    .jsonbox {
+      background: #070b13;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 14px;
+      color: #b9f7d9;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", monospace;
+      font-size: 12px;
+      line-height: 1.5;
+      overflow: auto;
+      max-height: 330px;
+      white-space: pre;
+    }
+
+    .tabs {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 14px;
+      flex-wrap: wrap;
+    }
+
+    .tab {
+      border: 1px solid var(--line);
+      background: #0c1320;
+      color: var(--muted);
+      padding: 8px 10px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 12px;
+      font-weight: 800;
+    }
+
+    .tab.active {
+      color: #03110b;
+      background: var(--green);
+      border-color: var(--green);
+    }
+
+    .report-grid {
+      display: grid;
+      gap: 14px;
+    }
+
+    .wide {
+      grid-column: 1 / -1;
+    }
+
+    .empty {
+      min-height: calc(100vh - 48px);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      color: var(--muted);
+      border: 1px dashed var(--line);
+      border-radius: 10px;
+      background: rgba(11, 17, 29, 0.55);
+      padding: 32px;
+    }
+
+    .empty h2 {
+      color: var(--text);
+      font-size: 24px;
+      margin-bottom: 10px;
+    }
+
+    .loading {
+      display: none;
+      align-items: center;
+      gap: 10px;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 12px;
+    }
+
+    .loading.on { display: flex; }
+
+    .spinner {
+      width: 16px;
+      height: 16px;
+      border: 2px solid #1f2a3d;
+      border-top-color: var(--green);
+      border-radius: 50%;
+      animation: spin 0.75s linear infinite;
+    }
+
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    @media (max-width: 980px) {
+      .app { grid-template-columns: 1fr; }
+      aside { position: static; height: auto; }
+      .hero { flex-direction: column; }
+      .status { width: 100%; }
+      .kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .cols { grid-template-columns: 1fr; }
+    }
+
+    @media (max-width: 620px) {
+      main { padding: 18px; }
+      .kpis { grid-template-columns: 1fr; }
+      .actions { grid-template-columns: 1fr; }
+      h1 { font-size: 25px; }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">
+        <div class="mark">AF</div>
+        <div>
+          <strong>ANIFORCE</strong>
+          <span>Agent Analytics Audit</span>
+        </div>
+      </div>
+
+      <form id="auditForm" class="form">
+        <div>
+          <label for="brand">客户品牌名</label>
+          <input id="brand" value="HelpPilot AI" autocomplete="off" />
+        </div>
+        <div>
+          <label for="url">官网 URL</label>
+          <input id="url" value="https://helppilot.ai" autocomplete="off" />
+        </div>
+        <div>
+          <label for="category">客户类型</label>
+          <select id="category">
+            <option>B2B AI Customer Support SaaS</option>
+            <option>MarTech / SalesTech SaaS</option>
+            <option>Developer Tool / API Platform</option>
+            <option>Cybersecurity / Compliance SaaS</option>
+            <option>High-consideration DTC Brand</option>
+          </select>
+        </div>
+        <div>
+          <label for="competitors">主要竞品</label>
+          <textarea id="competitors">Intercom, Zendesk AI, Gorgias, Freshdesk</textarea>
+        </div>
+        <div>
+          <label for="market">目标市场</label>
+          <input id="market" value="US mid-market B2B SaaS" autocomplete="off" />
+        </div>
+        <div class="actions">
+          <button class="btn" type="submit">生成诊断报告</button>
+          <button class="btn secondary" type="button" id="sampleBtn">换一组样例</button>
+        </div>
+        <div class="loading" id="loading"><span class="spinner"></span><span>正在模拟抓取官网、生成 buyer prompts、分析 agent 可见性...</span></div>
+      </form>
+
+      <div class="hint">
+        这是最小可演示版本：用确定性模拟数据展示产品形态。后续可替换为真实官网抓取、Cloudflare/Vercel 日志、Prompt API 和 Search Console 数据。
+      </div>
+    </aside>
+
+    <main>
+      <section class="hero">
+        <div>
+          <h1>AI Buyer Visibility 与 Agent Analytics 诊断报告</h1>
+          <p class="subhead">输入客户品牌或官网，生成一份面向 B2B SaaS 获客场景的诊断报告：AI 是否能理解你、是否引用你、竞品是否压过你、哪些页面适合做 Agent/GEO Asset Pack。</p>
+        </div>
+        <div class="status">
+          <div class="label">Demo Mode</div>
+          <div class="value">Local Static</div>
+        </div>
+      </section>
+
+      <div id="report" class="empty">
+        <div>
+          <h2>生成第一份诊断报告</h2>
+          <p>点击左侧按钮后，这里会显示 Agent 可见性、Crawler 活跃度、Prompt 输赢、结构化 Offer 和修复建议。</p>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script>
+    const samples = [
+      {
+        brand: "HelpPilot AI",
+        url: "https://helppilot.ai",
+        category: "B2B AI Customer Support SaaS",
+        competitors: "Intercom, Zendesk AI, Gorgias, Freshdesk",
+        market: "US mid-market B2B SaaS"
+      },
+      {
+        brand: "PipeForge",
+        url: "https://pipeforge.ai",
+        category: "MarTech / SalesTech SaaS",
+        competitors: "HubSpot, Outreach, Apollo, Salesforce",
+        market: "US B2B outbound teams"
+      },
+      {
+        brand: "SecureLedger",
+        url: "https://secureledger.io",
+        category: "Cybersecurity / Compliance SaaS",
+        competitors: "Vanta, Drata, Secureframe, Sprinto",
+        market: "US startups preparing SOC 2"
+      },
+      {
+        brand: "VectorAPI",
+        url: "https://vectorapi.dev",
+        category: "Developer Tool / API Platform",
+        competitors: "Pinecone, Weaviate, Chroma, Qdrant",
+        market: "AI app developers"
+      }
+    ];
+
+    let sampleIndex = 0;
+
+    function hashString(str) {
+      let h = 2166136261;
+      for (let i = 0; i < str.length; i++) {
+        h ^= str.charCodeAt(i);
+        h += (h << 1) + (h << 4) + (h << 7) + (h << 8) + (h << 24);
+      }
+      return Math.abs(h >>> 0);
+    }
+
+    function clamp(n, min, max) {
+      return Math.max(min, Math.min(max, n));
+    }
+
+    function domainFromUrl(url) {
+      try {
+        return new URL(url).hostname.replace(/^www\./, "");
+      } catch {
+        return url.replace(/^https?:\/\//, "").replace(/^www\./, "").split("/")[0] || "example.com";
+      }
+    }
+
+    function splitCompetitors(str) {
+      return str.split(/[,，\n]/).map(x => x.trim()).filter(Boolean).slice(0, 6);
+    }
+
+    function makeReport(input) {
+      const seed = hashString(input.brand + input.url + input.category);
+      const competitors = splitCompetitors(input.competitors);
+      const domain = domainFromUrl(input.url);
+      const base = seed % 100;
+      const mention = clamp(18 + (base % 42), 12, 64);
+      const citation = clamp(10 + ((seed >> 4) % 36), 6, 52);
+      const readiness = clamp(46 + ((seed >> 8) % 34), 38, 86);
+      const offer = clamp(52 + ((seed >> 12) % 33), 45, 89);
+      const fact = clamp(58 + ((seed >> 16) % 29), 45, 92);
+      const agentHits = clamp(120 + ((seed >> 3) % 820), 80, 980);
+      const competitorLeader = competitors[(seed >> 5) % Math.max(competitors.length, 1)] || "Top Competitor";
+      const winRate = clamp(12 + ((seed >> 7) % 38), 8, 55);
+
+      const agents = [
+        ["OAI-SearchBot", "ChatGPT search / retrieval", Math.round(agentHits * 0.28)],
+        ["GPTBot", "OpenAI training crawler policy check", Math.round(agentHits * 0.18)],
+        ["PerplexityBot", "Answer engine crawler", Math.round(agentHits * 0.16)],
+        ["ClaudeBot", "Anthropic crawler", Math.round(agentHits * 0.12)],
+        ["Bingbot", "Bing / Copilot search index", Math.round(agentHits * 0.19)],
+        ["Googlebot", "Google Search / AI features", Math.round(agentHits * 0.07)]
+      ];
+
+      const pages = [
+        ["/", "Homepage", 74 + (seed % 80), readiness > 60 ? "可抓取" : "需检查"],
+        ["/pricing", "Pricing", 18 + (seed % 35), "价格不够结构化"],
+        ["/customers", "Case Studies", 22 + ((seed >> 2) % 54), "证据可复用"],
+        ["/compare/" + (competitorLeader || "intercom").toLowerCase().replace(/\s+/g, "-"), "Comparison", 8 + ((seed >> 4) % 31), "建议加强"],
+        ["/docs/integrations", "Integrations", 16 + ((seed >> 6) % 42), "适合 Agent 抽取"],
+        ["/agent-offer.json", "Structured Offer", 0, "尚未发布"]
+      ];
+
+      const prompts = [
+        [`Best ${input.category.replace("B2B ", "").replace(" SaaS", "")} for ${input.market}`, mention > 45, true, competitorLeader],
+        [`${competitorLeader} alternatives for ${input.market}`, mention > 36, citation > 24, competitorLeader],
+        [`Compare ${input.brand} vs ${competitorLeader}`, true, citation > 30, competitorLeader],
+        [`Which AI support platform reduces tickets for SaaS teams?`, mention > 52, fact > 68, competitors[1] || competitorLeader],
+        [`What is the best tool with Zendesk integration?`, mention > 42, citation > 34, competitors[2] || competitorLeader],
+        [`Affordable ${input.category} for startups`, mention > 48, fact > 72, competitors[0] || competitorLeader]
+      ];
+
+      const fixes = [
+        {
+          title: "发布 agent-offer.json",
+          body: "把产品、目标客户、价格约束、证据、CTA 和集成能力整理成机器可读 Offer，方便 Chatbot 和 Agent 抽取。"
+        },
+        {
+          title: `补齐 ${competitorLeader} 对比页`,
+          body: "当前竞品在 buyer shortlist prompt 中占优。建议生成对比页，明确适用场景、差异点、证据和迁移成本。"
+        },
+        {
+          title: "把 claim 绑定到 proof",
+          body: "AI 答案更倾向引用可验证事实。将“降低工单量”“提升响应速度”等卖点绑定案例、截图、客户证言或数据页。"
+        },
+        {
+          title: "建立 50 个高意图 prompt 监控",
+          body: "按 category discovery、competitor comparison、problem solution、pricing fit、action intent 五类建立周度监控。"
+        }
+      ];
+
+      const offerJson = {
+        brand: input.brand,
+        domain,
+        category: input.category,
+        target_market: input.market,
+        offer: `${input.brand} helps ${input.market} evaluate and deploy ${input.category.toLowerCase()} with measurable proof and integration-ready workflows.`,
+        competitors,
+        proof_status: readiness > 70 ? "partial_verified" : "needs_more_evidence",
+        recommended_assets: [
+          "comparison_page",
+          "faq_page",
+          "proof_page",
+          "agent-offer.json",
+          "pricing_constraints_summary"
+        ],
+        actions: [
+          { type: "book_demo", url: `https://${domain}/demo` },
+          { type: "view_pricing", url: `https://${domain}/pricing` },
+          { type: "compare", url: `https://${domain}/compare/${(competitorLeader || "competitor").toLowerCase().replace(/\s+/g, "-")}` }
+        ]
+      };
+
+      return {
+        input,
+        domain,
+        mention,
+        citation,
+        readiness,
+        offer,
+        fact,
+        agentHits,
+        competitorLeader,
+        winRate,
+        agents,
+        pages,
+        prompts,
+        fixes,
+        offerJson
+      };
+    }
+
+    function health(score) {
+      if (score >= 72) return ["Good", "pill"];
+      if (score >= 50) return ["Watch", "pill warn"];
+      return ["Risk", "pill bad"];
+    }
+
+    function color(score) {
+      if (score >= 72) return "var(--green)";
+      if (score >= 50) return "var(--amber)";
+      return "var(--red)";
+    }
+
+    function renderReport(data) {
+      const [readinessLabel, readinessPill] = health(data.readiness);
+      const [visibilityLabel, visibilityPill] = health(data.mention);
+      const report = document.getElementById("report");
+      report.className = "report-grid";
+      report.innerHTML = `
+        <div class="grid kpis">
+          ${kpi("AI Mention Rate", `${data.mention}%`, "目标 prompt 中品牌被提及比例", visibilityLabel, visibilityPill)}
+          ${kpi("Citation Rate", `${data.citation}%`, "AI answer 引用官网或资产页比例", data.citation >= 35 ? "Citable" : "Weak", data.citation >= 35 ? "pill" : "pill warn")}
+          ${kpi("GEO Readiness", `${data.readiness}`, "抓取、结构化、证据和行动入口综合分", readinessLabel, readinessPill)}
+          ${kpi("Agent Hits", `${data.agentHits}`, "过去 30 天 AI crawler 模拟访问量", "30D", "pill")}
+        </div>
+
+        <div class="cols">
+          <section class="card pad">
+            <div class="section-title">
+              <div>
+                <h2>${data.input.brand} 诊断摘要</h2>
+                <span>${data.domain} · ${data.input.category}</span>
+              </div>
+              <span class="${readinessPill}">${readinessLabel}</span>
+            </div>
+            <table>
+              <thead><tr><th>指标</th><th>当前表现</th><th>说明</th></tr></thead>
+              <tbody>
+                <tr><td>AI Buyer Visibility</td><td>${data.mention}%<div class="bar"><i style="--w:${data.mention}%;--c:${color(data.mention)}"></i></div></td><td>品牌在高意图 buyer prompt 中仍有提升空间。</td></tr>
+                <tr><td>Fact Correctness</td><td>${data.fact}%<div class="bar"><i style="--w:${data.fact}%;--c:${color(data.fact)}"></i></div></td><td>AI 对产品事实的提取准确率，受官网结构和证据页影响。</td></tr>
+                <tr><td>Competitor Pressure</td><td>${data.competitorLeader}</td><td>当前在多个 comparison prompt 中最容易压过 ${data.input.brand}。</td></tr>
+                <tr><td>Shortlist Win Rate</td><td>${data.winRate}%<div class="bar"><i style="--w:${data.winRate}%;--c:${color(data.winRate)}"></i></div></td><td>进入 AI 推荐候选列表并优于竞品的模拟比例。</td></tr>
+              </tbody>
+            </table>
+          </section>
+
+          <section class="card pad">
+            <div class="section-title">
+              <div>
+                <h2>AI Agent / Crawler 活跃度</h2>
+                <span>基于 server log 产品形态模拟</span>
+              </div>
+            </div>
+            <div class="agent-list">
+              ${data.agents.map(a => `
+                <div class="agent">
+                  <div><strong>${a[0]}</strong><small>${a[1]}</small></div>
+                  <span class="pill">${a[2]}</span>
+                </div>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+
+        <div class="cols">
+          <section class="card pad">
+            <div class="section-title">
+              <div>
+                <h2>Prompt Visibility 输赢表</h2>
+                <span>建议作为周度监控的起点</span>
+              </div>
+            </div>
+            <table>
+              <thead><tr><th>Buyer Prompt</th><th>提及</th><th>引用</th><th>主要竞品</th></tr></thead>
+              <tbody>
+                ${data.prompts.map(p => `
+                  <tr>
+                    <td>${escapeHtml(p[0])}</td>
+                    <td><span class="${p[1] ? "pill" : "pill bad"}">${p[1] ? "Yes" : "No"}</span></td>
+                    <td><span class="${p[2] ? "pill" : "pill warn"}">${p[2] ? "Cited" : "Weak"}</span></td>
+                    <td>${escapeHtml(p[3])}</td>
+                  </tr>
+                `).join("")}
+              </tbody>
+            </table>
+          </section>
+
+          <section class="card pad">
+            <div class="section-title">
+              <div>
+                <h2>优先修复建议</h2>
+                <span>按影响排序</span>
+              </div>
+            </div>
+            <div class="fixes">
+              ${data.fixes.map((f, idx) => `
+                <div class="fix">
+                  <div class="rank">${idx + 1}</div>
+                  <div><strong>${escapeHtml(f.title)}</strong><p>${escapeHtml(f.body)}</p></div>
+                </div>
+              `).join("")}
+            </div>
+          </section>
+        </div>
+
+        <section class="card pad wide">
+          <div class="section-title">
+            <div>
+              <h2>页面级 Agent 访问与资产缺口</h2>
+              <span>用于决定先生成哪些 Agent/GEO Asset Pack 页面</span>
+            </div>
+          </div>
+          <table>
+            <thead><tr><th>路径</th><th>页面类型</th><th>AI 访问</th><th>诊断</th></tr></thead>
+            <tbody>
+              ${data.pages.map(row => `
+                <tr>
+                  <td>${escapeHtml(row[0])}</td>
+                  <td>${escapeHtml(row[1])}</td>
+                  <td>${row[2]}</td>
+                  <td>${escapeHtml(row[3])}</td>
+                </tr>
+              `).join("")}
+            </tbody>
+          </table>
+        </section>
+
+        <section class="card pad wide">
+          <div class="section-title">
+            <div>
+              <h2>agent-offer.json 预览</h2>
+              <span>未来给 AI Search / Chatbot / Agent 解析的结构化商业对象</span>
+            </div>
+            <button class="tab active" type="button" onclick="copyOffer()">复制 JSON</button>
+          </div>
+          <pre class="jsonbox" id="offerJson">${escapeHtml(JSON.stringify(data.offerJson, null, 2))}</pre>
+        </section>
+      `;
+    }
+
+    function kpi(title, value, desc, badge, badgeClass) {
+      return `
+        <section class="card kpi">
+          <div class="top"><span>${title}</span><span class="${badgeClass}">${badge}</span></div>
+          <div class="num">${value}</div>
+          <div class="desc">${desc}</div>
+        </section>
+      `;
+    }
+
+    function escapeHtml(str) {
+      return String(str)
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;")
+        .replaceAll("'", "&#039;");
+    }
+
+    function currentInput() {
+      return {
+        brand: document.getElementById("brand").value.trim() || "Demo Brand",
+        url: document.getElementById("url").value.trim() || "https://example.com",
+        category: document.getElementById("category").value,
+        competitors: document.getElementById("competitors").value,
+        market: document.getElementById("market").value.trim() || "B2B buyers"
+      };
+    }
+
+    function loadSample(sample) {
+      document.getElementById("brand").value = sample.brand;
+      document.getElementById("url").value = sample.url;
+      document.getElementById("category").value = sample.category;
+      document.getElementById("competitors").value = sample.competitors;
+      document.getElementById("market").value = sample.market;
+    }
+
+    function copyOffer() {
+      const text = document.getElementById("offerJson")?.innerText || "";
+      navigator.clipboard?.writeText(text);
+    }
+
+    document.getElementById("auditForm").addEventListener("submit", event => {
+      event.preventDefault();
+      const loading = document.getElementById("loading");
+      loading.classList.add("on");
+      setTimeout(() => {
+        renderReport(makeReport(currentInput()));
+        loading.classList.remove("on");
+      }, 650);
+    });
+
+    document.getElementById("sampleBtn").addEventListener("click", () => {
+      sampleIndex = (sampleIndex + 1) % samples.length;
+      loadSample(samples[sampleIndex]);
+    });
+  </script>
+</body>
+</html>

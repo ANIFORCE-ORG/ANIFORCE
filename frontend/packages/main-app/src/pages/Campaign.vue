@@ -5,7 +5,9 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import PipelineManager from '@/components/campaigns/PipelineManager.vue'
 import CampaignTable from '@/components/campaigns/CampaignTable.vue'
-import { getCampaigns, updateCampaignStatus, type Campaign, login } from '@/api'
+import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
+import { addMaterialToCampaign, getCampaigns, updateCampaignStatus, type Campaign, login } from '@/api'
+import type { Material } from '@/api/materials'
 
 const router = useRouter()
 
@@ -22,14 +24,57 @@ const error = ref('')
 const selectedCampaigns = ref<Set<string>>(new Set())
 const showBatchActions = computed(() => selectedCampaigns.value.size > 0)
 const viewMode = ref<'card' | 'table'>('card')
+const showMaterialModal = ref(false)
+const materialTargetCampaign = ref<Campaign | null>(null)
+const addingMaterials = ref(false)
 
 // 排序选项
 const sortOptions = [
   { value: 'spend', label: '消耗' },
+  { value: 'budget_usage', label: '预算进度' },
+  { value: 'remaining', label: '剩余预算' },
   { value: 'roi', label: 'ROI' },
   { value: 'installs', label: '安装数' },
   { value: 'cpi', label: 'CPI' }
 ]
+
+const formatMoney = (value?: number) => `$${Math.round(value || 0).toLocaleString()}`
+const formatRate = (value?: number) => `${Math.round((value || 0) * 100)}%`
+
+const budgetSummary = computed(() => {
+  const byProject = new Map<string, Campaign[]>()
+  campaigns.value.forEach(campaign => {
+    const key = campaign.project_id || campaign.project_name
+    byProject.set(key, [...(byProject.get(key) || []), campaign])
+  })
+
+  let projectTotal = 0
+  let projectSpent = 0
+  let allocated = 0
+  let unallocated = 0
+  byProject.forEach(projectCampaigns => {
+    const snapshot = projectCampaigns[0]?.project_budget
+    if (snapshot) {
+      projectTotal += snapshot.project_total_budget || 0
+      projectSpent += snapshot.project_spent || 0
+      allocated += snapshot.project_allocated_budget || 0
+      unallocated += snapshot.project_unallocated_budget || 0
+    } else {
+      allocated += projectCampaigns.reduce((sum, campaign) => sum + (campaign.budget || 0), 0)
+      projectSpent += projectCampaigns.reduce((sum, campaign) => sum + (campaign.spent || 0), 0)
+    }
+  })
+
+  return {
+    projectCount: byProject.size,
+    projectTotal,
+    projectSpent,
+    allocated,
+    unallocated,
+    running: campaigns.value.filter(c => c.status === 'running').length,
+    needsAction: campaigns.value.filter(c => ['warning', 'danger', 'success'].includes(c.agent_action?.level || '')).length,
+  }
+})
 
 // 导航项配置
 const navItems = [
@@ -77,7 +122,7 @@ onMounted(async () => {
     const token = localStorage.getItem('access_token')
     if (!token) {
       console.log('自动登录测试账号...')
-      await login('test@aniforce.com', 'test123')
+      await login('test@animagus.com', 'test123')
     }
     
     // 加载广告投放数据
@@ -144,6 +189,14 @@ const filteredCampaigns = computed(() => {
         aVal = a.spent || 0
         bVal = b.spent || 0
         break
+      case 'budget_usage':
+        aVal = a.budget_usage_rate || ((a.spent || 0) / (a.budget || 1))
+        bVal = b.budget_usage_rate || ((b.spent || 0) / (b.budget || 1))
+        break
+      case 'remaining':
+        aVal = a.budget_remaining ?? ((a.budget || 0) - (a.spent || 0))
+        bVal = b.budget_remaining ?? ((b.budget || 0) - (b.spent || 0))
+        break
       case 'roi':
         aVal = a.roi || 0
         bVal = b.roi || 0
@@ -200,6 +253,39 @@ const handleViewCampaign = (campaignId: string) => {
   router.push(`/campaigns/${campaignId}`)
 }
 
+const handleOpenMaterialModal = (campaign: Campaign) => {
+  materialTargetCampaign.value = campaign
+  showMaterialModal.value = true
+}
+
+const handleCloseMaterialModal = () => {
+  showMaterialModal.value = false
+  materialTargetCampaign.value = null
+}
+
+const handleSelectMaterials = async (materials: Material[]) => {
+  if (!materialTargetCampaign.value) return
+  const campaign = materialTargetCampaign.value
+  const existingIds = new Set(campaign.material_ids || [])
+  const newMaterials = materials.filter(material => !existingIds.has(material.id))
+  if (newMaterials.length === 0) {
+    handleCloseMaterialModal()
+    return
+  }
+
+  try {
+    addingMaterials.value = true
+    await Promise.all(newMaterials.map(material => addMaterialToCampaign(campaign.id, material.id)))
+    const data = await getCampaigns()
+    campaigns.value = data
+    handleCloseMaterialModal()
+  } catch (err: any) {
+    error.value = err.message || '添加素材失败，请重试'
+  } finally {
+    addingMaterials.value = false
+  }
+}
+
 // 切换广告状态（前后端同步）
 const updatingCampaigns = ref<Set<string>>(new Set())
 
@@ -244,9 +330,11 @@ const handleToggleStatus = async (campaign: Campaign) => {
 // 获取状态文本
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
+    draft: '草稿',
     running: '进行中',
     review: '审核中',
-    paused: '已暂停'
+    paused: '已暂停',
+    completed: '已完成'
   }
   return statusMap[status] || status
 }
@@ -389,11 +477,42 @@ const handleUpdatePipeline = async (data: { pipeline_step: string }) => {
 // 获取状态颜色
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
+    draft: 'text-slate-600 bg-slate-50 dark:bg-slate-900/30',
     running: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30',
     review: 'text-blue-600 bg-blue-50 dark:bg-blue-900/30',
-    paused: 'text-slate-600 bg-slate-50 dark:bg-slate-900/30'
+    paused: 'text-amber-600 bg-amber-50 dark:bg-amber-900/30',
+    completed: 'text-slate-600 bg-slate-50 dark:bg-slate-900/30'
   }
   return colors[status] || 'text-slate-600 bg-slate-50'
+}
+
+const getPacingText = (status?: string) => {
+  const labels: Record<string, string> = {
+    fast: '消耗偏快',
+    slow: '消耗偏慢',
+    normal: '节奏正常'
+  }
+  return labels[status || 'normal'] || '节奏正常'
+}
+
+const getPacingColor = (status?: string) => {
+  const colors: Record<string, string> = {
+    fast: 'text-orange-600 bg-orange-50 dark:bg-orange-900/20',
+    slow: 'text-blue-600 bg-blue-50 dark:bg-blue-900/20',
+    normal: 'text-emerald-600 bg-emerald-50 dark:bg-emerald-900/20'
+  }
+  return colors[status || 'normal'] || colors.normal
+}
+
+const getAgentActionColor = (level?: string) => {
+  const colors: Record<string, string> = {
+    success: 'border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-900/50 dark:bg-emerald-900/20 dark:text-emerald-300',
+    warning: 'border-orange-200 bg-orange-50 text-orange-700 dark:border-orange-900/50 dark:bg-orange-900/20 dark:text-orange-300',
+    danger: 'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-900/20 dark:text-red-300',
+    info: 'border-blue-200 bg-blue-50 text-blue-700 dark:border-blue-900/50 dark:bg-blue-900/20 dark:text-blue-300',
+    neutral: 'border-slate-200 bg-slate-50 text-slate-600 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300'
+  }
+  return colors[level || 'neutral'] || colors.neutral
 }
 </script>
 
@@ -412,6 +531,9 @@ const getStatusColor = (status: string) => {
       <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
         <div class="flex items-center gap-3">
           <h3 class="font-bold text-slate-900 dark:text-white">广告投放</h3>
+          <span class="text-xs px-2 py-1 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400">
+            {{ budgetSummary.projectCount }} 个项目 · {{ budgetSummary.running }} 个投放中
+          </span>
           <!-- 视图切换 -->
           <div class="flex items-center gap-1 p-1 rounded-md bg-slate-100 dark:bg-slate-800">
             <button
@@ -453,8 +575,27 @@ const getStatusColor = (status: string) => {
 
       <!-- 搜索和筛选栏 -->
       <div class="border-b border-slate-200 dark:border-slate-800 p-4">
-        <div class="flex items-center gap-3 mb-3">
-          <div class="flex-1 relative">
+        <div class="grid grid-cols-2 xl:grid-cols-4 gap-3 mb-4">
+          <div class="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+            <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">项目总预算</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white">{{ formatMoney(budgetSummary.projectTotal) }}</div>
+          </div>
+          <div class="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+            <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">计划已分配</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white">{{ formatMoney(budgetSummary.allocated) }}</div>
+          </div>
+          <div class="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+            <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">实际已消耗</div>
+            <div class="text-lg font-semibold text-slate-900 dark:text-white">{{ formatMoney(budgetSummary.projectSpent) }}</div>
+          </div>
+          <div class="rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 px-4 py-3">
+            <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">需要处理</div>
+            <div class="text-lg font-semibold text-orange-600 dark:text-orange-400">{{ budgetSummary.needsAction }} 项</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-[minmax(240px,1fr)_180px_140px_140px] gap-3 mb-3">
+          <div class="relative">
             <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
             <input
               v-model="searchQuery"
@@ -465,7 +606,7 @@ const getStatusColor = (status: string) => {
           </div>
           <select
             v-model="projectFilter"
-            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[150px]"
+            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
             <option value="all">所有项目</option>
             <option v-for="project in uniqueProjects" :key="project" :value="project">
@@ -474,7 +615,7 @@ const getStatusColor = (status: string) => {
           </select>
           <select
             v-model="platformFilter"
-            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[120px]"
+            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
             <option value="all">所有平台</option>
             <option v-for="platform in uniquePlatforms" :key="platform" :value="platform">
@@ -483,9 +624,10 @@ const getStatusColor = (status: string) => {
           </select>
           <select
             v-model="statusFilter"
-            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[120px]"
+            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
             <option value="all">全部状态</option>
+            <option value="draft">草稿</option>
             <option value="running">投放中</option>
             <option value="review">审核中</option>
             <option value="paused">已暂停</option>
@@ -559,14 +701,14 @@ const getStatusColor = (status: string) => {
             <span class="text-sm text-slate-600 dark:text-slate-400">全选</span>
           </div>
 
-          <div class="space-y-3">
+          <div class="grid grid-cols-1 2xl:grid-cols-2 gap-4">
           <div
             v-for="campaign in filteredCampaigns"
             :key="campaign.id"
-            class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-4 hover:shadow-md transition-all"
+            class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-4 hover:border-primary/50 hover:shadow-sm transition-all"
           >
             <!-- 广告头部 -->
-            <div class="flex items-start justify-between mb-2">
+            <div class="flex items-start justify-between gap-3 mb-3">
               <div class="flex items-center gap-3 flex-1">
                 <!-- 复选框 -->
                 <input
@@ -579,12 +721,18 @@ const getStatusColor = (status: string) => {
                   <h4 class="text-sm font-bold text-slate-900 dark:text-white mb-1">
                     {{ campaign.name }}
                   </h4>
-                  <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                  <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
                     <span>所属项目: {{ campaign.project_name }}</span>
+                    <span v-if="campaign.external_campaign_id" class="px-1.5 py-0.5 rounded bg-blue-50 text-blue-600">
+                      Meta ID {{ campaign.external_campaign_id }}
+                    </span>
+                    <span v-if="campaign.budget_type" class="px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-700">
+                      {{ campaign.budget_type === 'daily' ? '日预算' : '总预算' }}
+                    </span>
                   </div>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-2 flex-wrap justify-end">
                 <span
                   class="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
                 >
@@ -599,42 +747,75 @@ const getStatusColor = (status: string) => {
               </div>
             </div>
 
+            <!-- 预算与节奏 -->
+            <div class="rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/40 p-3 mb-3">
+              <div class="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-3">
+                <div>
+                  <div class="text-[11px] text-slate-500 dark:text-slate-400 mb-1">计划预算</div>
+                  <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(campaign.budget) }}</div>
+                </div>
+                <div>
+                  <div class="text-[11px] text-slate-500 dark:text-slate-400 mb-1">已消耗</div>
+                  <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(campaign.spent) }}</div>
+                </div>
+                <div>
+                  <div class="text-[11px] text-slate-500 dark:text-slate-400 mb-1">剩余</div>
+                  <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ formatMoney(campaign.budget_remaining) }}</div>
+                </div>
+                <div>
+                  <div class="text-[11px] text-slate-500 dark:text-slate-400 mb-1">节奏</div>
+                  <span class="text-xs font-semibold px-2 py-1 rounded" :class="getPacingColor(campaign.pacing_status)">
+                    {{ getPacingText(campaign.pacing_status) }}
+                  </span>
+                </div>
+              </div>
+              <div class="space-y-1">
+                <div class="flex items-center justify-between text-[11px] text-slate-500 dark:text-slate-400">
+                  <span>预算进度 {{ formatRate(campaign.budget_usage_rate) }}</span>
+                  <span>时间进度 {{ formatRate(campaign.elapsed_rate) }}</span>
+                </div>
+                <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                  <div
+                    class="h-full rounded-full transition-all"
+                    :class="campaign.pacing_status === 'fast' ? 'bg-orange-500' : campaign.pacing_status === 'slow' ? 'bg-blue-500' : 'bg-emerald-500'"
+                    :style="{ width: `${Math.min(Math.round((campaign.budget_usage_rate || 0) * 100), 100)}%` }"
+                  ></div>
+                </div>
+              </div>
+            </div>
+
             <!-- 数据指标 -->
-            <div class="grid grid-cols-5 gap-3 mb-3">
-              <div class="text-center">
-                <div class="text-xl font-bold text-slate-900 dark:text-white">
-                  ${{ campaign.spent?.toLocaleString() || 0 }}
-                </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">消耗</div>
+            <div class="grid grid-cols-2 lg:grid-cols-5 gap-3 mb-3">
+              <div>
+                <div class="text-base font-bold text-slate-900 dark:text-white">{{ campaign.installs?.toLocaleString() || 0 }}</div>
+                <div class="text-[11px] text-slate-400">安装数</div>
               </div>
-              <div class="text-center">
-                <div class="text-xl font-bold text-slate-900 dark:text-white">
-                  {{ campaign.installs?.toLocaleString() || 0 }}
-                </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">安装数</div>
+              <div>
+                <div class="text-base font-bold text-slate-900 dark:text-white">${{ campaign.cpi?.toFixed(2) || '0.00' }}</div>
+                <div class="text-[11px] text-slate-400">CPI</div>
               </div>
-              <div class="text-center">
-                <div class="text-xl font-bold text-slate-900 dark:text-white">
-                  ${{ campaign.cpi?.toFixed(2) || '0.00' }}
-                </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">CPI</div>
-              </div>
-              <div class="text-center">
-                <div class="text-xl font-bold" :class="campaign.roi && campaign.target_cpa && campaign.cpi && campaign.cpi <= campaign.target_cpa ? 'text-emerald-600' : 'text-red-600'">
+              <div>
+                <div class="text-base font-bold" :class="campaign.roi && campaign.roi >= 2 ? 'text-emerald-600' : 'text-red-600'">
                   {{ campaign.roi ? `${campaign.roi.toFixed(2)}x` : '-' }}
                 </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">ROI</div>
+                <div class="text-[11px] text-slate-400">ROI</div>
               </div>
-              <div class="text-center">
-                <div class="text-xl font-bold text-slate-900 dark:text-white">
-                  {{ campaign.material_ids?.length || 0 }}
-                </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">素材</div>
+              <div>
+                <div class="text-base font-bold text-slate-900 dark:text-white">{{ campaign.ctr ? `${campaign.ctr.toFixed(1)}%` : '-' }}</div>
+                <div class="text-[11px] text-slate-400">CTR</div>
+              </div>
+              <div>
+                <div class="text-base font-bold text-slate-900 dark:text-white">{{ campaign.material_ids?.length || 0 }}</div>
+                <div class="text-[11px] text-slate-400">素材</div>
               </div>
             </div>
 
             <!-- 投放日期和目标CPA -->
-            <div class="flex items-center gap-4 mb-3 text-xs text-slate-500 dark:text-slate-400">
+            <div class="flex items-center gap-4 mb-3 text-xs text-slate-500 dark:text-slate-400 flex-wrap">
+              <span v-if="campaign.platform_account_id" class="flex items-center gap-1">
+                <span class="material-symbols-outlined text-sm">account_balance_wallet</span>
+                账户 {{ campaign.platform_account_id }}
+              </span>
               <span class="flex items-center gap-1">
                 <span class="material-symbols-outlined text-sm">calendar_today</span>
                 {{ campaign.start_date }} - {{ campaign.end_date || '持续投放' }}
@@ -643,6 +824,19 @@ const getStatusColor = (status: string) => {
                 <span class="material-symbols-outlined text-sm">flag</span>
                 目标CPA: ${{ campaign.target_cpa.toFixed(2) }}
               </span>
+            </div>
+
+            <div
+              class="mb-3 rounded-md border px-3 py-2"
+              :class="getAgentActionColor(campaign.agent_action?.level)"
+            >
+              <div class="flex items-start gap-2">
+                <span class="material-symbols-outlined text-base mt-0.5">smart_toy</span>
+                <div class="min-w-0">
+                  <div class="text-xs font-semibold">{{ campaign.agent_action?.label || '保持观察' }}</div>
+                  <div class="text-xs opacity-90 leading-relaxed">{{ campaign.agent_action?.reason || '暂无自动化动作建议' }}</div>
+                </div>
+              </div>
             </div>
 
             <!-- 操作按钮 -->
@@ -658,6 +852,12 @@ const getStatusColor = (status: string) => {
                 @click="handleManagePipeline(campaign)"
               >
                 阶段管理
+              </button>
+              <button
+                class="px-3 py-1.5 text-xs font-medium rounded bg-primary/10 text-primary border border-primary/20 hover:bg-primary/15 transition-colors"
+                @click="handleOpenMaterialModal(campaign)"
+              >
+                添加素材
               </button>
               <button
                 class="px-3 py-1.5 text-xs font-semibold rounded border transition-colors flex items-center gap-1"
@@ -695,6 +895,7 @@ const getStatusColor = (status: string) => {
             @view="handleViewCampaign"
             @toggle-status="handleToggleStatus"
             @select="toggleSelectCampaign"
+            @add-material="handleOpenMaterialModal"
           />
         </div>
       </div>
@@ -731,10 +932,18 @@ const getStatusColor = (status: string) => {
         </div>
 
         <PipelineManager
+          v-if="managingCampaign"
           :campaign="managingCampaign"
           @update="handleUpdatePipeline"
         />
       </div>
     </div>
+
+    <SelectMaterialModal
+      :show="showMaterialModal"
+      :selected-ids="materialTargetCampaign?.material_ids || []"
+      @close="handleCloseMaterialModal"
+      @select="handleSelectMaterials"
+    />
   </div>
 </template>

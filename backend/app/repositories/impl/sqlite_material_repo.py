@@ -3,7 +3,7 @@ import json
 from sqlalchemy import select, or_
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Material
-from app.models.material import MaterialType
+from app.models.material import MaterialStatus, MaterialType
 
 
 class SqliteMaterialRepository:
@@ -11,6 +11,23 @@ class SqliteMaterialRepository:
     
     def __init__(self, session: AsyncSession):
         self.session = session
+
+    def _enum_value(self, value) -> str | None:
+        if value is None:
+            return None
+        if hasattr(value, "value"):
+            return value.value
+        text = str(value)
+        mappings = {
+            "A_SEGMENT": "a_segment",
+            "B_SEGMENT": "b_segment",
+            "C_SEGMENT": "c_segment",
+            "FULL_VIDEO": "full_video",
+            "RUNNING": "running",
+            "READY": "ready",
+            "FATIGUE": "fatigue",
+        }
+        return mappings.get(text, text)
     
     def _to_dict(self, material: Material) -> dict:
         """将 ORM 对象转换为字典"""
@@ -20,12 +37,15 @@ class SqliteMaterialRepository:
             "project_ids": material.get_project_ids(),
             "campaign_ids": material.get_campaign_ids(),
             "name": material.name,
-            "type": material.type.value,
+            "type": self._enum_value(material.type),
             "media_type": material.media_type,
-            "status": material.status.value,
+            "status": self._enum_value(material.status),
             "url": material.url,
             "thumbnail_url": material.thumbnail_url,
             "ctr_estimate": material.ctr_estimate,
+            "roi": material.roi,
+            "spend": material.spend,
+            "campaign_id": material.campaign_id,
             "fatigue": material.fatigue,
             "is_hero": material.is_hero,
             "tags": material.get_tags(),
@@ -55,6 +75,9 @@ class SqliteMaterialRepository:
         
         # 处理 type
         material_type = MaterialType(type)
+
+        if "status" in kwargs and isinstance(kwargs["status"], str):
+            kwargs["status"] = MaterialStatus(kwargs["status"])
         
         material = Material(
             user_id=user_id,
@@ -147,6 +170,9 @@ class SqliteMaterialRepository:
         # 处理 type
         if "type" in kwargs and isinstance(kwargs["type"], str):
             kwargs["type"] = MaterialType(kwargs["type"])
+
+        if "status" in kwargs and isinstance(kwargs["status"], str):
+            kwargs["status"] = MaterialStatus(kwargs["status"])
 
         for key, value in kwargs.items():
             if hasattr(material, key):

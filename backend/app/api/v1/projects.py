@@ -1,6 +1,14 @@
 """项目管理 API"""
+import json
+from datetime import datetime
+
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+from app.config.database import get_db
+from app.models import AgentAction, Campaign, PlatformAccount, ProjectPlatformAccount
 from app.repositories.protocols import ProjectRepository
 from app.repositories.factory import get_project_repo
 from app.api.deps import get_current_user
@@ -19,6 +27,29 @@ class CreateProjectRequest(BaseModel):
     manager: str | None = None
     start_date: str | None = None
     end_date: str | None = None
+
+
+class ProjectPlatformAccountRequest(BaseModel):
+    platform_account_id: str
+    role: str | None = "primary"
+    spend_cap: float | None = None
+    daily_cap: float | None = None
+    note: str | None = None
+
+
+def _campaign_config(campaign: Campaign) -> dict:
+    if not campaign.config:
+        return {}
+    if isinstance(campaign.config, dict):
+        return campaign.config
+    try:
+        return json.loads(campaign.config)
+    except (TypeError, json.JSONDecodeError):
+        return {}
+
+
+def _campaign_platform_value(campaign: Campaign) -> str:
+    return getattr(campaign.platform, "value", campaign.platform)
 
 
 @router.get("")
@@ -53,6 +84,257 @@ async def get_project(
         raise HTTPException(status_code=403, detail="Permission denied")
     
     return project
+
+
+@router.get("/{project_id}/platform-accounts")
+async def get_project_platform_accounts(
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    project = await project_repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    result = await session.execute(
+        select(ProjectPlatformAccount)
+        .options(selectinload(ProjectPlatformAccount.account))
+        .join(PlatformAccount, ProjectPlatformAccount.platform_account_id == PlatformAccount.id)
+        .where(ProjectPlatformAccount.project_id == project_id)
+        .order_by(ProjectPlatformAccount.updated_at.desc())
+    )
+    return [link.to_dict() for link in result.scalars().all()]
+
+
+@router.post("/{project_id}/platform-accounts")
+async def bind_project_platform_account(
+    project_id: str,
+    request: ProjectPlatformAccountRequest,
+    current_user: dict = Depends(get_current_user),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    project = await project_repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    account_result = await session.execute(
+        select(PlatformAccount).where(
+            PlatformAccount.id == request.platform_account_id,
+            PlatformAccount.user_id == current_user["id"],
+        )
+    )
+    account = account_result.scalar_one_or_none()
+    if not account:
+        raise HTTPException(status_code=404, detail="Platform account not found")
+
+    result = await session.execute(
+        select(ProjectPlatformAccount).where(
+            ProjectPlatformAccount.project_id == project_id,
+            ProjectPlatformAccount.platform_account_id == account.id,
+        )
+    )
+    link = result.scalar_one_or_none()
+    if not link:
+        link = ProjectPlatformAccount(
+            project_id=project_id,
+            platform_account_id=account.id,
+        )
+        session.add(link)
+
+    link.role = request.role or "primary"
+    link.status = "active"
+    link.spend_cap = request.spend_cap
+    link.daily_cap = request.daily_cap
+    link.note = request.note
+    await session.commit()
+    await session.refresh(link)
+    await session.refresh(link, ["account"])
+    return link.to_dict()
+
+
+@router.delete("/{project_id}/platform-accounts/{platform_account_id}")
+async def unbind_project_platform_account(
+    project_id: str,
+    platform_account_id: str,
+    current_user: dict = Depends(get_current_user),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    project = await project_repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    result = await session.execute(
+        select(ProjectPlatformAccount).where(
+            ProjectPlatformAccount.project_id == project_id,
+            ProjectPlatformAccount.platform_account_id == platform_account_id,
+        )
+    )
+    link = result.scalar_one_or_none()
+    if not link:
+        raise HTTPException(status_code=404, detail="Project account binding not found")
+    await session.delete(link)
+    await session.commit()
+    return {"message": "Project account binding removed"}
+
+
+@router.get("/{project_id}/agent-actions")
+async def get_project_agent_actions(
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    project = await project_repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    result = await session.execute(
+        select(AgentAction)
+        .where(AgentAction.project_id == project_id)
+        .order_by(AgentAction.created_at.desc())
+    )
+    return [action.to_dict() for action in result.scalars().all()]
+
+
+@router.post("/{project_id}/agent-actions/generate")
+async def generate_project_agent_actions(
+    project_id: str,
+    current_user: dict = Depends(get_current_user),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    project = await project_repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    created: list[AgentAction] = []
+    account_links = (
+        await session.execute(
+            select(ProjectPlatformAccount).where(ProjectPlatformAccount.project_id == project_id)
+        )
+    ).scalars().all()
+    if not account_links:
+        created.append(AgentAction(
+            user_id=current_user["id"],
+            project_id=project_id,
+            action_type="bind_platform_account",
+            risk_level="L1",
+            status="suggested",
+            title="为项目绑定广告账户",
+            summary="当前项目没有绑定广告账户，创建真实平台 Campaign 前建议先绑定可用账户。",
+            evidence_json=json.dumps({"linked_accounts": 0}),
+            payload_json=json.dumps({"target": "project_platform_accounts"}),
+            expected_impact_json=json.dumps({"impact": "避免创建广告计划时误选无关账户"}),
+        ))
+
+    campaigns = (
+        await session.execute(select(Campaign).where(Campaign.project_id == project_id))
+    ).scalars().all()
+    for campaign in campaigns:
+        config = _campaign_config(campaign)
+        campaign_platform_account_id = campaign.platform_account_id or config.get("platform_account_id")
+        budget = float(campaign.budget or 0)
+        spent = float(campaign.spent or 0)
+        usage = spent / budget if budget else 0
+        if budget and usage >= 0.9:
+            created.append(AgentAction(
+                user_id=current_user["id"],
+                project_id=project_id,
+                platform_account_id=campaign_platform_account_id,
+                campaign_id=campaign.id,
+                action_type="review_budget",
+                risk_level="L2",
+                status="suggested",
+                title=f"检查计划预算：{campaign.name}",
+                summary="该计划预算使用率已超过 90%，建议确认是否补预算、降速或暂停。",
+                evidence_json=json.dumps({"budget": budget, "spent": spent, "usage_rate": usage}),
+                payload_json=json.dumps({"campaign_id": campaign.id}),
+                expected_impact_json=json.dumps({"impact": "避免预算耗尽导致投放中断"}),
+            ))
+        if not campaign_platform_account_id:
+            created.append(AgentAction(
+                user_id=current_user["id"],
+                project_id=project_id,
+                campaign_id=campaign.id,
+                action_type="link_campaign_account",
+                risk_level="L1",
+                status="suggested",
+                title=f"补充计划广告账户：{campaign.name}",
+                summary="该计划没有绑定平台广告账户，后续同步、诊断和执行会缺少真实平台定位。",
+                evidence_json=json.dumps({"campaign_id": campaign.id, "platform": _campaign_platform_value(campaign)}),
+                payload_json=json.dumps({"campaign_id": campaign.id}),
+                expected_impact_json=json.dumps({"impact": "让 Agent 能定位真实平台对象"}),
+            ))
+
+    for action in created:
+        session.add(action)
+    await session.commit()
+    return {"actions": [action.to_dict() for action in created]}
+
+
+@router.post("/{project_id}/agent-actions/{action_id}/confirm")
+async def confirm_project_agent_action(
+    project_id: str,
+    action_id: str,
+    current_user: dict = Depends(get_current_user),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    project = await project_repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    result = await session.execute(
+        select(AgentAction).where(AgentAction.id == action_id, AgentAction.project_id == project_id)
+    )
+    action = result.scalar_one_or_none()
+    if not action:
+        raise HTTPException(status_code=404, detail="Agent action not found")
+    action.status = "confirmed"
+    action.confirmed_by = current_user["id"]
+    action.confirmed_at = datetime.utcnow()
+    await session.commit()
+    return action.to_dict()
+
+
+@router.post("/{project_id}/agent-actions/{action_id}/reject")
+async def reject_project_agent_action(
+    project_id: str,
+    action_id: str,
+    current_user: dict = Depends(get_current_user),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    project = await project_repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    result = await session.execute(
+        select(AgentAction).where(AgentAction.id == action_id, AgentAction.project_id == project_id)
+    )
+    action = result.scalar_one_or_none()
+    if not action:
+        raise HTTPException(status_code=404, detail="Agent action not found")
+    action.status = "rejected"
+    action.confirmed_by = current_user["id"]
+    action.confirmed_at = datetime.utcnow()
+    await session.commit()
+    return action.to_dict()
 
 
 @router.post("")

@@ -115,8 +115,50 @@ export async function createMaterial(data: {
   campaign_ids?: string[]
   tags?: string[]
   ctr_estimate?: number
+  media_type?: string
+  fatigue?: number
+  is_hero?: boolean
+  duration?: number
+  file_size?: number
+  roi?: number
+  spend?: number
+  campaign_id?: string
 }): Promise<Material> {
   return http.post<Material>('/materials', data)
+}
+
+/**
+ * 上传素材文件并创建素材
+ */
+export async function uploadMaterialFile(
+  file: File,
+  data?: {
+    name?: string
+    type?: string
+    tags?: string[]
+    project_ids?: string[]
+  }
+): Promise<Material> {
+  const formData = new FormData()
+  formData.append('file', file)
+  formData.append('name', data?.name || file.name.replace(/\.[^.]+$/, ''))
+  formData.append('type', data?.type || 'full_video')
+  formData.append('tags', JSON.stringify(data?.tags || ['uploaded']))
+  formData.append('project_ids', JSON.stringify(data?.project_ids || []))
+
+  const token = localStorage.getItem('access_token')
+  const response = await fetch('/api/v1/materials/upload', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : undefined,
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(error.message || error.detail || `HTTP ${response.status}`)
+  }
+
+  return response.json()
 }
 
 /**

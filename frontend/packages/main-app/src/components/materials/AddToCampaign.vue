@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { getCampaigns, type Campaign } from '@/api/campaigns'
+import { addMaterialToCampaign, getCampaigns, type Campaign } from '@/api/campaigns'
 
 interface Material {
   id: string
@@ -81,13 +81,15 @@ const handleAdd = async () => {
 
   try {
     loading.value = true
-    // TODO: 调用API将素材添加到选中的投放计划
-    // await addMaterialToCampaigns(props.material?.id, Array.from(selectedCampaigns.value))
+    if (!props.material?.id) {
+      throw new Error('素材信息缺失')
+    }
 
-    console.log('添加素材到投放计划:', {
-      materialId: props.material?.id,
-      campaignIds: Array.from(selectedCampaigns.value)
-    })
+    await Promise.all(
+      Array.from(selectedCampaigns.value).map(campaignId =>
+        addMaterialToCampaign(campaignId, props.material!.id)
+      )
+    )
 
     emit('add-complete')
     handleClose()

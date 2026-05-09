@@ -14,6 +14,16 @@ export interface Campaign {
   spent: number
   status: string
   material_ids: string[]
+  platform_account_id?: string
+  external_campaign_id?: string
+  external_status?: string
+  objective?: string
+  budget_type?: 'daily' | 'total' | 'lifetime'
+  daily_budget?: number
+  lifetime_budget?: number
+  bid_strategy?: string
+  last_synced_at?: string
+  last_sync_error?: string
   start_date: string
   end_date?: string
   config?: any
@@ -28,6 +38,29 @@ export interface Campaign {
   learning_phase?: string
   auto_optimize_enabled?: boolean
   optimization_rules?: any
+  budget_type?: 'daily' | 'total' | 'lifetime'
+  budget_remaining?: number
+  budget_usage_rate?: number
+  elapsed_rate?: number
+  pacing_status?: 'fast' | 'slow' | 'normal'
+  ctr?: number
+  cvr?: number
+  last_spend?: number
+  last_revenue?: number
+  project_budget?: {
+    project_total_budget: number
+    project_spent: number
+    project_remaining_budget: number
+    project_allocated_budget: number
+    project_unallocated_budget: number
+    project_allocation_rate: number
+    project_spend_rate: number
+  }
+  agent_action?: {
+    level: 'success' | 'warning' | 'danger' | 'info' | 'neutral'
+    label: string
+    reason: string
+  }
 }
 
 export interface CampaignsResponse {
@@ -72,15 +105,47 @@ export async function getCampaignMaterials(campaignId: string): Promise<any[]> {
 }
 
 /**
+ * 添加素材到广告投放
+ */
+export async function addMaterialToCampaign(
+  campaignId: string,
+  materialId: string
+): Promise<{ message: string }> {
+  return http.post(`/campaigns/${campaignId}/materials/${materialId}`)
+}
+
+/**
+ * 从广告投放移除素材
+ */
+export async function removeMaterialFromCampaign(
+  campaignId: string,
+  materialId: string
+): Promise<{ message: string }> {
+  return http.delete(`/campaigns/${campaignId}/materials/${materialId}`)
+}
+
+/**
  * 创建广告投放
  */
 export async function createCampaign(data: {
   project_id: string
   name: string
   platform: string
+  platform_account_id?: string
   budget: number
+  budget_type?: 'daily' | 'total'
   status?: string
+  objective?: string
+  bidding_strategy?: string
+  target_cpa?: number
+  start_date?: string
+  end_date?: string
+  target_regions?: string[]
+  age_range?: { min: number; max: number }
+  gender?: string
+  target_interests?: string[]
   material_ids?: string[]
+  auto_optimize_enabled?: boolean
 }): Promise<Campaign> {
   return http.post<Campaign>('/campaigns', data)
 }

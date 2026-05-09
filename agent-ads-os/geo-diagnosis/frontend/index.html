@@ -1,0 +1,305 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>GEO Diagnosis Demo</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+        background: #071016;
+        color: #e5eef5;
+      }
+      .app {
+        min-height: 100vh;
+        display: grid;
+        grid-template-columns: 360px minmax(0, 1fr);
+      }
+      aside {
+        border-right: 1px solid #1e3340;
+        background: #09131b;
+        padding: 24px;
+      }
+      main {
+        padding: 28px;
+      }
+      label {
+        display: block;
+        margin: 16px 0 8px;
+        color: #9fb1bf;
+        font-size: 12px;
+        font-weight: 700;
+      }
+      input, textarea {
+        width: 100%;
+        border: 1px solid #24404f;
+        border-radius: 6px;
+        background: #0d1b24;
+        color: #e5eef5;
+        padding: 12px;
+        font: inherit;
+      }
+      textarea {
+        min-height: 86px;
+        resize: vertical;
+      }
+      button {
+        width: 100%;
+        margin-top: 18px;
+        border: 0;
+        border-radius: 6px;
+        background: #35e39b;
+        color: #04100b;
+        padding: 13px 16px;
+        font-weight: 900;
+        cursor: pointer;
+      }
+      .topbar {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 18px;
+        margin-bottom: 22px;
+      }
+      h1 {
+        margin: 0;
+        font-size: 28px;
+      }
+      p {
+        color: #8ca0ae;
+        line-height: 1.6;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 14px;
+      }
+      .card {
+        border: 1px solid #1e3340;
+        border-radius: 8px;
+        background: #0b1821;
+        padding: 16px;
+      }
+      .metric-label {
+        color: #8ca0ae;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .metric-value {
+        margin-top: 10px;
+        font-size: 30px;
+        font-weight: 950;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        margin-top: 12px;
+      }
+      th, td {
+        border-bottom: 1px solid #1e3340;
+        padding: 10px;
+        text-align: left;
+        vertical-align: top;
+        font-size: 13px;
+      }
+      th {
+        color: #8ca0ae;
+        font-size: 11px;
+        text-transform: uppercase;
+      }
+      pre {
+        max-height: 320px;
+        overflow: auto;
+        border-radius: 6px;
+        background: #061017;
+        padding: 14px;
+        color: #b7f7d9;
+        font-size: 12px;
+      }
+      .stack {
+        display: grid;
+        gap: 16px;
+      }
+      .error {
+        color: #ff9aa8;
+        font-size: 13px;
+      }
+      @media (max-width: 900px) {
+        .app { grid-template-columns: 1fr; }
+        .grid { grid-template-columns: 1fr 1fr; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="app">
+      <aside>
+        <h2>GEO Diagnosis</h2>
+        <p>输入官网 URL，自动抓取首页和 sitemap 页面。</p>
+        <form id="form">
+          <label>Project ID</label>
+          <input name="project_id" value="demo_project_001" />
+          <label>官网 URL</label>
+          <input name="url" value="https://www.aniforce.ai" />
+          <button id="submitBtn" type="submit">分析网页</button>
+          <p id="error" class="error"></p>
+        </form>
+      </aside>
+      <main>
+        <div class="topbar">
+          <div>
+            <h1>AI Buyer Visibility & Agent Readiness</h1>
+            <p>抓取首页和 sitemap 前 5-10 个页面，输出 AI 可见性、页面资产缺口和 agent-offer.json。</p>
+          </div>
+        </div>
+        <section id="empty" class="card">
+          <p>输入 URL 后显示诊断报告。</p>
+        </section>
+        <section id="report" class="stack" style="display: none;">
+          <div class="grid">
+            <div class="card"><div class="metric-label">GEO Readiness</div><div id="readiness" class="metric-value"></div></div>
+            <div class="card"><div class="metric-label">AI Mention</div><div id="mention" class="metric-value"></div></div>
+            <div class="card"><div class="metric-label">Citation</div><div id="citation" class="metric-value"></div></div>
+            <div class="card"><div class="metric-label">Agent Hits</div><div id="hits" class="metric-value"></div></div>
+          </div>
+          <div class="card">
+            <h3 id="summaryTitle"></h3>
+            <p id="summaryText"></p>
+          </div>
+          <div class="card">
+            <h3>抓取概览</h3>
+            <table>
+              <tbody id="crawl"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>提取信号</h3>
+            <table>
+              <thead><tr><th>信号</th><th>值</th><th>状态</th></tr></thead>
+              <tbody id="signals"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>Prompt Visibility</h3>
+            <table>
+              <thead><tr><th>Prompt</th><th>提及</th><th>引用</th><th>主要竞品</th></tr></thead>
+              <tbody id="prompts"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>页面资产缺口</h3>
+            <table>
+              <thead><tr><th>路径</th><th>类型</th><th>AI 访问</th><th>诊断</th><th>状态</th></tr></thead>
+              <tbody id="pages"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>修复建议</h3>
+            <table>
+              <thead><tr><th>优先级</th><th>事项</th><th>说明</th></tr></thead>
+              <tbody id="fixes"></tbody>
+            </table>
+          </div>
+          <div class="card">
+            <h3>agent-offer.json</h3>
+            <pre id="offer"></pre>
+          </div>
+        </section>
+      </main>
+    </div>
+    <script>
+      const form = document.getElementById('form')
+      const submitBtn = document.getElementById('submitBtn')
+      const error = document.getElementById('error')
+      const empty = document.getElementById('empty')
+      const reportEl = document.getElementById('report')
+
+      const clear = (element) => {
+        while (element.firstChild) element.removeChild(element.firstChild)
+      }
+
+      const cell = (tag, text) => {
+        const element = document.createElement(tag)
+        element.textContent = text == null || text === '' ? '未发现' : String(text)
+        return element
+      }
+
+      const appendRow = (tbody, values, headerFirst = false) => {
+        const row = document.createElement('tr')
+        values.forEach((value, index) => row.appendChild(cell(headerFirst && index === 0 ? 'th' : 'td', value)))
+        tbody.appendChild(row)
+      }
+
+      form.addEventListener('submit', async (event) => {
+        event.preventDefault()
+        error.textContent = ''
+        submitBtn.disabled = true
+        submitBtn.textContent = '分析中...'
+        const data = Object.fromEntries(new FormData(form).entries())
+        const payload = {
+          project_id: data.project_id,
+          url: data.url,
+        }
+
+        try {
+          const response = await fetch('/api/geo-audits', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+          })
+          if (!response.ok) throw new Error(await response.text())
+          const report = await response.json()
+
+          empty.style.display = 'none'
+          reportEl.style.display = 'grid'
+          document.getElementById('readiness').textContent = report.scores.geo_readiness
+          document.getElementById('mention').textContent = `${report.scores.mention_rate}%`
+          document.getElementById('citation').textContent = `${report.scores.citation_rate}%`
+          document.getElementById('hits').textContent = report.scores.agent_hits
+          document.getElementById('summaryTitle').textContent = `${report.input.brand} · ${report.domain}`
+          document.getElementById('summaryText').textContent = `已分析 ${report.crawl_summary.pages_analyzed} 个页面。建议优先处理结构化数据、证据页、对比页和机器可读 Offer。`
+          const crawl = document.getElementById('crawl')
+          clear(crawl)
+          appendRow(crawl, ['最终 URL', report.crawl_summary.final_url], true)
+          appendRow(crawl, ['Sitemap', report.crawl_summary.sitemap_url || '未发现'], true)
+          appendRow(crawl, ['Robots', report.crawl_summary.robots_status], true)
+          appendRow(crawl, ['页面', `${report.crawl_summary.pages_analyzed} 成功 / ${report.crawl_summary.pages_failed} 失败`], true)
+          Object.entries(report.crawl_summary.ai_assets || {}).forEach(([name, status]) => {
+            appendRow(crawl, [name, status], true)
+          })
+          if (report.crawl_summary.errors?.length) {
+            appendRow(crawl, ['错误', report.crawl_summary.errors.join('；')], true)
+          }
+
+          const signals = document.getElementById('signals')
+          clear(signals)
+          report.extracted_signals.forEach(item => appendRow(signals, [item.name, item.value, item.status]))
+
+          const prompts = document.getElementById('prompts')
+          clear(prompts)
+          report.prompts.forEach(item => appendRow(prompts, [
+            item.prompt,
+            item.mentioned ? 'Yes' : 'No',
+            item.cited ? 'Cited' : 'Weak',
+            item.leading_competitor,
+          ]))
+
+          const pages = document.getElementById('pages')
+          clear(pages)
+          report.pages.forEach(item => appendRow(pages, [item.path, item.page_type, item.agent_visits, item.diagnosis, item.status]))
+
+          const fixes = document.getElementById('fixes')
+          clear(fixes)
+          report.fixes.forEach(item => appendRow(fixes, [item.priority, item.title, item.body]))
+          document.getElementById('offer').textContent = JSON.stringify(report.offer_json, null, 2)
+        } catch (err) {
+          error.textContent = err.message || '生成失败'
+        } finally {
+          submitBtn.disabled = false
+          submitBtn.textContent = '分析网页'
+        }
+      })
+    </script>
+  </body>
+</html>

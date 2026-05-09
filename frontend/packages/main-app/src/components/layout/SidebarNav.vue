@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 
@@ -19,6 +20,7 @@ interface Props {
   navItems?: NavItem[]
   sessions?: Session[]
   activePanel?: string
+  activeId?: string
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -26,11 +28,13 @@ const props = withDefaults(defineProps<Props>(), {
     { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
     { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
     { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
+    { id: 'accounts', icon: 'account_balance_wallet', label: '广告账户', path: '/platform-accounts' },
     { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
     { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/reports' },
   ],
   sessions: () => [],
-  activePanel: ''
+  activePanel: '',
+  activeId: ''
 })
 
 const emit = defineEmits<{
@@ -42,13 +46,43 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 
+const requiredNavItems: NavItem[] = [
+  { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
+  { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
+  { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
+  { id: 'accounts', icon: 'account_balance_wallet', label: '广告账户', path: '/platform-accounts' },
+  { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
+  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/reports' },
+]
+
+const settingsNavItems: NavItem[] = [
+  { id: 'settings', icon: 'settings', label: '设置', path: '/settings' },
+]
+
+const normalizedNavItems = computed(() => {
+  const byId = new Map<string, NavItem>()
+  props.navItems.forEach(item => byId.set(item.id, item))
+  requiredNavItems.forEach(item => {
+    const existing = byId.get(item.id)
+    byId.set(item.id, existing ? { ...existing, path: item.path } : item)
+  })
+  return requiredNavItems.map(item => byId.get(item.id) || item)
+})
+
 const isActivePanel = (itemId: string) => {
-  if (props.activePanel) {
-    return props.activePanel === itemId
+  const active = props.activePanel || props.activeId
+  if (active) {
+    return active === itemId
   }
   // 根据当前路由判断
-  const item = props.navItems.find(i => i.id === itemId)
+  const item = normalizedNavItems.value.find(i => i.id === itemId)
   if (!item) return false
+  return route.path === item.path || route.path.startsWith(item.path + '/')
+}
+
+const isActiveSettings = (item: NavItem) => {
+  const active = props.activePanel || props.activeId
+  if (active) return active === item.id
   return route.path === item.path || route.path.startsWith(item.path + '/')
 }
 
@@ -73,7 +107,7 @@ const handleSessionClick = (session: Session) => {
         <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 px-2">功能导航</div>
         <ul class="space-y-1">
           <li
-            v-for="item in navItems"
+            v-for="item in normalizedNavItems"
             :key="item.id"
             class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all"
             :class="isActivePanel(item.id)
@@ -114,6 +148,24 @@ const handleSessionClick = (session: Session) => {
         </ul>
       </div>
     </nav>
+
+    <div class="border-t border-slate-200 dark:border-slate-800 p-4">
+      <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 px-2">系统</div>
+      <ul class="space-y-1">
+        <li
+          v-for="item in settingsNavItems"
+          :key="item.id"
+          class="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer transition-all"
+          :class="isActiveSettings(item)
+            ? 'bg-primary/10 text-primary font-semibold'
+            : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+          @click="handleNavClick(item)"
+        >
+          <span class="material-symbols-outlined text-lg">{{ item.icon }}</span>
+          <span class="text-sm">{{ item.label }}</span>
+        </li>
+      </ul>
+    </div>
   </aside>
 </template>
 

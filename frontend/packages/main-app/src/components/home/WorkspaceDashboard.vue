@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue'
+import { ref, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
@@ -22,6 +22,7 @@ const navItems = [
   { id: 'dashboard', icon: 'pie_chart', label: '工作台', path: '/dashboard' },
   { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
   { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
+  { id: 'accounts', icon: 'account_balance_wallet', label: '广告账户', path: '/platform-accounts' },
   { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
   { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/dashboard?panel=reports' }
 ]
