@@ -8,6 +8,7 @@ import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
 import { addMaterialToCampaign } from '@/api/campaigns'
 import type { Material } from '@/api/materials'
 import { getPlatformAccounts, type PlatformAccount } from '@/api/platformAccounts'
+import { createAssistantMessage, createUserMessage, sendAIChatMessage } from '@/utils/aiAssistant'
 import {
   bindProjectPlatformAccount,
   confirmProjectAgentAction,
@@ -138,8 +139,47 @@ const switchSession = (session: any) => {
 }
 
 const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
+  const trimmed = message.trim()
+  if (!trimmed) return
+  messages.value.push(createUserMessage(trimmed))
   chatInput.value = ''
+  messages.value.push(createAssistantMessage('正在分析当前项目上下文...'))
+  const pendingIndex = messages.value.length - 1
+  const scenario = trimmed.includes('素材')
+    ? 'material_recommend'
+    : trimmed.includes('计划') || trimmed.includes('创建')
+      ? 'plan_extract'
+      : 'chat_general'
+  sendAIChatMessage({
+    scenario,
+    message: trimmed,
+    projectId: projectId.value,
+    context: {
+      page: 'project_detail',
+      project: project.value,
+      budget: projectBudgetSummary.value,
+      campaigns: campaigns.value.map(campaign => ({
+        id: campaign.id,
+        name: campaign.name,
+        status: campaign.status,
+        budget: campaign.budget,
+        spent: campaign.spent,
+        cpi: campaign.cpi,
+        roi: campaign.roi,
+      })),
+      accounts: projectAccounts.value.map(link => ({
+        platform_account_id: link.platform_account_id,
+        status: link.status,
+        role: link.role,
+      })),
+    },
+  })
+    .then(reply => {
+      messages.value[pendingIndex] = reply
+    })
+    .catch((err: any) => {
+      messages.value[pendingIndex] = createAssistantMessage(err.message || 'AI Gateway 调用失败，请稍后重试。')
+    })
 }
 
 const handleHintClick = (hint: string) => {

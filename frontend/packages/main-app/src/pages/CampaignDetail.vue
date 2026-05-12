@@ -7,6 +7,7 @@ import ChatPanel from '@/components/layout/ChatPanel.vue'
 import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
 import { addMaterialToCampaign, getCampaignDetail, getCampaignMaterials, type Campaign, type CampaignMaterialBinding } from '@/api/campaigns'
 import { getMaterialImage, type Material } from '@/api/materials'
+import { createAssistantMessage, createUserMessage, sendAIChatMessage } from '@/utils/aiAssistant'
 
 const router = useRouter()
 const route = useRoute()
@@ -124,8 +125,41 @@ const switchSession = (session: any) => {
 }
 
 const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
+  const trimmed = message.trim()
+  if (!trimmed) return
+  messages.value.push(createUserMessage(trimmed))
   chatInput.value = ''
+  messages.value.push(createAssistantMessage('正在分析当前计划上下文...'))
+  const pendingIndex = messages.value.length - 1
+  const scenario = trimmed.includes('复盘') || trimmed.includes('报告')
+    ? 'report_summary'
+    : trimmed.includes('诊断') || trimmed.includes('优化') || trimmed.includes('表现')
+      ? 'campaign_diagnosis'
+      : 'chat_general'
+  sendAIChatMessage({
+    scenario,
+    message: trimmed,
+    projectId: campaign.value?.project_id,
+    campaignId: campaignId.value,
+    context: {
+      page: 'campaign_detail',
+      campaign: campaign.value,
+      materials: materials.value.map(material => ({
+        binding_id: material.id,
+        material_id: getBindingMaterialId(material),
+        title: material.title,
+        description: material.description,
+        copy: material.copy,
+        status: material.status,
+      })),
+    },
+  })
+    .then(reply => {
+      messages.value[pendingIndex] = reply
+    })
+    .catch((err: any) => {
+      messages.value[pendingIndex] = createAssistantMessage(err.message || 'AI Gateway 调用失败，请稍后重试。')
+    })
 }
 
 const handleHintClick = (hint: string) => {

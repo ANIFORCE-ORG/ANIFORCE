@@ -48,7 +48,17 @@ def mock_output_for_scenario(scenario: str, context: dict[str, Any]) -> dict[str
                     "title": "高转化素材标题候选",
                     "description": "突出目标市场、核心卖点和首屏冲突的投放描述。",
                     "risk_flags": [],
-                }
+                },
+                {
+                    "title": "3秒反转剧情钩子",
+                    "description": "用前三秒反转制造停留，强调主角选择和后续追剧悬念。",
+                    "risk_flags": [],
+                },
+                {
+                    "title": "北美短剧高能片段",
+                    "description": "面向目标地区用户，突出情绪冲突、爽点和立即观看理由。",
+                    "risk_flags": [],
+                },
             ],
         }
     if scenario == "campaign_diagnosis":
@@ -64,8 +74,7 @@ def mock_output_for_scenario(scenario: str, context: dict[str, Any]) -> dict[str
             ],
         }
     return {
-        "summary": "AI Gateway mock response",
+        "summary": "已基于当前上下文生成建议，结果仅作为草稿参考，需要业务人员确认后再执行。",
         "scenario": scenario,
         "requires_human_confirm": True,
     }
-

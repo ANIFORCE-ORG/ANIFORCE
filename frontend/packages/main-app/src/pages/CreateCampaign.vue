@@ -8,6 +8,7 @@ import { getProjectCampaigns, getProjectDetail, getProjectPlatformAccounts, type
 import { batchCreateProjectCampaigns, type CampaignMaterialBindingInput } from '@/api/campaigns'
 import { type Material, getMaterialImage } from '@/api/materials'
 import { getPlatformAccounts, type PlatformAccount } from '@/api/platformAccounts'
+import { runAI } from '@/api/ai'
 
 const router = useRouter()
 const route = useRoute()
@@ -185,12 +186,23 @@ const materialBindingDrafts = ref<Record<string, {
   description: string
   copy: string
 }>>({})
+const materialBindingSourceById = ref<Record<string, 'manual' | 'ai'>>({})
+const materialCopyCandidates = ref<Record<string, Array<{
+  title: string
+  description: string
+  risk_flags?: string[]
+}>>>({})
+const generatingMaterialCopyIds = ref<string[]>([])
+const materialCopyErrors = ref<Record<string, string>>({})
 
 const removeMaterial = (materialId: string) => {
   const index = selectedMaterials.value.findIndex(m => m.id === materialId)
   if (index > -1) {
     selectedMaterials.value.splice(index, 1)
     delete materialBindingDrafts.value[materialId]
+    delete materialBindingSourceById.value[materialId]
+    delete materialCopyCandidates.value[materialId]
+    delete materialCopyErrors.value[materialId]
   }
 }
 
@@ -201,6 +213,7 @@ const ensureMaterialBindingDraft = (material: Material) => {
       description: `用于 ${selectedGroup.value?.target_market || '目标市场'} 的投放素材`,
       copy: '',
     }
+    materialBindingSourceById.value[material.id] = 'manual'
   }
 }
 
@@ -213,11 +226,80 @@ const buildMaterialBindings = (): CampaignMaterialBindingInput[] => {
       title: draft.title,
       description: draft.description,
       copy: draft.copy,
-      source: 'manual',
+      source: materialBindingSourceById.value[material.id] || 'manual',
       sort_order: index + 1,
       status: 'ready',
     }
   })
+}
+
+const fallbackCopyCandidates = (material: Material) => {
+  const baseTitle = material.name || '素材标题'
+  return [
+    {
+      title: baseTitle,
+      description: `面向 ${selectedGroup.value?.target_market || '目标市场'}，突出产品卖点和首屏吸引力。`,
+      risk_flags: [],
+    },
+    {
+      title: `${baseTitle} 高能开场`,
+      description: '强化前三秒冲突和转化动作，适合作为冷启动测试素材。',
+      risk_flags: [],
+    },
+    {
+      title: `${baseTitle} 转化测试版`,
+      description: '聚焦目标人群兴趣和投放区域，便于后续按素材表现复盘。',
+      risk_flags: [],
+    },
+  ]
+}
+
+const generateMaterialCopy = async (material: Material) => {
+  ensureMaterialBindingDraft(material)
+  if (generatingMaterialCopyIds.value.includes(material.id)) return
+  generatingMaterialCopyIds.value.push(material.id)
+  materialCopyErrors.value[material.id] = ''
+  try {
+    const response = await runAI({
+      scenario: 'material_copy',
+      project_id: selectedGroup.value?.id,
+      material_id: material.id,
+      messages: [{ role: 'user', content: '为当前计划素材生成 3 个标题和描述候选' }],
+      context: {
+        material_id: material.id,
+        material_name: material.name,
+        material_type: material.type,
+        tags: material.tags,
+        project: selectedGroup.value,
+        target_market: selectedGroup.value?.target_market,
+        target_regions: targetRegions.value,
+        target_interests: targetInterests.value,
+        objective: campaignObjective.value,
+        current_draft: materialBindingDrafts.value[material.id],
+      },
+    })
+    const candidates = Array.isArray(response.output?.candidates)
+      ? response.output.candidates.slice(0, 3)
+      : []
+    materialCopyCandidates.value[material.id] = candidates.length >= 3
+      ? candidates
+      : [...candidates, ...fallbackCopyCandidates(material)].slice(0, 3)
+  } catch (err: any) {
+    materialCopyErrors.value[material.id] = err.message || 'AI 生成失败'
+    materialCopyCandidates.value[material.id] = fallbackCopyCandidates(material)
+  } finally {
+    generatingMaterialCopyIds.value = generatingMaterialCopyIds.value.filter(id => id !== material.id)
+  }
+}
+
+const applyMaterialCopyCandidate = (
+  materialId: string,
+  candidate: { title: string; description: string }
+) => {
+  if (!materialBindingDrafts.value[materialId]) return
+  materialBindingDrafts.value[materialId].title = candidate.title
+  materialBindingDrafts.value[materialId].description = candidate.description
+  materialBindingSourceById.value[materialId] = 'ai'
 }
 
 // 加载素材缩略图
@@ -824,7 +906,19 @@ onMounted(async () => {
               </div>
               <div class="mt-4 space-y-3">
                 <div>
-                  <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">计划内素材标题</label>
+                  <div class="mb-1 flex items-center justify-between gap-2">
+                    <label class="block text-xs font-medium text-slate-600 dark:text-slate-300">计划内素材标题</label>
+                    <button
+                      class="inline-flex items-center gap-1 rounded-md border border-primary/30 px-2 py-1 text-xs font-medium text-primary hover:bg-primary/5 disabled:cursor-not-allowed disabled:opacity-50"
+                      :disabled="generatingMaterialCopyIds.includes(material.id)"
+                      @click="generateMaterialCopy(material)"
+                    >
+                      <span class="material-symbols-outlined text-sm">
+                        {{ generatingMaterialCopyIds.includes(material.id) ? 'progress_activity' : 'auto_awesome' }}
+                      </span>
+                      <span>{{ generatingMaterialCopyIds.includes(material.id) ? '生成中' : 'AI 生成' }}</span>
+                    </button>
+                  </div>
                   <input
                     v-model="materialBindingDrafts[material.id].title"
                     type="text"
@@ -840,6 +934,29 @@ onMounted(async () => {
                     maxlength="500"
                     class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white resize-none"
                   ></textarea>
+                </div>
+                <div v-if="materialCopyErrors[material.id]" class="text-xs text-red-600">
+                  {{ materialCopyErrors[material.id] }}
+                </div>
+                <div v-if="materialCopyCandidates[material.id]?.length" class="space-y-2">
+                  <div
+                    v-for="(candidate, candidateIndex) in materialCopyCandidates[material.id]"
+                    :key="`${material.id}-${candidateIndex}`"
+                    class="rounded-md border border-primary/20 bg-primary/5 p-3"
+                  >
+                    <div class="flex items-start justify-between gap-3">
+                      <div class="min-w-0">
+                        <div class="text-xs font-semibold text-slate-900 dark:text-white">{{ candidate.title }}</div>
+                        <div class="mt-1 text-xs leading-relaxed text-slate-500 dark:text-slate-400">{{ candidate.description }}</div>
+                      </div>
+                      <button
+                        class="shrink-0 rounded-md bg-primary px-2 py-1 text-xs font-medium text-white hover:bg-primary/90"
+                        @click="applyMaterialCopyCandidate(material.id, candidate)"
+                      >
+                        应用
+                      </button>
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">投放文案</label>

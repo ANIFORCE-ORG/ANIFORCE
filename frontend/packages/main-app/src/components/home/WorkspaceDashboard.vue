@@ -9,6 +9,7 @@ import QuickActions from './workspace/QuickActions.vue'
 import DataTrends from './workspace/DataTrends.vue'
 import BasicInsights from './workspace/BasicInsights.vue'
 import PlatformStatus from './workspace/PlatformStatus.vue'
+import { createAssistantMessage, createUserMessage, sendAIChatMessage } from '@/utils/aiAssistant'
 
 const router = useRouter()
 const route = useRoute()
@@ -61,8 +62,26 @@ const switchSession = (session: any) => {
 }
 
 const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
+  const trimmed = message.trim()
+  if (!trimmed) return
+  messages.value.push(createUserMessage(trimmed))
   chatInput.value = ''
+  messages.value.push(createAssistantMessage('正在处理你的问题...'))
+  const pendingIndex = messages.value.length - 1
+  sendAIChatMessage({
+    scenario: 'chat_general',
+    message: trimmed,
+    context: {
+      page: 'workspace_dashboard',
+      active_panel: activePanel.value,
+    },
+  })
+    .then(reply => {
+      messages.value[pendingIndex] = reply
+    })
+    .catch((err: any) => {
+      messages.value[pendingIndex] = createAssistantMessage(err.message || 'AI Gateway 调用失败，请稍后重试。')
+    })
 }
 
 const handleHintClick = (hint: string) => {
