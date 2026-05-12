@@ -9,6 +9,7 @@ from app.repositories.protocols import (
     ChatRepository,
     MaterialRepository,
     CampaignRepository,
+    CampaignMaterialRepository,
     MetricRepository,
 )
 from app.repositories.mock.mock_chat_repo import MockChatRepository
@@ -18,6 +19,7 @@ from app.repositories.mock.mock_metric_repo import MockMetricRepository
 from app.repositories.impl.sqlite_user_repo import SqliteUserRepository
 from app.repositories.impl.sqlite_project_repo import SqliteProjectRepository
 from app.repositories.impl.sqlite_campaign_repo import SqliteCampaignRepository
+from app.repositories.impl.sqlite_campaign_material_repo import SqliteCampaignMaterialRepository
 from app.repositories.impl.sqlite_material_repo import SqliteMaterialRepository
 from app.repositories.impl.sqlite_metric_repo import SqliteMetricRepository
 
@@ -68,6 +70,11 @@ def get_campaign_repo(session: AsyncSession = Depends(get_db)) -> CampaignReposi
     return SqliteCampaignRepository(session)
 
 
+def get_campaign_material_repo(session: AsyncSession = Depends(get_db)) -> CampaignMaterialRepository:
+    """获取计划-素材绑定 Repository"""
+    return SqliteCampaignMaterialRepository(session)
+
+
 def get_metric_repo(session: AsyncSession = Depends(get_db)) -> MetricRepository:
     """获取监控指标 Repository"""
     settings = get_settings()
@@ -75,4 +82,3 @@ def get_metric_repo(session: AsyncSession = Depends(get_db)) -> MetricRepository
         # Demo 模式暂时也使用 SQLite
         return SqliteMetricRepository(session)
     return SqliteMetricRepository(session)
-

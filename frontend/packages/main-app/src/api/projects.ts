@@ -3,6 +3,7 @@
  */
 
 import { http } from './http'
+import type { Campaign } from './campaigns'
 import type { PlatformAccount } from './platformAccounts'
 
 export interface Project {
@@ -54,6 +55,24 @@ export interface AgentAction {
   payload: Record<string, any>
   expected_impact: Record<string, any>
   created_at: string
+}
+
+export interface ProjectPlanWorkspace {
+  project: Project
+  platform_accounts: ProjectPlatformAccount[]
+  campaigns: Array<Campaign & {
+    latest_metric?: Record<string, any>
+    material_binding_count?: number
+    materials?: any[]
+  }>
+  agent_actions: AgentAction[]
+  budget: {
+    total: number
+    allocated: number
+    unallocated: number
+    spent: number
+    remaining: number
+  }
 }
 
 interface ProjectsResponse {
@@ -135,6 +154,10 @@ export async function deleteProject(projectId: string): Promise<void> {
 export async function getProjectCampaigns(projectId: string): Promise<any[]> {
   const response = await http.get<{ campaigns: any[] }>(`/campaigns?project_id=${projectId}`)
   return response.campaigns
+}
+
+export async function getProjectPlanWorkspace(projectId: string): Promise<ProjectPlanWorkspace> {
+  return http.get<ProjectPlanWorkspace>(`/projects/${projectId}/plan-workspace`)
 }
 
 export async function getProjectPlatformAccounts(projectId: string): Promise<ProjectPlatformAccount[]> {

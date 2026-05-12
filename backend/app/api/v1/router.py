@@ -6,6 +6,7 @@ from app.api.v1.campaigns import router as campaigns_router
 from app.api.v1.materials import router as materials_router
 from app.api.v1.platform_auth import router as platform_auth_router
 from app.api.v1.media_ops import router as media_ops_router
+from app.api.v1.ai_gateway import router as ai_gateway_router
 
 api_router = APIRouter(prefix="/api/v1")
 api_router.include_router(auth_router)
@@ -15,3 +16,4 @@ api_router.include_router(campaigns_router)
 api_router.include_router(materials_router)
 api_router.include_router(platform_auth_router, prefix="/platform", tags=["platform"])
 api_router.include_router(media_ops_router)
+api_router.include_router(ai_gateway_router)

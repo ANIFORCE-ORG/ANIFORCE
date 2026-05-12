@@ -5,9 +5,9 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import SelectGroupModal from '@/components/campaigns/SelectGroupModal.vue'
 import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
 import { getProjectCampaigns, getProjectDetail, getProjectPlatformAccounts, type Project } from '@/api/projects'
-import { createCampaign } from '@/api/campaigns'
+import { batchCreateProjectCampaigns, type CampaignMaterialBindingInput } from '@/api/campaigns'
 import { type Material, getMaterialImage } from '@/api/materials'
-import { createMetaCampaign, getPlatformAccounts, type PlatformAccount } from '@/api/platformAccounts'
+import { getPlatformAccounts, type PlatformAccount } from '@/api/platformAccounts'
 
 const router = useRouter()
 const route = useRoute()
@@ -180,12 +180,44 @@ const loadPlatformAccounts = async () => {
 // 执行阶段数据
 const selectedMaterials = ref<Material[]>([])
 const materialThumbnails = ref<Record<string, string>>({})
+const materialBindingDrafts = ref<Record<string, {
+  title: string
+  description: string
+  copy: string
+}>>({})
 
 const removeMaterial = (materialId: string) => {
   const index = selectedMaterials.value.findIndex(m => m.id === materialId)
   if (index > -1) {
     selectedMaterials.value.splice(index, 1)
+    delete materialBindingDrafts.value[materialId]
   }
+}
+
+const ensureMaterialBindingDraft = (material: Material) => {
+  if (!materialBindingDrafts.value[material.id]) {
+    materialBindingDrafts.value[material.id] = {
+      title: material.name || '素材标题',
+      description: `用于 ${selectedGroup.value?.target_market || '目标市场'} 的投放素材`,
+      copy: '',
+    }
+  }
+}
+
+const buildMaterialBindings = (): CampaignMaterialBindingInput[] => {
+  return selectedMaterials.value.map((material, index) => {
+    ensureMaterialBindingDraft(material)
+    const draft = materialBindingDrafts.value[material.id]
+    return {
+      material_id: material.id,
+      title: draft.title,
+      description: draft.description,
+      copy: draft.copy,
+      source: 'manual',
+      sort_order: index + 1,
+      status: 'ready',
+    }
+  })
 }
 
 // 加载素材缩略图
@@ -312,48 +344,35 @@ const handleSubmit = async () => {
     // 构建广告计划名称
     const campaignName = `${selectedGroup.value.name} - ${platforms.find(p => p.id === selectedPlatform.value)?.name}`
 
-    let campaign
-    if (selectedPlatform.value === 'Meta') {
-      if (!selectedPlatformAccountId.value) {
-        alert('请选择 Meta 广告账户')
-        return
-      }
-      const result = await createMetaCampaign({
-        platform_account_id: selectedPlatformAccountId.value,
-        project_id: selectedGroup.value.id,
-        name: campaignName,
-        objective: campaignObjective.value === 'engagement' ? 'OUTCOME_AWARENESS' : 'OUTCOME_TRAFFIC',
-        status: 'PAUSED',
-        budget: projectedTotalBudget.value,
-        budget_type: budgetType.value === 'daily' ? 'daily' : 'lifetime',
-        special_ad_categories: [],
-        create_local_record: true,
-      })
-      campaign = result.local_campaign
-    } else {
-      // 调用API创建广告计划
-      campaign = await createCampaign({
-        project_id: selectedGroup.value.id,
-        name: campaignName,
-        platform: selectedPlatform.value,
-        budget: projectedTotalBudget.value,
-        budget_type: budgetType.value as 'daily' | 'total',
-        status: 'draft',
-        objective: campaignObjective.value,
-        bidding_strategy: biddingStrategy.value,
-        target_cpa: biddingStrategy.value === 'target_cpa' ? targetCPA.value : undefined,
-        start_date: startDate.value,
-        end_date: endDate.value,
-        target_regions: targetRegions.value,
+    if (selectedPlatform.value === 'Meta' && !selectedPlatformAccountId.value) {
+      alert('请选择 Meta 广告账户')
+      return
+    }
+
+    const result = await batchCreateProjectCampaigns(selectedGroup.value.id, {
+      plan_count: 1,
+      name_template: campaignName,
+      platform: selectedPlatform.value,
+      platform_account_id: selectedPlatformAccountId.value || undefined,
+      objective: campaignObjective.value === 'engagement' ? 'OUTCOME_AWARENESS' : 'OUTCOME_TRAFFIC',
+      budget: projectedTotalBudget.value,
+      budget_type: budgetType.value as 'daily' | 'total',
+      status: 'draft',
+      bidding_strategy: biddingStrategy.value,
+      target_cpa: biddingStrategy.value === 'target_cpa' ? targetCPA.value : undefined,
+      start_date: startDate.value,
+      end_date: endDate.value,
+      targeting: {
+        regions: targetRegions.value,
         age_range: ageRange.value,
         gender: gender.value,
-        target_interests: targetInterests.value,
-        material_ids: selectedMaterials.value.map(m => m.id),
-        auto_optimize_enabled: true
-      })
-    }
+        interests: targetInterests.value,
+      },
+      materials: buildMaterialBindings(),
+      auto_optimize_enabled: true,
+    })
     
-    console.log('广告计划创建成功:', campaign)
+    console.log('广告计划创建成功:', result)
     
     // 跳转回项目详情页
     router.push(`/projects/${selectedGroup.value.id}`)
@@ -395,6 +414,7 @@ const handleCloseMaterialModal = () => {
 
 const handleSelectMaterials = (materials: Material[]) => {
   selectedMaterials.value = materials
+  materials.forEach(ensureMaterialBindingDraft)
   console.log('选择素材:', materials)
   // 关闭弹窗后自动关闭
   showMaterialModal.value = false
@@ -802,6 +822,35 @@ onMounted(async () => {
                   </div>
                 </div>
               </div>
+              <div class="mt-4 space-y-3">
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">计划内素材标题</label>
+                  <input
+                    v-model="materialBindingDrafts[material.id].title"
+                    type="text"
+                    maxlength="120"
+                    class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white"
+                  />
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">计划内素材描述</label>
+                  <textarea
+                    v-model="materialBindingDrafts[material.id].description"
+                    rows="2"
+                    maxlength="500"
+                    class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white resize-none"
+                  ></textarea>
+                </div>
+                <div>
+                  <label class="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1">投放文案</label>
+                  <textarea
+                    v-model="materialBindingDrafts[material.id].copy"
+                    rows="2"
+                    maxlength="1000"
+                    class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-sm text-slate-900 dark:text-white resize-none"
+                  ></textarea>
+                </div>
+              </div>
               <!-- 移除按钮 -->
               <button
                 @click="removeMaterial(material.id)"
@@ -998,6 +1047,18 @@ onMounted(async () => {
               <div class="text-slate-500 dark:text-slate-400 mb-2">选择素材</div>
               <div class="font-medium text-slate-900 dark:text-white">
                 {{ selectedMaterials.length }} 个素材
+              </div>
+              <div class="mt-2 space-y-2">
+                <div
+                  v-for="material in selectedMaterials"
+                  :key="material.id"
+                  class="rounded-md bg-slate-50 dark:bg-slate-800 px-3 py-2"
+                >
+                  <div class="font-medium text-slate-900 dark:text-white">{{ materialBindingDrafts[material.id]?.title || material.name }}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    {{ materialBindingDrafts[material.id]?.description || '未填写描述' }}
+                  </div>
+                </div>
               </div>
             </div>
             <div>

@@ -68,6 +68,63 @@ export interface CampaignsResponse {
 
 export interface CampaignDetailResponse extends Campaign {}
 
+export interface CampaignMaterialBindingInput {
+  material_id: string
+  title?: string
+  description?: string
+  copy?: string
+  source?: 'manual' | 'upload' | 'ai' | 'copied'
+  sort_order?: number
+  status?: 'draft' | 'ready' | 'disabled'
+}
+
+export interface CampaignMaterialBinding {
+  id: string
+  campaign_id: string
+  material_id: string
+  title?: string
+  description?: string
+  copy?: string
+  source?: string
+  sort_order: number
+  status: string
+  created_by?: string
+  created_at: string
+  updated_at: string
+  material?: any
+}
+
+export interface BatchCampaignCreateRequest {
+  plan_count: number
+  name_template: string
+  platform: string
+  platform_account_id?: string
+  objective?: string
+  budget_type?: 'daily' | 'total' | 'lifetime'
+  budget: number
+  target_cpa?: number
+  bidding_strategy?: string
+  start_date?: string
+  end_date?: string
+  targeting?: {
+    regions: string[]
+    age_range: { min: number; max: number }
+    gender: string
+    interests: string[]
+  }
+  materials?: CampaignMaterialBindingInput[]
+  status?: string
+  auto_optimize_enabled?: boolean
+}
+
+export interface BatchCampaignCreateResponse {
+  campaigns: Campaign[]
+  material_bindings: CampaignMaterialBinding[]
+  plan_count: number
+  skipped: boolean
+  message?: string
+}
+
 /**
  * 获取广告投放列表
  */
@@ -98,9 +155,24 @@ export async function getCampaignDetail(campaignId: string): Promise<Campaign> {
 /**
  * 获取广告投放关联的素材
  */
-export async function getCampaignMaterials(campaignId: string): Promise<any[]> {
-  const response = await http.get<{ materials: any[] }>(`/campaigns/${campaignId}/materials`)
+export async function getCampaignMaterials(campaignId: string): Promise<CampaignMaterialBinding[]> {
+  const response = await http.get<{ materials: CampaignMaterialBinding[] }>(`/campaigns/${campaignId}/materials`)
   return response.materials
+}
+
+export async function createCampaignMaterialBinding(
+  campaignId: string,
+  data: CampaignMaterialBindingInput
+): Promise<CampaignMaterialBinding> {
+  return http.post<CampaignMaterialBinding>(`/campaigns/${campaignId}/materials`, data)
+}
+
+export async function updateCampaignMaterialBinding(
+  campaignId: string,
+  bindingId: string,
+  data: Partial<CampaignMaterialBindingInput>
+): Promise<CampaignMaterialBinding> {
+  return http.put<CampaignMaterialBinding>(`/campaigns/${campaignId}/materials/${bindingId}`, data)
 }
 
 /**
@@ -147,6 +219,13 @@ export async function createCampaign(data: {
   auto_optimize_enabled?: boolean
 }): Promise<Campaign> {
   return http.post<Campaign>('/campaigns', data)
+}
+
+export async function batchCreateProjectCampaigns(
+  projectId: string,
+  data: BatchCampaignCreateRequest
+): Promise<BatchCampaignCreateResponse> {
+  return http.post<BatchCampaignCreateResponse>(`/projects/${projectId}/campaigns/batch`, data)
 }
 
 /**

@@ -5,10 +5,11 @@ from pydantic import BaseModel
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.models import Metric, PlatformAccount, ProjectPlatformAccount
-from app.repositories.protocols import CampaignRepository, MaterialRepository, MetricRepository, ProjectRepository
-from app.repositories.factory import get_campaign_repo, get_material_repo, get_metric_repo, get_project_repo
+from app.repositories.protocols import CampaignMaterialRepository, CampaignRepository, MaterialRepository, MetricRepository, ProjectRepository
+from app.repositories.factory import get_campaign_material_repo, get_campaign_repo, get_material_repo, get_metric_repo, get_project_repo
 from app.config.database import get_db
 from app.api.deps import get_current_user
+from app.schemas.campaign_material import CampaignMaterialCreate, CampaignMaterialUpdate
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -157,6 +158,22 @@ async def _enrich_campaigns(
         enriched.append(campaign)
 
     return enriched
+
+
+async def _get_authorized_campaign_project(
+    campaign_id: str,
+    current_user: dict,
+    campaign_repo: CampaignRepository,
+    project_repo: ProjectRepository,
+) -> tuple[dict, dict]:
+    campaign = await campaign_repo.get_by_id(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    project = await project_repo.get_by_id(campaign["project_id"])
+    if not project or project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    return campaign, project
 
 
 @router.get("")
@@ -356,6 +373,12 @@ async def create_campaign_metric(
     spend = float(request.spend or 0)
     revenue = float(request.revenue or 0)
     timestamp = datetime.fromisoformat(request.timestamp) if request.timestamp else datetime.utcnow()
+    budget = float(campaign.get("budget") or 0)
+    if budget and spend > budget:
+        raise HTTPException(
+            status_code=422,
+            detail=f"投放消耗不能超过计划预算，当前计划预算为 {budget:.2f}",
+        )
 
     metric = Metric(
         campaign_id=campaign_id,
@@ -424,20 +447,78 @@ async def get_campaign_materials(
     campaign_id: str,
     current_user: dict = Depends(get_current_user),
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    campaign_material_repo: CampaignMaterialRepository = Depends(get_campaign_material_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
 ):
     """获取广告投放的素材列表"""
-    campaign = await campaign_repo.get_by_id(campaign_id)
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # 验证权限
-    project = await project_repo.get_by_id(campaign["project_id"])
-    if not project or project["user_id"] != current_user["id"]:
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
+    await _get_authorized_campaign_project(campaign_id, current_user, campaign_repo, project_repo)
+    bindings = await campaign_material_repo.list_by_campaign(campaign_id)
+    if bindings:
+        return {"materials": bindings}
+
     materials = await campaign_repo.get_materials(campaign_id)
-    return {"materials": materials}
+    return {"materials": [{**material, "binding_id": None, "title": None, "description": None, "copy": None} for material in materials]}
+
+
+@router.post("/{campaign_id}/materials")
+async def create_campaign_material_binding(
+    campaign_id: str,
+    request: CampaignMaterialCreate,
+    current_user: dict = Depends(get_current_user),
+    campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    campaign_material_repo: CampaignMaterialRepository = Depends(get_campaign_material_repo),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    """添加或更新计划素材绑定元数据。"""
+    campaign, project = await _get_authorized_campaign_project(campaign_id, current_user, campaign_repo, project_repo)
+
+    material = await material_repo.get_by_id(request.material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    if material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    binding = await campaign_material_repo.create_or_update(
+        campaign_id=campaign_id,
+        material_id=request.material_id,
+        created_by=current_user["id"],
+        title=request.title,
+        description=request.description,
+        copy=request.ad_copy,
+        source=request.source,
+        sort_order=request.sort_order,
+        status=request.status,
+    )
+    await campaign_repo.add_material(campaign_id, request.material_id)
+    await material_repo.add_to_project(request.material_id, project["id"])
+    await material_repo.add_to_campaign(request.material_id, campaign["id"])
+    await session.commit()
+    return binding
+
+
+@router.put("/{campaign_id}/materials/{binding_id}")
+async def update_campaign_material_binding(
+    campaign_id: str,
+    binding_id: str,
+    request: CampaignMaterialUpdate,
+    current_user: dict = Depends(get_current_user),
+    campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    campaign_material_repo: CampaignMaterialRepository = Depends(get_campaign_material_repo),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    """更新计划素材绑定元数据。"""
+    await _get_authorized_campaign_project(campaign_id, current_user, campaign_repo, project_repo)
+    binding = await campaign_material_repo.update(
+        binding_id,
+        **request.model_dump(exclude_unset=True),
+    )
+    if not binding or binding["campaign_id"] != campaign_id:
+        raise HTTPException(status_code=404, detail="Campaign material binding not found")
+    await session.commit()
+    return binding
 
 
 @router.post("/{campaign_id}/materials/{material_id}")
@@ -448,6 +529,7 @@ async def add_material_to_campaign(
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
     material_repo: MaterialRepository = Depends(get_material_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
+    campaign_material_repo: CampaignMaterialRepository = Depends(get_campaign_material_repo),
     session: AsyncSession = Depends(get_db),
 ):
     """添加素材到广告投放"""
@@ -467,6 +549,13 @@ async def add_material_to_campaign(
         raise HTTPException(status_code=403, detail="Permission denied")
 
     await campaign_repo.add_material(campaign_id, material_id)
+    await campaign_material_repo.create_or_update(
+        campaign_id=campaign_id,
+        material_id=material_id,
+        created_by=current_user["id"],
+        source="manual",
+        status="draft",
+    )
     await material_repo.add_to_campaign(material_id, campaign_id)
     await session.commit()
     return {"message": "Material added to campaign successfully"}
@@ -478,22 +567,28 @@ async def remove_material_from_campaign(
     material_id: str,
     current_user: dict = Depends(get_current_user),
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    campaign_material_repo: CampaignMaterialRepository = Depends(get_campaign_material_repo),
     material_repo: MaterialRepository = Depends(get_material_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
     session: AsyncSession = Depends(get_db),
 ):
-    """从广告投放移除素材"""
-    campaign = await campaign_repo.get_by_id(campaign_id)
-    if not campaign:
-        raise HTTPException(status_code=404, detail="Campaign not found")
-    
-    # 验证权限
-    project = await project_repo.get_by_id(campaign["project_id"])
-    if not project or project["user_id"] != current_user["id"]:
-        raise HTTPException(status_code=403, detail="Permission denied")
-    
-    await campaign_repo.remove_material(campaign_id, material_id)
-    await material_repo.remove_from_campaign(material_id, campaign_id)
+    """从广告投放移除素材。参数兼容 binding_id 和旧 material_id。"""
+    await _get_authorized_campaign_project(campaign_id, current_user, campaign_repo, project_repo)
+
+    bindings = await campaign_material_repo.list_by_campaign(campaign_id)
+    matched = next(
+        (
+            binding for binding in bindings
+            if binding["id"] == material_id or binding["material_id"] == material_id
+        ),
+        None,
+    )
+    legacy_material_id = matched["material_id"] if matched else material_id
+    if matched:
+        await campaign_material_repo.delete(matched["id"])
+
+    await campaign_repo.remove_material(campaign_id, legacy_material_id)
+    await material_repo.remove_from_campaign(legacy_material_id, campaign_id)
     await session.commit()
     return {"message": "Material removed from campaign successfully"}
 

@@ -5,7 +5,7 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
-import { addMaterialToCampaign, getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
+import { addMaterialToCampaign, getCampaignDetail, getCampaignMaterials, type Campaign, type CampaignMaterialBinding } from '@/api/campaigns'
 import { getMaterialImage, type Material } from '@/api/materials'
 
 const router = useRouter()
@@ -19,7 +19,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 const campaign = ref<Campaign | null>(null)
-const materials = ref<any[]>([])
+const materials = ref<CampaignMaterialBinding[]>([])
 const materialImages = ref<Map<string, string>>(new Map())
 const showMaterialModal = ref(false)
 const addingMaterials = ref(false)
@@ -88,11 +88,12 @@ const loadCampaignData = async () => {
     
     // 加载素材图像（Base64）
     for (const material of materialsData) {
+      const materialId = getBindingMaterialId(material)
       try {
-        const imageData = await getMaterialImage(material.id, true)
-        materialImages.value.set(material.id, imageData.data)
+        const imageData = await getMaterialImage(materialId, true)
+        materialImages.value.set(materialId, imageData.data)
       } catch (err) {
-        console.error('加载素材图像失败:', material.id, err)
+        console.error('加载素材图像失败:', materialId, err)
       }
     }
   } catch (err: any) {
@@ -106,6 +107,10 @@ const loadCampaignData = async () => {
 const getMaterialImageSrc = (materialId: string): string | undefined => {
   return materialImages.value.get(materialId)
 }
+
+const getBindingMaterialId = (binding: CampaignMaterialBinding | any) => binding.material_id || binding.material?.id || binding.id
+const getBindingMaterialName = (binding: CampaignMaterialBinding | any) => binding.material?.name || binding.title || binding.name || '-'
+const getBindingStatus = (binding: CampaignMaterialBinding | any) => binding.material?.status || binding.status || '-'
 
 const switchPanel = (item: any) => {
   if (item.path) {
@@ -142,7 +147,7 @@ const handleCloseMaterialModal = () => {
 
 const handleSelectMaterials = async (selectedMaterials: Material[]) => {
   if (!campaign.value) return
-  const existingIds = new Set(materials.value.map(material => material.id))
+  const existingIds = new Set(materials.value.map(material => getBindingMaterialId(material)))
   const newMaterials = selectedMaterials.filter(material => !existingIds.has(material.id))
   if (newMaterials.length === 0) {
     handleCloseMaterialModal()
@@ -346,9 +351,9 @@ const getPacingLabel = (status?: string) => {
               <!-- Material Image -->
               <div class="aspect-[9/16] bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
                 <img
-                  v-if="getMaterialImageSrc(material.id)"
-                  :src="getMaterialImageSrc(material.id)"
-                  :alt="material.name"
+                  v-if="getMaterialImageSrc(getBindingMaterialId(material))"
+                  :src="getMaterialImageSrc(getBindingMaterialId(material))"
+                  :alt="getBindingMaterialName(material)"
                   class="w-full h-full object-cover"
                 />
                 <div v-else class="w-full h-full flex items-center justify-center">
@@ -357,10 +362,16 @@ const getPacingLabel = (status?: string) => {
               </div>
               <!-- Material Info -->
               <div class="p-3 bg-white dark:bg-slate-900">
-                <div class="text-sm font-medium text-slate-900 dark:text-white mb-1 truncate">{{ material.name }}</div>
+                <div class="text-sm font-medium text-slate-900 dark:text-white mb-1 truncate">{{ material.title || getBindingMaterialName(material) }}</div>
+                <div v-if="material.description" class="text-xs text-slate-500 dark:text-slate-400 mb-2 line-clamp-2">
+                  {{ material.description }}
+                </div>
+                <div v-if="material.copy" class="text-xs text-slate-500 dark:text-slate-400 mb-2 line-clamp-2">
+                  {{ material.copy }}
+                </div>
                 <div class="flex items-center justify-between">
                   <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600">
-                    {{ material.status }}
+                    {{ getBindingStatus(material) }}
                   </span>
                 </div>
               </div>
@@ -395,7 +406,7 @@ const getPacingLabel = (status?: string) => {
 
     <SelectMaterialModal
       :show="showMaterialModal"
-      :selected-ids="materials.map(material => material.id)"
+      :selected-ids="materials.map(material => getBindingMaterialId(material))"
       @close="handleCloseMaterialModal"
       @select="handleSelectMaterials"
     />

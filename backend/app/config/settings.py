@@ -27,6 +27,17 @@ class Settings(BaseSettings):
 
     # 外部服务
     OPENAI_API_KEY: str = ""
+    AI_PROVIDER: str = "mock"
+    AI_DEFAULT_MODEL: str = "mock-small"
+    AI_SMALL_MODEL: str = "mock-small"
+    AI_MEDIUM_MODEL: str = "mock-medium"
+    AI_LARGE_MODEL: str = "mock-large"
+    AI_DAILY_TOKEN_LIMIT: int = 50000
+    AI_MONTHLY_TOKEN_LIMIT: int = 1000000
+    AI_DAILY_COST_LIMIT_USD: float = 20.0
+    AI_MONTHLY_COST_LIMIT_USD: float = 500.0
+    AI_LOG_PROMPTS: bool = False
+    AI_LOG_OUTPUTS: bool = True
     META_APP_ID: str = ""
     META_APP_SECRET: str = ""
     META_OAUTH_REDIRECT_URI: str = "http://127.0.0.1:8010/api/v1/platform/meta/oauth/callback"
