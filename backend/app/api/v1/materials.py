@@ -7,6 +7,8 @@ import uuid
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import JSONResponse
+from sqlalchemy.ext.asyncio import AsyncSession
+from app.config.database import get_db
 from app.repositories.protocols import MaterialRepository
 from app.repositories.factory import get_material_repo
 from app.api.deps import get_current_user
@@ -102,6 +104,7 @@ async def create_material(
     request: MaterialCreate,
     current_user: dict = Depends(get_current_user),
     material_repo: MaterialRepository = Depends(get_material_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """创建新素材"""
     material = await material_repo.create(
@@ -123,6 +126,7 @@ async def create_material(
         spend=request.spend,
         campaign_id=request.campaign_id,
     )
+    await session.commit()
     return material
 
 
@@ -135,6 +139,7 @@ async def upload_material(
     project_ids: str | None = Form(None),
     current_user: dict = Depends(get_current_user),
     material_repo: MaterialRepository = Depends(get_material_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """上传素材文件并创建素材记录"""
     allowed_content_types = {
@@ -185,6 +190,7 @@ async def upload_material(
         is_hero=False,
         file_size=len(data),
     )
+    await session.commit()
     return material
 
 

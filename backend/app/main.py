@@ -1,8 +1,10 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 from loguru import logger
 from datetime import datetime
+from pathlib import Path
 
 from app.config.settings import get_settings
 from app.api.v1.router import api_router
@@ -15,6 +17,8 @@ allow_origins = [
     "http://localhost:3001",
     "http://localhost:3002",
     "http://localhost:3010",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3010",
 ]
 if settings.CORS_ALLOW_ORIGINS.strip():
     allow_origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
@@ -30,7 +34,7 @@ app = FastAPI(
 # CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3010", "http://127.0.0.1:3010", "http://localhost:3000", "http://127.0.0.1:3000"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"],
     allow_headers=["*"],
@@ -40,12 +44,19 @@ app.add_middleware(
 # 路由
 app.include_router(api_router)
 
+images_dir = Path(__file__).resolve().parents[2] / "data" / "images"
+images_dir.mkdir(parents=True, exist_ok=True)
+app.mount("/images", StaticFiles(directory=str(images_dir)), name="images")
+
 
 @app.get("/health")
 async def health_check():
     return {
         "status": "ok",
         "demo_mode": settings.DEMO_MODE,
+        "debug": settings.DEBUG,
+        "version": app.version,
+        "service": app.title,
         "timestamp": int(datetime.now().timestamp()),
     }
 

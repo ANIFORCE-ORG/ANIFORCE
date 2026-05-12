@@ -24,6 +24,10 @@ export default defineConfig(() => {
           target: `ws://${backendHost}:${backendPort}`,
           ws: true,
         },
+        '/images': {
+          target: `http://${backendHost}:${backendPort}`,
+          changeOrigin: true,
+        },
       },
     },
   }

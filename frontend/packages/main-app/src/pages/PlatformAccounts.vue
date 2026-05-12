@@ -206,11 +206,9 @@ onMounted(async () => {
 
         <div class="flex items-center gap-3">
           <select v-model="platformFilter" class="px-3 py-2 rounded-md border text-sm">
-            <option value="">全部平台</option>
             <option value="meta">Meta</option>
-            <option value="google">Google</option>
-            <option value="tiktok">TikTok</option>
           </select>
+          <span class="text-xs text-slate-500">Google/TikTok 待接入，v0.1 仅展示 Meta 账户</span>
           <input
             v-model="searchQuery"
             class="flex-1 px-3 py-2 rounded-md border text-sm"

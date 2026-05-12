@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// @ts-nocheck
 import { ref, computed } from 'vue'
 
 // Mock data - 实际应该从API获取

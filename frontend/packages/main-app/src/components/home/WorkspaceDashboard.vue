@@ -9,7 +9,6 @@ import QuickActions from './workspace/QuickActions.vue'
 import DataTrends from './workspace/DataTrends.vue'
 import BasicInsights from './workspace/BasicInsights.vue'
 import PlatformStatus from './workspace/PlatformStatus.vue'
-import ReportsContent from './workspace/ReportsContent.vue'
 
 const router = useRouter()
 const route = useRoute()
@@ -24,7 +23,7 @@ const navItems = [
   { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
   { id: 'accounts', icon: 'account_balance_wallet', label: '广告账户', path: '/platform-accounts' },
   { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
-  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/dashboard?panel=reports' }
+  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/reports' }
 ]
 
 const sessions = ref([
@@ -48,10 +47,7 @@ const quickHints = [
 ]
 
 const switchPanel = (item: any) => {
-  if (item.id === 'reports') {
-    activePanel.value = 'reports'
-    router.push('/dashboard?panel=reports')
-  } else if (item.id === 'dashboard') {
+  if (item.id === 'dashboard') {
     activePanel.value = 'dashboard'
     router.push('/dashboard')
   } else if (item.path) {
@@ -76,7 +72,7 @@ const handleHintClick = (hint: string) => {
 // Watch route query to update active panel
 watch(() => route.query.panel, (newPanel) => {
   if (newPanel === 'reports') {
-    activePanel.value = 'reports'
+    router.replace('/reports')
   } else {
     activePanel.value = 'dashboard'
   }
@@ -137,8 +133,6 @@ watch(() => route.query.panel, (newPanel) => {
           <PlatformStatus />
         </div>
 
-        <!-- Reports Content -->
-        <ReportsContent v-else-if="activePanel === 'reports'" />
       </div>
     </main>
 

@@ -8,19 +8,19 @@ import type { PlatformAccount } from './platformAccounts'
 export interface Project {
   id: string
   name: string
-  description?: string
-  game_type: string
-  target_market: string
+  description?: string | null
+  game_type?: string | null
+  target_market?: string | null
   tags: string[]
   total_budget: number
   spent: number
   status: string
-  manager: string
-  start_date: string
-  end_date: string
+  manager?: string | null
+  start_date?: string | null
+  end_date?: string | null
   created_at: string
   updated_at: string
-  product_type?: string
+  product_type?: string | null
   region?: string | string[]
   target_roi?: number
   current_roi?: number
@@ -106,11 +106,17 @@ export async function updateProject(
   projectId: string,
   data: {
     name?: string
+    description?: string
+    game_type?: string
+    target_market?: string
     total_budget?: number
     status?: string
     product_type?: string
     region?: string[]
     target_roi?: number
+    manager?: string
+    start_date?: string
+    end_date?: string
   }
 ): Promise<Project> {
   return http.put<Project>(`/projects/${projectId}`, data)
@@ -156,11 +162,13 @@ export async function unbindProjectPlatformAccount(
 }
 
 export async function getProjectAgentActions(projectId: string): Promise<AgentAction[]> {
-  return http.get<AgentAction[]>(`/projects/${projectId}/agent-actions`)
+  const actions = await http.get<AgentAction[]>(`/projects/${projectId}/agent-actions`)
+  return actions.filter(action => action.status !== 'expired')
 }
 
 export async function generateProjectAgentActions(projectId: string): Promise<{ actions: AgentAction[] }> {
-  return http.post<{ actions: AgentAction[] }>(`/projects/${projectId}/agent-actions/generate`)
+  await http.post<{ actions: AgentAction[] }>(`/projects/${projectId}/agent-actions/generate`)
+  return { actions: await getProjectAgentActions(projectId) }
 }
 
 export async function confirmProjectAgentAction(projectId: string, actionId: string): Promise<AgentAction> {

@@ -2,7 +2,9 @@
 from datetime import date, datetime
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
+from app.models import Metric, PlatformAccount, ProjectPlatformAccount
 from app.repositories.protocols import CampaignRepository, MaterialRepository, MetricRepository, ProjectRepository
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_metric_repo, get_project_repo
 from app.config.database import get_db
@@ -36,6 +38,21 @@ class CreateCampaignRequest(BaseModel):
     target_interests: list[str] | None = None
     material_ids: list[str] | None = None
     auto_optimize_enabled: bool | None = True
+
+
+class MetricCreateRequest(BaseModel):
+    timestamp: str | None = None
+    impressions: int = 0
+    clicks: int = 0
+    conversions: int = 0
+    installs: int = 0
+    spend: float = 0
+    revenue: float = 0
+    ctr: float | None = None
+    cvr: float | None = None
+    cpa: float | None = None
+    cpi: float | None = None
+    roi: float | None = None
 
 
 def _parse_date(value: str | None) -> date | None:
@@ -210,6 +227,7 @@ async def create_campaign(
     request: CreateCampaignRequest,
     current_user: dict = Depends(get_current_user),
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    material_repo: MaterialRepository = Depends(get_material_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
     session: AsyncSession = Depends(get_db),
 ):
@@ -232,6 +250,18 @@ async def create_campaign(
             status_code=422,
             detail=f"计划预算超出项目未分配预算，可用额度为 {available:.2f}",
         )
+
+    selected_account = None
+    if request.platform_account_id:
+        account_result = await session.execute(
+            select(PlatformAccount).where(
+                PlatformAccount.id == request.platform_account_id,
+                PlatformAccount.user_id == current_user["id"],
+            )
+        )
+        selected_account = account_result.scalar_one_or_none()
+        if not selected_account:
+            raise HTTPException(status_code=404, detail="Platform account not found")
 
     config = {
         "objective": request.objective,
@@ -272,11 +302,97 @@ async def create_campaign(
         end_date=request.end_date,
         config=config,
     )
+
+    if selected_account:
+        link_result = await session.execute(
+            select(ProjectPlatformAccount).where(
+                ProjectPlatformAccount.project_id == request.project_id,
+                ProjectPlatformAccount.platform_account_id == request.platform_account_id,
+            )
+        )
+        if not link_result.scalar_one_or_none():
+            session.add(ProjectPlatformAccount(
+                project_id=request.project_id,
+                platform_account_id=request.platform_account_id,
+                role="primary",
+                status="active",
+                note="Auto-linked when creating a campaign",
+            ))
+
+    for material_id in request.material_ids or []:
+        material = await material_repo.get_by_id(material_id)
+        if material and material["user_id"] == current_user["id"]:
+            await material_repo.add_to_project(material_id, request.project_id)
+            await material_repo.add_to_campaign(material_id, campaign["id"])
     
     # 提交事务以确保数据持久化
     await session.commit()
     
     return campaign
+
+
+@router.post("/{campaign_id}/metrics")
+async def create_campaign_metric(
+    campaign_id: str,
+    request: MetricCreateRequest,
+    current_user: dict = Depends(get_current_user),
+    campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    """上传一条 Campaign 投放结果数据，用于客户交付后的复盘演示。"""
+    campaign = await campaign_repo.get_by_id(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+
+    project = await project_repo.get_by_id(campaign["project_id"])
+    if not project or project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+
+    clicks = int(request.clicks or 0)
+    impressions = int(request.impressions or 0)
+    installs = int(request.installs or 0)
+    conversions = int(request.conversions or 0)
+    spend = float(request.spend or 0)
+    revenue = float(request.revenue or 0)
+    timestamp = datetime.fromisoformat(request.timestamp) if request.timestamp else datetime.utcnow()
+
+    metric = Metric(
+        campaign_id=campaign_id,
+        timestamp=timestamp,
+        platform=campaign["platform"],
+        impressions=impressions,
+        clicks=clicks,
+        conversions=conversions,
+        installs=installs,
+        spend=spend,
+        revenue=revenue,
+        ctr=request.ctr if request.ctr is not None else (clicks / impressions * 100 if impressions else 0),
+        cvr=request.cvr if request.cvr is not None else (conversions / clicks * 100 if clicks else 0),
+        cpa=request.cpa if request.cpa is not None else (spend / conversions if conversions else 0),
+        cpi=request.cpi if request.cpi is not None else (spend / installs if installs else 0),
+        roi=request.roi if request.roi is not None else (revenue / spend if spend else 0),
+    )
+    session.add(metric)
+    await campaign_repo.update(campaign_id, spent=spend)
+    await session.commit()
+    return {
+        "id": metric.id,
+        "campaign_id": metric.campaign_id,
+        "timestamp": metric.timestamp.isoformat(),
+        "platform": metric.platform,
+        "impressions": metric.impressions,
+        "clicks": metric.clicks,
+        "conversions": metric.conversions,
+        "installs": metric.installs,
+        "spend": metric.spend,
+        "revenue": metric.revenue,
+        "ctr": metric.ctr,
+        "cvr": metric.cvr,
+        "cpa": metric.cpa,
+        "cpi": metric.cpi,
+        "roi": metric.roi,
+    }
 
 
 @router.put("/{campaign_id}/status")
@@ -332,6 +448,7 @@ async def add_material_to_campaign(
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
     material_repo: MaterialRepository = Depends(get_material_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """添加素材到广告投放"""
     campaign = await campaign_repo.get_by_id(campaign_id)
@@ -351,6 +468,7 @@ async def add_material_to_campaign(
 
     await campaign_repo.add_material(campaign_id, material_id)
     await material_repo.add_to_campaign(material_id, campaign_id)
+    await session.commit()
     return {"message": "Material added to campaign successfully"}
 
 
@@ -362,6 +480,7 @@ async def remove_material_from_campaign(
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
     material_repo: MaterialRepository = Depends(get_material_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """从广告投放移除素材"""
     campaign = await campaign_repo.get_by_id(campaign_id)
@@ -375,6 +494,7 @@ async def remove_material_from_campaign(
     
     await campaign_repo.remove_material(campaign_id, material_id)
     await material_repo.remove_from_campaign(material_id, campaign_id)
+    await session.commit()
     return {"message": "Material removed from campaign successfully"}
 
 

@@ -15,6 +15,7 @@ export interface Material {
   url: string
   thumbnail_url?: string
   ctr_estimate?: number
+  format?: string
   tags: string[]
   duration?: number
   file_size?: number

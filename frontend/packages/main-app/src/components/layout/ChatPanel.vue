@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, watch } from 'vue'
 
 interface Message {
   role: string
@@ -24,16 +24,20 @@ const emit = defineEmits<{
   'send-message': [message: string]
   'hint-click': [hint: string]
   'new-chat': []
-  'update:chatInput': [value: string]
+  'update:chat-input': [value: string]
 }>()
 
 const localChatInput = ref(props.chatInput)
+
+watch(() => props.chatInput, (value) => {
+  localChatInput.value = value
+})
 
 const handleSendMessage = () => {
   if (!localChatInput.value.trim()) return
   emit('send-message', localChatInput.value)
   localChatInput.value = ''
-  emit('update:chatInput', '')
+  emit('update:chat-input', '')
 }
 
 const handleHintClick = (hint: string) => {

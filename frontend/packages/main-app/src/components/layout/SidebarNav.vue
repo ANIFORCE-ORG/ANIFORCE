@@ -88,7 +88,7 @@ const isActiveSettings = (item: NavItem) => {
 
 const handleNavClick = (item: NavItem) => {
   emit('switch-panel', item)
-  if (item.path) {
+  if (!props.activePanel && !props.activeId && item.path) {
     router.push(item.path)
   }
 }

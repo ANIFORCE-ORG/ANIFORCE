@@ -38,7 +38,6 @@ export interface Campaign {
   learning_phase?: string
   auto_optimize_enabled?: boolean
   optimization_rules?: any
-  budget_type?: 'daily' | 'total' | 'lifetime'
   budget_remaining?: number
   budget_usage_rate?: number
   elapsed_rate?: number

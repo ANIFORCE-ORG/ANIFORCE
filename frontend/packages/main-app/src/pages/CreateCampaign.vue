@@ -51,9 +51,9 @@ const selectedPlatformAccountId = ref('')
 const showGroupModal = ref(false)
 const showMaterialModal = ref(false)
 const platforms = [
-  { id: 'Google', name: 'Google Ads', icon: 'G', description: '搜索广告、展示广告、应用广告' },
-  { id: 'TikTok', name: 'TikTok Ads', icon: '♪', description: '信息流广告、开屏广告、挑战赛' },
-  { id: 'Meta', name: 'Meta Ads', icon: 'f', description: 'Facebook/Instagram 广告' }
+  { id: 'Meta', name: 'Meta Ads', icon: 'f', description: 'Facebook/Instagram 广告', available: true },
+  { id: 'Google', name: 'Google Ads', icon: 'G', description: '待接入：搜索广告、展示广告、应用广告', available: false },
+  { id: 'TikTok', name: 'TikTok Ads', icon: '♪', description: '待接入：信息流广告、开屏广告、挑战赛', available: false }
 ]
 
 const accountChecks = [
@@ -221,6 +221,8 @@ const interests = ['游戏', '短视频', '电商购物', '社交媒体', '音�
 // 验证逻辑
 const canProceedStep1 = computed(() => {
   if (!selectedGroup.value || !selectedPlatform.value) return false
+  const platform = platforms.find(item => item.id === selectedPlatform.value)
+  if (!platform?.available) return false
   if (selectedPlatform.value === 'Meta') {
     return Boolean(selectedPlatformAccountId.value)
   }
@@ -290,6 +292,12 @@ const handleSubmit = async () => {
   
   if (!selectedPlatform.value) {
     alert('请选择投放平台')
+    return
+  }
+
+  const selectedPlatformConfig = platforms.find(platform => platform.id === selectedPlatform.value)
+  if (!selectedPlatformConfig?.available) {
+    alert('当前版本仅开放 Meta Campaign 创建链路')
     return
   }
   
@@ -537,18 +545,26 @@ onMounted(async () => {
             <div
               v-for="platform in platforms"
               :key="platform.id"
-              class="p-4 rounded-lg border-2 transition-all cursor-pointer"
-              :class="selectedPlatform === platform.id 
-                ? 'border-primary bg-primary/5' 
-                : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'"
-              @click="selectedPlatform = platform.id"
+              class="p-4 rounded-lg border-2 transition-all"
+              :class="[
+                selectedPlatform === platform.id 
+                  ? 'border-primary bg-primary/5' 
+                  : 'border-slate-200 dark:border-slate-700',
+                platform.available
+                  ? 'cursor-pointer hover:border-primary/50'
+                  : 'cursor-not-allowed opacity-60 bg-slate-50 dark:bg-slate-900/40'
+              ]"
+              @click="platform.available && (selectedPlatform = platform.id)"
             >
               <div class="flex items-center gap-4">
                 <div class="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl font-bold">
                   {{ platform.icon }}
                 </div>
                 <div class="flex-1">
-                  <div class="font-semibold text-slate-900 dark:text-white">{{ platform.name }}</div>
+                  <div class="flex items-center gap-2">
+                    <div class="font-semibold text-slate-900 dark:text-white">{{ platform.name }}</div>
+                    <span v-if="!platform.available" class="rounded bg-slate-100 px-2 py-0.5 text-[11px] font-medium text-slate-500">待接入</span>
+                  </div>
                   <div class="text-sm text-slate-500 dark:text-slate-400">{{ platform.description }}</div>
                 </div>
               </div>

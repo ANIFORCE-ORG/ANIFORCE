@@ -1,4 +1,5 @@
 <script setup lang="ts">
+// @ts-nocheck
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'

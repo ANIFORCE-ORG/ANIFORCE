@@ -8,7 +8,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 from app.config.database import get_db
-from app.models import AgentAction, Campaign, PlatformAccount, ProjectPlatformAccount
+from app.models import AgentAction, Campaign, Metric, PlatformAccount, ProjectPlatformAccount
 from app.repositories.protocols import ProjectRepository
 from app.repositories.factory import get_project_repo
 from app.api.deps import get_current_user
@@ -35,6 +35,21 @@ class ProjectPlatformAccountRequest(BaseModel):
     spend_cap: float | None = None
     daily_cap: float | None = None
     note: str | None = None
+
+
+class UpdateProjectRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    game_type: str | None = None
+    target_market: str | None = None
+    total_budget: float | None = None
+    status: str | None = None
+    product_type: str | None = None
+    region: list[str] | None = None
+    target_roi: float | None = None
+    manager: str | None = None
+    start_date: str | None = None
+    end_date: str | None = None
 
 
 def _campaign_config(campaign: Campaign) -> dict:
@@ -220,6 +235,15 @@ async def generate_project_agent_actions(
     if project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
 
+    existing_result = await session.execute(
+        select(AgentAction).where(
+            AgentAction.project_id == project_id,
+            AgentAction.status == "suggested",
+        )
+    )
+    for action in existing_result.scalars().all():
+        action.status = "expired"
+
     created: list[AgentAction] = []
     account_links = (
         await session.execute(
@@ -264,6 +288,34 @@ async def generate_project_agent_actions(
                 payload_json=json.dumps({"campaign_id": campaign.id}),
                 expected_impact_json=json.dumps({"impact": "避免预算耗尽导致投放中断"}),
             ))
+        latest_metric_result = await session.execute(
+            select(Metric)
+            .where(Metric.campaign_id == campaign.id)
+            .order_by(Metric.timestamp.desc())
+            .limit(1)
+        )
+        latest_metric = latest_metric_result.scalar_one_or_none()
+        target_cpa = float(campaign.target_cpa or 0)
+        cpi = float(latest_metric.cpi or 0) if latest_metric else 0
+        if target_cpa and cpi and cpi > target_cpa * 1.15:
+            created.append(AgentAction(
+                user_id=current_user["id"],
+                project_id=project_id,
+                platform_account_id=campaign_platform_account_id,
+                campaign_id=campaign.id,
+                action_type="review_cpi",
+                risk_level="L2",
+                status="suggested",
+                title=f"检查计划成本：{campaign.name}",
+                summary="该计划最新 CPI 已高于目标 15%，建议收窄定向、降低预算或替换疲劳素材。",
+                evidence_json=json.dumps({
+                    "campaign_id": campaign.id,
+                    "target_cpa": target_cpa,
+                    "latest_cpi": cpi,
+                }),
+                payload_json=json.dumps({"campaign_id": campaign.id}),
+                expected_impact_json=json.dumps({"impact": "降低获客成本并减少低效消耗"}),
+            ))
         if not campaign_platform_account_id:
             created.append(AgentAction(
                 user_id=current_user["id"],
@@ -304,6 +356,8 @@ async def confirm_project_agent_action(
     action = result.scalar_one_or_none()
     if not action:
         raise HTTPException(status_code=404, detail="Agent action not found")
+    if action.status != "suggested":
+        raise HTTPException(status_code=409, detail=f"Agent action is already {action.status}")
     action.status = "confirmed"
     action.confirmed_by = current_user["id"]
     action.confirmed_at = datetime.utcnow()
@@ -330,6 +384,8 @@ async def reject_project_agent_action(
     action = result.scalar_one_or_none()
     if not action:
         raise HTTPException(status_code=404, detail="Agent action not found")
+    if action.status != "suggested":
+        raise HTTPException(status_code=409, detail=f"Agent action is already {action.status}")
     action.status = "rejected"
     action.confirmed_by = current_user["id"]
     action.confirmed_at = datetime.utcnow()
@@ -364,9 +420,7 @@ async def create_project(
 @router.put("/{project_id}")
 async def update_project(
     project_id: str,
-    name: str | None = None,
-    total_budget: float | None = None,
-    status: str | None = None,
+    request: UpdateProjectRequest,
     current_user: dict = Depends(get_current_user),
     project_repo: ProjectRepository = Depends(get_project_repo),
 ):
@@ -379,15 +433,11 @@ async def update_project(
         raise HTTPException(status_code=403, detail="Permission denied")
     
     update_data = {}
-    if name is not None:
-        update_data["name"] = name
-    if total_budget is not None:
-        update_data["total_budget"] = total_budget
-    if status is not None:
-        update_data["status"] = status
+    for key, value in request.model_dump(exclude_unset=True).items():
+        update_data[key] = value
     
-    await project_repo.update(project_id, **update_data)
-    return {"message": "Project updated successfully"}
+    updated = await project_repo.update(project_id, **update_data)
+    return updated or await project_repo.get_by_id(project_id)
 
 
 @router.delete("/{project_id}")
