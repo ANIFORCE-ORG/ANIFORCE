@@ -60,6 +60,8 @@ htmlcov/
 # ===== 数据文件 =====
 backend/data/images/
 backend/data/sqlite/
+.server_pids
+.server_ports
 
 # ===== 其他 =====
 *.bak

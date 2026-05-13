@@ -28,6 +28,15 @@ class Settings(BaseSettings):
     # 外部服务
     OPENAI_API_KEY: str = ""
 
+    # 平台授权配置
+    META_APP_ID: str = ""
+    META_APP_SECRET: str = ""
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    TIKTOK_APP_ID: str = ""
+    TIKTOK_APP_SECRET: str = ""
+    OAUTH_REDIRECT_URI: str = "http://localhost:3010/auth-callback"
+
     class Config:
         env_file = ".env"
 
