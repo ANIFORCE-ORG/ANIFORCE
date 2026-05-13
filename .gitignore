@@ -61,6 +61,11 @@ htmlcov/
 backend/data/images/
 backend/data/sqlite/
 
+# ==== 日志/临时文件 =====
+log/
+.server_pids
+.server_ports
+
 # ===== 其他 =====
 *.bak
 *.tmp

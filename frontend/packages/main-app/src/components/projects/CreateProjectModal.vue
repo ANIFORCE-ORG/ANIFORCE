@@ -162,7 +162,7 @@ defineExpose({
       <Transition name="scale">
         <div
           v-if="show"
-          class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+          class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
         >
           <!-- 弹窗头部 -->
           <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
