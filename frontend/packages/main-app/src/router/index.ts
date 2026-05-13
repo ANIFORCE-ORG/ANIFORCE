@@ -20,14 +20,14 @@ const router = createRouter({
       component: () => import('@/pages/MarketAnalysis.vue'),
     },
     {
+      path: '/campaign',
+      name: 'campaign',
+      component: () => import('@/pages/campaigns/Campaign.vue'),
+    },
+    {
       path: '/material',
       name: 'material',
       component: () => import('@/pages/Material.vue'),
-    },
-    {
-      path: '/campaign',
-      name: 'campaign',
-      component: () => import('@/pages/Campaign.vue'),
     },
     {
       path: '/monitor',
@@ -42,22 +42,22 @@ const router = createRouter({
     {
       path: '/projects',
       name: 'projects',
-      component: () => import('@/pages/Projects.vue'),
+      component: () => import('@/pages/projects/Projects.vue'),
     },
     {
       path: '/projects/:id',
       name: 'project-detail',
-      component: () => import('@/pages/ProjectDetail.vue'),
+      component: () => import('@/pages/projects/ProjectDetail.vue'),
     },
     {
       path: '/campaigns/:id',
       name: 'campaign-detail',
-      component: () => import('@/pages/CampaignDetail.vue'),
+      component: () => import('@/pages/campaigns/CampaignDetail.vue'),
     },
     {
       path: '/campaigns/create',
       name: 'create-campaign',
-      component: () => import('@/pages/CreateCampaign.vue'),
+      component: () => import('@/pages/campaigns/CreateCampaign.vue'),
     },
     {
       path: '/login',
@@ -67,7 +67,22 @@ const router = createRouter({
     {
       path: '/settings',
       name: 'settings',
-      component: () => import('@/pages/Settings.vue'),
+      component: () => import('@/pages/settings/Settings.vue'),
+    },
+    {
+      path: '/account-config',
+      name: 'account-config',
+      component: () => import('@/pages/settings/AccountConfig.vue'),
+    },
+    {
+      path: '/ai-usage-config',
+      name: 'ai-usage-config',
+      component: () => import('@/pages/settings/AIUsageConfig.vue'),
+    },
+    {
+      path: '/platform-connections',
+      name: 'platform-connections',
+      component: () => import('@/pages/settings/PlatformConnections.vue'),
     },
   ],
 })
@@ -77,7 +92,7 @@ router.beforeEach((to, from, next) => {
   const auth = useAuthStore()
   
   // 需要登录的页面列表
-  const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings']
+  const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/account-config', '/ai-usage-config', '/platform-connections']
   
   // 已登录用户访问GetStart页面,重定向到/home
   if (to.path === '/' && auth.isLoggedIn) {

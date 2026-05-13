@@ -17,17 +17,8 @@ const sessions = ref([
   { id: 'sess_g003', name: '东南亚市场测试', active: false }
 ])
 
-const quickHints = [
-  '查看用量统计',
-  '连接广告账户',
-  '修改账户信息',
-  '升级套餐'
-]
-
-// 用户信息
 const userEmail = ref(auth.user?.email || 'test@animagus.com')
 
-// 套餐和用量信息
 const currentPlan = ref({
   name: 'Seed',
   icon: '🌱',
@@ -43,35 +34,6 @@ const usage = ref({
   materialsGenerated: 23,
   materialsLimit: 500
 })
-
-// 广告账户连接状态
-const adAccounts = ref([
-  {
-    id: 'meta',
-    name: 'Meta Ads',
-    icon: 'M',
-    iconBg: 'bg-blue-600',
-    connected: false,
-    accountId: '' as string
-  },
-  {
-    id: 'tiktok',
-    name: 'TikTok Ads',
-    icon: '♪',
-    iconBg: 'bg-black dark:bg-white',
-    iconColor: 'text-white dark:text-black',
-    connected: false,
-    accountId: '' as string
-  },
-  {
-    id: 'google',
-    name: 'Google Ads',
-    icon: 'G',
-    iconBg: 'bg-red-600',
-    connected: false,
-    accountId: '' as string
-  }
-])
 
 const switchPanel = (item: any) => {
   if (item.path) {
@@ -96,43 +58,20 @@ const handleDeleteAccount = () => {
   const confirmed = confirm('确定要删除账户吗？此操作不可恢复！')
   if (confirmed) {
     console.log('删除账户')
-    // TODO: 调用删除账户API
   }
 }
 
 const handleUpgradePlan = () => {
   console.log('升级套餐')
-  // TODO: 跳转到升级页面或显示升级弹窗
-}
-
-const handleConnectAdAccount = (accountId: string) => {
-  console.log('连接广告账户:', accountId)
-  const account = adAccounts.value.find(a => a.id === accountId)
-  if (account) {
-    if (account.connected) {
-      // 断开连接
-      const confirmed = confirm(`确定要断开 ${account.name} 连接吗？`)
-      if (confirmed) {
-        account.connected = false
-        account.accountId = ''
-      }
-    } else {
-      // 连接账户
-      // TODO: 实现OAuth授权流程
-      account.connected = true
-      account.accountId = `${accountId}_${Date.now()}`
-    }
-  }
 }
 
 onMounted(() => {
-  console.log('账户设置页面加载')
+  console.log('账号配置页面加载')
 })
 </script>
 
 <template>
   <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
-    <!-- 左侧功能导航抽屉 -->
     <SidebarNav 
       :nav-items="navItems"
       :sessions="sessions"
@@ -141,21 +80,28 @@ onMounted(() => {
       @switch-session="switchSession"
     />
 
-    <!-- 中间设置展示区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-      <!-- Header -->
-      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
-        <h3 class="font-bold text-slate-900 dark:text-white">账户设置</h3>
+      <div class="border-b border-slate-200 dark:border-slate-800 px-6 py-4">
+        <div class="flex items-center gap-3">
+          <button
+            class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            @click="router.back()"
+          >
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back</span>
+          </button>
+          <div>
+            <h1 class="text-xl font-bold text-slate-900 dark:text-white">系统账号设置</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">管理团队成员、登录身份和基础账号信息</p>
+          </div>
+        </div>
       </div>
 
-      <!-- Content -->
       <div class="flex-1 overflow-y-auto p-6">
-        <div class="max-w-4xl mx-auto space-y-8">
-          
-          <!-- Login Account Section -->
+        <div class="space-y-6">
+          <!-- 登录账户信息 -->
           <section>
-            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-4">登录账户信息</h2>
-            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white mb-3">登录账户信息</h3>
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-6">
               <div class="flex items-center justify-between">
                 <div>
                   <div class="text-sm text-slate-500 dark:text-slate-400 mb-1">Email</div>
@@ -180,11 +126,10 @@ onMounted(() => {
             </div>
           </section>
 
-          <!-- Plan & Usage Section -->
+          <!-- 会员等级 & 用量 -->
           <section>
-            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-4">会员等级 & 用量</h2>
-            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-6">
-              <!-- Current Plan -->
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white mb-3">会员等级 & 用量</h3>
+            <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-6">
               <div class="flex items-center justify-between mb-6">
                 <div class="flex items-center gap-3">
                   <span class="text-2xl">{{ currentPlan.icon }}</span>
@@ -198,8 +143,8 @@ onMounted(() => {
                 </button>
               </div>
 
-              <!-- Monthly Usage -->
               <div class="space-y-4">
+                <!-- 月度用量 -->
                 <div>
                   <div class="flex items-center justify-between mb-2">
                     <span class="text-sm text-slate-600 dark:text-slate-400">月度用量</span>
@@ -213,7 +158,7 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <!-- AI Calls -->
+                <!-- AI 调用次数 -->
                 <div class="pt-4 border-t border-slate-200 dark:border-slate-700">
                   <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
@@ -232,7 +177,7 @@ onMounted(() => {
                   </div>
                 </div>
 
-                <!-- Materials Generated -->
+                <!-- 素材生成数量 -->
                 <div class="pt-4 border-t border-slate-200 dark:border-slate-700">
                   <div class="flex items-center justify-between mb-2">
                     <div class="flex items-center gap-2">
@@ -253,51 +198,8 @@ onMounted(() => {
               </div>
             </div>
           </section>
-
-          <!-- Ad Account Connections Section -->
-          <section>
-            <h2 class="text-lg font-bold text-slate-900 dark:text-white mb-4">平台广告账户管理</h2>
-            <div class="space-y-3">
-              <div
-                v-for="account in adAccounts"
-                :key="account.id"
-                class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-5 hover:border-primary/50 transition-all"
-              >
-                <div class="flex items-center justify-between">
-                  <div class="flex items-center gap-4">
-                    <div 
-                      class="w-10 h-10 rounded-lg flex items-center justify-center text-white font-bold"
-                      :class="account.iconBg"
-                    >
-                      <span :class="account.iconColor || 'text-white'">{{ account.icon }}</span>
-                    </div>
-                    <div>
-                      <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ account.name }}</div>
-                      <div v-if="account.connected" class="text-xs text-emerald-600 dark:text-emerald-400 mt-0.5">
-                        已连接 · {{ account.accountId }}
-                      </div>
-                      <div v-else class="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                        未连接
-                      </div>
-                    </div>
-                  </div>
-                  <button
-                    class="px-4 py-2 rounded-md text-sm font-medium transition-colors"
-                    :class="account.connected 
-                      ? 'border border-slate-300 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700'
-                      : 'border border-primary text-primary hover:bg-primary/10'"
-                    @click="handleConnectAdAccount(account.id)"
-                  >
-                    {{ account.connected ? '取消连接' : '立即连接' }}
-                  </button>
-                </div>
-              </div>
-            </div>
-          </section>
-
         </div>
       </div>
     </main>
-
   </div>
 </template>
