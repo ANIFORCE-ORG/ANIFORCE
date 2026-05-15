@@ -334,7 +334,7 @@ onMounted(async () => {
 
       <!-- Content -->
       <div class="flex-1 overflow-y-auto">
-        <div class="max-w-7xl mx-auto px-6 py-8">
+        <div class="mx-auto px-6 py-8">
       <!-- Step 1: 准备 -->
       <div v-if="currentStep === 1" class="space-y-6">
         <!-- 选择所属分组 -->
