@@ -95,18 +95,26 @@ ANIMAGUS/
 │       │       │   │   ├── Campaign.vue          # 广告系列列表
 │       │       │   │   ├── CampaignDetail.vue    # 广告系列详情
 │       │       │   │   └── CreateCampaign.vue    # 创建广告系列
+│       │       │   ├── creatives/    # 素材相关页面
+│       │       │   │   └── Material.vue          # 素材管理
+│       │       │   ├── starting/     # 启动相关页面
+│       │       │   │   ├── GetStart.vue          # 欢迎页
+│       │       │   │   ├── Login.vue             # 登录页
+│       │       │   │   └── Register.vue          # 注册页
 │       │       │   ├── Home.vue      # 首页（AI 对话交互）
-│       │       │   ├── Material.vue  # 素材管理
 │       │       │   ├── Monitor.vue   # 实时监控
 │       │       │   ├── Dashboard.vue # 数据看板
-│       │       │   ├── MarketAnalysis.vue  # 市场分析
-│       │       │   ├── GetStart.vue  # 欢迎页
-│       │       │   └── Login.vue     # 登录页
+│       │       │   └── MarketAnalysis.vue  # 市场分析
+│       │       ├── composables/      # Vue3 Composables
+│       │       │   └── useToast.ts           # Toast 提示管理
 │       │       └── components/       # 可复用组件
 │       │           ├── layout/       # 布局组件
 │       │           │   ├── SidebarNav.vue    # 侧边栏导航
 │       │           │   ├── AppHeader.vue     # 顶部导航
 │       │           │   └── AppFooter.vue     # 页脚
+│       │           ├── toasts/       # Toast 提示组件
+│       │           │   ├── ToastContainer.vue  # Toast 容器（支持多个平铺）
+│       │           │   └── Toast.vue         # 单个 Toast 组件（已弃用）
 │       │           ├── settings/     # 设置相关组件
 │       │           │   └── MetaConfigDialog.vue  # Meta 配置弹窗
 │       │           ├── projects/     # 项目相关组件
@@ -421,3 +429,132 @@ cp backend/.env.example backend/.env
 - 生产环境会配置数据库密码、第三方 API Key 等敏感凭证
 - Git 历史永久保留，即使后续删除也需要 `git filter-branch` 才能彻底清除
 - 每位开发者的本地配置不同，提交会导致频繁合并冲突
+
+---
+
+## 最新功能更新
+
+### 🎉 Toast 通用提示组件系统（2026-05-16）
+
+**功能特性**：
+- ✅ 支持多个 Toast 同时显示（最多 3 个平铺展示）
+- ✅ 4 种提示类型：`success`、`error`、`warning`、`info`
+- ✅ 自动关闭（默认 3 秒）+ 手动关闭
+- ✅ 优雅的进出场动画
+- ✅ 完美支持深色模式
+- ✅ 非阻塞式用户体验
+
+**使用方式**：
+```vue
+<script setup>
+import ToastContainer from '@/components/toasts/ToastContainer.vue'
+import { useToast } from '@/composables/useToast'
+
+const { success, error, warning, info } = useToast()
+
+// 显示提示
+success('操作成功')
+error('操作失败')
+warning('警告信息')
+info('提示信息')
+</script>
+
+<template>
+  <!-- 你的内容 -->
+  <ToastContainer />
+</template>
+```
+
+**已应用页面**：
+- `AccountConfig.vue` - 用户名/密码修改提示
+- `Login.vue` - 功能开发中提示
+- `Material.vue` - 素材上传提示
+
+### 🔐 登录错误处理优化（2026-05-16）
+
+**优化内容**：
+- 后端区分"邮箱未注册"（404）和"密码错误"（401）
+- 前端根据 HTTP 状态码显示精确错误信息
+- 提升用户体验和错误提示准确性
+
+**错误提示**：
+- 邮箱未注册 → "该邮箱尚未注册"
+- 密码错误 → "密码错误"
+- 网络错误 → "网络错误，请稍后重试"
+
+### 📁 素材管理页面重构（2026-05-16）
+
+**目录结构优化**：
+- 创建 `pages/creatives/` 目录
+- 移动 `Material.vue` 到新目录
+- 创建 `pages/starting/` 目录（登录/注册页面）
+- 提升代码组织和可维护性
+
+**路由配置**：
+- 路径：`/material`
+- 组件：`@/pages/creatives/Material.vue`
+- 导航菜单：创意素材
+
+### 📤 素材上传功能优化（2026-05-16）
+
+**已实现功能**：
+- ✅ 文件选择（支持多选）
+- ✅ 拖拽上传
+- ✅ 文件类型验证（JPG/PNG/GIF/MP4/MOV）
+- ✅ 文件大小限制（最大 100MB）
+- ✅ Toast 提示替代 alert
+- ✅ 上传进度显示框架
+- ✅ 自动刷新素材列表
+
+**待开发功能**：
+- ⏳ 后端 API 对接
+- ⏳ 实时上传进度显示
+- ⏳ 批量上传优化
+
+**当前状态**：
+点击"完成上传"按钮会显示友好提示："上传功能待开发完善！"
+
+---
+
+## 开发规范
+
+### 页面组织规范
+
+**模块化目录结构**：
+- `pages/settings/` - 设置相关页面
+- `pages/projects/` - 项目管理页面
+- `pages/campaigns/` - 广告系列页面
+- `pages/creatives/` - 素材管理页面
+- `pages/starting/` - 启动流程页面（登录/注册/欢迎）
+
+**组件复用原则**：
+- `components/layout/` - 布局组件
+- `components/toasts/` - Toast 提示组件
+- `components/settings/` - 设置相关组件
+- `components/projects/` - 项目相关组件
+- 遵循单一职责原则，便于测试和维护
+
+### Toast 使用规范
+
+**推荐使用场景**：
+- ✅ 操作成功/失败反馈
+- ✅ 表单验证错误提示
+- ✅ 功能开发中提示
+- ✅ 网络请求错误提示
+
+**不推荐使用场景**：
+- ❌ 需要用户确认的操作（使用 Modal）
+- ❌ 复杂的错误信息（使用专门的错误页面）
+- ❌ 长时间显示的信息（使用 Banner）
+
+---
+
+## 贡献指南
+
+欢迎提交 Issue 和 Pull Request！
+
+**提交 PR 前请确保**：
+1. 代码符合项目规范
+2. 添加必要的注释
+3. 更新相关文档
+4. 通过所有测试
