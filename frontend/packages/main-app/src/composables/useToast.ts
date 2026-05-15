@@ -1,25 +1,51 @@
 import { ref } from 'vue'
 
+export interface ToastItem {
+  id: string
+  message: string
+  type: 'success' | 'error' | 'warning' | 'info'
+  duration: number
+}
+
 export interface ToastOptions {
   message: string
   type?: 'success' | 'error' | 'warning' | 'info'
   duration?: number
 }
 
-const toastState = ref({
-  show: false,
-  message: '',
-  type: 'info' as 'success' | 'error' | 'warning' | 'info',
-  duration: 3000
-})
+const MAX_TOASTS = 3
+const toasts = ref<ToastItem[]>([])
+let toastIdCounter = 0
 
 export function useToast() {
   const showToast = (options: ToastOptions) => {
-    toastState.value = {
-      show: true,
+    const id = `toast-${Date.now()}-${toastIdCounter++}`
+    const newToast: ToastItem = {
+      id,
       message: options.message,
       type: options.type || 'info',
       duration: options.duration || 3000
+    }
+
+    // 如果已经有 3 个 toast，移除最早的一个
+    if (toasts.value.length >= MAX_TOASTS) {
+      toasts.value.shift()
+    }
+
+    toasts.value.push(newToast)
+
+    // 自动移除 toast
+    if (newToast.duration > 0) {
+      setTimeout(() => {
+        removeToast(id)
+      }, newToast.duration)
+    }
+  }
+
+  const removeToast = (id: string) => {
+    const index = toasts.value.findIndex(t => t.id === id)
+    if (index !== -1) {
+      toasts.value.splice(index, 1)
     }
   }
 
@@ -39,17 +65,18 @@ export function useToast() {
     showToast({ message, type: 'info', duration })
   }
 
-  const hideToast = () => {
-    toastState.value.show = false
+  const clearAll = () => {
+    toasts.value = []
   }
 
   return {
-    toastState,
+    toasts,
     showToast,
+    removeToast,
     success,
     error,
     warning,
     info,
-    hideToast
+    clearAll
   }
 }

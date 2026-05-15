@@ -2,9 +2,12 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import ToastContainer from '@/components/toasts/ToastContainer.vue'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { info } = useToast()
 const email = ref('admin@animagus.ai')
 const password = ref('admin123')
 const loading = ref(false)
@@ -52,14 +55,14 @@ if (!email.value && !password.value) {
 function handleGoogleLogin() {
   console.log('Google 登录')
   // TODO: 实现 Google OAuth 登录
-  alert('Google 登录功能开发中...')
+  info('Google 登录功能开发中...')
 }
 
 // Facebook 登录
 function handleFacebookLogin() {
   console.log('Facebook 登录')
   // TODO: 实现 Facebook OAuth 登录
-  alert('Facebook 登录功能开发中...')
+  info('Facebook 登录功能开发中...')
 }
 
 // Demo 模式登录
@@ -72,7 +75,7 @@ function handleDemoLogin() {
 function handleForgotPassword() {
   console.log('忘记密码')
   // TODO: 实现忘记密码功能
-  alert('忘记密码功能开发中...\n请联系管理员重置密码')
+  info('忘记密码功能开发中，请联系管理员重置密码')
 }
 
 // 注册账号
@@ -255,4 +258,7 @@ function handleRegister() {
       </div>
     </div>
   </main>
+
+  <!-- Toast 提示容器 -->
+  <ToastContainer />
 </template>

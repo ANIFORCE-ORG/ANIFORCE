@@ -5,12 +5,12 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import { navItems } from '@/config/navigation'
 import { userApi } from '@/api/user'
-import Toast from '@/components/alerts/Toast.vue'
+import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { toastState, success, error } = useToast()
+const { success, error } = useToast()
 
 const activePanel = ref('settings')
 const activeSession = ref('sess_g001')
@@ -401,12 +401,6 @@ onMounted(() => {
     </main>
   </div>
 
-  <!-- Toast 提示组件 -->
-  <Toast
-    :show="toastState.show"
-    :message="toastState.message"
-    :type="toastState.type"
-    :duration="toastState.duration"
-    @close="toastState.show = false"
-  />
+  <!-- Toast 提示容器 -->
+  <ToastContainer />
 </template>
