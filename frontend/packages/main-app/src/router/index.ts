@@ -7,7 +7,7 @@ const router = createRouter({
     {
       path: '/',
       name: 'get-start',
-      component: () => import('@/pages/GetStart.vue'),
+      component: () => import('@/pages/starting/GetStart.vue'),
     },
     {
       path: '/home',
@@ -62,7 +62,7 @@ const router = createRouter({
     {
       path: '/login',
       name: 'login',
-      component: () => import('@/pages/Login.vue'),
+      component: () => import('@/pages/starting/Login.vue'),
     },
     {
       path: '/settings',
