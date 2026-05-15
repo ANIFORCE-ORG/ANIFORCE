@@ -65,7 +65,7 @@ class SqliteUserRepository:
             "updated_at": user.updated_at.isoformat(),
         }
     
-    async def update(self, user_id: str, **kwargs) -> None:
+    async def update(self, user_id: str, **kwargs) -> dict:
         """更新用户"""
         result = await self.session.execute(
             select(User).where(User.id == user_id)
@@ -79,3 +79,12 @@ class SqliteUserRepository:
                 setattr(user, key, value)
         
         await self.session.flush()
+        
+        return {
+            "id": user.id,
+            "email": user.email,
+            "password_hash": user.password_hash,
+            "name": user.name,
+            "created_at": user.created_at.isoformat(),
+            "updated_at": user.updated_at.isoformat(),
+        }

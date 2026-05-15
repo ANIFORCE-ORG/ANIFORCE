@@ -3,7 +3,7 @@ from datetime import datetime, timedelta
 from jose import jwt
 from passlib.context import CryptContext
 from app.config.settings import get_settings
-from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse
+from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UpdateNameRequest, UpdatePasswordRequest
 from app.schemas.base import ResponseBase
 from app.repositories.factory import get_user_repo
 

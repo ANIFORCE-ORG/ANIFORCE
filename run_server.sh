@@ -19,6 +19,7 @@ MODE=local
 ONLY=all
 SKIP_INSTALL=0
 HOST=0.0.0.0
+DEMO_MODE=false
 
 FRONTEND_PORT_EXPLICIT=0
 BACKEND_PORT_EXPLICIT=0
@@ -35,12 +36,14 @@ while [[ $# -gt 0 ]]; do
     --only) ONLY="$2"; shift 2 ;;
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
     --host) HOST="$2"; shift 2 ;;
+    --demo) DEMO_MODE=true; shift 1 ;;
     -h|--help)
-      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--only all|backend|frontend] [--skip-install] [--host HOST]"
+      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--only all|backend|frontend] [--skip-install] [--host HOST] [--demo]"
       echo "  --mode           启动模式: local(默认) / cloud"
       echo "  --only           仅启动: all(默认) / backend / frontend"
       echo "  --skip-install   跳过依赖安装（云端更常用）"
       echo "  --host           监听地址（默认: 0.0.0.0）"
+      echo "  --demo           启用 Demo 模式（设置 DEMO_MODE=true，默认: false 生产模式）"
       echo "  --frontend-port  前端端口 (默认: 3010；cloud 模式若存在环境变量 PORT 且未显式指定 --frontend-port，将使用 PORT)"
       echo "  --backend-port   后端端口 (默认: 8010)"
       exit 0 ;;
@@ -63,6 +66,7 @@ if [ "$MODE" = "cloud" ] && [ -n "${PORT:-}" ]; then
 fi
 
 info "启动模式: MODE=$MODE, ONLY=$ONLY, SKIP_INSTALL=$SKIP_INSTALL, HOST=$HOST"
+info "环境配置: DEMO_MODE=$DEMO_MODE"
 info "端口配置: 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT"
 
 # ---------- 项目根目录 ----------
@@ -177,9 +181,26 @@ fi
 if [ ! -f ".env" ]; then
   warn ".env 文件不存在，从 .env.example 复制..."
   cp .env.example .env
-  ok "已创建 .env（Demo 模式）"
+  ok "已创建 .env"
+fi
+
+# 根据 --demo 参数设置 DEMO_MODE
+if [ "$DEMO_MODE" = "true" ]; then
+  info "设置 DEMO_MODE=true（Demo 模式）"
+  if grep -q "^DEMO_MODE=" .env; then
+    sed -i.bak 's/^DEMO_MODE=.*/DEMO_MODE=true/' .env && rm -f .env.bak
+  else
+    echo "DEMO_MODE=true" >> .env
+  fi
+  ok "Demo 模式已启用"
 else
-  ok ".env 已存在"
+  info "设置 DEMO_MODE=false（生产模式）"
+  if grep -q "^DEMO_MODE=" .env; then
+    sed -i.bak 's/^DEMO_MODE=.*/DEMO_MODE=false/' .env && rm -f .env.bak
+  else
+    echo "DEMO_MODE=false" >> .env
+  fi
+  ok "生产模式已启用"
 fi
 
 # ============================================================
