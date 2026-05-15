@@ -27,7 +27,7 @@ const router = createRouter({
     {
       path: '/material',
       name: 'material',
-      component: () => import('@/pages/Material.vue'),
+      component: () => import('@/pages/creatives/Material.vue'),
     },
     {
       path: '/monitor',
