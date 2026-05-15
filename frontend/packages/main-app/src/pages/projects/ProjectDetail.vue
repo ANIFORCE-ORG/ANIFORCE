@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { getProjectDetail, getProjectCampaigns, type Project } from '@/api/projects'
+import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 const route = useRoute()
@@ -44,6 +45,7 @@ const quickHints = [
   '数据报表'
 ]
 
+/*
 const navItems = [
   { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
   { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
@@ -51,6 +53,7 @@ const navItems = [
   { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
   { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
 ]
+  */
 
 onMounted(async () => {
   await loadProjectData()

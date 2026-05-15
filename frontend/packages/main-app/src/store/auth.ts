@@ -14,11 +14,18 @@ export interface LoginCredentials {
   password: string
 }
 
+export interface RegisterCredentials {
+  name: string
+  email: string
+  password: string
+}
+
 export interface LoginResponse {
   success: boolean
   data?: {
     user: User
-    token: string
+    access_token: string
+    refresh_token?: string
   }
   message?: string
 }
@@ -64,7 +71,7 @@ export const useAuthStore = defineStore('auth', () => {
       
       if (response.data.success && response.data.data) {
         user.value = response.data.data.user
-        token.value = response.data.data.token
+        token.value = response.data.data.access_token
         return response.data
       }
       
@@ -74,9 +81,55 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch (error: any) {
       console.error('登录错误:', error)
+      
+      // 根据 HTTP 状态码和错误详情返回不同的错误信息
+      const status = error.response?.status
+      const detail = error.response?.data?.detail
+      
+      let errorMessage = '网络错误，请稍后重试'
+      
+      if (status === 404) {
+        // 邮箱未注册
+        errorMessage = detail || '该邮箱尚未注册'
+      } else if (status === 401) {
+        // 密码错误
+        errorMessage = detail || '密码错误'
+      } else if (detail) {
+        // 其他错误，使用后端返回的详细信息
+        errorMessage = detail
+      } else if (error.response?.data?.message) {
+        // 使用 message 字段
+        errorMessage = error.response.data.message
+      }
+      
       return {
         success: false,
-        message: error.response?.data?.message || '网络错误,请稍后重试'
+        message: errorMessage
+      }
+    }
+  }
+
+  // 用户注册API
+  async function register(credentials: RegisterCredentials): Promise<LoginResponse> {
+    try {
+      // 调用后端注册API
+      const response = await axios.post<LoginResponse>('/api/v1/auth/register', credentials)
+      
+      if (response.data.success && response.data.data) {
+        user.value = response.data.data.user
+        token.value = response.data.data.access_token
+        return response.data
+      }
+      
+      return {
+        success: false,
+        message: response.data.message || '注册失败'
+      }
+    } catch (error: any) {
+      console.error('注册错误:', error)
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.response?.data?.message || '网络错误,请稍后重试'
       }
     }
   }
@@ -115,7 +168,8 @@ export const useAuthStore = defineStore('auth', () => {
     user, 
     token, 
     isLoggedIn, 
-    login, 
+    login,
+    register,
     fakeLogin, 
     logout,
     validateToken

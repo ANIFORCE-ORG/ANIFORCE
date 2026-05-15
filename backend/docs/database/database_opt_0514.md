@@ -8,7 +8,7 @@
 
 ## 概述
 
-本文档针对当前 ANIMAGUS 数据库设计进行全面分析，识别存在的问题并提供优化建议。当前数据库包含 5 张核心表（users、projects、campaigns、materials、metrics），采用 PostgreSQL 作为主数据库，MongoDB 存储对话历史。
+本文档针对当前 ANIMAGUS 数据库设计进行全面分析，识别存在的问题并提供优化建议。当前数据库包含 5 张核心表（users、projects、campaigns、materials、metrics），采用 Sqlite 作为主数据库，MongoDB 存储对话历史。
 
 ---
 

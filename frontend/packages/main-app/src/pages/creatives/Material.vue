@@ -3,11 +3,14 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
+import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { getMaterials, getMaterialImage, type Material } from '@/api/materials'
 import { login } from '@/api'
 import { navItems } from '@/config/navigation'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
+const { success, error: showError, info } = useToast()
 
 const activeSession = ref('sess_g001')
 const chatInput = ref('')
@@ -22,6 +25,8 @@ const materialImages = ref<Map<string, string>>(new Map())
 const showUploadModal = ref(false)
 const uploadFiles = ref<File[]>([])
 const isDragging = ref(false)
+const uploading = ref(false)
+const uploadProgress = ref<Map<string, number>>(new Map())
 
 // 历史会话
 const sessions = ref([
@@ -496,12 +501,12 @@ const addFiles = (files: File[]) => {
     const maxSize = 100 * 1024 * 1024 // 100MB
     
     if (!validTypes.includes(file.type)) {
-      alert(`文件 ${file.name} 格式不支持`)
+      showError(`文件 ${file.name} 格式不支持`)
       return false
     }
     
     if (file.size > maxSize) {
-      alert(`文件 ${file.name} 超过100MB限制`)
+      showError(`文件 ${file.name} 超过100MB限制`)
       return false
     }
     
@@ -515,16 +520,60 @@ const removeFile = (index: number) => {
   uploadFiles.value.splice(index, 1)
 }
 
+const refreshMaterials = async () => {
+  try {
+    loading.value = true
+    const data = await getMaterials()
+    materials.value = data
+    
+    // 加载新素材的图像
+    for (const material of data) {
+      if (!materialImages.value.has(material.id)) {
+        try {
+          const imageData = await getMaterialImage(material.id, true)
+          materialImages.value.set(material.id, imageData.data)
+        } catch (err) {
+          console.error('加载素材图像失败:', material.id, err)
+        }
+      }
+    }
+  } catch (err: any) {
+    console.error('刷新素材列表失败:', err)
+    showError('刷新素材列表失败')
+  } finally {
+    loading.value = false
+  }
+}
+
 const completeUpload = async () => {
   if (uploadFiles.value.length === 0) {
-    alert('请先选择要上传的文件')
+    showError('请先选择要上传的文件')
     return
   }
   
-  console.log('开始上传文件:', uploadFiles.value)
-  // TODO: 实现实际的上传逻辑
-  alert(`准备上传 ${uploadFiles.value.length} 个文件`)
-  closeUploadModal()
+  // 后端 API 未对接，显示提示信息
+  info('上传功能待开发完善！')
+  console.log('待上传文件:', uploadFiles.value)
+  
+  // TODO: 实际的后端 API 调用
+  // uploading.value = true
+  // uploadProgress.value.clear()
+  // 
+  // try {
+  //   const formData = new FormData()
+  //   uploadFiles.value.forEach(file => formData.append('files', file))
+  //   await uploadMaterials(formData)
+  //   
+  //   success(`成功上传 ${uploadFiles.value.length} 个文件`)
+  //   await refreshMaterials()
+  //   closeUploadModal()
+  // } catch (err: any) {
+  //   console.error('上传失败:', err)
+  //   showError(err.message || '上传失败，请稍后重试')
+  // } finally {
+  //   uploading.value = false
+  //   uploadProgress.value.clear()
+  // }
 }
 </script>
 
@@ -810,14 +859,18 @@ const completeUpload = async () => {
             取消
           </button>
           <button
-            class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-            :disabled="uploadFiles.length === 0"
+            class="px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+            :disabled="uploadFiles.length === 0 || uploading"
             @click="completeUpload"
           >
-            完成上传 ({{ uploadFiles.length }})
+            <span v-if="uploading" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+            <span>{{ uploading ? '上传中...' : `完成上传 (${uploadFiles.length})` }}</span>
           </button>
         </div>
       </div>
     </div>
   </div>
+
+  <!-- Toast 提示容器 -->
+  <ToastContainer />
 </template>
