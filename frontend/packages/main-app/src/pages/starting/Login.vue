@@ -12,8 +12,18 @@ const error = ref('')
 const showEmailLogin = ref(false)
 
 async function handleLogin() {
-  if (!email.value || !password.value) {
-    error.value = '请输入邮箱和密码'
+if (!email.value && !password.value) {
+  error.value = '请输入邮箱和密码'
+  return
+}
+
+  if (!email.value) {
+    error.value = '请输入正确邮箱地址'
+    return
+  }
+
+  if (!password.value) {
+    error.value = '请输入密码'
     return
   }
 
@@ -67,9 +77,7 @@ function handleForgotPassword() {
 
 // 注册账号
 function handleRegister() {
-  console.log('注册账号')
-  // TODO: 跳转到注册页面
-  alert('注册功能开发中...\n请使用 Demo 模式体验')
+  router.push('/register')
 }
 </script>
 

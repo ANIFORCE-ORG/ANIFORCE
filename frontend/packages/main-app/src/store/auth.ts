@@ -14,11 +14,18 @@ export interface LoginCredentials {
   password: string
 }
 
+export interface RegisterCredentials {
+  name: string
+  email: string
+  password: string
+}
+
 export interface LoginResponse {
   success: boolean
   data?: {
     user: User
-    token: string
+    access_token: string
+    refresh_token?: string
   }
   message?: string
 }
@@ -64,7 +71,7 @@ export const useAuthStore = defineStore('auth', () => {
       
       if (response.data.success && response.data.data) {
         user.value = response.data.data.user
-        token.value = response.data.data.token
+        token.value = response.data.data.access_token
         return response.data
       }
       
@@ -77,6 +84,31 @@ export const useAuthStore = defineStore('auth', () => {
       return {
         success: false,
         message: error.response?.data?.message || '网络错误,请稍后重试'
+      }
+    }
+  }
+
+  // 用户注册API
+  async function register(credentials: RegisterCredentials): Promise<LoginResponse> {
+    try {
+      // 调用后端注册API
+      const response = await axios.post<LoginResponse>('/api/v1/auth/register', credentials)
+      
+      if (response.data.success && response.data.data) {
+        user.value = response.data.data.user
+        token.value = response.data.data.access_token
+        return response.data
+      }
+      
+      return {
+        success: false,
+        message: response.data.message || '注册失败'
+      }
+    } catch (error: any) {
+      console.error('注册错误:', error)
+      return {
+        success: false,
+        message: error.response?.data?.detail || error.response?.data?.message || '网络错误,请稍后重试'
       }
     }
   }
@@ -115,7 +147,8 @@ export const useAuthStore = defineStore('auth', () => {
     user, 
     token, 
     isLoggedIn, 
-    login, 
+    login,
+    register,
     fakeLogin, 
     logout,
     validateToken

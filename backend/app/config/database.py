@@ -55,7 +55,12 @@ async def get_db() -> AsyncSession:
     """FastAPI 依赖注入：获取数据库会话"""
     async_session = get_session_maker()
     async with async_session() as session:
-        yield session
+        try:
+            yield session
+            await session.commit()  # 自动提交事务
+        except Exception:
+            await session.rollback()  # 发生错误时回滚
+            raise
 
 
 # MongoDB 客户端

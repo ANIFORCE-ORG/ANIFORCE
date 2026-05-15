@@ -7,7 +7,8 @@ from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserR
 from app.schemas.base import ResponseBase
 from app.repositories.factory import get_user_repo
 
-pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+# 使用 argon2 替代 bcrypt，更现代且更安全
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -54,9 +55,20 @@ async def login(
 
 
 @router.post("/register", response_model=ResponseBase[TokenResponse], status_code=201)
-async def register(request: RegisterRequest):
+async def register(
+    request: RegisterRequest,
+    user_repo = Depends(get_user_repo)
+):
     """用户注册"""
+    print(f"[DEBUG] 接收到注册请求")
+    print(f"[DEBUG] request 对象: {request}")
+    print(f"[DEBUG] request.password type: {type(request.password)}")
+    print(f"[DEBUG] request.password repr: {repr(request.password)}")
+    print(f"[DEBUG] request.password len: {len(request.password)}")
+    
     settings = get_settings()
+    
+    # Demo 模式
     if settings.DEMO_MODE:
         user = UserResponse(id="demo-user-001", email=request.email, name=request.name)
         access_token, refresh_token = _create_token(user.id, user.email, user.name)
@@ -67,4 +79,43 @@ async def register(request: RegisterRequest):
                 refresh_token=refresh_token,
             )
         )
-    raise NotImplementedError("生产模式注册尚未实现")
+    
+    # 生产模式：真实注册
+    # 1. 检查邮箱是否已存在
+    existing_user = await user_repo.get_by_email(request.email)
+    if existing_user:
+        raise HTTPException(status_code=400, detail="该邮箱已被注册")
+    
+    # 2. 验证密码长度（bcrypt 限制为 72 字节）
+    password_bytes = request.password.encode('utf-8')
+    print(f"[DEBUG] 密码长度: {len(request.password)}, 字节长度: {len(password_bytes)}")
+    print(f"[DEBUG] 密码内容: {repr(request.password)}")
+    
+    if len(password_bytes) > 72:
+        raise HTTPException(status_code=400, detail="密码过长，请使用不超过 72 个字符的密码")
+    
+    # 3. 加密密码
+    try:
+        password_hash = pwd_context.hash(request.password)
+        print(f"[DEBUG] 密码加密成功")
+    except Exception as e:
+        print(f"[DEBUG] 密码加密失败: {type(e).__name__}: {e}")
+        raise HTTPException(status_code=500, detail=f"密码加密失败: {str(e)}")
+    
+    # 3. 创建用户
+    user = await user_repo.create(
+        email=request.email,
+        password_hash=password_hash,
+        name=request.name
+    )
+    
+    # 4. 生成 token
+    access_token, refresh_token = _create_token(user["id"], user["email"], user["name"])
+    
+    return ResponseBase(
+        data=TokenResponse(
+            user=UserResponse(id=user["id"], email=user["email"], name=user["name"]),
+            access_token=access_token,
+            refresh_token=refresh_token,
+        )
+    )
