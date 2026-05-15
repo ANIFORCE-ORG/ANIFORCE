@@ -36,11 +36,11 @@ async def login(
     # 查询用户
     user = await user_repo.get_by_email(req.email)
     if not user:
-        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+        raise HTTPException(status_code=404, detail="该邮箱尚未注册")
     
     # 验证密码
     if not pwd_context.verify(req.password, user["password_hash"]):
-        raise HTTPException(status_code=401, detail="邮箱或密码错误")
+        raise HTTPException(status_code=401, detail="密码错误")
     
     # 生成 token
     access_token, refresh_token = _create_token(user["id"], user["email"], user["name"])

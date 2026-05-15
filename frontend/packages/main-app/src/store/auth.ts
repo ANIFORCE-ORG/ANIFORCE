@@ -81,9 +81,30 @@ export const useAuthStore = defineStore('auth', () => {
       }
     } catch (error: any) {
       console.error('登录错误:', error)
+      
+      // 根据 HTTP 状态码和错误详情返回不同的错误信息
+      const status = error.response?.status
+      const detail = error.response?.data?.detail
+      
+      let errorMessage = '网络错误，请稍后重试'
+      
+      if (status === 404) {
+        // 邮箱未注册
+        errorMessage = detail || '该邮箱尚未注册'
+      } else if (status === 401) {
+        // 密码错误
+        errorMessage = detail || '密码错误'
+      } else if (detail) {
+        // 其他错误，使用后端返回的详细信息
+        errorMessage = detail
+      } else if (error.response?.data?.message) {
+        // 使用 message 字段
+        errorMessage = error.response.data.message
+      }
+      
       return {
         success: false,
-        message: error.response?.data?.message || '网络错误,请稍后重试'
+        message: errorMessage
       }
     }
   }

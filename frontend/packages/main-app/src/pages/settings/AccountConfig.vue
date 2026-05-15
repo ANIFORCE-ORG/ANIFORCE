@@ -5,9 +5,12 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import { navItems } from '@/config/navigation'
 import { userApi } from '@/api/user'
+import Toast from '@/components/alerts/Toast.vue'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { toastState, success, error } = useToast()
 
 const activePanel = ref('settings')
 const activeSession = ref('sess_g001')
@@ -68,7 +71,7 @@ const handleEditName = () => {
 
 const handleSaveName = async () => {
   if (!newName.value.trim()) {
-    alert('用户名不能为空')
+    error('用户名不能为空')
     return
   }
   
@@ -77,10 +80,10 @@ const handleSaveName = async () => {
     userName.value = updatedUser.name
     auth.user = updatedUser
     isEditingName.value = false
-    alert('用户名更新成功')
-  } catch (error: any) {
-    console.error('更新用户名失败:', error)
-    alert(error.response?.data?.detail || '更新用户名失败，请稍后重试')
+    success('用户名更新成功')
+  } catch (err: any) {
+    console.error('更新用户名失败:', err)
+    error(err.response?.data?.detail || '更新用户名失败，请稍后重试')
   }
 }
 
@@ -129,10 +132,10 @@ const handleSavePassword = async () => {
       newPassword: '',
       confirmPassword: ''
     }
-    alert('密码修改成功')
-  } catch (error: any) {
-    console.error('更新密码失败:', error)
-    passwordError.value = error.response?.data?.detail || '密码修改失败，请检查当前密码是否正确'
+    success('密码修改成功')
+  } catch (err: any) {
+    console.error('更新密码失败:', err)
+    passwordError.value = err.response?.data?.detail || '密码修改失败，请检查当前密码是否正确'
   }
 }
 
@@ -397,4 +400,13 @@ onMounted(() => {
       </div>
     </main>
   </div>
+
+  <!-- Toast 提示组件 -->
+  <Toast
+    :show="toastState.show"
+    :message="toastState.message"
+    :type="toastState.type"
+    :duration="toastState.duration"
+    @close="toastState.show = false"
+  />
 </template>

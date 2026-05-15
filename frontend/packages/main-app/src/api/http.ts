@@ -22,7 +22,7 @@ class HttpClient {
   }
 
   private getAuthToken(): string | null {
-    return localStorage.getItem('access_token')
+    return localStorage.getItem('animagus_token')
   }
 
   private async request<T>(endpoint: string, options: RequestOptions = {}): Promise<T> {
