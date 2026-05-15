@@ -50,8 +50,10 @@
 ```
 ANIMAGUS/
 ├── README.md
-├── doc/                              # 项目文档
-│   └── 06-技术框架规划文档-详细版.md
+├── docs/                             # 项目文档
+│   ├── database/                     # 数据库设计文档
+│   ├── materials/                    # 素材相关文档
+│   └── pages/                        # 页面原型文档
 ├── html/                             # HTML 原型稿
 │
 ├── frontend/                         # 前端 monorepo
@@ -63,61 +65,114 @@ ANIMAGUS/
 │       │   ├── vite.config.ts
 │       │   ├── tailwind.config.js
 │       │   ├── tsconfig.json
-│       │   ├── .env.development      # VITE_DEMO_MODE=true
+│       │   ├── .env.development      # 开发环境配置
+│       │   ├── .env.example          # 环境变量模板
 │       │   └── src/
-│       │       ├── main.ts           # 应用入口 + DAL 初始化
-│       │       ├── App.vue           # 根组件（Header + RouterView + Footer）
+│       │       ├── main.ts           # 应用入口
+│       │       ├── App.vue           # 根组件
 │       │       ├── router/index.ts   # 路由配置
-│       │       ├── styles/global.css # TailwindCSS 全局样式
-│       │       ├── pages/
-│       │       │   ├── Home.vue      # 首页（AI 分析交互）
+│       │       ├── store/            # Pinia 状态管理
+│       │       │   └── auth.ts       # 认证状态
+│       │       ├── config/           # 配置文件
+│       │       │   ├── agent.ts      # AD Agent API 配置
+│       │       │   └── navigation.ts # 导航配置
+│       │       ├── api/              # API 客户端
+│       │       │   └── http.ts       # HTTP 客户端封装
+│       │       ├── services/         # 业务服务层
+│       │       │   └── agentService.ts  # AD Agent 服务
+│       │       ├── styles/           # 样式文件
+│       │       │   └── global.css    # TailwindCSS 全局样式
+│       │       ├── pages/            # 页面组件（模块化组织）
+│       │       │   ├── settings/     # 设置相关页面
+│       │       │   │   ├── Settings.vue          # 设置主页（卡片入口）
+│       │       │   │   ├── AccountConfig.vue     # 账号配置
+│       │       │   │   ├── AIUsageConfig.vue     # AI 使用量
+│       │       │   │   └── PlatformConnections.vue  # 平台连接
+│       │       │   ├── projects/     # 项目相关页面
+│       │       │   │   ├── Projects.vue          # 项目列表
+│       │       │   │   └── ProjectDetail.vue     # 项目详情
+│       │       │   ├── campaigns/    # 广告系列相关页面
+│       │       │   │   ├── Campaign.vue          # 广告系列列表
+│       │       │   │   ├── CampaignDetail.vue    # 广告系列详情
+│       │       │   │   └── CreateCampaign.vue    # 创建广告系列
+│       │       │   ├── Home.vue      # 首页（AI 对话交互）
+│       │       │   ├── Material.vue  # 素材管理
+│       │       │   ├── Monitor.vue   # 实时监控
+│       │       │   ├── Dashboard.vue # 数据看板
+│       │       │   ├── MarketAnalysis.vue  # 市场分析
+│       │       │   ├── GetStart.vue  # 欢迎页
 │       │       │   └── Login.vue     # 登录页
-│       │       └── components/
-│       │           └── layout/
-│       │               ├── AppHeader.vue
-│       │               └── AppFooter.vue
+│       │       └── components/       # 可复用组件
+│       │           ├── layout/       # 布局组件
+│       │           │   ├── SidebarNav.vue    # 侧边栏导航
+│       │           │   ├── AppHeader.vue     # 顶部导航
+│       │           │   └── AppFooter.vue     # 页脚
+│       │           ├── settings/     # 设置相关组件
+│       │           │   └── MetaConfigDialog.vue  # Meta 配置弹窗
+│       │           ├── projects/     # 项目相关组件
+│       │           │   └── CreateProjectModal.vue
+│       │           └── chat/         # 对话相关组件
+│       │               ├── ChatPanel.vue
+│       │               └── MessageBubble.vue
 │       └── shared/                   # 跨应用共享包
 │           ├── index.ts              # 统一导出
 │           ├── types/index.ts        # 类型定义
-│           ├── utils/constants.ts    # 常量
-│           └── dal/                  # 数据访问层（三层解耦核心）
-│               ├── interfaces.ts     # 接口定义（IChatClient 等）
-│               ├── mock-client.ts    # Demo 模式 Mock 实现
-│               ├── http-client.ts    # 生产模式 HTTP 实现
-│               └── factory.ts        # 工厂（根据环境变量切换）
+│           └── utils/constants.ts    # 常量
 │
 └── backend/                          # 后端 FastAPI 服务
+    ├── alembic/                      # 数据库迁移
+    │   └── versions/                 # 迁移脚本
     ├── requirements.txt              # Python 依赖
-    ├── .env                          # 环境变量（DEMO_MODE=true）
+    ├── .env.example                  # 环境变量模板
     └── app/
         ├── __init__.py
         ├── main.py                   # FastAPI 入口 + CORS + 异常处理
         ├── config/
         │   └── settings.py           # Pydantic Settings 配置
+        ├── database/                 # 数据库配置
+        │   ├── postgres.py           # PostgreSQL 连接
+        │   └── mongodb.py            # MongoDB 连接
+        ├── models/                   # SQLAlchemy 模型
+        │   ├── user.py               # 用户模型
+        │   ├── project.py            # 项目模型
+        │   └── campaign.py           # 广告系列模型
         ├── schemas/                  # Pydantic 请求/响应模型
         │   ├── base.py               # ResponseBase / ErrorResponse
         │   ├── auth.py               # 认证相关 Schema
         │   └── chat.py               # 对话相关 Schema
-        ├── api/
+        ├── api/                      # API 路由
         │   ├── deps.py               # 公共依赖（认证中间件）
         │   └── v1/
         │       ├── router.py         # 路由聚合
-        │       ├── auth.py           # POST /auth/login, /auth/register
-        │       └── chat.py           # POST /chat/analyze, /{id}/message
-        ├── services/                 # 纯业务逻辑（零 if/else）
-        │   ├── chat_service.py
-        │   ├── material_service.py
-        │   ├── campaign_service.py
-        │   └── monitor_service.py
-        └── repositories/             # 数据访问层
-            ├── protocols.py          # Protocol 抽象接口
-            ├── factory.py            # 工厂（DEMO_MODE 切换）
-            └── mock/                 # Mock 实现（内存数据）
-                ├── mock_chat_repo.py
-                ├── mock_material_repo.py
-                ├── mock_campaign_repo.py
-                └── mock_metric_repo.py
+        │       ├── auth.py           # 认证接口
+        │       ├── users.py          # 用户管理
+        │       ├── projects.py       # 项目管理
+        │       └── campaigns.py      # 广告系列管理
+        └── services/                 # 纯业务逻辑
+            ├── auth_service.py
+            ├── user_service.py
+            ├── project_service.py
+            └── campaign_service.py
 ```
+
+### 目录组织原则
+
+**前端页面模块化**：
+- `pages/settings/` - 设置相关页面集中管理
+- `pages/projects/` - 项目相关页面集中管理
+- `pages/campaigns/` - 广告系列相关页面集中管理
+- 提高代码可维护性和可扩展性
+
+**组件复用**：
+- `components/settings/` - 设置相关可复用组件
+- `components/projects/` - 项目相关可复用组件
+- `components/layout/` - 布局组件
+- 遵循单一职责原则，便于测试和维护
+
+**配置集中管理**：
+- `config/agent.ts` - AD Agent API 配置（环境变量驱动）
+- `config/navigation.ts` - 导航配置
+- 统一管理，易于修改和部署
 
 ---
 
