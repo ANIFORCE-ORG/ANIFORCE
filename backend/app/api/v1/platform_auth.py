@@ -3,14 +3,15 @@
 处理 OAuth 认证和账号管理
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
-from typing import List, Optional
-from datetime import datetime
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
-import secrets
+from typing import List, Optional
+from datetime import datetime, timedelta
 import logging
+import httpx
 
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
@@ -480,6 +481,7 @@ async def delete_connection(
     try:
         user_id = current_user["id"]
         
+        # 查询连接
         stmt = select(PlatformConnection).where(
             PlatformConnection.id == connection_id,
             PlatformConnection.user_id == user_id
@@ -490,10 +492,11 @@ async def delete_connection(
         if not connection:
             raise HTTPException(status_code=404, detail="连接不存在")
         
+        # 删除连接
         await db.delete(connection)
         await db.commit()
+        logger.info(f"Deleted connection: {connection_id} for user: {user_id}")
         
-        logger.info(f"Deleted connection: {connection_id}")
         return {"message": "连接已删除"}
         
     except HTTPException:
@@ -501,4 +504,138 @@ async def delete_connection(
     except Exception as e:
         await db.rollback()
         logger.error(f"Failed to delete connection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/meta/auth_callback")
+async def meta_auth_callback(
+    code: str = Query(..., description="OAuth 授权码"),
+    state: str = Query(default="0", description="状态参数"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Meta OAuth 授权回调接口
+    
+    Args:
+        code: OAuth 授权码
+        state: 状态参数（包含 connection_id）
+        db: 数据库会话
+    
+    Returns:
+        重定向到前端页面
+    """
+    try:
+        connection_id = state
+        logger.info(f"Received OAuth callback for connection: {connection_id}, code: {code[:10]}...")
+        
+        # 查询连接信息
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            logger.error(f"Connection not found: {connection_id}")
+            return RedirectResponse(
+                url=f"http://localhost:3010/settings/platform-connections?error=connection_not_found"
+            )
+        
+        # 使用 code 换取 access_token
+        async with httpx.AsyncClient() as client:
+            token_response = await client.get(
+                "https://graph.facebook.com/v24.0/oauth/access_token",
+                params={
+                    "client_id": connection.account_id,
+                    "client_secret": connection.account_secret,
+                    "redirect_uri": "https://8.148.151.36:8010/meta/auth_callback",
+                    "code": code
+                }
+            )
+            
+            if token_response.status_code != 200:
+                logger.error(f"Failed to get access token: {token_response.text}")
+                return RedirectResponse(
+                    url=f"http://localhost:3010/settings/platform-connections?error=token_exchange_failed"
+                )
+            
+            token_data = token_response.json()
+            logger.info(f"Got access token for connection: {connection_id}")
+        
+        # 更新连接信息
+        connection.access_token = token_data.get("access_token")
+        connection.token_type = token_data.get("token_type", "bearer")
+        
+        # 计算过期时间
+        expires_in = token_data.get("expires_in")
+        if expires_in:
+            connection.token_expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in))
+        
+        connection.status = "active"
+        connection.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        logger.info(f"Updated connection with access token: {connection_id}")
+        
+        # 重定向到前端页面
+        return RedirectResponse(
+            url="http://localhost:3010/settings/platform-connections?success=authorized"
+        )
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"OAuth callback failed: {e}")
+        return RedirectResponse(
+            url=f"http://localhost:3010/settings/platform-connections?error=callback_failed"
+        )
+
+
+@router.get("/meta/authorize_url/{connection_id}")
+async def get_meta_authorize_url(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Meta OAuth 授权 URL（供前端使用）
+    
+    Args:
+        connection_id: 连接 ID
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        授权 URL
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 查询连接
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 构建 OAuth 授权 URL
+        scopes = ",".join(connection.scopes or [])
+        auth_url = (
+            f"https://www.facebook.com/v25.0/dialog/oauth?"
+            f"client_id={connection.account_id}&"
+            f"redirect_uri=https://8.148.151.36:8010/meta/auth_callback&"
+            f"scope={scopes}&"
+            f"response_type=code&"
+            f"state={connection_id}"
+        )
+        
+        return {"authorize_url": auth_url}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get authorize URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))

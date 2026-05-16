@@ -91,10 +91,16 @@ const handleEdit = (connection: PlatformConnectionResponse) => {
   showConfigDialog.value = true
 }
 
-const handleAuthorize = (connection: PlatformConnectionResponse) => {
+const handleAuthorize = async (connection: PlatformConnectionResponse) => {
   console.log('授权连接:', connection)
-  // TODO: 发起 OAuth 授权流程
-  showError('OAuth 授权功能开发中')
+  try {
+    const response = await platformApi.getMetaAuthorizeUrl(connection.id)
+    // 在新窗口中打开授权页面
+    window.open(response.authorize_url, '_blank', 'width=600,height=700')
+  } catch (err: any) {
+    console.error('获取授权 URL 失败:', err)
+    showError('获取授权 URL 失败，请重试')
+  }
 }
 
 const handleDelete = (connection: PlatformConnectionResponse) => {
@@ -155,6 +161,26 @@ const getStatusClass = (status: string) => {
 
 onMounted(() => {
   loadConnections()
+  
+  // 检查 URL 参数，显示授权结果
+  const urlParams = new URLSearchParams(window.location.search)
+  const successParam = urlParams.get('success')
+  const errorParam = urlParams.get('error')
+  
+  if (successParam === 'authorized') {
+    success('授权成功！')
+    // 清除 URL 参数
+    window.history.replaceState({}, '', window.location.pathname)
+  } else if (errorParam) {
+    const errorMessages: Record<string, string> = {
+      'connection_not_found': '连接不存在',
+      'token_exchange_failed': '获取访问令牌失败',
+      'callback_failed': '授权回调失败'
+    }
+    showError(errorMessages[errorParam] || '授权失败')
+    // 清除 URL 参数
+    window.history.replaceState({}, '', window.location.pathname)
+  }
 })
 </script>
 

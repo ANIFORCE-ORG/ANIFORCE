@@ -31,4 +31,7 @@ export const platformApi = {
 
   deleteConnection: (connectionId: string) =>
     http.delete(`/platform-auth/connections/${connectionId}`),
+
+  getMetaAuthorizeUrl: (connectionId: string) =>
+    http.get<{ authorize_url: string }>(`/platform-auth/meta/authorize_url/${connectionId}`),
 }
