@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MetaConfigDialog from '@/components/settings/MetaConfigDialog.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
+import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { navItems } from '@/config/navigation'
 import { platformApi, type PlatformConnectionResponse } from '@/api/platform'
 import { useToast } from '@/composables/useToast'
@@ -15,6 +16,8 @@ const showConfigDialog = ref(false)
 const connections = ref<PlatformConnectionResponse[]>([])
 const loading = ref(false)
 const editingConnection = ref<PlatformConnectionResponse | null>(null)
+const showDeleteConfirm = ref(false)
+const deletingConnection = ref<PlatformConnectionResponse | null>(null)
 
 const platforms = [
   {
@@ -94,19 +97,29 @@ const handleAuthorize = (connection: PlatformConnectionResponse) => {
   showError('OAuth 授权功能开发中')
 }
 
-const handleDelete = async (connection: PlatformConnectionResponse) => {
-  if (!confirm(`确定要删除「${connection.account_name || connection.account_id}」吗？`)) {
-    return
-  }
+const handleDelete = (connection: PlatformConnectionResponse) => {
+  deletingConnection.value = connection
+  showDeleteConfirm.value = true
+}
+
+const confirmDelete = async () => {
+  if (!deletingConnection.value) return
   
+  const connection = deletingConnection.value
   try {
     await platformApi.deleteConnection(connection.id)
     success('连接已删除')
     await loadConnections()
   } catch (err: any) {
-    console.error('删除失败:', err)
-    showError('删除连接失败')
+    console.error('删除连接失败:', err)
+    showError('删除连接失败，请重试')
+  } finally {
+    deletingConnection.value = null
   }
+}
+
+const cancelDelete = () => {
+  deletingConnection.value = null
 }
 
 const formatDate = (dateStr: string) => {
@@ -352,6 +365,19 @@ onMounted(() => {
       @close="closeConfigDialog"
       @save="handleSaveConfig"
       @import="handleImportToken"
+    />
+    
+    <!-- 删除确认弹窗 -->
+    <ConfirmDialog
+      :show="showDeleteConfirm"
+      title="确认删除"
+      :message="`确定要删除「${deletingConnection?.account_name || deletingConnection?.account_id}」吗？`"
+      confirm-text="确定"
+      cancel-text="取消"
+      confirm-button-class="bg-blue-500 hover:bg-blue-600"
+      @confirm="confirmDelete"
+      @cancel="cancelDelete"
+      @close="showDeleteConfirm = false"
     />
     
     <!-- Toast 提示容器 -->
