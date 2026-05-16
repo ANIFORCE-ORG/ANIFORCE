@@ -4,6 +4,7 @@ from app.models.project import Project, ProjectStatus
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.material import Material, MaterialType
 from app.models.metric import Metric
+from app.models.platform_connection import PlatformConnection
 
 __all__ = [
     "User",
@@ -14,4 +15,5 @@ __all__ = [
     "Material",
     "MaterialType",
     "Metric",
+    "PlatformConnection",
 ]

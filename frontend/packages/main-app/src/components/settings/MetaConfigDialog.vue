@@ -1,10 +1,17 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { useToast } from '@/composables/useToast'
+import { platformApi } from '@/api/platform'
 
 interface Props {
   show: boolean
+  connectionId?: string | null
+  initialData?: {
+    account_name: string
+    app_id: string
+    scopes: string[]
+  } | null
 }
 
 interface Emits {
@@ -16,9 +23,12 @@ interface Emits {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const { success } = useToast()
+const { success, error: showError } = useToast()
 const saving = ref(false)
 const copied = ref(false)
+const showSecret = ref(false)
+const isEditingSecret = ref(false)
+const isEditMode = ref(false)
 
 const REDIRECT_URI = 'https://8.148.151.36:8010/meta/callback'
 
@@ -29,6 +39,34 @@ const form = ref({
   redirect_uri: REDIRECT_URI,
   scopes: ['ads_management', 'ads_read', 'business_management'] as string[],
 })
+
+// 监听 initialData 变化，填充表单数据
+watch(() => props.initialData, (data) => {
+  if (data) {
+    isEditMode.value = true
+    form.value.account_name = data.account_name || ''
+    form.value.app_id = data.app_id || ''
+    form.value.scopes = data.scopes || ['ads_management', 'ads_read', 'business_management']
+    // 编辑模式：显示32个加密字符，实际值为空
+    form.value.app_secret = '********************************'
+    isEditingSecret.value = false
+  } else {
+    // 重置表单（新建模式）
+    isEditMode.value = false
+    form.value.account_name = ''
+    form.value.app_id = ''
+    form.value.app_secret = ''
+    form.value.scopes = ['ads_management', 'ads_read', 'business_management']
+    isEditingSecret.value = false
+  }
+}, { immediate: true })
+
+// 点击笔图标，允许编辑 App Secret
+const startEditingSecret = () => {
+  isEditingSecret.value = true
+  form.value.app_secret = ''
+  showSecret.value = false
+}
 
 // 复制 Redirect URI 到剪贴板
 const copyRedirectUri = async () => {
@@ -79,8 +117,11 @@ const validateForm = () => {
   if (!form.value.app_id.trim()) {
     return 'App ID 不能为空'
   }
-  if (!form.value.app_secret.trim()) {
-    return 'App Secret 不能为空'
+  // 仅在新建模式或编辑模式下选择修改 App Secret 时校验
+  if (!isEditMode.value || isEditingSecret.value) {
+    if (!form.value.app_secret.trim() || form.value.app_secret === '********************************') {
+      return 'App Secret 不能为空'
+    }
   }
   if (form.value.scopes.length === 0) {
     return '请至少选择一个授权权限'
@@ -90,25 +131,61 @@ const validateForm = () => {
 
 // 计算表单是否有效
 const isFormValid = computed(() => {
-  return form.value.account_name.trim() !== '' &&
-         form.value.app_id.trim() !== '' &&
-         form.value.app_secret.trim() !== '' &&
-         form.value.scopes.length > 0
+  const baseValid = form.value.account_name.trim() !== '' &&
+                    form.value.app_id.trim() !== '' &&
+                    form.value.scopes.length > 0
+  
+  // 新建模式：必须填写 App Secret
+  if (!isEditMode.value) {
+    return baseValid && form.value.app_secret.trim() !== ''
+  }
+  
+  // 编辑模式：如果选择修改 App Secret，则必须填写
+  if (isEditingSecret.value) {
+    return baseValid && form.value.app_secret.trim() !== '' && form.value.app_secret !== '********************************'
+  }
+  
+  // 编辑模式且不修改 App Secret：只需基础字段有效
+  return baseValid
 })
 
-const handleSaveConfig = () => {
-  const error = validateForm()
-  if (error) {
-    alert(error)
+const handleSaveConfig = async () => {
+  const validationError = validateForm()
+  if (validationError) {
+    showError(validationError)
     return
   }
   
   saving.value = true
-  setTimeout(() => {
-    emit('save', form.value)
+  try {
+    const payload: any = {
+      account_name: form.value.account_name,
+      app_id: form.value.app_id,
+      scopes: form.value.scopes
+    }
+    
+    // 仅在新建模式或编辑模式下选择修改 App Secret 时发送
+    if (!isEditMode.value || isEditingSecret.value) {
+      payload.app_secret = form.value.app_secret
+    }
+    
+    // 编辑模式：传递 connection_id 用于更新
+    if (props.connectionId) {
+      payload.connection_id = props.connectionId
+    }
+    
+    const response = await platformApi.saveMetaConfig(payload)
+    
+    emit('save', response)
+    success('Meta App 配置已保存')
+  } catch (err: any) {
+    console.error('保存配置失败:', err)
+    // 提取后端返回的详细错误信息
+    const errorDetail = err.response?.data?.detail || '保存配置失败，请重试'
+    showError(errorDetail)
+  } finally {
     saving.value = false
-    alert('Meta App 配置已保存（模拟）')
-  }, 1000)
+  }
 }
 
 const handleImportToken = () => {
@@ -163,12 +240,47 @@ const handleImportToken = () => {
             </label>
             <label class="block">
               <span class="text-xs font-medium text-slate-600 dark:text-slate-400">App Secret</span>
-              <input
-                v-model="form.app_secret"
-                type="password"
-                class="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="保存后不会在前端回显"
-              />
+              <div class="relative mt-1">
+                <input
+                  v-model="form.app_secret"
+                  :type="showSecret ? 'text' : 'password'"
+                  :readonly="isEditMode && !isEditingSecret"
+                  :class="[
+                    'w-full px-3 py-2 pr-10 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-primary',
+                    isEditMode && !isEditingSecret
+                      ? 'border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 cursor-default'
+                      : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white'
+                  ]"
+                  :placeholder="isEditMode && !isEditingSecret ? '' : '保存后不会在前端回显'"
+                />
+                <!-- 编辑模式且未开始修改：显示笔图标 -->
+                <button
+                  v-if="isEditMode && !isEditingSecret"
+                  type="button"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  @click="startEditingSecret"
+                  title="点击修改 App Secret"
+                >
+                  <span class="material-symbols-outlined text-lg text-slate-600 dark:text-slate-400">
+                    edit
+                  </span>
+                </button>
+                <!-- 新建模式或正在编辑：显示眼睛图标 -->
+                <button
+                  v-else
+                  type="button"
+                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  @click="showSecret = !showSecret"
+                  :title="showSecret ? '隐藏密码' : '显示密码'"
+                >
+                  <span class="material-symbols-outlined text-lg text-slate-600 dark:text-slate-400">
+                    {{ showSecret ? 'visibility_off' : 'visibility' }}
+                  </span>
+                </button>
+              </div>
+              <span v-if="isEditMode && !isEditingSecret" class="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+                已加密保存，点击笔图标可修改
+              </span>
             </label>
             <label class="block">
               <span class="text-xs font-medium text-slate-600 dark:text-slate-400">OAuth Redirect URI</span>
@@ -241,7 +353,7 @@ const handleImportToken = () => {
               class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm opacity-50 cursor-not-allowed"
               disabled
             >
-              Facebook SDK 授权
+              Facebook授权
             </button>
           </div>
         </section>

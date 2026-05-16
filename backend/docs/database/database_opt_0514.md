@@ -320,7 +320,7 @@ CREATE TABLE platform_connections (
     last_sync_at TIMESTAMP,
     
     -- 元数据
-    metadata JSON,  -- 存储平台特定的额外信息
+    extra_data JSON,  -- 存储平台特定的额外信息
     
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,

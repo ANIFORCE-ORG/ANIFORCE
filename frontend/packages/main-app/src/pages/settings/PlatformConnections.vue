@@ -3,11 +3,18 @@ import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MetaConfigDialog from '@/components/settings/MetaConfigDialog.vue'
+import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { navItems } from '@/config/navigation'
+import { platformApi, type PlatformConnectionResponse } from '@/api/platform'
+import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
+const { success, error: showError } = useToast()
 const activePlatform = ref<'meta' | 'google' | 'tiktok'>('meta')
 const showConfigDialog = ref(false)
+const connections = ref<PlatformConnectionResponse[]>([])
+const loading = ref(false)
+const editingConnection = ref<PlatformConnectionResponse | null>(null)
 
 const platforms = [
   {
@@ -43,23 +50,98 @@ const switchPanel = (item: any) => {
 }
 
 const openConfigDialog = () => {
+  editingConnection.value = null
   showConfigDialog.value = true
 }
 
 const closeConfigDialog = () => {
   showConfigDialog.value = false
+  editingConnection.value = null
 }
 
-const handleSaveConfig = (data: any) => {
+const loadConnections = async () => {
+  loading.value = true
+  try {
+    connections.value = await platformApi.getAllConnections()
+  } catch (err: any) {
+    console.error('加载连接失败:', err)
+    showError('加载平台连接失败')
+  } finally {
+    loading.value = false
+  }
+}
+
+const handleSaveConfig = async (data: any) => {
   console.log('保存配置:', data)
+  closeConfigDialog()
+  await loadConnections()
+  success('配置已保存')
 }
 
 const handleImportToken = (data: any) => {
   console.log('导入沙盒账户:', data)
 }
 
+const handleEdit = (connection: PlatformConnectionResponse) => {
+  console.log('编辑连接:', connection)
+  editingConnection.value = connection
+  showConfigDialog.value = true
+}
+
+const handleAuthorize = (connection: PlatformConnectionResponse) => {
+  console.log('授权连接:', connection)
+  // TODO: 发起 OAuth 授权流程
+  showError('OAuth 授权功能开发中')
+}
+
+const handleDelete = async (connection: PlatformConnectionResponse) => {
+  if (!confirm(`确定要删除「${connection.account_name || connection.account_id}」吗？`)) {
+    return
+  }
+  
+  try {
+    await platformApi.deleteConnection(connection.id)
+    success('连接已删除')
+    await loadConnections()
+  } catch (err: any) {
+    console.error('删除失败:', err)
+    showError('删除连接失败')
+  }
+}
+
+const formatDate = (dateStr: string) => {
+  const date = new Date(dateStr)
+  return date.toLocaleString('zh-CN', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  })
+}
+
+const getStatusText = (status: string) => {
+  const statusMap: Record<string, string> = {
+    'active': '已激活',
+    'unauthorized': '未授权',
+    'expired': '已过期',
+    'revoked': '已撤销'
+  }
+  return statusMap[status] || status
+}
+
+const getStatusClass = (status: string) => {
+  const classMap: Record<string, string> = {
+    'active': 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400',
+    'unauthorized': 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+    'expired': 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+    'revoked': 'bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-400'
+  }
+  return classMap[status] || classMap['unauthorized']
+}
+
 onMounted(() => {
-  console.log('平台连接页面加载')
+  loadConnections()
 })
 </script>
 
@@ -165,6 +247,95 @@ onMounted(() => {
               </button>
             </div>
           </section>
+
+          <!-- 平台连接列表 -->
+          <section class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+              <h2 class="text-sm font-semibold text-slate-900 dark:text-white">已连接的平台账户</h2>
+            </div>
+            
+            <div v-if="loading" class="p-8 text-center text-slate-500 dark:text-slate-400">
+              <span class="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
+              <p class="mt-2 text-sm">加载中...</p>
+            </div>
+            
+            <div v-else-if="connections.length === 0" class="p-8 text-center text-slate-500 dark:text-slate-400">
+              <span class="material-symbols-outlined text-5xl mb-2">cloud_off</span>
+              <p class="text-sm">暂无平台连接</p>
+              <p class="text-xs mt-1">点击上方「添加广告账户」按钮开始配置</p>
+            </div>
+            
+            <div v-else class="overflow-x-auto">
+              <table class="w-full">
+                <thead class="bg-slate-50 dark:bg-slate-700/50">
+                  <tr>
+                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">账户名称</th>
+                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">APP ID</th>
+                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">授权范围</th>
+                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">状态</th>
+                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">更新时间</th>
+                    <th class="px-5 py-3 text-right text-xs font-medium text-slate-600 dark:text-slate-400">操作</th>
+                  </tr>
+                </thead>
+                <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
+                  <tr v-for="connection in connections" :key="connection.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                    <td class="px-5 py-4 text-sm text-slate-900 dark:text-white">
+                      {{ connection.account_name || '-' }}
+                    </td>
+                    <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 font-mono">
+                      {{ connection.account_id }}
+                    </td>
+                    <td class="px-5 py-4 text-xs">
+                      <div class="flex flex-wrap gap-1">
+                        <span
+                          v-for="scope in connection.scopes"
+                          :key="scope"
+                          class="px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                        >
+                          {{ scope }}
+                        </span>
+                        <span v-if="!connection.scopes || connection.scopes.length === 0" class="text-slate-400">-</span>
+                      </div>
+                    </td>
+                    <td class="px-5 py-4 text-xs">
+                      <span class="px-2 py-1 rounded font-medium" :class="getStatusClass(connection.status)">
+                        {{ getStatusText(connection.status) }}
+                      </span>
+                    </td>
+                    <td class="px-5 py-4 text-xs text-slate-600 dark:text-slate-400">
+                      {{ formatDate(connection.updated_at) }}
+                    </td>
+                    <td class="px-5 py-4 text-right">
+                      <div class="flex items-center justify-end gap-2">
+                        <button
+                          class="px-3 py-1.5 rounded text-xs font-medium border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                          @click="handleEdit(connection)"
+                        >
+                          编辑
+                        </button>
+                        <button
+                          class="px-3 py-1.5 rounded text-xs font-medium border transition-colors"
+                          :class="connection.status === 'active' 
+                            ? 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'
+                            : 'border-primary text-primary hover:bg-primary/5'"
+                          :disabled="connection.status === 'active'"
+                          @click="handleAuthorize(connection)"
+                        >
+                          授权
+                        </button>
+                        <button
+                          class="px-3 py-1.5 rounded text-xs font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          @click="handleDelete(connection)"
+                        >
+                          删除
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </section>
         </div>
       </div>
     </main>
@@ -172,9 +343,18 @@ onMounted(() => {
     <!-- Meta 配置弹窗组件 -->
     <MetaConfigDialog
       :show="showConfigDialog"
+      :connection-id="editingConnection?.id || null"
+      :initial-data="editingConnection ? {
+        account_name: editingConnection.account_name || '',
+        app_id: editingConnection.account_id,
+        scopes: editingConnection.scopes || []
+      } : null"
       @close="closeConfigDialog"
       @save="handleSaveConfig"
       @import="handleImportToken"
     />
+    
+    <!-- Toast 提示容器 -->
+    <ToastContainer />
   </div>
 </template>
