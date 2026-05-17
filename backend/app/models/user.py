@@ -19,3 +19,4 @@ class User(Base):
     # 关系
     projects: Mapped[list["Project"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     materials: Mapped[list["Material"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    platform_connections: Mapped[list["PlatformConnection"]] = relationship(back_populates="user", cascade="all, delete-orphan")

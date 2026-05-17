@@ -51,8 +51,13 @@ class HttpClient {
       const response = await fetch(url, config)
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({ message: response.statusText }))
-        throw new Error(error.message || error.detail || `HTTP ${response.status}`)
+        const errorData = await response.json().catch(() => ({ detail: response.statusText }))
+        const error: any = new Error(errorData.detail || errorData.message || `HTTP ${response.status}`)
+        error.response = {
+          status: response.status,
+          data: errorData
+        }
+        throw error
       }
 
       return await response.json()

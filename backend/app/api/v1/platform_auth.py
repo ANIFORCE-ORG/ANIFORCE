@@ -3,15 +3,21 @@
 处理 OAuth 认证和账号管理
 """
 
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime
-import secrets
+from datetime import datetime, timedelta
 import logging
+import httpx
 
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
+from app.config.database import get_db
+from app.models import PlatformConnection
+from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/platform-auth", tags=["platform-auth"])
 logger = logging.getLogger(__name__)
@@ -60,6 +66,30 @@ class AdAccountResponse(BaseModel):
     currency: str
     timezone_name: Optional[str] = None
     amount_spent: Optional[str] = None
+
+
+class MetaConfigRequest(BaseModel):
+    """Meta 配置请求"""
+    account_name: str
+    app_id: str
+    app_secret: Optional[str] = None
+    scopes: List[str]
+    connection_id: Optional[str] = None  # 编辑模式下的连接 ID
+
+
+class PlatformConnectionResponse(BaseModel):
+    """平台连接响应"""
+    id: str
+    platform: str
+    account_id: str
+    account_name: Optional[str]
+    status: str
+    scopes: Optional[List[str]]
+    created_at: datetime
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
 
 
 # ==================== 临时存储（实际应使用数据库）====================
@@ -259,3 +289,353 @@ async def add_test_account(platform: str):
     logger.info(f"Added test account for platform: {platform}")
     
     return account
+
+
+@router.post("/meta/config", response_model=PlatformConnectionResponse)
+async def save_meta_config(
+    config: MetaConfigRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    保存 Meta 平台配置
+    
+    Args:
+        config: Meta 配置信息
+        db: 数据库会话
+        current_user: 当前用户
+        
+    Returns:
+        PlatformConnectionResponse: 保存的平台连接信息
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 编辑模式：通过 connection_id 更新
+        if config.connection_id:
+            # 获取要更新的连接
+            stmt = select(PlatformConnection).where(
+                PlatformConnection.id == config.connection_id,
+                PlatformConnection.user_id == user_id
+            )
+            result = await db.execute(stmt)
+            existing = result.scalar_one_or_none()
+            
+            if not existing:
+                raise HTTPException(status_code=404, detail="连接不存在")
+            
+            # 检查 APP ID 是否与其他记录冲突（排除当前记录）
+            if existing.account_id != config.app_id:
+                conflict_stmt = select(PlatformConnection).where(
+                    PlatformConnection.user_id == user_id,
+                    PlatformConnection.platform == "Meta",
+                    PlatformConnection.account_id == config.app_id,
+                    PlatformConnection.id != config.connection_id
+                )
+                conflict_result = await db.execute(conflict_stmt)
+                conflict = conflict_result.scalar_one_or_none()
+                
+                if conflict:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"APP ID 已存在，与账户「{conflict.account_name or conflict.account_id}」冲突"
+                    )
+            
+            # 更新配置
+            existing.account_name = config.account_name
+            existing.account_id = config.app_id
+            # 只在提供了 app_secret 时才更新
+            if config.app_secret:
+                existing.account_secret = config.app_secret
+            existing.scopes = config.scopes
+            existing.updated_at = datetime.utcnow()
+            await db.commit()
+            await db.refresh(existing)
+            logger.info(f"Updated Meta config for user: {user_id}, connection: {config.connection_id}")
+            return existing
+        
+        # 新建模式：检查 APP ID 是否已存在
+        conflict_stmt = select(PlatformConnection).where(
+            PlatformConnection.user_id == user_id,
+            PlatformConnection.platform == "Meta",
+            PlatformConnection.account_id == config.app_id
+        )
+        conflict_result = await db.execute(conflict_stmt)
+        conflict = conflict_result.scalar_one_or_none()
+        
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail=f"APP ID 已存在，与账户「{conflict.account_name or conflict.account_id}」冲突"
+            )
+        
+        # 创建新配置
+        if not config.app_secret:
+            raise HTTPException(status_code=400, detail="创建新配置时 App Secret 不能为空")
+        
+        new_connection = PlatformConnection(
+            user_id=user_id,
+            platform="Meta",
+            account_id=config.app_id,
+            account_name=config.account_name,
+            account_secret=config.app_secret,
+            access_token="",  # 暂时为空，等待 OAuth 授权
+            scopes=config.scopes,
+            status="unauthorized"
+        )
+        db.add(new_connection)
+        await db.commit()
+        await db.refresh(new_connection)
+        logger.info(f"Created Meta config for user: {user_id}")
+        return new_connection
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to save Meta config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/meta/config", response_model=Optional[PlatformConnectionResponse])
+async def get_meta_config(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Meta 平台配置
+    
+    Args:
+        db: 数据库会话
+        current_user: 当前用户
+        
+    Returns:
+        PlatformConnectionResponse: 平台连接信息，如果不存在则返回 None
+    """
+    try:
+        user_id = current_user["id"]
+        
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.user_id == user_id,
+            PlatformConnection.platform == "Meta"
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        return connection
+        
+    except Exception as e:
+        logger.error(f"Failed to get Meta config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/connections", response_model=List[PlatformConnectionResponse])
+async def get_all_connections(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取当前用户的所有平台连接
+    
+    Args:
+        db: 数据库会话
+        current_user: 当前用户
+        
+    Returns:
+        List[PlatformConnectionResponse]: 平台连接列表
+    """
+    try:
+        user_id = current_user["id"]
+        
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.user_id == user_id
+        ).order_by(PlatformConnection.updated_at.desc())
+        
+        result = await db.execute(stmt)
+        connections = result.scalars().all()
+        
+        return connections
+        
+    except Exception as e:
+        logger.error(f"Failed to get connections: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/connections/{connection_id}")
+async def delete_connection(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    删除平台连接
+    
+    Args:
+        connection_id: 连接 ID
+        db: 数据库会话
+        current_user: 当前用户
+        
+    Returns:
+        成功消息
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 查询连接
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 删除连接
+        await db.delete(connection)
+        await db.commit()
+        logger.info(f"Deleted connection: {connection_id} for user: {user_id}")
+        
+        return {"message": "连接已删除"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to delete connection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/meta/auth_callback")
+async def meta_auth_callback(
+    code: str = Query(..., description="OAuth 授权码"),
+    state: str = Query(default="0", description="状态参数"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Meta OAuth 授权回调接口
+    
+    Args:
+        code: OAuth 授权码
+        state: 状态参数（包含 connection_id）
+        db: 数据库会话
+    
+    Returns:
+        重定向到前端页面
+    """
+    try:
+        connection_id = state
+        logger.info(f"Received OAuth callback for connection: {connection_id}, code: {code[:10]}...")
+        
+        # 查询连接信息
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            logger.error(f"Connection not found: {connection_id}")
+            return RedirectResponse(
+                url=f"http://localhost:3010/settings/platform-connections?error=connection_not_found"
+            )
+        
+        # 使用 code 换取 access_token
+        async with httpx.AsyncClient() as client:
+            token_response = await client.get(
+                "https://graph.facebook.com/v24.0/oauth/access_token",
+                params={
+                    "client_id": connection.account_id,
+                    "client_secret": connection.account_secret,
+                    "redirect_uri": "https://8.148.151.36:8010/meta/auth_callback",
+                    "code": code
+                }
+            )
+            
+            if token_response.status_code != 200:
+                logger.error(f"Failed to get access token: {token_response.text}")
+                return RedirectResponse(
+                    url=f"http://localhost:3010/settings/platform-connections?error=token_exchange_failed"
+                )
+            
+            token_data = token_response.json()
+            logger.info(f"Got access token for connection: {connection_id}")
+        
+        # 更新连接信息
+        connection.access_token = token_data.get("access_token")
+        connection.token_type = token_data.get("token_type", "bearer")
+        
+        # 计算过期时间
+        expires_in = token_data.get("expires_in")
+        if expires_in:
+            connection.token_expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in))
+        
+        connection.status = "active"
+        connection.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        logger.info(f"Updated connection with access token: {connection_id}")
+        
+        # 重定向到前端页面
+        return RedirectResponse(
+            url="http://localhost:3010/settings/platform-connections?success=authorized"
+        )
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"OAuth callback failed: {e}")
+        return RedirectResponse(
+            url=f"http://localhost:3010/settings/platform-connections?error=callback_failed"
+        )
+
+
+@router.get("/meta/authorize_url/{connection_id}")
+async def get_meta_authorize_url(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Meta OAuth 授权 URL（供前端使用）
+    
+    Args:
+        connection_id: 连接 ID
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        授权 URL
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 查询连接
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 构建 OAuth 授权 URL
+        scopes = ",".join(connection.scopes or [])
+        auth_url = (
+            f"https://www.facebook.com/v25.0/dialog/oauth?"
+            f"client_id={connection.account_id}&"
+            f"redirect_uri=https://8.148.151.36:8010/meta/auth_callback&"
+            f"scope={scopes}&"
+            f"response_type=code&"
+            f"state={connection_id}"
+        )
+        
+        return {"authorize_url": auth_url}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get authorize URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

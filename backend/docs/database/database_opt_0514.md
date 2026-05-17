@@ -304,7 +304,7 @@ CREATE TABLE platform_connections (
     -- 账号信息
     account_id VARCHAR(255) NOT NULL,
     account_name VARCHAR(255),
-    account_email VARCHAR(255),
+    account_secret VARCHAR(255),
     
     -- OAuth 令牌
     access_token TEXT NOT NULL,
@@ -316,11 +316,11 @@ CREATE TABLE platform_connections (
     scopes TEXT[],  -- 数组类型存储权限列表
     
     -- 状态管理
-    status VARCHAR(20) NOT NULL DEFAULT 'active',  -- 'active', 'expired', 'revoked'
+    status VARCHAR(20) NOT NULL DEFAULT 'active',  -- 'unauthorized', 'active', 'expired', 'revoked'
     last_sync_at TIMESTAMP,
     
     -- 元数据
-    metadata JSONB,  -- 存储平台特定的额外信息
+    extra_data JSON,  -- 存储平台特定的额外信息
     
     created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     updated_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
