@@ -5,10 +5,17 @@ from loguru import logger
 from datetime import datetime
 
 from app.config.settings import get_settings
+from app.config.logging import setup_logging
 from app.api.v1.router import api_router
 from app.schemas.base import ErrorResponse, ErrorDetail
 
 settings = get_settings()
+
+# 初始化日志系统
+setup_logging(
+    log_level=settings.LOG_LEVEL if hasattr(settings, 'LOG_LEVEL') else "INFO",
+    log_file="logs/app.log"
+)
 
 allow_origins = [
     "http://localhost:3000",
