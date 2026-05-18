@@ -27,15 +27,15 @@ class Settings(BaseSettings):
 
     # 外部服务
     OPENAI_API_KEY: str = ""
-
-    # 平台授权配置
-    META_APP_ID: str = ""
-    META_APP_SECRET: str = ""
-    GOOGLE_CLIENT_ID: str = ""
-    GOOGLE_CLIENT_SECRET: str = ""
-    TIKTOK_APP_ID: str = ""
-    TIKTOK_APP_SECRET: str = ""
-    OAUTH_REDIRECT_URI: str = "http://localhost:3010/auth-callback"
+    
+    # 服务地址配置（根据运行模式自动切换）
+    # Local 模式: http://localhost:3010 / http://localhost:8010
+    # Cloud 模式: http://8.148.151.36:3010 / https://8.148.151.36:8010
+    FRONTEND_BASE_URL: str = "http://localhost:3010"
+    BACKEND_BASE_URL: str = "http://localhost:8010"
+    
+    # 日志配置
+    LOG_LEVEL: str = "INFO"
 
     class Config:
         env_file = ".env"
