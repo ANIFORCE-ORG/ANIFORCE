@@ -538,7 +538,7 @@ async def meta_auth_callback(
         if not connection:
             logger.error(f"Connection not found: {connection_id}")
             return RedirectResponse(
-                url=f"http://localhost:3010/settings/platform-connections?error=connection_not_found"
+                url=f"http://8.148.151.36:3010/platform-connections?error=connection_not_found"
             )
         
         # 使用 code 换取 access_token
@@ -548,7 +548,7 @@ async def meta_auth_callback(
                 params={
                     "client_id": connection.account_id,
                     "client_secret": connection.account_secret,
-                    "redirect_uri": "https://8.148.151.36:8010/meta/auth_callback",
+                    "redirect_uri": "https://8.148.151.36:8010/api/v1/platform-auth/meta/auth_callback",
                     "code": code
                 }
             )
@@ -556,7 +556,7 @@ async def meta_auth_callback(
             if token_response.status_code != 200:
                 logger.error(f"Failed to get access token: {token_response.text}")
                 return RedirectResponse(
-                    url=f"http://localhost:3010/settings/platform-connections?error=token_exchange_failed"
+                    url=f"http://8.148.151.36:3010/platform-connections?error=token_exchange_failed"
                 )
             
             token_data = token_response.json()
@@ -579,14 +579,14 @@ async def meta_auth_callback(
         
         # 重定向到前端页面
         return RedirectResponse(
-            url="http://localhost:3010/settings/platform-connections?success=authorized"
+            url="http://8.148.151.36:3010/platform-connections?success=authorized"
         )
         
     except Exception as e:
         await db.rollback()
         logger.error(f"OAuth callback failed: {e}")
         return RedirectResponse(
-            url=f"http://localhost:3010/settings/platform-connections?error=callback_failed"
+            url=f"http://8.148.151.36:3010/platform-connections?error=callback_failed"
         )
 
 
@@ -626,7 +626,7 @@ async def get_meta_authorize_url(
         auth_url = (
             f"https://www.facebook.com/v25.0/dialog/oauth?"
             f"client_id={connection.account_id}&"
-            f"redirect_uri=https://8.148.151.36:8010/meta/auth_callback&"
+            f"redirect_uri=https://8.148.151.36:8010/api/v1/platform-auth/meta/auth_callback&"
             f"scope={scopes}&"
             f"response_type=code&"
             f"state={connection_id}"
