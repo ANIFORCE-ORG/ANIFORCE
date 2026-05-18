@@ -26,7 +26,7 @@ class PlatformConnection(Base):
     account_secret: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
     
     # OAuth 令牌
-    access_token: Mapped[str] = mapped_column(Text, nullable=False)
+    access_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     refresh_token: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
     token_type: Mapped[str] = mapped_column(String(50), default="Bearer", nullable=False)
     token_expires_at: Mapped[Optional[datetime]] = mapped_column(DateTime, nullable=True)

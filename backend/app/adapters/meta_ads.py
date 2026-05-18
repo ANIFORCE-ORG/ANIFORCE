@@ -7,11 +7,9 @@ import aiohttp
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import json
-import logging
+from loguru import logger
 
 from .base import BaseAdapter
-
-logger = logging.getLogger(__name__)
 
 
 class MetaAdsAdapter(BaseAdapter):
