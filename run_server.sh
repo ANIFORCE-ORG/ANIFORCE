@@ -39,13 +39,29 @@ while [[ $# -gt 0 ]]; do
     --demo) DEMO_MODE=true; shift 1 ;;
     -h|--help)
       echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--only all|backend|frontend] [--skip-install] [--host HOST] [--demo]"
+      echo ""
+      echo "参数说明:"
       echo "  --mode           启动模式: local(默认) / cloud"
       echo "  --only           仅启动: all(默认) / backend / frontend"
       echo "  --skip-install   跳过依赖安装（云端更常用）"
       echo "  --host           监听地址（默认: 0.0.0.0）"
       echo "  --demo           启用 Demo 模式（设置 DEMO_MODE=true，默认: false 生产模式）"
-      echo "  --frontend-port  前端端口 (默认: 3010；cloud 模式若存在环境变量 PORT 且未显式指定 --frontend-port，将使用 PORT)"
+      echo "  --frontend-port  前端端口 (默认: 3010；cloud 模式若存在环境变量 PORT 且未显式指定，将使用 PORT)"
       echo "  --backend-port   后端端口 (默认: 8010)"
+      echo ""
+      echo "环境变量:"
+      echo "  CLOUD_IP         云端模式的 IP 地址（默认: 8.148.151.36）"
+      echo "                   用于自动配置 .env 中的 FRONTEND_BASE_URL 和 BACKEND_BASE_URL"
+      echo ""
+      echo "示例:"
+      echo "  # 本地开发模式"
+      echo "  $0 --mode local"
+      echo ""
+      echo "  # 云端生产模式（使用默认 IP）"
+      echo "  $0 --mode cloud --skip-install"
+      echo ""
+      echo "  # 云端模式（自定义 IP）"
+      echo "  CLOUD_IP=your-server-ip $0 --mode cloud"
       exit 0 ;;
     *) fail "未知参数: $1  (使用 --help 查看帮助)" ;;
   esac
@@ -201,6 +217,47 @@ else
     echo "DEMO_MODE=false" >> .env
   fi
   ok "生产模式已启用"
+fi
+
+# 根据 MODE 自动配置服务地址
+if [ "$MODE" = "cloud" ]; then
+  info "配置 Cloud 模式服务地址"
+  # 获取云端 IP（可通过环境变量 CLOUD_IP 指定，否则使用默认值）
+  CLOUD_IP=${CLOUD_IP:-8.148.151.36}
+  
+  # 更新 FRONTEND_BASE_URL
+  if grep -q "^FRONTEND_BASE_URL=" .env; then
+    sed -i.bak "s|^FRONTEND_BASE_URL=.*|FRONTEND_BASE_URL=http://$CLOUD_IP:$FRONTEND_PORT|" .env && rm -f .env.bak
+  else
+    echo "FRONTEND_BASE_URL=http://$CLOUD_IP:$FRONTEND_PORT" >> .env
+  fi
+  
+  # 更新 BACKEND_BASE_URL
+  if grep -q "^BACKEND_BASE_URL=" .env; then
+    sed -i.bak "s|^BACKEND_BASE_URL=.*|BACKEND_BASE_URL=https://$CLOUD_IP:$BACKEND_PORT|" .env && rm -f .env.bak
+  else
+    echo "BACKEND_BASE_URL=https://$CLOUD_IP:$BACKEND_PORT" >> .env
+  fi
+  
+  ok "Cloud 模式服务地址: 前端=http://$CLOUD_IP:$FRONTEND_PORT, 后端=https://$CLOUD_IP:$BACKEND_PORT"
+else
+  info "配置 Local 模式服务地址"
+  
+  # 更新 FRONTEND_BASE_URL
+  if grep -q "^FRONTEND_BASE_URL=" .env; then
+    sed -i.bak "s|^FRONTEND_BASE_URL=.*|FRONTEND_BASE_URL=http://localhost:$FRONTEND_PORT|" .env && rm -f .env.bak
+  else
+    echo "FRONTEND_BASE_URL=http://localhost:$FRONTEND_PORT" >> .env
+  fi
+  
+  # 更新 BACKEND_BASE_URL
+  if grep -q "^BACKEND_BASE_URL=" .env; then
+    sed -i.bak "s|^BACKEND_BASE_URL=.*|BACKEND_BASE_URL=http://localhost:$BACKEND_PORT|" .env && rm -f .env.bak
+  else
+    echo "BACKEND_BASE_URL=http://localhost:$BACKEND_PORT" >> .env
+  fi
+  
+  ok "Local 模式服务地址: 前端=http://localhost:$FRONTEND_PORT, 后端=http://localhost:$BACKEND_PORT"
 fi
 
 # ============================================================

@@ -10,8 +10,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime, timedelta
-import logging
 import httpx
+from loguru import logger
 
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
@@ -20,7 +20,6 @@ from app.models import PlatformConnection
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/platform-auth", tags=["platform-auth"])
-logger = logging.getLogger(__name__)
 settings = get_settings()
 
 
@@ -92,145 +91,9 @@ class PlatformConnectionResponse(BaseModel):
         from_attributes = True
 
 
-# ==================== 临时存储（实际应使用数据库）====================
-
-connected_accounts = []
-
-
-# ==================== 适配器工厂 ====================
-
-def get_adapter(platform: str):
-    """
-    获取平台适配器实例
-    
-    Args:
-        platform: 平台类型 (meta/google/tiktok)
-        
-    Returns:
-        适配器实例
-    """
-    if platform == "meta":
-        config = {
-            'api_version': 'v19.0',
-            'app_id': settings.META_APP_ID,
-            'app_secret': settings.META_APP_SECRET
-        }
-        return MetaAdsAdapter(config)
-    elif platform == "google":
-        # TODO: 实现 Google Ads 适配器
-        raise HTTPException(status_code=501, detail="Google Ads adapter not implemented yet")
-    elif platform == "tiktok":
-        # TODO: 实现 TikTok Ads 适配器
-        raise HTTPException(status_code=501, detail="TikTok Ads adapter not implemented yet")
-    else:
-        raise HTTPException(status_code=400, detail=f"Unsupported platform: {platform}")
-
-
 # ==================== API 路由 ====================
-
-@router.post("/{platform}/connect", response_model=ConnectResponse)
-async def connect_platform(platform: str):
-    """
-    获取平台 OAuth 授权 URL
-    
-    Args:
-        platform: 平台类型 (meta/google/tiktok)
-        
-    Returns:
-        ConnectResponse: 包含授权 URL 和 state
-    """
-    try:
-        adapter = get_adapter(platform)
-        state = secrets.token_urlsafe(32)
-        
-        # 从环境变量或配置获取回调地址
-        redirect_uri = settings.OAUTH_REDIRECT_URI or "http://localhost:3010/auth-callback"
-        
-        auth_url = adapter.get_oauth_url(redirect_uri, state)
-        
-        logger.info(f"Generated OAuth URL for platform: {platform}")
-        return ConnectResponse(auth_url=auth_url, state=state)
-        
-    except Exception as e:
-        logger.error(f"Failed to generate OAuth URL: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.post("/callback", response_model=TokenResponse)
-async def auth_callback(request: CallbackRequest):
-    """
-    处理 OAuth 回调，用 code 换取 access_token
-    
-    Args:
-        request: 回调请求
-        
-    Returns:
-        TokenResponse: Token 信息
-    """
-    try:
-        logger.info(f"Processing OAuth callback for platform: {request.platform}")
-        
-        adapter = get_adapter(request.platform)
-        
-        # 用 code 换取 token
-        token_data = await adapter.exchange_code_for_token(request.code, request.redirect_uri)
-        
-        # 如果支持长期 token，则进行转换
-        if request.platform == "meta":
-            try:
-                long_lived_token = await adapter.get_long_lived_token(token_data['access_token'])
-                token_data = long_lived_token
-            except Exception as e:
-                logger.warning(f"Failed to get long-lived token: {e}, using short-lived token")
-        
-        # TODO: 保存 token 到数据库
-        # await save_platform_token(user_id, request.platform, token_data)
-        
-        return TokenResponse(
-            access_token=token_data['access_token'],
-            token_type=token_data.get('token_type', 'bearer'),
-            expires_in=token_data.get('expires_in', 3600),
-            refresh_token=token_data.get('refresh_token')
-        )
-        
-    except Exception as e:
-        logger.error(f"OAuth callback failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
-@router.get("/{platform}/accounts", response_model=List[AdAccountResponse])
-async def get_ad_accounts(platform: str, access_token: str):
-    """
-    获取平台广告账户列表
-    
-    Args:
-        platform: 平台类型
-        access_token: 访问令牌
-        
-    Returns:
-        List[AdAccountResponse]: 广告账户列表
-    """
-    try:
-        adapter = get_adapter(platform)
-        adapter.set_access_token(access_token)
-        
-        accounts = await adapter.get_ad_accounts()
-        
-        return [
-            AdAccountResponse(
-                id=acc['id'],
-                name=acc['name'],
-                account_status=acc.get('account_status', 1),
-                currency=acc.get('currency', 'USD'),
-                timezone_name=acc.get('timezone_name'),
-                amount_spent=acc.get('amount_spent')
-            )
-            for acc in accounts
-        ]
-        
-    except Exception as e:
-        logger.error(f"Failed to get ad accounts: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+# 注意：平台配置现在通过数据库 PlatformConnection 模型管理
+# 每个用户可以配置多个平台账号，配置存储在数据库中而非全局 settings
 
 
 @router.get("/accounts", response_model=List[PlatformAccount])
@@ -509,8 +372,8 @@ async def delete_connection(
 
 @router.get("/meta/auth_callback")
 async def meta_auth_callback(
-    code: str = Query(..., description="OAuth 授权码"),
-    state: str = Query(default="0", description="状态参数"),
+    code: Optional[str] = Query(None, description="OAuth 授权码"),
+    state: Optional[str] = Query(None, description="状态参数"),
     db: AsyncSession = Depends(get_db)
 ):
     """
@@ -524,6 +387,21 @@ async def meta_auth_callback(
     Returns:
         重定向到前端页面
     """
+    logger.info(f"Meta auth callback received: code={code[:10] if code else 'None'}, state={state}")
+    
+    # 验证必需参数
+    if not code:
+        logger.error("Missing required parameter: code")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=missing_code"
+        )
+    
+    if not state:
+        logger.error("Missing required parameter: state")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=missing_state"
+        )
+    
     try:
         connection_id = state
         logger.info(f"Received OAuth callback for connection: {connection_id}, code: {code[:10]}...")
@@ -538,29 +416,72 @@ async def meta_auth_callback(
         if not connection:
             logger.error(f"Connection not found: {connection_id}")
             return RedirectResponse(
-                url=f"http://localhost:3010/settings/platform-connections?error=connection_not_found"
+                url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=connection_not_found"
             )
         
         # 使用 code 换取 access_token
-        async with httpx.AsyncClient() as client:
-            token_response = await client.get(
-                "https://graph.facebook.com/v24.0/oauth/access_token",
-                params={
-                    "client_id": connection.account_id,
-                    "client_secret": connection.account_secret,
-                    "redirect_uri": "https://8.148.151.36:8010/meta/auth_callback",
-                    "code": code
-                }
-            )
-            
-            if token_response.status_code != 200:
-                logger.error(f"Failed to get access token: {token_response.text}")
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+            try:
+                logger.info(f"Requesting access token from Facebook API for connection: {connection_id}")
+                token_response = await client.get(
+                    "https://graph.facebook.com/v25.0/oauth/access_token",
+                    params={
+                        "client_id": connection.account_id,
+                        "client_secret": connection.account_secret,
+                        "redirect_uri": f"{settings.BACKEND_BASE_URL}/api/v1/platform-auth/meta/auth_callback",
+                        "code": code
+                    }
+                )
+                
+                if token_response.status_code != 200:
+                    logger.error(f"Failed to get access token: status={token_response.status_code}, response={token_response.text}")
+                    return RedirectResponse(
+                        url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=token_exchange_failed"
+                    )
+                
+                token_data = token_response.json()
+                short_lived_token = token_data.get("access_token")
+                logger.info(f"Got short-lived access token for connection: {connection_id}, token: {short_lived_token[:20] if short_lived_token else 'None'}, expires_in: {token_data.get('expires_in')} seconds")
+                
+            except httpx.TimeoutException as e:
+                logger.error(f"Timeout while getting access token: {e}")
                 return RedirectResponse(
-                    url=f"http://localhost:3010/settings/platform-connections?error=token_exchange_failed"
+                    url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=token_timeout"
+                )
+            except httpx.ConnectError as e:
+                logger.error(f"Connection error while getting access token: {e}")
+                return RedirectResponse(
+                    url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=connection_error"
+                )
+            except Exception as e:
+                logger.error(f"Unexpected error while getting access token: {e}", exc_info=True)
+                return RedirectResponse(
+                    url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=token_exchange_failed"
                 )
             
-            token_data = token_response.json()
-            logger.info(f"Got access token for connection: {connection_id}")
+            # 将短期 token 转换为长期 token（60天有效期）
+            try:
+                logger.info(f"Converting to long-lived token for connection: {connection_id}")
+                long_token_response = await client.get(
+                    "https://graph.facebook.com/v25.0/oauth/access_token",
+                    params={
+                        "grant_type": "fb_exchange_token",
+                        "client_id": connection.account_id,
+                        "client_secret": connection.account_secret,
+                        "fb_exchange_token": short_lived_token
+                    }
+                )
+                
+                if long_token_response.status_code == 200:
+                    long_token_data = long_token_response.json()
+                    token_data = long_token_data
+                    logger.info(f"Successfully converted to long-lived token for connection: {connection_id}, expires_in: {long_token_data.get('expires_in')} seconds (~{long_token_data.get('expires_in', 0) // 86400} days)")
+                else:
+                    logger.warning(f"Failed to get long-lived token: status={long_token_response.status_code}, response={long_token_response.text}, using short-lived token instead")
+            except httpx.TimeoutException as e:
+                logger.warning(f"Timeout during long-lived token conversion: {e}, using short-lived token instead")
+            except Exception as e:
+                logger.warning(f"Exception during long-lived token conversion: {e}, using short-lived token instead")
         
         # 更新连接信息
         connection.access_token = token_data.get("access_token")
@@ -570,8 +491,11 @@ async def meta_auth_callback(
         expires_in = token_data.get("expires_in")
         if expires_in:
             connection.token_expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in))
+            logger.info(f"Token will expire at: {connection.token_expires_at} UTC")
         
+        # 更新状态和同步时间
         connection.status = "active"
+        connection.last_sync_at = datetime.utcnow()
         connection.updated_at = datetime.utcnow()
         
         await db.commit()
@@ -579,14 +503,15 @@ async def meta_auth_callback(
         
         # 重定向到前端页面
         return RedirectResponse(
-            url="http://localhost:3010/settings/platform-connections?success=authorized"
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?success=authorized"
         )
         
     except Exception as e:
         await db.rollback()
-        logger.error(f"OAuth callback failed: {e}")
+        logger.error(f"OAuth callback failed: {e}", exc_info=True)
+        logger.error(f"Exception type: {type(e).__name__}, Exception details: {str(e)}")
         return RedirectResponse(
-            url=f"http://localhost:3010/settings/platform-connections?error=callback_failed"
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=callback_failed"
         )
 
 
@@ -626,7 +551,7 @@ async def get_meta_authorize_url(
         auth_url = (
             f"https://www.facebook.com/v25.0/dialog/oauth?"
             f"client_id={connection.account_id}&"
-            f"redirect_uri=https://8.148.151.36:8010/meta/auth_callback&"
+            f"redirect_uri={settings.BACKEND_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
             f"scope={scopes}&"
             f"response_type=code&"
             f"state={connection_id}"

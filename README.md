@@ -197,13 +197,22 @@ ANIMAGUS/
 项目提供了一键部署脚本，自动完成环境检测、依赖安装和服务启动：
 
 ```bash
-# 默认端口启动（前端:3010 / 后端:8010）
+# 本地开发模式（默认）
 ./run_server.sh
+
+# 云端生产模式
+./run_server.sh --mode cloud
+
+# 云端模式 + 跳过依赖安装
+./run_server.sh --mode cloud --skip-install
 
 # 自定义端口启动
 ./run_server.sh --frontend-port 4000 --backend-port 9000
 
-# 查看帮助
+# 云端模式 + 自定义 IP
+CLOUD_IP=your-server-ip ./run_server.sh --mode cloud
+
+# 查看完整帮助
 ./run_server.sh --help
 ```
 
@@ -211,8 +220,9 @@ ANIMAGUS/
 1. 检测 Python、Node.js、pnpm 版本
 2. 创建 Python 虚拟环境并安装后端依赖
 3. 安装前端依赖（pnpm install）
-4. 启动后端 FastAPI 服务和前端 Vite 开发服务器
-5. 在浏览器中打开前端页面
+4. **根据启动模式自动配置 `.env` 文件中的服务地址**
+5. 启动后端 FastAPI 服务和前端 Vite 开发服务器
+6. 在浏览器中打开前端页面（仅 local 模式）
 
 ### 一键停止
 
@@ -228,13 +238,59 @@ ANIMAGUS/
 
 ---
 
+## 启动模式说明
+
+### Local vs Cloud 模式配置对比
+
+| 配置项 | **Local 模式** | **Cloud 模式** | 说明 |
+|--------|---------------|---------------|------|
+| **后端启动参数** | | | |
+| `--reload` | ✅ 启用 | ❌ 禁用 | 热重载，代码修改自动重启 |
+| `--workers` | ❌ 单进程 | ✅ `--workers 2` | 多进程提高并发性能 |
+| **前端启动参数** | | | |
+| `--host` | 默认（仅本地） | `--host 0.0.0.0` | 允许外部访问 |
+| `VITE_BACKEND_HOST` | `127.0.0.1` | `0.0.0.0` | 前端连接后端的地址 |
+| **自动配置 .env** | | | |
+| `FRONTEND_BASE_URL` | `http://localhost:3010` | `http://8.148.151.36:3010` | 前端服务地址 |
+| `BACKEND_BASE_URL` | `http://localhost:8010` | `https://8.148.151.36:8010` | 后端服务地址 |
+| **其他行为** | | | |
+| 自动打开浏览器 | ✅ 是 | ❌ 否 | local 模式自动打开 localhost |
+| 端口配置 | 固定 `3010/8010` | 支持环境变量 `PORT` | cloud 优先使用 `$PORT` |
+| **适用场景** | 本地开发调试 | 云端生产部署 | |
+
+### 启动参数说明
+
+| 参数 | 说明 | 默认值 |
+|------|------|--------|
+| `--mode local\|cloud` | 启动模式：`local`（本地开发）/ `cloud`（云端部署） | `local` |
+| `--only all\|backend\|frontend` | 仅启动指定服务 | `all` |
+| `--skip-install` | 跳过依赖安装（云端常用） | 否 |
+| `--host HOST` | 监听地址 | `0.0.0.0` |
+| `--demo` | 启用 Demo 模式（设置 `DEMO_MODE=true`） | 否（生产模式） |
+| `--frontend-port PORT` | 前端端口 | `3010` |
+| `--backend-port PORT` | 后端端口 | `8010` |
+
+### 环境变量
+
+| 变量 | 说明 | 默认值 | 示例 |
+|------|------|--------|------|
+| `CLOUD_IP` | 云端模式的 IP 地址 | `8.148.151.36` | `CLOUD_IP=your-server-ip` |
+| `PORT` | 云平台注入的端口（cloud 模式自动用于前端） | - | `PORT=8080` |
+| `CORS_ALLOW_ORIGINS` | 后端 CORS 允许的来源（逗号分隔） | - | `https://your-domain.com` |
+| `VITE_BACKEND_HOST` | 前端代理的后端地址 | `127.0.0.1` (local) / `0.0.0.0` (cloud) | `10.0.0.5` |
+
+---
+
 ## 云端部署
 
 ### 云端启动命令
 
 ```bash
-# 云端模式启动（全部服务）
+# 云端模式启动（全部服务，使用默认 IP）
 ./run_server.sh --mode cloud
+
+# 云端模式 + 自定义 IP
+CLOUD_IP=your-server-ip ./run_server.sh --mode cloud
 
 # 云端模式 + 跳过依赖安装（适合已安装依赖的环境）
 ./run_server.sh --mode cloud --skip-install
@@ -249,21 +305,31 @@ ANIMAGUS/
 ./run_server.sh --mode cloud --frontend-port 80 --backend-port 8000
 ```
 
-### 启动参数说明
+### 自动配置说明
 
-| 参数 | 说明 | 默认值 |
-|------|------|--------|
-| `--mode local\|cloud` | 启动模式：`local`（本地开发）/ `cloud`（云端部署） | `local` |
-| `--only all\|backend\|frontend` | 仅启动指定服务 | `all` |
-| `--skip-install` | 跳过依赖安装（云端常用） | 否 |
-| `--host HOST` | 监听地址 | `0.0.0.0` |
-| `--frontend-port PORT` | 前端端口 | `3010` |
-| `--backend-port PORT` | 后端端口 | `8010` |
+脚本会根据启动模式**自动配置** `backend/.env` 文件中的服务地址：
 
-**云端模式与本地模式的区别**：
-- 云端模式不自动打开浏览器
-- 云端模式后端不启用 `--reload`，启用 `--workers 2`
-- 云端模式若存在环境变量 `PORT` 且未显式指定 `--frontend-port`，将使用 `PORT` 作为前端端口
+**Local 模式**：
+```bash
+FRONTEND_BASE_URL=http://localhost:3010
+BACKEND_BASE_URL=http://localhost:8010
+```
+
+**Cloud 模式**（使用默认 IP `8.148.151.36`）：
+```bash
+FRONTEND_BASE_URL=http://8.148.151.36:3010
+BACKEND_BASE_URL=https://8.148.151.36:8010
+```
+
+**Cloud 模式**（使用自定义 IP）：
+```bash
+CLOUD_IP=192.168.1.100 ./run_server.sh --mode cloud
+# 自动配置为：
+# FRONTEND_BASE_URL=http://192.168.1.100:3010
+# BACKEND_BASE_URL=https://192.168.1.100:8010
+```
+
+> 💡 **提示**：无需手动修改 `.env` 文件，只需切换启动模式即可自动适配！
 
 ### 云端环境变量
 
