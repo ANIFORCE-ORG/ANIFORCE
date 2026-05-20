@@ -2,14 +2,14 @@
 import { ref, computed, watch } from 'vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { useToast } from '@/composables/useToast'
-import { platformApi } from '@/api/platform'
+import { platformApi, type GoogleConfigRequest } from '@/api/platform'
 
 interface Props {
   show: boolean
   connectionId?: string | null
   initialData?: {
     account_name: string
-    app_id: string
+    client_id: string
     scopes: string[]
   } | null
 }
@@ -17,7 +17,6 @@ interface Props {
 interface Emits {
   (e: 'close'): void
   (e: 'save', data: any): void
-  (e: 'import', data: any): void
 }
 
 const props = defineProps<Props>()
@@ -30,14 +29,14 @@ const showSecret = ref(false)
 const isEditingSecret = ref(false)
 const isEditMode = ref(false)
 
-const REDIRECT_URI = 'https://8.148.151.36:8010/api/v1/platform-auth/meta/auth_callback'
+const REDIRECT_URI = 'https://8.148.151.36:8010/api/v1/platform-auth/google/auth_callback'
 
 const form = ref({
   account_name: '',
-  app_id: '',
-  app_secret: '',
+  client_id: '',
+  client_secret: '',
   redirect_uri: REDIRECT_URI,
-  scopes: ['ads_management', 'ads_read', 'business_management'] as string[],
+  scopes: [] as string[],
 })
 
 // 监听 initialData 变化，填充表单数据
@@ -45,26 +44,32 @@ watch(() => props.initialData, (data) => {
   if (data) {
     isEditMode.value = true
     form.value.account_name = data.account_name || ''
-    form.value.app_id = data.app_id || ''
-    form.value.scopes = data.scopes || ['ads_management', 'ads_read', 'business_management']
+    form.value.client_id = data.client_id || ''
+    form.value.scopes = data.scopes || [
+      'https://www.googleapis.com/auth/adwords',
+      'https://www.googleapis.com/auth/userinfo.email'
+    ]
     // 编辑模式：显示32个加密字符，实际值为空
-    form.value.app_secret = '********************************'
+    form.value.client_secret = '********************************'
     isEditingSecret.value = false
   } else {
     // 重置表单（新建模式）
     isEditMode.value = false
     form.value.account_name = ''
-    form.value.app_id = ''
-    form.value.app_secret = ''
-    form.value.scopes = ['ads_management', 'ads_read', 'business_management']
+    form.value.client_id = ''
+    form.value.client_secret = ''
+    form.value.scopes = [
+      'https://www.googleapis.com/auth/adwords',
+      'https://www.googleapis.com/auth/userinfo.email'
+    ]
     isEditingSecret.value = false
   }
 }, { immediate: true })
 
-// 点击笔图标，允许编辑 App Secret
+// 点击笔图标，允许编辑 Client Secret
 const startEditingSecret = () => {
   isEditingSecret.value = true
-  form.value.app_secret = ''
+  form.value.client_secret = ''
   showSecret.value = false
 }
 
@@ -82,11 +87,23 @@ const copyRedirectUri = async () => {
   }
 }
 
-// 可用的授权权限选项
+// 可用的授权权限选项（使用简化关键词，后端会添加前缀）
 const availableScopes = [
-  { value: 'ads_management', label: 'ads_management', description: '管理广告系列、广告组和广告' },
-  { value: 'ads_read', label: 'ads_read', description: '读取广告数据和统计信息' },
-  { value: 'business_management', label: 'business_management', description: '管理商务管理平台资源' },
+  { 
+    value: 'adwords', 
+    label: 'Google Ads API', 
+    description: '管理 Google Ads 广告系列和数据' 
+  },
+  { 
+    value: 'userinfo.email', 
+    label: 'User Email', 
+    description: '获取用户邮箱信息' 
+  },
+  { 
+    value: 'userinfo.profile', 
+    label: 'User Profile', 
+    description: '获取用户基本资料' 
+  },
 ]
 
 // 切换权限选择
@@ -108,13 +125,13 @@ const validateForm = () => {
   if (!form.value.account_name.trim()) {
     return 'Account Name 不能为空'
   }
-  if (!form.value.app_id.trim()) {
-    return 'App ID 不能为空'
+  if (!form.value.client_id.trim()) {
+    return 'Client ID 不能为空'
   }
-  // 仅在新建模式或编辑模式下选择修改 App Secret 时校验
+  // 仅在新建模式或编辑模式下选择修改 Client Secret 时校验
   if (!isEditMode.value || isEditingSecret.value) {
-    if (!form.value.app_secret.trim() || form.value.app_secret === '********************************') {
-      return 'App Secret 不能为空'
+    if (!form.value.client_secret.trim() || form.value.client_secret === '********************************') {
+      return 'Client Secret 不能为空'
     }
   }
   if (form.value.scopes.length === 0) {
@@ -126,20 +143,20 @@ const validateForm = () => {
 // 计算表单是否有效
 const isFormValid = computed(() => {
   const baseValid = form.value.account_name.trim() !== '' &&
-                    form.value.app_id.trim() !== '' &&
+                    form.value.client_id.trim() !== '' &&
                     form.value.scopes.length > 0
   
-  // 新建模式：必须填写 App Secret
+  // 新建模式：必须填写 Client Secret
   if (!isEditMode.value) {
-    return baseValid && form.value.app_secret.trim() !== ''
+    return baseValid && form.value.client_secret.trim() !== ''
   }
   
-  // 编辑模式：如果选择修改 App Secret，则必须填写
+  // 编辑模式：如果选择修改 Client Secret，则必须填写
   if (isEditingSecret.value) {
-    return baseValid && form.value.app_secret.trim() !== '' && form.value.app_secret !== '********************************'
+    return baseValid && form.value.client_secret.trim() !== '' && form.value.client_secret !== '********************************'
   }
   
-  // 编辑模式且不修改 App Secret：只需基础字段有效
+  // 编辑模式且不修改 Client Secret：只需基础字段有效
   return baseValid
 })
 
@@ -152,15 +169,15 @@ const handleSaveConfig = async () => {
   
   saving.value = true
   try {
-    const payload: any = {
+    const payload: GoogleConfigRequest = {
       account_name: form.value.account_name,
-      app_id: form.value.app_id,
+      client_id: form.value.client_id,
       scopes: form.value.scopes
     }
     
-    // 仅在新建模式或编辑模式下选择修改 App Secret 时发送
+    // 仅在新建模式或编辑模式下选择修改 Client Secret 时发送
     if (!isEditMode.value || isEditingSecret.value) {
-      payload.app_secret = form.value.app_secret
+      payload.client_secret = form.value.client_secret
     }
     
     // 编辑模式：传递 connection_id 用于更新
@@ -168,13 +185,12 @@ const handleSaveConfig = async () => {
       payload.connection_id = props.connectionId
     }
     
-    const response = await platformApi.saveMetaConfig(payload)
+    const response = await platformApi.saveGoogleConfig(payload)
     
     emit('save', response)
-    success('Meta App 配置已保存')
+    success('Google 配置已保存')
   } catch (err: any) {
     console.error('保存配置失败:', err)
-    // 提取后端返回的详细错误信息
     const errorDetail = err.response?.data?.detail || '保存配置失败，请重试'
     showError(errorDetail)
   } finally {
@@ -182,8 +198,20 @@ const handleSaveConfig = async () => {
   }
 }
 
-const openMetaDeveloperPlatform = () => {
-  window.open('https://developers.facebook.com/apps/', '_blank')
+const handleGoogleAuthorize = async () => {
+  if (!props.connectionId) {
+    showError('请先保存配置后再进行授权')
+    return
+  }
+  
+  try {
+    const response = await platformApi.getGoogleAuthorizeUrl(props.connectionId)
+    window.location.href = response.authorize_url
+  } catch (err: any) {
+    console.error('获取授权 URL 失败:', err)
+    const errorDetail = err.response?.data?.detail || '获取授权 URL 失败，请重试'
+    showError(errorDetail)
+  }
 }
 </script>
 
@@ -196,7 +224,7 @@ const openMetaDeveloperPlatform = () => {
     <div class="bg-white dark:bg-slate-800 rounded-md shadow-lg max-w-4xl w-full">
       <!-- 弹窗头部 -->
       <div class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between rounded-t-xl">
-        <h2 class="text-lg font-bold text-slate-900 dark:text-white">Meta App 配置</h2>
+        <h2 class="text-lg font-bold text-slate-900 dark:text-white">Google OAuth 配置</h2>
         <button
           class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
           @click="handleClose"
@@ -207,7 +235,7 @@ const openMetaDeveloperPlatform = () => {
 
       <!-- 弹窗内容 -->
       <div class="p-6 space-y-6">
-        <!-- Meta App 配置部分 -->
+        <!-- Google OAuth 配置部分 -->
         <section>
           <div class="space-y-4">
             <label class="block">
@@ -215,22 +243,22 @@ const openMetaDeveloperPlatform = () => {
               <input
                 v-model="form.account_name"
                 class="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Meta Account Name"
+                placeholder="Google Account Name"
               />
             </label>
             <label class="block">
-              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">App ID</span>
+              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">Client ID</span>
               <input
-                v-model="form.app_id"
+                v-model="form.client_id"
                 class="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
-                placeholder="Meta App ID"
+                placeholder="Google OAuth Client ID"
               />
             </label>
             <label class="block">
-              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">App Secret</span>
+              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">Client Secret</span>
               <div class="relative mt-1">
                 <input
-                  v-model="form.app_secret"
+                  v-model="form.client_secret"
                   :type="showSecret ? 'text' : 'password'"
                   :readonly="isEditMode && !isEditingSecret"
                   :class="[
@@ -247,7 +275,7 @@ const openMetaDeveloperPlatform = () => {
                   type="button"
                   class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                   @click="startEditingSecret"
-                  title="点击修改 App Secret"
+                  title="点击修改 Client Secret"
                 >
                   <span class="material-symbols-outlined text-lg text-slate-600 dark:text-slate-400">
                     edit
@@ -293,7 +321,7 @@ const openMetaDeveloperPlatform = () => {
                 </button>
               </div>
               <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">
-                需要在 Meta App 后台 Valid OAuth Redirect URIs 填入同一个地址。
+                需要在 Google Cloud Console 的 OAuth 2.0 客户端配置中添加此重定向 URI。
               </span>
             </label>
             <div>
@@ -332,16 +360,14 @@ const openMetaDeveloperPlatform = () => {
               {{ saving ? '保存中...' : '保存配置' }}
             </button>
             <button
-              class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-              @click="openMetaDeveloperPlatform"
+              class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="!connectionId"
+              @click="handleGoogleAuthorize"
             >
-              前往 Meta 开发者平台
+              Google OAuth 授权
             </button>
           </div>
         </section>
-
-        <!-- 分隔线 -->
-        <div class="border-t border-slate-200 dark:border-slate-700"></div>
       </div>
     </div>
     <!-- Toast 提示容器 -->

@@ -8,6 +8,14 @@ export interface MetaConfigRequest {
   connection_id?: string
 }
 
+export interface GoogleConfigRequest {
+  account_name: string
+  client_id: string
+  client_secret?: string
+  scopes: string[]
+  connection_id?: string
+}
+
 export interface PlatformConnectionResponse {
   id: string
   platform: string
@@ -34,4 +42,13 @@ export const platformApi = {
 
   getMetaAuthorizeUrl: (connectionId: string) =>
     http.get<{ authorize_url: string }>(`/platform-auth/meta/authorize_url/${connectionId}`),
+
+  saveGoogleConfig: (data: GoogleConfigRequest) =>
+    http.post<PlatformConnectionResponse>('/platform-auth/google/config', data),
+
+  getGoogleConfig: () =>
+    http.get<PlatformConnectionResponse | null>('/platform-auth/google/config'),
+
+  getGoogleAuthorizeUrl: (connectionId: string) =>
+    http.get<{ authorize_url: string }>(`/platform-auth/google/authorize_url/${connectionId}`),
 }

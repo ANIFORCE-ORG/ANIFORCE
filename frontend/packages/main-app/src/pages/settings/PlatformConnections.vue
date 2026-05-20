@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MetaConfigDialog from '@/components/settings/MetaConfigDialog.vue'
+import GoogleConfigDialog from '@/components/settings/GoogleConfigDialog.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { navItems } from '@/config/navigation'
@@ -94,7 +95,16 @@ const handleEdit = (connection: PlatformConnectionResponse) => {
 const handleAuthorize = async (connection: PlatformConnectionResponse) => {
   console.log('授权连接:', connection)
   try {
-    const response = await platformApi.getMetaAuthorizeUrl(connection.id)
+    let response
+    // 根据平台类型调用不同的授权 URL API
+    if (connection.platform === 'Meta') {
+      response = await platformApi.getMetaAuthorizeUrl(connection.id)
+    } else if (connection.platform === 'Google') {
+      response = await platformApi.getGoogleAuthorizeUrl(connection.id)
+    } else {
+      showError(`${connection.platform} 平台授权功能暂未实现`)
+      return
+    }
     // 在新窗口中打开授权页面
     window.open(response.authorize_url, '_blank', 'width=600,height=700')
   } catch (err: any) {
@@ -137,6 +147,28 @@ const formatDate = (dateStr: string) => {
     hour: '2-digit',
     minute: '2-digit'
   })
+}
+
+// 根据当前选中的平台过滤连接列表
+const filteredConnections = computed(() => {
+  const platformMap: Record<string, string> = {
+    'meta': 'Meta',
+    'google': 'Google',
+    'tiktok': 'TikTok'
+  }
+  const platformName = platformMap[activePlatform.value]
+  return connections.value.filter(conn => conn.platform === platformName)
+})
+
+// 判断各平台是否已接入（是否有账号配置）
+const isPlatformConnected = (platformId: string) => {
+  const platformMap: Record<string, string> = {
+    'meta': 'Meta',
+    'google': 'Google',
+    'tiktok': 'TikTok'
+  }
+  const platformName = platformMap[platformId]
+  return connections.value.some(conn => conn.platform === platformName)
 }
 
 const getStatusText = (status: string) => {
@@ -224,8 +256,13 @@ onMounted(() => {
             >
               <div class="flex items-center justify-between">
                 <div class="font-semibold text-slate-900 dark:text-white">{{ platform.label }}</div>
-                <span class="rounded px-2 py-1 text-xs font-medium bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400">
-                  待接入
+                <span 
+                  class="rounded px-2 py-1 text-xs font-medium"
+                  :class="isPlatformConnected(platform.id)
+                    ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400'
+                    : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'"
+                >
+                  {{ isPlatformConnected(platform.id) ? '已接入' : '待接入' }}
                 </span>
               </div>
               <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ platform.description }}</p>
@@ -260,8 +297,8 @@ onMounted(() => {
               </div>
             </div>
 
-            <!-- 开发中提示 -->
-            <div class="p-4 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-4">
+            <!-- 开发中提示（仅 Google 和 TikTok 显示）-->
+            <div v-if="activePlatform !== 'meta'" class="p-4 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-4">
               <div class="flex items-start gap-3">
                 <span class="material-symbols-outlined text-amber-600 dark:text-amber-400 text-xl">construction</span>
                 <div>
@@ -285,6 +322,17 @@ onMounted(() => {
                 添加广告账户
               </button>
             </div>
+            
+            <!-- Google 平台特殊功能 -->
+            <div v-if="activePlatform === 'google'" class="flex items-center justify-between">
+              <p class="text-sm text-slate-600 dark:text-slate-400">配置 Google 广告账户连接</p>
+              <button
+                class="px-4 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+                @click="openConfigDialog"
+              >
+                添加广告账户
+              </button>
+            </div>
           </section>
 
           <!-- 平台连接列表 -->
@@ -298,10 +346,10 @@ onMounted(() => {
               <p class="mt-2 text-sm">加载中...</p>
             </div>
             
-            <div v-else-if="connections.length === 0" class="p-8 text-center text-slate-500 dark:text-slate-400">
+            <div v-else-if="filteredConnections.length === 0" class="p-8 text-center text-slate-500 dark:text-slate-400">
               <span class="material-symbols-outlined text-5xl mb-2">cloud_off</span>
-              <p class="text-sm">暂无平台连接</p>
-              <p class="text-xs mt-1">点击上方「添加广告账户」按钮开始配置</p>
+              <p class="text-sm">暂无 {{ platforms.find(p => p.id === activePlatform)?.label }} 平台连接</p>
+              <p v-if="activePlatform === 'meta'" class="text-xs mt-1">点击上方「添加广告账户」按钮开始配置</p>
             </div>
             
             <div v-else class="overflow-x-auto">
@@ -317,7 +365,7 @@ onMounted(() => {
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                  <tr v-for="connection in connections" :key="connection.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                  <tr v-for="connection in filteredConnections" :key="connection.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
                     <td class="px-5 py-4 text-sm text-slate-900 dark:text-white">
                       {{ connection.account_name || '-' }}
                     </td>
@@ -381,6 +429,7 @@ onMounted(() => {
 
     <!-- Meta 配置弹窗组件 -->
     <MetaConfigDialog
+      v-if="activePlatform === 'meta'"
       :show="showConfigDialog"
       :connection-id="editingConnection?.id || null"
       :initial-data="editingConnection ? {
@@ -391,6 +440,20 @@ onMounted(() => {
       @close="closeConfigDialog"
       @save="handleSaveConfig"
       @import="handleImportToken"
+    />
+    
+    <!-- Google 配置弹窗组件 -->
+    <GoogleConfigDialog
+      v-if="activePlatform === 'google'"
+      :show="showConfigDialog"
+      :connection-id="editingConnection?.id || null"
+      :initial-data="editingConnection ? {
+        account_name: editingConnection.account_name || '',
+        client_id: editingConnection.account_id,
+        scopes: editingConnection.scopes || []
+      } : null"
+      @close="closeConfigDialog"
+      @save="handleSaveConfig"
     />
     
     <!-- 删除确认弹窗 -->

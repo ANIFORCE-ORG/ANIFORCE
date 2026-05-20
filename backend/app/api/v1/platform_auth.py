@@ -76,6 +76,15 @@ class MetaConfigRequest(BaseModel):
     connection_id: Optional[str] = None  # 编辑模式下的连接 ID
 
 
+class GoogleConfigRequest(BaseModel):
+    """Google 配置请求"""
+    account_name: str
+    client_id: str
+    client_secret: Optional[str] = None
+    scopes: List[str]
+    connection_id: Optional[str] = None  # 编辑模式下的连接 ID
+
+
 class PlatformConnectionResponse(BaseModel):
     """平台连接响应"""
     id: str
@@ -289,6 +298,204 @@ async def get_meta_config(
         
     except Exception as e:
         logger.error(f"Failed to get Meta config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/google/config", response_model=PlatformConnectionResponse)
+async def save_google_config(
+    config: GoogleConfigRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    保存 Google 平台配置
+    
+    Args:
+        config: Google 配置信息
+        db: 数据库会话
+        current_user: 当前用户
+        
+    Returns:
+        PlatformConnectionResponse: 保存的平台连接信息
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 编辑模式：通过 connection_id 更新
+        if config.connection_id:
+            # 获取要更新的连接
+            stmt = select(PlatformConnection).where(
+                PlatformConnection.id == config.connection_id,
+                PlatformConnection.user_id == user_id
+            )
+            result = await db.execute(stmt)
+            existing = result.scalar_one_or_none()
+            
+            if not existing:
+                raise HTTPException(status_code=404, detail="连接不存在")
+            
+            # 检查 Client ID 是否与其他记录冲突（排除当前记录）
+            if existing.account_id != config.client_id:
+                conflict_stmt = select(PlatformConnection).where(
+                    PlatformConnection.user_id == user_id,
+                    PlatformConnection.platform == "Google",
+                    PlatformConnection.account_id == config.client_id,
+                    PlatformConnection.id != config.connection_id
+                )
+                conflict_result = await db.execute(conflict_stmt)
+                conflict = conflict_result.scalar_one_or_none()
+                
+                if conflict:
+                    raise HTTPException(
+                        status_code=409,
+                        detail=f"Client ID 已存在，与账户「{conflict.account_name or conflict.account_id}」冲突"
+                    )
+            
+            # 更新配置
+            existing.account_name = config.account_name
+            existing.account_id = config.client_id
+            # 只在提供了 client_secret 时才更新
+            if config.client_secret:
+                existing.account_secret = config.client_secret
+            existing.scopes = config.scopes
+            existing.updated_at = datetime.utcnow()
+            await db.commit()
+            await db.refresh(existing)
+            logger.info(f"Updated Google config for user: {user_id}, connection: {config.connection_id}")
+            return existing
+        
+        # 新建模式：检查 Client ID 是否已存在
+        conflict_stmt = select(PlatformConnection).where(
+            PlatformConnection.user_id == user_id,
+            PlatformConnection.platform == "Google",
+            PlatformConnection.account_id == config.client_id
+        )
+        conflict_result = await db.execute(conflict_stmt)
+        conflict = conflict_result.scalar_one_or_none()
+        
+        if conflict:
+            raise HTTPException(
+                status_code=409,
+                detail=f"Client ID 已存在，与账户「{conflict.account_name or conflict.account_id}」冲突"
+            )
+        
+        # 创建新配置
+        if not config.client_secret:
+            raise HTTPException(status_code=400, detail="创建新配置时 Client Secret 不能为空")
+        
+        new_connection = PlatformConnection(
+            user_id=user_id,
+            platform="Google",
+            account_id=config.client_id,
+            account_name=config.account_name,
+            account_secret=config.client_secret,
+            access_token="",  # 暂时为空，等待 OAuth 授权
+            scopes=config.scopes,
+            status="unauthorized"
+        )
+        db.add(new_connection)
+        await db.commit()
+        await db.refresh(new_connection)
+        logger.info(f"Created Google config for user: {user_id}")
+        return new_connection
+            
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to save Google config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/google/config", response_model=Optional[PlatformConnectionResponse])
+async def get_google_config(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Google 平台配置
+    
+    Args:
+        db: 数据库会话
+        current_user: 当前用户
+        
+    Returns:
+        PlatformConnectionResponse: 平台连接信息，如果不存在则返回 None
+    """
+    try:
+        user_id = current_user["id"]
+        
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.user_id == user_id,
+            PlatformConnection.platform == "Google"
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        return connection
+        
+    except Exception as e:
+        logger.error(f"Failed to get Google config: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/google/authorize_url/{connection_id}")
+async def get_google_authorize_url(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Google OAuth 授权 URL
+    
+    Args:
+        connection_id: 连接 ID
+        db: 数据库会话
+        current_user: 当前用户
+        
+    Returns:
+        包含授权 URL 的字典
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 查询连接
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id,
+            PlatformConnection.platform == "Google"
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 构建 scope 字符串（添加 https://www.googleapis.com/auth/ 前缀）
+        scope_prefix = "https://www.googleapis.com/auth/"
+        scopes = [f"{scope_prefix}{scope}" for scope in connection.scopes]
+        scope_str = " ".join(scopes)
+        
+        # 构建 Google OAuth 授权 URL
+        redirect_uri = f"{settings.BACKEND_BASE_URL}/api/v1/platform-auth/google/auth_callback"
+        authorize_url = (
+            f"https://accounts.google.com/o/oauth2/v2/auth"
+            f"?response_type=code"
+            f"&client_id={connection.account_id}"
+            f"&redirect_uri={redirect_uri}"
+            f"&scope={scope_str}"
+            f"&access_type=offline"
+            f"&prompt=consent"
+            f"&state={connection_id}"
+        )
+        
+        logger.info(f"Generated Google authorize URL for connection: {connection_id}")
+        return {"authorize_url": authorize_url}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to generate Google authorize URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
