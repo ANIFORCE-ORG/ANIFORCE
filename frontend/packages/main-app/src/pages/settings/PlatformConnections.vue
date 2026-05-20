@@ -160,7 +160,7 @@ const filteredConnections = computed(() => {
   return connections.value.filter(conn => conn.platform === platformName)
 })
 
-// 判断各平台是否已接入（是否有账号配置）
+// 判断各平台是否已接入（至少有一个账号状态为 authorized）
 const isPlatformConnected = (platformId: string) => {
   const platformMap: Record<string, string> = {
     'meta': 'Meta',
@@ -168,7 +168,7 @@ const isPlatformConnected = (platformId: string) => {
     'tiktok': 'TikTok'
   }
   const platformName = platformMap[platformId]
-  return connections.value.some(conn => conn.platform === platformName)
+  return connections.value.some(conn => conn.platform === platformName && conn.status === 'active')
 }
 
 const getStatusText = (status: string) => {
