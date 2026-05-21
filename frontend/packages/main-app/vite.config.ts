@@ -15,6 +15,12 @@ export default defineConfig(() => {
     server: {
       host: '0.0.0.0',
       port: Number(process.env.VITE_FRONTEND_PORT || 3010),
+      allowedHosts: [
+        'localhost',
+        '127.0.0.1',
+        'www.aniforce.cc',
+        'aniforce.cc',
+      ],
       proxy: {
         '/api': {
           target: `http://${backendHost}:${backendPort}`,
