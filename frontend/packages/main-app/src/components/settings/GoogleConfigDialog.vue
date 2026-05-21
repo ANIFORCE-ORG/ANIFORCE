@@ -45,10 +45,7 @@ watch(() => props.initialData, (data) => {
     isEditMode.value = true
     form.value.account_name = data.account_name || ''
     form.value.client_id = data.client_id || ''
-    form.value.scopes = data.scopes || [
-      'https://www.googleapis.com/auth/adwords',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ]
+    form.value.scopes = data.scopes || ['adwords']
     // 编辑模式：显示32个加密字符，实际值为空
     form.value.client_secret = '********************************'
     isEditingSecret.value = false
@@ -58,10 +55,7 @@ watch(() => props.initialData, (data) => {
     form.value.account_name = ''
     form.value.client_id = ''
     form.value.client_secret = ''
-    form.value.scopes = [
-      'https://www.googleapis.com/auth/adwords',
-      'https://www.googleapis.com/auth/userinfo.email'
-    ]
+    form.value.scopes = ['adwords']
     isEditingSecret.value = false
   }
 }, { immediate: true })
@@ -189,6 +183,14 @@ const handleSaveConfig = async () => {
     
     emit('save', response)
     success('Google 配置已保存')
+    
+    // 后清空表单
+    form.value.account_name = ''
+    form.value.client_id = ''
+    form.value.client_secret = ''
+    form.value.scopes = ['adwords']
+    isEditMode.value = false
+    isEditingSecret.value = false
   } catch (err: any) {
     console.error('保存配置失败:', err)
     const errorDetail = err.response?.data?.detail || '保存配置失败，请重试'
@@ -212,6 +214,10 @@ const handleGoogleAuthorize = async () => {
     const errorDetail = err.response?.data?.detail || '获取授权 URL 失败，请重试'
     showError(errorDetail)
   }
+}
+
+const openGoogleCloudPlatform = () => {
+  window.open('https://cloud.google.com/', '_blank')
 }
 </script>
 
@@ -360,11 +366,10 @@ const handleGoogleAuthorize = async () => {
               {{ saving ? '保存中...' : '保存配置' }}
             </button>
             <button
-              class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="!connectionId"
-              @click="handleGoogleAuthorize"
+              class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              @click="openGoogleCloudPlatform"
             >
-              Google OAuth 授权
+              前往 Google Cloud 平台
             </button>
           </div>
         </section>

@@ -172,6 +172,14 @@ const handleSaveConfig = async () => {
     
     emit('save', response)
     success('Meta App 配置已保存')
+    
+    // 保存成功后清空表单
+    form.value.account_name = ''
+    form.value.app_id = ''
+    form.value.app_secret = ''
+    form.value.scopes = []
+    isEditMode.value = false
+    isEditingSecret.value = false
   } catch (err: any) {
     console.error('保存配置失败:', err)
     // 提取后端返回的详细错误信息

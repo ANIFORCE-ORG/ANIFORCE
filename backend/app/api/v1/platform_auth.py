@@ -489,7 +489,7 @@ async def get_google_authorize_url(
             f"&state={connection_id}"
         )
         
-        logger.info(f"Generated Google authorize URL for connection: {connection_id}")
+        logger.info(f"Generated Google authorize URL for connection: {connection_id}, authroize_url: {authorize_url}")
         return {"authorize_url": authorize_url}
         
     except HTTPException:
@@ -763,6 +763,8 @@ async def get_meta_authorize_url(
             f"response_type=code&"
             f"state={connection_id}"
         )
+
+        logger.info(f"Generated Google authorize URL for connection: {connection_id}, authroize_url: {auth_url}")
         
         return {"authorize_url": auth_url}
         
