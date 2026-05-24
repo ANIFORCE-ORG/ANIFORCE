@@ -1,5 +1,8 @@
 /**
- * 认证 API
+ * 认证 API 类型定义
+ * 
+ * 注意：登录/登出功能已由 Pinia Store (store/auth.ts) 统一管理
+ * 此文件仅保留类型定义和后端 API 接口定义
  */
 import { http } from './http'
 
@@ -25,46 +28,9 @@ export interface LoginResponse {
 }
 
 /**
- * 用户登录
+ * 刷新 access token（后端接口）
+ * 注意：此函数仅用于后端 API 调用，不处理 localStorage
  */
-export async function login(email: string, password: string): Promise<LoginResponse> {
-  const response = await http.post<LoginResponse>('/auth/login', { email, password })
-  
-  // 保存 token 到 localStorage
-  if (response.success && response.data.access_token) {
-    localStorage.setItem('access_token', response.data.access_token)
-    localStorage.setItem('refresh_token', response.data.refresh_token)
-    localStorage.setItem('user', JSON.stringify(response.data.user))
-  }
-  
-  return response
-}
-
-/**
- * 用户登出
- */
-export function logout(): void {
-  localStorage.removeItem('access_token')
-  localStorage.removeItem('refresh_token')
-  localStorage.removeItem('user')
-}
-
-/**
- * 获取当前用户
- */
-export function getCurrentUser(): User | null {
-  const userStr = localStorage.getItem('user')
-  if (!userStr) return null
-  try {
-    return JSON.parse(userStr)
-  } catch {
-    return null
-  }
-}
-
-/**
- * 检查是否已登录
- */
-export function isAuthenticated(): boolean {
-  return !!localStorage.getItem('access_token')
+export async function refreshToken(refreshToken: string): Promise<LoginResponse> {
+  return await http.post<LoginResponse>('/auth/refresh', { refresh_token: refreshToken })
 }

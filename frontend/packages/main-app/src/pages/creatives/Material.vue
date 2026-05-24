@@ -1,15 +1,16 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { getMaterials, getMaterialImage, type Material } from '@/api/materials'
-import { login } from '@/api'
 import { navItems } from '@/config/navigation'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
+const auth = useAuthStore()
 const { success, error: showError, info } = useToast()
 
 const activeSession = ref('sess_g001')
@@ -59,10 +60,9 @@ onMounted(async () => {
     error.value = ''
     
     // 检查是否已登录
-    const token = localStorage.getItem('access_token')
-    if (!token) {
+    if (!auth.isLoggedIn) {
       console.log('自动登录测试账号...')
-      await login('test@animagus.com', 'test123')
+      await auth.login({ email: 'test@animagus.com', password: 'test123' })
     }
     
     // 加载素材数据
