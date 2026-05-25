@@ -6,8 +6,13 @@ const router = createRouter({
   routes: [
     {
       path: '/',
-      name: 'get-start',
-      component: () => import('@/pages/starting/GetStart.vue'),
+      name: 'marketing-home',
+      component: () => import('@/pages/MarketingHome.vue'),
+    },
+    {
+      path: '/contact',
+      name: 'contact',
+      component: () => import('@/pages/Contact.vue'),
     },
     {
       path: '/home',
@@ -93,17 +98,11 @@ const router = createRouter({
 })
 
 // 导航守卫 - 统一处理路由保护和重定向
-router.beforeEach((to, from, next) => {
+router.beforeEach((to, _from, next) => {
   const auth = useAuthStore()
   
   // 需要登录的页面列表
   const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/account-config', '/ai-usage-config', '/platform-connections']
-  
-  // 已登录用户访问GetStart页面,重定向到/home
-  if (to.path === '/' && auth.isLoggedIn) {
-    next('/home')
-    return
-  }
   
   // 未登录用户访问需要登录的页面,重定向到登录页
   if (requiresAuth.includes(to.path) && !auth.isLoggedIn) {

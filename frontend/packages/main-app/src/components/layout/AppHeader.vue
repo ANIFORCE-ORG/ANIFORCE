@@ -2,30 +2,31 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import { useLanguage } from '@/store/language'
 
 const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
+const { language, setLanguage } = useLanguage()
 
 const showUserMenu = ref(false)
 
-const navItems = [
-  //{ label: 'GetStart', path: '/get-start', icon: 'rocket_launch' },
-  //{ label: '数据概览', path: '/dashboard', icon: 'pie_chart' },
-  //{ label: '市场分析', path: '/market-analysis', icon: 'trending_up' },
-  //{ label: '素材生产', path: '/material', icon: 'auto_awesome' },
-  //{ label: '投放计划', path: '/campaign', icon: 'campaign' },
-  //{ label: '投放数据分析', path: '/monitor', icon: 'analytics' },
-]
-
-const isActive = (path: string) => {
-  if (path === '/') return route.path === '/'
-  return route.path.startsWith(path)
+const publicCopy = {
+  cn: {
+    home: '首页',
+    start: '马上体验',
+    login: '登录',
+    logout: '退出登录',
+  },
+  en: {
+    home: 'Home',
+    start: 'Start now',
+    login: 'Login',
+    logout: 'Log out',
+  },
 }
 
-const navigateTo = (path: string) => {
-  router.push(path)
-}
+const isPublicPage = () => route.path === '/' || route.path === '/contact' || route.path === '/login' || route.path === '/register'
 
 const handleLogoClick = () => {
   if (auth.isLoggedIn) {
@@ -61,19 +62,9 @@ const handleLogout = () => {
     </div>
 
     <!-- Navigation -->
-    <nav class="hidden md:flex items-center gap-1">
-      <button
-        v-for="item in navItems"
-        :key="item.path"
-        class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
-        :class="isActive(item.path)
-          ? 'bg-primary/10 text-primary font-semibold shadow-sm'
-          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary'"
-        @click="navigateTo(item.path)"
-      >
-        <span class="material-symbols-outlined text-[18px]">{{ item.icon }}</span>
-        {{ item.label }}
-      </button>
+    <nav v-if="isPublicPage()" class="hidden md:flex items-center gap-6">
+      <RouterLink class="text-sm font-medium text-slate-600 hover:text-primary" to="/">{{ publicCopy[language].home }}</RouterLink>
+      <RouterLink class="text-sm font-medium text-slate-600 hover:text-primary" to="/contact">{{ publicCopy[language].start }}</RouterLink>
     </nav>
 
     <!-- Right Actions -->
@@ -110,7 +101,7 @@ const handleLogout = () => {
                 @click="handleLogout"
               >
                 <span class="material-symbols-outlined text-[18px]">logout</span>
-                退出登录
+                {{ publicCopy[language].logout }}
               </button>
             </div>
           </Transition>
@@ -127,15 +118,32 @@ const handleLogout = () => {
           class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:text-primary transition-colors font-medium"
           @click="handleUserClick"
         >
-          登录
-        </button>
-        <button
-          class="px-4 py-2 text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors font-medium"
-          @click="handleUserClick"
-        >
-          开始使用
+          {{ publicCopy[language].login }}
         </button>
       </template>
+
+      <div
+        v-if="isPublicPage()"
+        class="inline-flex h-9 items-center rounded-md border border-slate-200 bg-white p-0.5 text-xs font-semibold text-slate-500"
+        aria-label="切换语言"
+      >
+        <button
+          class="h-8 rounded px-2.5"
+          :class="language === 'cn' ? 'bg-slate-950 text-white' : 'hover:text-slate-900'"
+          type="button"
+          @click="setLanguage('cn')"
+        >
+          CN
+        </button>
+        <button
+          class="h-8 rounded px-2.5"
+          :class="language === 'en' ? 'bg-slate-950 text-white' : 'hover:text-slate-900'"
+          type="button"
+          @click="setLanguage('en')"
+        >
+          EN
+        </button>
+      </div>
     </div>
   </header>
 
