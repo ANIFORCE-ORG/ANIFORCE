@@ -254,6 +254,219 @@ Required report endpoints:
 
 Metrics should include spend, impressions, clicks, CTR, installs/conversions, CPI/CPA, ROAS, budget pacing, fatigue signals, and anomaly alerts.
 
+Recommended response contracts:
+
+`GET /reports/overview?range=7d&platform=all`
+
+```json
+{
+  "range": "7d",
+  "platform": "all",
+  "metrics": {
+    "spend": 28460,
+    "conversions": 4832,
+    "cpi": 5.89,
+    "roas": 2.43,
+    "spend_delta": 0.124,
+    "conversion_delta": 0.087,
+    "cpi_delta": -0.062,
+    "roas_delta": 0.18
+  }
+}
+```
+
+`GET /reports/platforms?range=7d`
+
+```json
+{
+  "platforms": [
+    {
+      "platform": "Meta",
+      "platform_account_id": "platform_account_pk",
+      "platform_account_name": "Candy Blast Meta UA",
+      "campaign_count": 5,
+      "spend": 12840,
+      "conversions": 2180,
+      "cpi": 5.89,
+      "roas": 2.31,
+      "trend_score": 68
+    }
+  ]
+}
+```
+
+`GET /reports/projects?range=7d`
+
+```json
+{
+  "projects": [
+    {
+      "project_id": "project_pk",
+      "project_name": "Candy Blast 全球推广",
+      "budget": 68000,
+      "spend": 19840,
+      "budget_pacing": 0.292,
+      "campaign_count": 9,
+      "alert_count": 2,
+      "roas": 2.56
+    }
+  ]
+}
+```
+
+`GET /reports/creatives?range=7d&sort=roas`
+
+```json
+{
+  "creatives": [
+    {
+      "material_id": "material_pk",
+      "material_name": "UGC_FailMoment_15s",
+      "project_id": "project_pk",
+      "project_name": "Candy Blast",
+      "type": "video",
+      "ctr": 0.048,
+      "cvr": 0.112,
+      "roas": 3.1,
+      "fatigue_status": "normal"
+    }
+  ]
+}
+```
+
+`GET /reports/insights?range=7d`
+
+```json
+{
+  "insights": [
+    {
+      "id": "insight_pk",
+      "level": "high",
+      "type": "creative_fatigue",
+      "title": "素材疲劳提醒",
+      "content": "Meta 两组高消耗素材 CTR 连续 3 天下降。",
+      "confidence": 0.92,
+      "related_project_id": "project_pk",
+      "related_campaign_id": "campaign_pk",
+      "recommended_action": "replace_hook"
+    }
+  ]
+}
+```
+
+### Project Management Page APIs
+
+`/projects` now shows frontend Demo data when the project API is empty or unavailable. Production should provide project-level fields that match the platform-account and campaign hierarchy.
+
+Required project list endpoint:
+
+- `GET /projects?status=active&limit=50`
+
+Recommended response:
+
+```json
+{
+  "projects": [
+    {
+      "id": "project_pk",
+      "name": "Candy Blast 全球推广",
+      "description": "业务项目或产品投放容器",
+      "game_type": "game",
+      "target_market": "US / CA / AU",
+      "tags": ["Meta", "TikTok"],
+      "total_budget": 68000,
+      "spent": 28460,
+      "status": "active",
+      "manager": "Growth Team",
+      "start_date": "2026-05-01",
+      "end_date": "2026-06-30",
+      "campaign_count": 5,
+      "ad_group_count": 18,
+      "material_count": 42,
+      "alert_count": 2,
+      "roas": 2.43,
+      "platform_accounts": [
+        {
+          "id": "platform_account_pk",
+          "platform": "Meta",
+          "account_id": "act_1029384756",
+          "account_name": "Candy Blast Meta UA",
+          "business_name": "Candy Blast Business",
+          "auth_status": "active",
+          "account_status": "active",
+          "currency": "USD",
+          "timezone": "America/Los_Angeles"
+        }
+      ],
+      "created_at": "2026-05-01T00:00:00Z",
+      "updated_at": "2026-05-25T00:00:00Z"
+    }
+  ]
+}
+```
+
+Related endpoints:
+
+- `POST /projects`
+- `PUT /projects/:projectId`
+- `DELETE /projects/:projectId`
+- `GET /projects/:projectId/campaigns`
+- `GET /projects/:projectId/platform-accounts`
+- `POST /projects/:projectId/platform-accounts`
+
+### Campaign List Page APIs
+
+`/campaign` now shows frontend Demo data when campaign API is empty or unavailable. Production should return platform-aware campaign fields so the list can represent the Meta/Google/TikTok structure without frontend inference.
+
+Required campaign list endpoint:
+
+- `GET /campaigns?project_id=&status=&platform=&limit=`
+
+Recommended response:
+
+```json
+{
+  "campaigns": [
+    {
+      "id": "campaign_pk",
+      "project_id": "project_pk",
+      "project_name": "Candy Blast 全球推广",
+      "name": "Meta_US_Broad_Install_May_W4",
+      "platform": "Meta",
+      "platform_account_id": "platform_account_pk",
+      "platform_account_name": "Candy Blast Meta UA",
+      "external_campaign_id": "23851234567890123",
+      "objective": "App installs",
+      "bid_strategy": "Lowest cost",
+      "budget": 18000,
+      "spent": 12480,
+      "budget_pacing": "normal",
+      "status": "running",
+      "ad_group_count": 6,
+      "material_ids": ["material_pk_1", "material_pk_2"],
+      "conversions": 2180,
+      "ctr": 0.041,
+      "cpa": 5.72,
+      "roas": 2.31,
+      "agent_alert": "两条 UGC 素材 CTR 连续下降，建议替换前三秒 Hook。",
+      "start_date": "2026-05-20",
+      "end_date": "2026-06-05",
+      "created_at": "2026-05-20T00:00:00Z",
+      "updated_at": "2026-05-25T00:00:00Z"
+    }
+  ]
+}
+```
+
+Related endpoints:
+
+- `GET /campaigns/:campaignId`
+- `PUT /campaigns/:campaignId/status`
+- `DELETE /campaigns/:campaignId`
+- `GET /campaigns/:campaignId/materials`
+- `POST /campaigns/:campaignId/materials/:materialId`
+- `GET /campaigns/:campaignId/ad-groups`
+
 ### Agent Sessions
 
 Frontend currently has one global business Agent session list in local storage and passes only `sessionId` into `ChatPanel`.
