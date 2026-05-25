@@ -1,18 +1,16 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
 import { getProjects, createProject, type Project } from '@/api/projects'
 import { navItems } from '@/config/navigation'
+import { useWorkspaceSessions } from '@/composables/useWorkspaceSessions'
 
 const router = useRouter()
-const auth = useAuthStore()
+const workspaceSessions = useWorkspaceSessions()
 
-const activeSession = ref('sess_g001')
-const chatInput = ref('')
 const showCreateModal = ref(false)
 const loading = ref(false)
 const error = ref<string | null>(null)
@@ -20,22 +18,6 @@ const projects = ref<Project[]>([])
 const searchQuery = ref('')
 const filterStatus = ref('all')
 const createModalRef = ref<any>(null)
-
-const sessions = ref([
-  { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
-  { id: 'sess_g002', name: '素材优化建议', active: false },
-  { id: 'sess_g003', name: '东南亚市场拓展', active: false },
-  { id: 'sess_g004', name: 'DramaBox新剧推广', active: false },
-])
-
-const messages = ref([
-  {
-    role: 'assistant',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: `您好${auth.user?.name || '李明'}！我是ANIFORCE智能助手。\n\n当前项目概览：\n• 📱 Candy Blast：消耗$52,300，ROI 1.88x\n• 📺 DramaBox：消耗$98,700，ROI 2.15x\n\n我可以帮您分析项目数据、优化投放策略。请告诉我您需要什么帮助？`
-  }
-])
 
 const quickHints = [
   '项目数据分析',
@@ -98,20 +80,6 @@ const switchPanel = (item: any) => {
   }
 }
 
-const switchSession = (session: any) => {
-  activeSession.value = session.id
-  sessions.value.forEach(s => s.active = s.id === session.id)
-}
-
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
-}
-
 const handleSearch = () => {
   // 筛选逻辑在 computed 中处理
 }
@@ -169,9 +137,9 @@ const getStatusLabel = (status: string) => {
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav 
       :nav-items="navItems"
-      :sessions="sessions"
+      :sessions="workspaceSessions.sessions.value"
       @switch-panel="switchPanel"
-      @switch-session="switchSession"
+      @switch-session="workspaceSessions.switchSession"
     />
 
     <!-- 中间项目展示区 -->
@@ -321,12 +289,8 @@ const getStatusLabel = (status: string) => {
 
     <!-- 右侧对话区 -->
     <ChatPanel
-      :messages="messages"
+      :session-id="workspaceSessions.activeSessionId.value"
       :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
     />
 
     <!-- 创建项目弹窗 -->

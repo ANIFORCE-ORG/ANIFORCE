@@ -6,35 +6,18 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { getCampaigns, updateCampaignStatus, type Campaign } from '@/api'
 import { navItems } from '@/config/navigation'
+import { useWorkspaceSessions } from '@/composables/useWorkspaceSessions'
 
 const router = useRouter()
 const auth = useAuthStore()
+const workspaceSessions = useWorkspaceSessions()
 
-const activeSession = ref('sess_c001')
-const chatInput = ref('')
 const statusFilter = ref('all')
 const searchQuery = ref('')
 const projectFilter = ref('all')
 const platformFilter = ref('all')
 const loading = ref(false)
 const error = ref('')
-
-// 历史会话
-const sessions = ref([
-  { id: 'sess_c001', name: '广告投放咨询', active: true },
-  { id: 'sess_c002', name: '预算优化建议', active: false },
-  { id: 'sess_c003', name: '投放策略分析', active: false },
-])
-
-// 聊天消息
-const messages = ref([
-  {
-    role: 'ai',
-    author: 'ANIMAGUS助手',
-    time: '刚刚',
-    content: '您好！我可以帮您创建广告计划、优化投放策略或分析广告数据。请问需要什么帮助？'
-  }
-])
 
 // 快捷提示
 const quickHints = [
@@ -122,24 +105,6 @@ const switchPanel = (item: any) => {
   }
 }
 
-// 切换会话
-const switchSession = (session: any) => {
-  activeSession.value = session.id
-  sessions.value.forEach(s => {
-    s.active = s.id === session.id
-  })
-}
-
-// 发送消息
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-}
-
-// 快捷提示点击
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
-}
-
 // 创建广告
 const handleCreateCampaign = () => {
   // 跳转到创建广告页面，不传projectId参数，让用户在页面中选择项目
@@ -218,8 +183,10 @@ const getStatusColor = (status: string) => {
     <!-- 左侧导航栏 -->
     <SidebarNav
       :nav-items="navItems"
-      active-id="campaigns"
+      active-panel="campaigns"
+      :sessions="workspaceSessions.sessions.value"
       @switch-panel="switchPanel"
+      @switch-session="workspaceSessions.switchSession"
     />
 
     <!-- 中间广告列表工作区 -->
@@ -381,13 +348,8 @@ const getStatusColor = (status: string) => {
 
     <!-- 右侧对话区 -->
     <ChatPanel
-      :messages="messages"
+      :session-id="workspaceSessions.activeSessionId.value"
       :quick-hints="quickHints"
-      :chat-input="chatInput"
-      :sessions="sessions"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @switch-session="switchSession"
     />
   </div>
 </template>

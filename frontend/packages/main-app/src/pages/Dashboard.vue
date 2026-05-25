@@ -1,46 +1,15 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { navItems } from '@/config/navigation'
+import { useWorkspaceSessions } from '@/composables/useWorkspaceSessions'
 
 const router = useRouter()
-const auth = useAuthStore()
+const workspaceSessions = useWorkspaceSessions('dashboard')
 
-const activeSession = ref('sess_g001')
-const chatInput = ref('')
 const timeFilter = ref('7d')
-
-const sessions = ref([
-  { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
-  { id: 'sess_g002', name: '素材优化建议', active: false },
-  { id: 'sess_g003', name: '东南亚市场测试', active: false },
-  { id: 'sess_d001', name: 'DramaBox新剧推广', active: false }
-])
-
-const messages = ref([
-  {
-    role: 'assistant',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: `您好${auth.user?.name || '李明'}！我是ANIFORCE智能营销助手。
-
-当前投放概览：
-• 📊 Candy Blast：消耗$52,300，ROI 1.88x
-• 🎬 DramaBox：消耗$98,700，ROI 2.15x
-
-我可以帮您：
-• 查看营销数据概览
-• 创建和管理项目
-• 规划和执行广告投放
-• 生成和管理创意素材
-• 分析数据报表
-
-请告诉我您需要什么帮助？`
-  }
-])
 
 const quickHints = [
   '数据概览',
@@ -107,20 +76,6 @@ const switchPanel = (item: any) => {
   }
 }
 
-const switchSession = (session: any) => {
-  activeSession.value = session.id
-  sessions.value.forEach(s => s.active = s.id === session.id)
-}
-
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
-}
-
 const handleRefresh = () => {
   console.log('刷新数据')
 }
@@ -136,9 +91,9 @@ const handleAlertAction = (alert: any) => {
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav 
       :nav-items="navItems"
-      :sessions="sessions"
+      :sessions="workspaceSessions.sessions.value"
       @switch-panel="switchPanel"
-      @switch-session="switchSession"
+      @switch-session="workspaceSessions.switchSession"
     />
 
     <!-- 中间数据展示区 -->
@@ -238,10 +193,11 @@ const handleAlertAction = (alert: any) => {
                 </div>
               </div>
               <button
-                class="text-xs font-medium text-primary hover:underline"
+                class="inline-flex h-8 w-8 items-center justify-center rounded-md border border-slate-200 bg-white text-primary hover:bg-primary hover:text-white dark:border-slate-700 dark:bg-slate-900"
+                :title="alert.action"
                 @click="handleAlertAction(alert)"
               >
-                {{ alert.action }}
+                <span class="material-symbols-outlined text-[18px]">arrow_forward</span>
               </button>
             </div>
           </div>
@@ -251,12 +207,8 @@ const handleAlertAction = (alert: any) => {
 
     <!-- 右侧对话区 -->
     <ChatPanel
-      :messages="messages"
+      :session-id="workspaceSessions.activeSessionId.value"
       :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
     />
   </div>
 </template>

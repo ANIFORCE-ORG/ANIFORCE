@@ -10,6 +10,7 @@ interface Props {
 interface Emits {
   (e: 'close'): void
   (e: 'select', materials: Material[]): void
+  (e: 'create-material'): void
 }
 
 const props = defineProps<Props>()
@@ -85,6 +86,11 @@ const handleConfirm = () => {
 // 关闭弹窗
 const handleClose = () => {
   emit('close')
+}
+
+const handleCreateMaterial = () => {
+  emit('close')
+  emit('create-material')
 }
 
 // 过滤素材
@@ -195,9 +201,21 @@ const handleTypeFilter = (type: string) => {
           <div class="text-slate-500 dark:text-slate-400">加载中...</div>
         </div>
 
-        <div v-else-if="filteredMaterials.length === 0" class="flex flex-col items-center justify-center py-12">
+        <div v-else-if="filteredMaterials.length === 0" class="flex flex-col items-center justify-center py-12 text-center">
           <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">image_not_supported</span>
-          <div class="text-slate-500 dark:text-slate-400">暂无素材</div>
+          <div class="text-sm font-semibold text-slate-700 dark:text-slate-300">
+            {{ materials.length === 0 ? '素材库暂无素材' : '没有匹配的素材' }}
+          </div>
+          <p class="mt-2 max-w-sm text-xs leading-5 text-slate-500 dark:text-slate-400">
+            创建广告计划可以先保存草稿。需要投放素材时，请到创意素材模块上传或生成素材后再回来选择。
+          </p>
+          <button
+            class="mt-5 inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+            @click="handleCreateMaterial"
+          >
+            <span class="material-symbols-outlined text-base">video_library</span>
+            去素材模块创建素材
+          </button>
         </div>
 
         <div v-else class="grid grid-cols-3 gap-4">

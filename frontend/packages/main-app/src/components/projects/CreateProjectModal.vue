@@ -22,7 +22,7 @@ interface ProjectFormData {
   tags: string[]
 }
 
-const props = defineProps<Props>()
+defineProps<Props>()
 const emit = defineEmits<Emits>()
 
 const formData = ref<ProjectFormData>({

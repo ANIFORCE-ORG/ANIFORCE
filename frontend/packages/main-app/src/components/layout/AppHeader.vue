@@ -40,7 +40,7 @@ const handleUserClick = () => {
   if (!auth.isLoggedIn) {
     router.push('/login')
   } else {
-    showUserMenu.value = !showUserMenu.value
+    router.push('/home')
   }
 }
 

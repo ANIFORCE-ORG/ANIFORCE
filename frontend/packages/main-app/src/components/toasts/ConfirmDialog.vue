@@ -14,7 +14,7 @@ interface Emits {
   (e: 'close'): void
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   title: '确认操作',
   confirmText: '确定',
   cancelText: '取消',

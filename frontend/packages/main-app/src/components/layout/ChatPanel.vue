@@ -28,7 +28,7 @@ const props = withDefaults(defineProps<Props>(), {
   autoFocus: false
 })
 
-const emit = defineEmits<{
+defineEmits<{
   'session-change': [sessionId: string]
 }>()
 
@@ -140,13 +140,6 @@ const handleSendMessage = async () => {
 // 快捷提示点击
 const handleHintClick = (hint: string) => {
   localChatInput.value = hint
-}
-
-// 创建新对话
-const handleNewChat = () => {
-  currentSessionId.value = agentService.generateSessionId('chat')
-  messages.value = []
-  emit('session-change', currentSessionId.value)
 }
 
 // 折叠/展开

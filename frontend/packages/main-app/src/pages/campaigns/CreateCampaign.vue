@@ -1,21 +1,28 @@
 <script setup lang="ts">
-import { ref, onMounted, computed, watch } from 'vue'
+import { ref, onMounted, computed, watch, nextTick } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
+import ChatPanel from '@/components/layout/ChatPanel.vue'
 import SelectGroupModal from '@/components/campaigns/SelectGroupModal.vue'
 import SelectMaterialModal from '@/components/campaigns/SelectMaterialModal.vue'
 import { getProjectDetail, type Project } from '@/api/projects'
 import { createCampaign } from '@/api/campaigns'
 import { type Material, getMaterialImage } from '@/api/materials'
+import { getPlatformAccounts, type PlatformAccount } from '@/api/platformAccounts'
 import { navItems } from '@/config/navigation'
+import { useWorkspaceSessions } from '@/composables/useWorkspaceSessions'
 
 const router = useRouter()
 const route = useRoute()
+const workspaceSessions = useWorkspaceSessions()
 
 const projectId = ref(route.query.projectId as string || '')
+const initialPlatform = ref(route.query.platform as string || '')
+const platformAccountId = ref(route.query.platformAccountId as string || '')
 
 const currentStep = ref(1)
 const totalSteps = 4
+const contentScrollRef = ref<HTMLElement | null>(null)
 
 const switchPanel = (item: any) => {
   if (item.path) {
@@ -24,15 +31,18 @@ const switchPanel = (item: any) => {
 }
 
 const steps = [
-  { id: 1, name: '准备', icon: 'settings', description: '选择分组和平台' },
-  { id: 2, name: '创建', icon: 'edit', description: '设置广告目标' },
-  { id: 3, name: '执行', icon: 'rocket_launch', description: '选择素材和定向' },
+  { id: 1, name: '准备', icon: 'settings', description: '项目、平台和账户' },
+  { id: 2, name: '创建', icon: 'edit', description: '目标、预算和出价' },
+  { id: 3, name: '执行', icon: 'rocket_launch', description: '素材、地区和受众' },
   { id: 4, name: '确认', icon: 'check_circle', description: '确认并提交' }
 ]
 
 // 准备阶段数据
 const selectedGroup = ref<Project | null>(null)
 const selectedPlatform = ref('')
+const platformAccounts = ref<PlatformAccount[]>([])
+const selectedPlatformAccountId = ref(platformAccountId.value)
+const accountApiUnavailable = ref(false)
 const showGroupModal = ref(false)
 const showMaterialModal = ref(false)
 const platforms = [
@@ -41,12 +51,12 @@ const platforms = [
   { id: 'Meta', name: 'Meta Ads', icon: 'f', description: 'Facebook/Instagram 广告' }
 ]
 
-const accountChecks = [
-  { id: 'account', label: '广告账户已开户', checked: true },
-  { id: 'conversion', label: '转化像素已配置', checked: true },
-  { id: 'app', label: '应用已绑定', checked: true },
-  { id: 'payment', label: '支付方式已设置', checked: true }
-]
+const accountChecks = computed(() => [
+  { id: 'account', label: '广告账户已授权', checked: Boolean(selectedPlatformAccountId.value) },
+  { id: 'conversion', label: '转化像素 / Dataset 发布前检查', checked: false },
+  { id: 'app', label: 'Page / IG / App 发布前检查', checked: false },
+  { id: 'payment', label: '币种和时区发布前检查', checked: Boolean(selectedPlatformAccountId.value) }
+])
 
 // 创建阶段数据
 const campaignObjective = ref('install')
@@ -104,6 +114,11 @@ watch(selectedMaterials, (newMaterials) => {
   }
 }, { deep: true })
 
+watch(selectedPlatform, () => {
+  selectedPlatformAccountId.value = ''
+  loadPlatformAccounts()
+})
+
 const targetRegions = ref<string[]>([])
 const regions = ['美国', '英国', '加拿大', '澳洲', '日本', '韩国', '新加坡', '泰国', '印度', '巴西']
 
@@ -115,7 +130,7 @@ const interests = ['游戏', '短视频', '电商购物', '社交媒体', '音�
 
 // 验证逻辑
 const canProceedStep1 = computed(() => {
-  return selectedGroup.value !== null && selectedPlatform.value !== ''
+  return selectedGroup.value !== null && selectedPlatform.value !== '' && selectedPlatformAccountId.value !== ''
 })
 
 const canProceedStep2 = computed(() => {
@@ -123,7 +138,7 @@ const canProceedStep2 = computed(() => {
 })
 
 const canProceedStep3 = computed(() => {
-  return selectedMaterials.value.length > 0
+  return true
 })
 
 const canProceed = computed(() => {
@@ -133,19 +148,23 @@ const canProceed = computed(() => {
   return true
 })
 
+const scrollContentToTop = () => {
+  nextTick(() => {
+    contentScrollRef.value?.scrollTo({ top: 0, behavior: 'smooth' })
+  })
+}
+
 const nextStep = () => {
   if (currentStep.value < totalSteps && canProceed.value) {
     currentStep.value++
-    // 滚动到页面顶部
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    scrollContentToTop()
   }
 }
 
 const prevStep = () => {
   if (currentStep.value > 1) {
     currentStep.value--
-    // 滚动到页面顶部
-    window.scrollTo({ top: 0, behavior: 'smooth' })
+    scrollContentToTop()
   }
 }
 
@@ -179,12 +198,30 @@ const handleSubmit = async () => {
     alert('请选择投放平台')
     return
   }
+
+  if (!selectedPlatformAccountId.value) {
+    alert('请先选择已授权广告账户')
+    return
+  }
   
   submitting.value = true
   
   try {
     // 构建广告计划名称
     const campaignName = `${selectedGroup.value.name} - ${platforms.find(p => p.id === selectedPlatform.value)?.name}`
+
+    if (selectedGroup.value.id.startsWith('demo-project')) {
+      console.log('Demo 创建广告计划草稿:', {
+        project_id: selectedGroup.value.id,
+        name: campaignName,
+        platform: selectedPlatform.value,
+        platform_account_id: selectedPlatformAccountId.value,
+        budget: dailyBudget.value,
+        material_ids: selectedMaterials.value.map(m => m.id)
+      })
+      router.push('/campaign')
+      return
+    }
     
     // 调用API创建广告计划
     const campaign = await createCampaign({
@@ -225,6 +262,42 @@ const handleSelectGroup = (project: Project) => {
   console.log('选择分组:', project)
 }
 
+const selectedPlatformAccount = computed(() =>
+  platformAccounts.value.find(account => account.id === selectedPlatformAccountId.value) || null
+)
+
+const loadPlatformAccounts = async () => {
+  if (!selectedPlatform.value) return
+  accountApiUnavailable.value = false
+  try {
+    platformAccounts.value = await getPlatformAccounts({
+      platform: selectedPlatform.value.toLowerCase(),
+      status: 'active',
+    })
+    if (!selectedPlatformAccountId.value && platformAccounts.value.length > 0) {
+      selectedPlatformAccountId.value = platformAccounts.value[0].id
+    }
+  } catch (err) {
+    accountApiUnavailable.value = true
+    platformAccounts.value = [
+      {
+        id: `demo-${selectedPlatform.value.toLowerCase()}-account-001`,
+        platform: selectedPlatform.value.toLowerCase(),
+        account_id: 'act_demo_001',
+        account_name: `Demo ${selectedPlatform.value} Ad Account`,
+        business_name: 'Demo Business',
+        auth_status: 'demo',
+        account_status: 'active',
+        currency: 'USD',
+        timezone: 'America/Los_Angeles',
+        last_sync_at: new Date().toISOString(),
+      },
+    ]
+    selectedPlatformAccountId.value = platformAccounts.value[0].id
+    console.error('加载广告账户失败:', err)
+  }
+}
+
 const handleOpenMaterialModal = () => {
   showMaterialModal.value = true
 }
@@ -240,16 +313,51 @@ const handleSelectMaterials = (materials: Material[]) => {
   showMaterialModal.value = false
 }
 
+const handleCreateMaterial = () => {
+  router.push({
+    path: '/material',
+    query: {
+      returnTo: route.fullPath,
+      source: 'campaign-create',
+    },
+  })
+}
+
 // 页面加载时，如果有projectId参数，自动加载该项目作为默认分组
 onMounted(async () => {
+  if (initialPlatform.value) {
+    selectedPlatform.value = initialPlatform.value
+  }
+
   if (projectId.value) {
     try {
       const project = await getProjectDetail(projectId.value)
       selectedGroup.value = project
       console.log('自动设置默认分组:', project.name)
     } catch (err) {
+      if (projectId.value.startsWith('demo-project')) {
+        selectedGroup.value = {
+          id: projectId.value,
+          name: 'Demo 广告项目',
+          game_type: 'game',
+          target_market: 'US',
+          tags: ['demo'],
+          total_budget: 0,
+          spent: 0,
+          status: 'draft',
+          manager: 'Demo',
+          start_date: '',
+          end_date: '',
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }
+      }
       console.error('加载项目详情失败:', err)
     }
+  }
+
+  if (selectedPlatform.value) {
+    await loadPlatformAccounts()
   }
 })
 </script>
@@ -259,15 +367,17 @@ onMounted(async () => {
     <!-- 左侧导航栏 -->
     <SidebarNav
       :nav-items="navItems"
-      active-id="campaigns"
+      active-panel="campaigns"
+      :sessions="workspaceSessions.sessions.value"
       @switch-panel="switchPanel"
+      @switch-session="workspaceSessions.switchSession"
     />
 
     <!-- 主内容区 -->
     <div class="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
       <!-- Header -->
       <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-7xl mx-auto px-6 py-4">
+      <div class="mx-auto px-6 py-4">
         <div class="flex items-center gap-4">
           <button
             @click="handleBack"
@@ -275,14 +385,17 @@ onMounted(async () => {
           >
             <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back</span>
           </button>
-          <h1 class="text-xl font-bold text-slate-900 dark:text-white">新建计划</h1>
+          <div>
+            <h1 class="text-base font-bold text-slate-900 dark:text-white">新建广告计划</h1>
+            <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">先创建草稿，发布前再完成素材和资产校验</p>
+          </div>
           </div>
         </div>
       </div>
 
       <!-- Steps Navigation -->
     <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-7xl mx-auto px-6 py-6">
+      <div class="mx-auto px-6 py-3">
         <div class="flex items-center justify-between">
           <div
             v-for="(step, index) in steps"
@@ -292,16 +405,16 @@ onMounted(async () => {
             <!-- Step Circle -->
             <div class="flex flex-col items-center">
               <div
-                class="w-12 h-12 rounded-full flex items-center justify-center transition-all"
+                class="h-9 w-9 rounded-md flex items-center justify-center transition-all"
                 :class="currentStep >= step.id 
                   ? 'bg-primary text-white' 
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400'"
               >
-                <span class="material-symbols-outlined">{{ step.icon }}</span>
+                <span class="material-symbols-outlined text-lg">{{ step.icon }}</span>
               </div>
               <div class="mt-2 text-center">
                 <div
-                  class="text-sm font-medium"
+                  class="whitespace-nowrap text-xs font-semibold"
                   :class="currentStep >= step.id 
                     ? 'text-primary' 
                     : 'text-slate-400'"
@@ -314,7 +427,7 @@ onMounted(async () => {
             <!-- Connector Line -->
             <div
               v-if="index < steps.length - 1"
-              class="flex-1 h-0.5 mx-4 transition-all"
+              class="flex-1 h-px mx-4 transition-all"
               :class="currentStep > step.id 
                 ? 'bg-primary' 
                 : 'bg-slate-200 dark:bg-slate-700'"
@@ -325,18 +438,18 @@ onMounted(async () => {
     </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto">
-        <div class="mx-auto px-6 py-8">
+      <div ref="contentScrollRef" class="flex-1 overflow-y-auto">
+        <div class="mx-auto px-6 py-5">
       <!-- Step 1: 准备 -->
-      <div v-if="currentStep === 1" class="space-y-6">
+      <div v-if="currentStep === 1" class="space-y-4">
         <!-- 选择所属分组 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">folder</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">选择所属项目</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">选择所属项目</h3>
           </div>
           <button
-            class="w-full px-4 py-3 rounded-md border-2 border-dashed transition-colors text-left"
+            class="w-full whitespace-nowrap rounded-md border border-dashed px-4 py-3 text-left transition-colors"
             :class="selectedGroup 
               ? 'border-primary bg-primary/5 text-slate-900 dark:text-white' 
               : 'border-primary/30 text-primary hover:bg-primary/5'"
@@ -344,7 +457,7 @@ onMounted(async () => {
           >
             <div v-if="selectedGroup">
               <div class="font-semibold">{{ selectedGroup.name }}</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ selectedGroup.game_type }}</div>
+              <div class="mt-1 text-xs text-slate-500 dark:text-slate-400">{{ selectedGroup.game_type }}</div>
             </div>
             <div v-else class="text-center text-primary">
               请选择分组
@@ -353,28 +466,28 @@ onMounted(async () => {
         </div>
 
         <!-- 投放平台 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">ads_click</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">投放平台</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">投放平台</h3>
           </div>
-          <div class="grid gap-4">
+          <div class="grid gap-3">
             <div
               v-for="platform in platforms"
               :key="platform.id"
-              class="p-4 rounded-lg border-2 transition-all cursor-pointer"
+              class="rounded-md p-3 border transition-all cursor-pointer"
               :class="selectedPlatform === platform.id 
                 ? 'border-primary bg-primary/5' 
                 : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'"
               @click="selectedPlatform = platform.id"
             >
               <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl font-bold">
+                <div class="h-10 w-10 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-base font-bold">
                   {{ platform.icon }}
                 </div>
                 <div class="flex-1">
                   <div class="font-semibold text-slate-900 dark:text-white">{{ platform.name }}</div>
-                  <div class="text-sm text-slate-500 dark:text-slate-400">{{ platform.description }}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400">{{ platform.description }}</div>
                 </div>
               </div>
             </div>
@@ -382,10 +495,30 @@ onMounted(async () => {
         </div>
 
         <!-- 账户环境检查 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">verified</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">账户环境检查</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">广告账户与环境检查</h3>
+          </div>
+          <div v-if="accountApiUnavailable" class="mb-4 rounded-md border border-amber-200 bg-amber-50 p-4 text-sm leading-6 text-amber-800">
+            广告账户列表接口暂不可用。需要后端提供 `GET /platform-accounts?platform=meta&status=active` 后继续联调。
+          </div>
+          <div v-else-if="platformAccounts.length === 0" class="mb-4 rounded-md border border-slate-200 bg-slate-50 p-4 text-sm leading-6 text-slate-600 dark:border-slate-800 dark:bg-slate-950 dark:text-slate-400">
+            暂无可用广告账户。请先在新任务流程或平台连接页完成授权和账户同步。
+          </div>
+          <div v-else class="mb-5">
+            <label class="mb-2 block text-sm font-medium text-slate-700 dark:text-slate-300">已授权广告账户</label>
+            <select
+              v-model="selectedPlatformAccountId"
+              class="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 dark:border-slate-700 dark:bg-slate-800 dark:text-white"
+            >
+              <option v-for="account in platformAccounts" :key="account.id" :value="account.id">
+                {{ account.account_name }} · {{ account.account_id }}
+              </option>
+            </select>
+            <p v-if="selectedPlatformAccount" class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              {{ selectedPlatformAccount.currency || 'Currency pending' }} · {{ selectedPlatformAccount.timezone || 'Timezone pending' }}
+            </p>
           </div>
           <div class="space-y-3">
             <div
@@ -406,28 +539,28 @@ onMounted(async () => {
       </div>
 
       <!-- Step 2: 创建 -->
-      <div v-if="currentStep === 2" class="space-y-6">
+      <div v-if="currentStep === 2" class="space-y-4">
         <!-- 推广目标 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">flag</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">推广目标</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">推广目标</h3>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-2 gap-3">
             <div
               v-for="objective in objectives"
               :key="objective.id"
-              class="p-4 rounded-lg border-2 transition-all cursor-pointer"
+              class="rounded-md p-3 border transition-all cursor-pointer"
               :class="campaignObjective === objective.id 
                 ? 'border-primary bg-primary/5' 
                 : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'"
               @click="campaignObjective = objective.id"
             >
               <div class="flex flex-col items-center text-center gap-2">
-                <span class="material-symbols-outlined text-3xl" :class="campaignObjective === objective.id ? 'text-primary' : 'text-slate-400'">
+                <span class="material-symbols-outlined text-2xl" :class="campaignObjective === objective.id ? 'text-primary' : 'text-slate-400'">
                   {{ objective.icon }}
                 </span>
-                <div class="font-semibold text-slate-900 dark:text-white">{{ objective.name }}</div>
+                <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ objective.name }}</div>
                 <div class="text-xs text-slate-500 dark:text-slate-400">{{ objective.description }}</div>
               </div>
             </div>
@@ -435,10 +568,10 @@ onMounted(async () => {
         </div>
 
         <!-- 预算设置 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">account_balance_wallet</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">预算设置</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">预算设置</h3>
           </div>
           <div class="space-y-4">
             <div>
@@ -468,22 +601,22 @@ onMounted(async () => {
         </div>
 
         <!-- 出价策略 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">trending_up</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">出价策略</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">出价策略</h3>
           </div>
-          <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="grid grid-cols-2 gap-3 mb-4">
             <div
               v-for="strategy in biddingStrategies"
               :key="strategy.id"
-              class="p-4 rounded-lg border-2 transition-all cursor-pointer"
+              class="rounded-md p-3 border transition-all cursor-pointer"
               :class="biddingStrategy === strategy.id 
                 ? 'border-primary bg-primary/5' 
                 : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'"
               @click="biddingStrategy = strategy.id"
             >
-              <div class="font-semibold text-slate-900 dark:text-white mb-1">{{ strategy.name }}</div>
+              <div class="mb-1 text-sm font-semibold text-slate-900 dark:text-white">{{ strategy.name }}</div>
               <div class="text-xs text-slate-500 dark:text-slate-400">{{ strategy.description }}</div>
             </div>
           </div>
@@ -501,12 +634,12 @@ onMounted(async () => {
         </div>
 
         <!-- 投放时间 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">schedule</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">投放时间</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">投放时间</h3>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">开始日期</label>
               <input
@@ -528,21 +661,21 @@ onMounted(async () => {
       </div>
 
       <!-- Step 3: 执行 -->
-      <div v-if="currentStep === 3" class="space-y-6">
+      <div v-if="currentStep === 3" class="space-y-4">
         <!-- 选择素材 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">video_library</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">选择素材</h3>
-            <span class="text-sm text-slate-500 dark:text-slate-400">选择需要投放的创意素材，可多选</span>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">选择素材</h3>
+            <span class="text-xs text-slate-500 dark:text-slate-400">草稿可先跳过，发布前补齐</span>
           </div>
           
           <!-- 已选择的素材列表 -->
-          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-2 gap-4 mb-4">
+          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-2 gap-3 mb-4">
             <div
               v-for="material in selectedMaterials"
               :key="material.id"
-              class="p-4 rounded-lg border-2 border-primary bg-primary/5 relative"
+              class="rounded-md p-3 border border-primary bg-primary/5 relative"
             >
               <div class="flex items-center gap-3">
                 <div class="w-16 h-16 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
@@ -566,7 +699,7 @@ onMounted(async () => {
               <!-- 移除按钮 -->
               <button
                 @click="removeMaterial(material.id)"
-                class="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"
+                class="absolute top-2 right-2 w-6 h-6 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"
               >
                 <span class="material-symbols-outlined text-sm">close</span>
               </button>
@@ -576,7 +709,7 @@ onMounted(async () => {
           <!-- 添加素材按钮 -->
           <button
             @click="handleOpenMaterialModal"
-            class="w-full px-4 py-3 rounded-md border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+            class="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-dashed border-primary/30 px-4 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
           >
             <span class="material-symbols-outlined">add_circle</span>
             <span>添加素材</span>
@@ -584,16 +717,16 @@ onMounted(async () => {
         </div>
 
         <!-- 定向配置 - 投放地区 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">public</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">定向配置 — 投放地区</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">定向配置 — 投放地区</h3>
           </div>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="region in regions"
               :key="region"
-              class="px-4 py-2 rounded-full text-sm transition-all"
+              class="whitespace-nowrap rounded-md px-3 py-2 text-sm transition-all"
               :class="targetRegions.includes(region) 
                 ? 'bg-primary text-white' 
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
@@ -605,10 +738,10 @@ onMounted(async () => {
         </div>
 
         <!-- 定向配置 - 受众人群 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">group</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">定向配置 — 受众人群</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">定向配置 — 受众人群</h3>
           </div>
           <div class="space-y-4">
             <div>
@@ -622,7 +755,7 @@ onMounted(async () => {
                 <option value="female">女性</option>
               </select>
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-3">
               <div>
                 <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">最小年龄</label>
                 <input
@@ -648,16 +781,16 @@ onMounted(async () => {
         </div>
 
         <!-- 定向配置 - 兴趣标签 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">label</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">定向配置 — 兴趣标签</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">定向配置 — 兴趣标签</h3>
           </div>
           <div class="flex flex-wrap gap-2">
             <button
               v-for="interest in interests"
               :key="interest"
-              class="px-4 py-2 rounded-full text-sm transition-all"
+              class="whitespace-nowrap rounded-md px-3 py-2 text-sm transition-all"
               :class="targetInterests.includes(interest) 
                 ? 'bg-primary text-white' 
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
@@ -670,12 +803,12 @@ onMounted(async () => {
       </div>
 
       <!-- Step 4: 确认 -->
-      <div v-if="currentStep === 4" class="space-y-6">
+      <div v-if="currentStep === 4" class="space-y-4">
         <!-- 准备阶段 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">settings</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">准备阶段</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">准备阶段</h3>
           </div>
           <div class="grid grid-cols-3 gap-4 text-sm">
             <div>
@@ -690,19 +823,19 @@ onMounted(async () => {
             </div>
             <div>
               <div class="text-slate-500 dark:text-slate-400 mb-1">账户状态</div>
-              <div class="flex items-center gap-1 text-emerald-600">
+              <div class="flex items-center gap-1" :class="selectedPlatformAccountId ? 'text-emerald-600' : 'text-amber-600'">
                 <span class="material-symbols-outlined text-sm">check_circle</span>
-                <span class="font-medium">全部就绪</span>
+                <span class="font-medium">{{ selectedPlatformAccountId ? '已选择广告账户' : '未选择广告账户' }}</span>
               </div>
             </div>
           </div>
         </div>
 
         <!-- 创建阶段 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">edit</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">创建阶段</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">创建阶段</h3>
           </div>
           <div class="space-y-3 text-sm">
             <div class="flex justify-between">
@@ -733,10 +866,10 @@ onMounted(async () => {
         </div>
 
         <!-- 执行阶段 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
             <span class="material-symbols-outlined text-primary">rocket_launch</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">执行阶段</h3>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">执行阶段</h3>
           </div>
           <div class="space-y-3 text-sm">
             <div>
@@ -772,7 +905,7 @@ onMounted(async () => {
         <button
           v-if="currentStep > 1"
           @click="prevStep"
-          class="flex items-center gap-2 px-6 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          class="flex items-center gap-2 whitespace-nowrap rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
         >
           <span class="material-symbols-outlined text-sm">arrow_back</span>
           <span>上一步</span>
@@ -783,7 +916,7 @@ onMounted(async () => {
           v-if="currentStep < totalSteps"
           @click="nextStep"
           :disabled="!canProceed"
-          class="flex items-center gap-2 px-6 py-2 rounded-md transition-colors ml-auto"
+          class="ml-auto flex items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold transition-colors"
           :class="canProceed 
             ? 'bg-primary text-white hover:bg-primary/90 cursor-pointer' 
             : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'"
@@ -795,7 +928,7 @@ onMounted(async () => {
           v-else
           @click="handleSubmit"
           :disabled="submitting"
-          class="flex items-center gap-2 px-6 py-2 rounded-md transition-colors ml-auto"
+          class="ml-auto flex items-center gap-2 whitespace-nowrap rounded-md px-4 py-2 text-sm font-semibold transition-colors"
           :class="submitting 
             ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed' 
             : 'bg-primary text-white hover:bg-primary/90 cursor-pointer'"
@@ -806,6 +939,7 @@ onMounted(async () => {
           </button>
         </div>
       </div>
+    </div>
     </div>
 
     <!-- 选择分组弹窗 -->
@@ -821,7 +955,12 @@ onMounted(async () => {
       :selected-ids="selectedMaterials.map(m => m.id)"
       @close="handleCloseMaterialModal"
       @select="handleSelectMaterials"
+      @create-material="handleCreateMaterial"
     />
-    </div>
+
+    <ChatPanel
+      :session-id="workspaceSessions.activeSessionId.value"
+      :quick-hints="['检查计划创建条件', '解释账户授权状态', '帮我优化预算和出价']"
+    />
   </div>
 </template>

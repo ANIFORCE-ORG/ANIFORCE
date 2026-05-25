@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
@@ -8,13 +8,14 @@ import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { getMaterials, getMaterialImage, type Material } from '@/api/materials'
 import { navItems } from '@/config/navigation'
 import { useToast } from '@/composables/useToast'
+import { useWorkspaceSessions } from '@/composables/useWorkspaceSessions'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
-const { success, error: showError, info } = useToast()
+const { error: showError, info } = useToast()
+const workspaceSessions = useWorkspaceSessions()
 
-const activeSession = ref('sess_g001')
-const chatInput = ref('')
 const filterTab = ref('all')
 const searchQuery = ref('')
 const loading = ref(false)
@@ -27,24 +28,8 @@ const showUploadModal = ref(false)
 const uploadFiles = ref<File[]>([])
 const isDragging = ref(false)
 const uploading = ref(false)
-const uploadProgress = ref<Map<string, number>>(new Map())
-
-// 历史会话
-const sessions = ref([
-  { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
-  { id: 'sess_g002', name: '素材优化建议', active: false },
-  { id: 'sess_g003', name: '东南亚市场拓展', active: false },
-])
-
-// 聊天消息
-const messages = ref([
-  {
-    role: 'ai',
-    author: ' ANIFORCE助手',
-    time: '刚刚',
-    content: '您好！我可以帮您分析热门素材、生成创意变体或AI生成新素材。请问需要什么帮助？'
-  }
-])
+const returnTo = computed(() => typeof route.query.returnTo === 'string' ? route.query.returnTo : '')
+const fromCampaignCreate = computed(() => route.query.source === 'campaign-create' && Boolean(returnTo.value))
 
 // 快捷提示
 const quickHints = [
@@ -92,269 +77,6 @@ onMounted(async () => {
 const getMaterialImageSrc = (materialId: string): string | undefined => {
   return materialImages.value.get(materialId)
 }
-
-// Mock素材库数据（保留作为后备）
-const mockCreatives = [
-  // 游戏素材
-  {
-    id: 'cre_g001',
-    name: 'CB_Gameplay_Level15',
-    thumbnail: '/images/creatives/creative_game_001.jpg',
-    status: 'running',
-    ctr: 1.85,
-    roi: 2.3,
-    impressions: '285K',
-    platform: 'Google',
-    tags: ['#gameplay', '#level_showcase']
-  },
-  {
-    id: 'cre_g002',
-    name: 'CB_UGC_FailMoment',
-    thumbnail: '/images/creatives/creative_game_002.jpg',
-    status: 'running',
-    ctr: 2.21,
-    roi: 2.8,
-    impressions: '420K',
-    platform: 'TikTok',
-    tags: ['#ugc', '#fail_moment']
-  },
-  {
-    id: 'cre_g003',
-    name: 'CB_Character_CandyQueen',
-    thumbnail: '/images/creatives/creative_game_003.jpg',
-    status: 'running',
-    ctr: 1.58,
-    roi: 1.9,
-    impressions: '285K',
-    platform: 'Meta',
-    tags: ['#character', '#story']
-  },
-  {
-    id: 'cre_g004',
-    name: 'CB_Hook_ImpossibleLevel',
-    thumbnail: '/images/creatives/creative_game_004.jpg',
-    status: 'running',
-    ctr: 3.12,
-    roi: 3.2,
-    impressions: '420K',
-    platform: 'TikTok',
-    tags: ['#hook', '#challenge']
-  },
-  // AI生成糖果游戏素材
-  {
-    id: 'ai_candy_001',
-    name: 'AI_Candy_Combo',
-    thumbnail: '/images/creatives/ai_candy_combo_001.jpg',
-    status: 'ready',
-    ctr: 1.98,
-    roi: 2.1,
-    impressions: '0',
-    platform: 'Google',
-    tags: ['#combo', '#mega']
-  },
-  {
-    id: 'ai_candy_002',
-    name: 'AI_Candy_Hook',
-    thumbnail: '/images/creatives/ai_candy_hook_001.jpg',
-    status: 'ready',
-    ctr: 2.15,
-    roi: 2.4,
-    impressions: '0',
-    platform: 'TikTok',
-    tags: ['#hook', '#satisfying']
-  },
-  {
-    id: 'ai_candy_003',
-    name: 'AI_Candy_Mix',
-    thumbnail: '/images/creatives/ai_candy_mix_001.jpg',
-    status: 'ready',
-    ctr: 1.85,
-    roi: 2.0,
-    impressions: '0',
-    platform: 'Meta',
-    tags: ['#gameplay', '#mix']
-  },
-  {
-    id: 'ai_candy_004',
-    name: 'AI_Candy_Reaction',
-    thumbnail: '/images/creatives/ai_candy_reaction_001.jpg',
-    status: 'ready',
-    ctr: 2.28,
-    roi: 2.5,
-    impressions: '0',
-    platform: 'TikTok',
-    tags: ['#ugc', '#reaction']
-  },
-  {
-    id: 'ai_candy_005',
-    name: 'AI_Candy_Trend',
-    thumbnail: '/images/creatives/ai_candy_trend_001.jpg',
-    status: 'ready',
-    ctr: 1.92,
-    roi: 2.2,
-    impressions: '0',
-    platform: 'Google',
-    tags: ['#trend', '#viral']
-  },
-  {
-    id: 'ai_candy_006',
-    name: 'AI_Candy_UGC',
-    thumbnail: '/images/creatives/ai_candy_ugc_001.jpg',
-    status: 'ready',
-    ctr: 2.05,
-    roi: 2.3,
-    impressions: '0',
-    platform: 'Meta',
-    tags: ['#ugc', '#authentic']
-  },
-  {
-    id: 'ai_candy_007',
-    name: 'AI_Candy_Victory',
-    thumbnail: '/images/creatives/ai_candy_victory_001.jpg',
-    status: 'ready',
-    ctr: 1.78,
-    roi: 1.9,
-    impressions: '0',
-    platform: 'Google',
-    tags: ['#victory', '#reward']
-  },
-  // 短剧素材
-  {
-    id: 'cre_d001',
-    name: 'DB_Hook_SuspenseCliffhanger',
-    thumbnail: '/images/creatives/creative_drama_001.jpg',
-    status: 'running',
-    ctr: 3.85,
-    roi: 2.8,
-    impressions: '1.25M',
-    platform: 'TikTok',
-    tags: ['#hook', '#suspense']
-  },
-  {
-    id: 'cre_d002',
-    name: 'DB_Romance_EmotionalConflict',
-    thumbnail: '/images/creatives/creative_drama_002.jpg',
-    status: 'running',
-    ctr: 3.21,
-    roi: 2.5,
-    impressions: '820K',
-    platform: 'Meta',
-    tags: ['#romance', '#emotional']
-  },
-  {
-    id: 'cre_d003',
-    name: 'DB_Character_BossReveal',
-    thumbnail: '/images/creatives/creative_drama_003.jpg',
-    status: 'running',
-    ctr: 2.85,
-    roi: 2.1,
-    impressions: '380K',
-    platform: 'Google',
-    tags: ['#character', '#boss']
-  },
-  {
-    id: 'cre_d004',
-    name: 'DB_Story_RevengePlot',
-    thumbnail: '/images/creatives/creative_drama_004.jpg',
-    status: 'fatigue',
-    ctr: 2.48,
-    roi: 2.3,
-    impressions: '2.1M',
-    platform: 'TikTok',
-    tags: ['#story', '#revenge']
-  },
-  // 短剧参考图片
-  {
-    id: 'ref_drama_001',
-    name: 'Short_Drama_Apps_Reference',
-    thumbnail: '/images/creatives/1_The_8_Best_Short_Drama_Apps_in_202.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#apps']
-  },
-  {
-    id: 'ref_video_001',
-    name: 'Mobile_Video_Ad_Best_Practices',
-    thumbnail: '/images/creatives/2_Mobile_Video_Ad_Best_Practices_for.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#best_practices']
-  },
-  {
-    id: 'ref_video_002',
-    name: 'How_to_Create_Mobile_Video_Ads',
-    thumbnail: '/images/creatives/3_How_to_Create_Mobile_Video_Ads_for.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#tutorial']
-  },
-  {
-    id: 'ref_match3_001',
-    name: 'Match_3_Workflow',
-    thumbnail: '/images/creatives/4_What_is_a_Match_3_How_to_do_it_Workflow.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#workflow']
-  },
-  {
-    id: 'ref_drama_002',
-    name: 'TikTok_Microdrama_Launch',
-    thumbnail: '/images/creatives/5_TikTok_quietly_launches_a_microdrama.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#tiktok']
-  },
-  {
-    id: 'ref_match3_002',
-    name: 'Match_3_Candy_Game_UI',
-    thumbnail: '/images/creatives/6_Match_3_candy_game_ui_interface_background.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#ui']
-  },
-  {
-    id: 'ref_drama_003',
-    name: 'Micro_Drama_Watch_Apps',
-    thumbnail: '/images/creatives/7_Micro_Drama_Watch_Short_Dramas_Apps.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#apps']
-  },
-  {
-    id: 'ref_drama_004',
-    name: 'TikTok_Micro_Dramas',
-    thumbnail: '/images/creatives/8_TikTok_Is_Jumping_Into_Micro_Dramas.png',
-    status: 'ready',
-    ctr: 0,
-    roi: 0,
-    impressions: '0',
-    platform: 'Reference',
-    tags: ['#reference', '#industry']
-  }
-]
-
-const creatives = ref(mockCreatives)
 
 // 过滤后的素材列表（使用真实数据）
 const filteredCreatives = computed(() => {
@@ -412,26 +134,6 @@ const switchPanel = (item: any) => {
   }
 }
 
-const switchSession = (session: any) => {
-  activeSession.value = session.id
-  sessions.value.forEach(s => s.active = s.id === session.id)
-}
-
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  messages.value.push({
-    role: 'user',
-    author: '用户',
-    time: '刚刚',
-    content: message
-  })
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
-}
-
 const handleFeatureClick = (featureId: string) => {
   console.log('点击功能卡片:', featureId)
 }
@@ -460,6 +162,12 @@ const getStatusLabel = (status: string) => {
 const openUploadModal = () => {
   showUploadModal.value = true
   uploadFiles.value = []
+}
+
+const handleReturnToCampaign = () => {
+  if (returnTo.value) {
+    router.push(returnTo.value)
+  }
 }
 
 const closeUploadModal = () => {
@@ -520,31 +228,6 @@ const removeFile = (index: number) => {
   uploadFiles.value.splice(index, 1)
 }
 
-const refreshMaterials = async () => {
-  try {
-    loading.value = true
-    const data = await getMaterials()
-    materials.value = data
-    
-    // 加载新素材的图像
-    for (const material of data) {
-      if (!materialImages.value.has(material.id)) {
-        try {
-          const imageData = await getMaterialImage(material.id, true)
-          materialImages.value.set(material.id, imageData.data)
-        } catch (err) {
-          console.error('加载素材图像失败:', material.id, err)
-        }
-      }
-    }
-  } catch (err: any) {
-    console.error('刷新素材列表失败:', err)
-    showError('刷新素材列表失败')
-  } finally {
-    loading.value = false
-  }
-}
-
 const completeUpload = async () => {
   if (uploadFiles.value.length === 0) {
     showError('请先选择要上传的文件')
@@ -583,24 +266,39 @@ const completeUpload = async () => {
     <!-- 左侧功能导航 -->
     <SidebarNav 
       :nav-items="navItems"
-      :sessions="sessions"
+      :sessions="workspaceSessions.sessions.value"
       active-panel="materials"
       @switch-panel="switchPanel"
-      @switch-session="switchSession"
+      @switch-session="workspaceSessions.switchSession"
     />
 
     <!-- 中间核心工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
       <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
-        <h1 class="text-xl font-bold text-slate-900 dark:text-white">创意素材</h1>
-        <button
-          class="flex items-center gap-2 px-4 py-2 bg-primary text-white rounded-lg hover:bg-primary/90 transition-colors"
-          @click="openUploadModal"
-        >
-          <span class="material-symbols-outlined text-lg">upload</span>
-          <span class="font-medium">上传素材</span>
-        </button>
+        <div>
+          <h1 class="text-base font-bold text-slate-900 dark:text-white">创意素材</h1>
+          <p v-if="fromCampaignCreate" class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">
+            创建或上传素材后，可以返回新建广告计划继续选择。
+          </p>
+        </div>
+        <div class="flex items-center gap-2">
+          <button
+            v-if="fromCampaignCreate"
+            class="inline-flex items-center gap-2 whitespace-nowrap rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800"
+            @click="handleReturnToCampaign"
+          >
+            <span class="material-symbols-outlined text-lg">arrow_back</span>
+            返回创建计划
+          </button>
+          <button
+            class="flex items-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-primary/90"
+            @click="openUploadModal"
+          >
+            <span class="material-symbols-outlined text-lg">upload</span>
+            <span>上传素材</span>
+          </button>
+        </div>
       </div>
 
       <!-- Content -->
@@ -755,12 +453,8 @@ const completeUpload = async () => {
 
     <!-- 右侧对话区 -->
     <ChatPanel
-      :messages="messages"
+      :session-id="workspaceSessions.activeSessionId.value"
       :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
     />
 
     <!-- 上传素材对话框 -->

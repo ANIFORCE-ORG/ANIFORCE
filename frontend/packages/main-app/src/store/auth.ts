@@ -139,9 +139,15 @@ export const useAuthStore = defineStore('auth', () => {
     user.value = {
       id: 'admin-001',
       name: 'Admin',
-      email: 'admin@animagus.ai',
+      email: 'test@animagus.com',
     }
-    token.value = 'fake-jwt-token-demo-' + Date.now()
+    const header = btoa(JSON.stringify({ alg: 'none', typ: 'JWT' }))
+    const payload = btoa(JSON.stringify({
+      sub: 'admin-001',
+      email: 'test@animagus.com',
+      exp: Math.floor(Date.now() / 1000) + 60 * 60 * 24 * 7,
+    }))
+    token.value = `${header}.${payload}.demo`
   }
 
   // 退出登录

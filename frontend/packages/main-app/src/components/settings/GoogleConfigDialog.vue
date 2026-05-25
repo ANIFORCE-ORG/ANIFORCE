@@ -200,22 +200,6 @@ const handleSaveConfig = async () => {
   }
 }
 
-const handleGoogleAuthorize = async () => {
-  if (!props.connectionId) {
-    showError('请先保存配置后再进行授权')
-    return
-  }
-  
-  try {
-    const response = await platformApi.getGoogleAuthorizeUrl(props.connectionId)
-    window.location.href = response.authorize_url
-  } catch (err: any) {
-    console.error('获取授权 URL 失败:', err)
-    const errorDetail = err.response?.data?.detail || '获取授权 URL 失败，请重试'
-    showError(errorDetail)
-  }
-}
-
 const openGoogleCloudPlatform = () => {
   window.open('https://cloud.google.com/', '_blank')
 }

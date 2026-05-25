@@ -17,6 +17,22 @@ const emit = defineEmits<Emits>()
 const loading = ref(false)
 const projects = ref<Project[]>([])
 
+const createDemoProject = () => ({
+  id: `demo-project-${Date.now()}`,
+  name: 'Demo 广告项目',
+  game_type: 'game',
+  target_market: 'US',
+  tags: ['demo'],
+  total_budget: 0,
+  spent: 0,
+  status: 'draft',
+  manager: 'Demo',
+  start_date: '',
+  end_date: '',
+  created_at: new Date().toISOString(),
+  updated_at: new Date().toISOString(),
+})
+
 onMounted(async () => {
   if (props.show) {
     await loadProjects()
@@ -38,6 +54,10 @@ const loadProjects = async () => {
 const handleSelect = (project: Project) => {
   emit('select', project)
   emit('close')
+}
+
+const handleUseDemoProject = () => {
+  handleSelect(createDemoProject())
 }
 
 const handleClose = () => {
@@ -106,9 +126,19 @@ watch(() => props.show, handleShowChange)
             </div>
 
             <!-- 空状态 -->
-            <div v-else class="flex flex-col items-center justify-center py-12">
+            <div v-else class="flex flex-col items-center justify-center py-12 text-center">
               <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">folder_off</span>
-              <p class="text-sm text-slate-500 dark:text-slate-400">暂无项目</p>
+              <p class="text-sm font-semibold text-slate-700 dark:text-slate-300">暂无项目</p>
+              <p class="mt-1 max-w-xs text-xs leading-5 text-slate-500 dark:text-slate-400">
+                项目接口为空时，可以先使用 Demo 项目完成前端创建流程测试。
+              </p>
+              <button
+                class="mt-5 inline-flex items-center gap-2 whitespace-nowrap rounded-md bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90"
+                @click="handleUseDemoProject"
+              >
+                <span class="material-symbols-outlined text-base">add</span>
+                使用 Demo 项目继续
+              </button>
             </div>
           </div>
         </div>
