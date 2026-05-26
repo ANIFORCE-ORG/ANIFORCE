@@ -8,8 +8,8 @@ import { useToast } from '@/composables/useToast'
 const router = useRouter()
 const auth = useAuthStore()
 const { info } = useToast()
-const email = ref('admin@animagus.ai')
-const password = ref('admin123')
+const email = ref('')
+const password = ref('')
 const loading = ref(false)
 const error = ref('')
 const showEmailLogin = ref(false)
@@ -193,7 +193,7 @@ function handleRegister() {
                   v-model="password"
                   type="password"
                   class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
-                  placeholder="••••••••"
+                  placeholder="enter your password"
                   :disabled="loading"
                 />
                 <!-- 忘记密码链接 -->
