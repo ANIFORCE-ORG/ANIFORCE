@@ -27,6 +27,19 @@ export interface PlatformConnectionResponse {
   updated_at: string
 }
 
+export interface SubAccountRequest {
+  name: string
+  customer_id: string
+}
+
+export interface SubAccountResponse {
+  id: string
+  name: string
+  customer_id: string
+  status: string
+  updated_at: string
+}
+
 export const platformApi = {
   saveMetaConfig: (data: MetaConfigRequest) =>
     http.post<PlatformConnectionResponse>('/platform-auth/meta/config', data),
@@ -51,4 +64,14 @@ export const platformApi = {
 
   getGoogleAuthorizeUrl: (connectionId: string) =>
     http.get<{ authorize_url: string }>(`/platform-auth/google/authorize_url/${connectionId}`),
+
+  // 子账号管理
+  getSubAccounts: (connectionId: string) =>
+    http.get<SubAccountResponse[]>(`/platform-auth/google/${connectionId}/sub-accounts`),
+
+  addSubAccount: (connectionId: string, data: SubAccountRequest) =>
+    http.post<SubAccountResponse>(`/platform-auth/google/${connectionId}/sub-accounts`, data),
+
+  deleteSubAccount: (connectionId: string, subAccountId: string) =>
+    http.delete(`/platform-auth/google/${connectionId}/sub-accounts/${subAccountId}`),
 }

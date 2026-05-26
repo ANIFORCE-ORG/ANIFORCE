@@ -51,6 +51,10 @@ class PlatformConnection(Base):
     
     # 关系
     user: Mapped["User"] = relationship(back_populates="platform_connections")
+    sub_account_bindings: Mapped[list["SubAccountBinding"]] = relationship(
+        back_populates="parent_connection",
+        cascade="all, delete-orphan"
+    )
     
     def __repr__(self):
         return f"<PlatformConnection(id={self.id}, user_id={self.user_id}, platform={self.platform}, account_id={self.account_id})>"
