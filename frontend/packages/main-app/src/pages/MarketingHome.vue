@@ -199,55 +199,55 @@ const pageCopy = computed(() => copy[language.value])
 </script>
 
 <template>
-  <main class="bg-[#f5f7f4] text-slate-950">
-    <section class="px-5 pb-14 pt-12 sm:px-6 lg:px-10 lg:pb-20 lg:pt-18">
+  <main class="bg-background-light text-slate-950">
+    <section class="relative overflow-hidden border-b border-slate-200 bg-white px-5 pb-14 pt-12 sm:px-6 lg:px-10 lg:pb-18 lg:pt-16">
       <div class="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
-          <p class="text-sm font-semibold uppercase text-emerald-700">{{ pageCopy.hero.eyebrow }}</p>
-          <h1 class="mt-5 max-w-3xl text-4xl font-black leading-tight md:text-5xl lg:text-6xl">
+          <p class="inline-flex rounded-md bg-primary/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-primary">{{ pageCopy.hero.eyebrow }}</p>
+          <h1 class="mt-5 max-w-3xl text-4xl font-bold leading-tight tracking-tight md:text-5xl lg:text-[56px]">
             {{ pageCopy.hero.title }}
           </h1>
-          <p class="mt-5 max-w-2xl text-base leading-8 text-slate-600 md:text-lg">
+          <p class="mt-5 max-w-2xl text-base leading-8 text-slate-600">
             {{ pageCopy.hero.secondary }}
           </p>
           <div class="mt-6 flex max-w-3xl flex-wrap gap-2.5">
             <span
               v-for="item in pageCopy.hero.highlights"
               :key="item"
-              class="inline-flex items-center gap-2 rounded-md border border-slate-300 bg-white/80 px-3.5 py-2 text-sm font-bold text-slate-800 shadow-sm"
+              class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-semibold text-slate-700"
             >
-              <span class="h-2 w-2 rounded-full bg-emerald-500"></span>
+              <span class="h-2 w-2 rounded-full bg-primary"></span>
               {{ item }}
             </span>
           </div>
           <RouterLink
             to="/contact"
-            class="mt-8 inline-flex items-center justify-center rounded-md bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-sm hover:bg-slate-800"
+            class="mt-8 inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary/90"
           >
             {{ pageCopy.hero.primaryCta }}
           </RouterLink>
         </div>
 
-        <div class="overflow-hidden rounded-lg border border-slate-300 bg-[#0f172a] shadow-2xl shadow-slate-300/50">
-          <div class="flex items-center justify-between border-b border-slate-800 px-4 py-3">
+        <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-blue-100/80">
+          <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
             <div class="flex items-center gap-2">
               <span class="h-2.5 w-2.5 rounded-full bg-red-400"></span>
               <span class="h-2.5 w-2.5 rounded-full bg-amber-400"></span>
               <span class="h-2.5 w-2.5 rounded-full bg-emerald-500"></span>
             </div>
-            <p class="text-xs font-semibold text-slate-400">{{ pageCopy.hero.previewTitle }} · {{ pageCopy.hero.live }}</p>
+            <p class="text-xs font-semibold text-slate-500">{{ pageCopy.hero.previewTitle }} · {{ pageCopy.hero.live }}</p>
           </div>
 
-          <div class="bg-[#eaf1ff] p-3">
-            <div class="grid min-h-[390px] overflow-hidden rounded-md border border-blue-100 bg-white shadow-sm lg:grid-cols-[148px_minmax(0,1fr)_250px]">
-              <aside class="hidden min-w-[148px] border-r border-blue-100 bg-[#0b4a9f] p-3 text-white lg:block">
+          <div class="bg-[#eef6ff] p-3">
+            <div class="grid min-h-[390px] overflow-hidden rounded-md border border-blue-100 bg-white shadow-sm lg:grid-cols-[156px_minmax(0,1fr)_258px]">
+              <aside class="hidden min-w-[156px] border-r border-blue-100 bg-primary p-3 text-white lg:block">
                 <p class="whitespace-nowrap text-sm font-black">aniforce</p>
                 <div class="mt-7 space-y-2 text-xs">
                   <div
                     v-for="(item, index) in pageCopy.product.demo.nav"
                     :key="item"
                     class="whitespace-nowrap rounded-md px-3 py-2"
-                    :class="index === pageCopy.product.demo.nav.length - 1 ? 'bg-white/18 font-bold' : 'text-blue-100'"
+                    :class="index === pageCopy.product.demo.nav.length - 1 ? 'bg-white/20 font-bold' : 'text-blue-100'"
                   >
                     {{ item }}
                   </div>
@@ -299,7 +299,7 @@ const pageCopy = computed(() => copy[language.value])
                   <div
                     v-for="metric in pageCopy.product.metrics"
                     :key="metric.label"
-                    class="rounded-md bg-[#0b4a9f] p-3 text-white"
+                    class="rounded-md bg-primary p-3 text-white"
                   >
                     <p class="text-[11px] font-semibold text-slate-300">{{ metric.label }}</p>
                     <p class="mt-1 whitespace-nowrap text-lg font-black">{{ metric.value }}</p>
@@ -314,7 +314,7 @@ const pageCopy = computed(() => copy[language.value])
                     <p class="mt-1 whitespace-nowrap text-[11px] text-slate-500">{{ pageCopy.product.monitorTitle }}</p>
                   </div>
                   <div class="flex-1 space-y-2 p-3">
-                    <div class="rounded-md bg-blue-600 px-3 py-2 text-[11px] leading-5 text-white">
+                    <div class="rounded-md bg-primary px-3 py-2 text-[11px] leading-5 text-white">
                       <p class="font-bold">{{ pageCopy.product.demo.alertTitle }}</p>
                       <p class="mt-1">{{ pageCopy.product.demo.alertBody }}</p>
                     </div>
@@ -333,7 +333,7 @@ const pageCopy = computed(() => copy[language.value])
                   <div class="border-t border-blue-100 p-3">
                     <div class="flex items-center justify-between gap-2 rounded-full border border-blue-100 bg-white px-3 py-2 text-[11px] text-slate-400">
                       <span class="whitespace-nowrap">{{ pageCopy.product.demo.inputPlaceholder }}</span>
-                      <span class="h-5 w-5 rounded-full bg-blue-600"></span>
+                      <span class="h-5 w-5 rounded-full bg-primary"></span>
                     </div>
                   </div>
                 </div>
@@ -344,24 +344,24 @@ const pageCopy = computed(() => copy[language.value])
       </div>
     </section>
 
-    <section class="border-y border-slate-200 bg-white px-5 py-16 sm:px-6 lg:px-10">
+    <section class="border-b border-slate-200 bg-background-light px-5 py-16 sm:px-6 lg:px-10">
       <div class="mx-auto max-w-7xl">
         <div class="max-w-3xl">
-          <p class="text-sm font-semibold uppercase text-emerald-700">{{ pageCopy.why.eyebrow }}</p>
-          <h2 class="mt-4 text-3xl font-black leading-snug md:text-4xl">
+          <p class="text-sm font-semibold uppercase text-primary">{{ pageCopy.why.eyebrow }}</p>
+          <h2 class="mt-4 text-3xl font-bold leading-snug tracking-tight md:text-4xl">
             <span v-for="line in pageCopy.why.titleLines" :key="line" class="block">{{ line }}</span>
           </h2>
         </div>
 
         <div class="mt-10 grid gap-6 md:grid-cols-3">
-          <article v-for="item in pageCopy.capabilities" :key="item.title" class="rounded-lg border border-slate-200 bg-slate-50 p-6">
-            <h3 class="text-xl font-bold leading-snug">{{ item.title }}</h3>
+          <article v-for="item in pageCopy.capabilities" :key="item.title" class="rounded-md border border-slate-200 bg-white p-6 shadow-sm">
+            <h3 class="text-xl font-semibold leading-snug">{{ item.title }}</h3>
             <p class="mt-3 text-sm leading-7 text-slate-600">{{ item.body }}</p>
             <div class="mt-5 flex flex-wrap gap-2">
               <span
                 v-for="point in item.points"
                 :key="point"
-                class="rounded-md border border-slate-200 bg-white px-3 py-1.5 text-xs font-bold text-slate-700"
+                class="rounded-md border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-primary"
               >
                 {{ point }}
               </span>
@@ -371,11 +371,11 @@ const pageCopy = computed(() => copy[language.value])
       </div>
     </section>
 
-    <section class="px-5 py-16 sm:px-6 lg:px-10">
+    <section class="bg-white px-5 py-16 sm:px-6 lg:px-10">
       <div class="mx-auto max-w-7xl">
         <div class="max-w-4xl">
-          <p class="text-sm font-semibold uppercase text-emerald-700">{{ pageCopy.workflow.eyebrow }}</p>
-          <h2 class="mt-4 text-3xl font-black leading-snug md:text-4xl">
+          <p class="text-sm font-semibold uppercase text-primary">{{ pageCopy.workflow.eyebrow }}</p>
+          <h2 class="mt-4 text-3xl font-bold leading-snug tracking-tight md:text-4xl">
             {{ pageCopy.workflow.title }}
           </h2>
           <p class="mt-5 text-base leading-8 text-slate-600">
@@ -387,13 +387,13 @@ const pageCopy = computed(() => copy[language.value])
           <article
             v-for="(step, index) in pageCopy.workflow.steps"
             :key="step.title"
-            class="rounded-lg border border-slate-200 bg-white p-5 shadow-sm"
+            class="rounded-md border border-slate-200 bg-slate-50 p-5"
           >
             <div class="flex items-center justify-between gap-3">
-              <p class="text-xs font-black text-slate-400">0{{ index + 1 }}</p>
-              <span class="h-1.5 w-10 rounded-full bg-emerald-500"></span>
+              <p class="text-xs font-bold text-slate-400">0{{ index + 1 }}</p>
+              <span class="h-1.5 w-10 rounded-full bg-primary"></span>
             </div>
-            <h3 class="mt-4 text-base font-black">{{ step.title }}</h3>
+            <h3 class="mt-4 text-base font-semibold">{{ step.title }}</h3>
             <p class="mt-3 text-sm leading-7 text-slate-600">{{ step.body }}</p>
             <div v-if="step.title === 'Media Execution'" class="mt-4 flex flex-wrap gap-2">
               <span class="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700">Meta</span>
@@ -405,15 +405,15 @@ const pageCopy = computed(() => copy[language.value])
       </div>
     </section>
 
-    <section class="border-t border-slate-200 bg-white px-5 py-16 sm:px-6 lg:px-10">
+    <section class="border-t border-slate-200 bg-background-light px-5 py-16 sm:px-6 lg:px-10">
       <div class="mx-auto max-w-7xl">
-        <div class="rounded-lg border border-slate-200 bg-slate-950 px-6 py-10 text-white md:px-10">
-          <p class="text-sm font-semibold uppercase text-emerald-300">{{ pageCopy.cta.eyebrow }}</p>
-          <h2 class="mt-3 text-3xl font-black leading-snug md:text-4xl">
+        <div class="rounded-md border border-blue-100 bg-primary px-6 py-10 text-white shadow-lg shadow-blue-100 md:px-10">
+          <p class="text-sm font-semibold uppercase text-blue-100">{{ pageCopy.cta.eyebrow }}</p>
+          <h2 class="mt-3 text-3xl font-bold leading-snug md:text-4xl">
             {{ pageCopy.cta.title }}
           </h2>
-          <p class="mt-4 max-w-2xl text-sm leading-7 text-slate-300">{{ pageCopy.cta.body }}</p>
-          <RouterLink to="/contact" class="mt-7 inline-flex items-center justify-center rounded-md bg-white px-6 py-3 text-sm font-semibold text-slate-950 hover:bg-slate-100">
+          <p class="mt-4 max-w-2xl text-sm leading-7 text-blue-50">{{ pageCopy.cta.body }}</p>
+          <RouterLink to="/contact" class="mt-7 inline-flex items-center justify-center rounded-md bg-white px-6 py-3 text-sm font-semibold text-primary hover:bg-blue-50">
             {{ pageCopy.cta.button }}
           </RouterLink>
         </div>
