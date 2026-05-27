@@ -27,7 +27,7 @@ const router = createRouter({
     {
       path: '/campaign',
       name: 'campaign',
-      component: () => import('@/pages/campaigns/Campaign.vue'),
+      redirect: '/projects',
     },
     {
       path: '/material',
@@ -42,7 +42,7 @@ const router = createRouter({
     {
       path: '/dashboard',
       name: 'dashboard',
-      component: () => import('@/pages/Dashboard.vue'),
+      redirect: '/monitor',
     },
     {
       path: '/projects',

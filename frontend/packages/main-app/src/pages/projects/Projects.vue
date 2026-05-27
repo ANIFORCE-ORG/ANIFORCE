@@ -112,12 +112,12 @@ const demoProjects: ProjectView[] = [
 ]
 
 const quickHints = [
-  '项目数据分析',
+  '项目和计划数据分析',
   '创建新项目',
+  '创建广告计划',
   '优化建议',
   '预算调整',
-  '素材管理',
-  '投放策略'
+  '素材管理'
 ]
 
 const statusFilters = [
@@ -224,7 +224,36 @@ const handleSubmitProject = async (data: any) => {
     createModalRef.value?.resetForm()
   } catch (err: any) {
     console.error('创建项目失败:', err)
-    alert(err.message || '创建项目失败，请重试')
+    usingDemoData.value = true
+    const fallbackProject: ProjectView = {
+      id: `demo-project-${Date.now()}`,
+      name: data.name,
+      description: data.description || '本地 Demo 项目，后端 Project 接口就绪后将替换为真实数据。',
+      game_type: data.game_type,
+      target_market: data.target_market,
+      tags: data.tags?.length ? data.tags : ['Demo'],
+      total_budget: data.total_budget,
+      spent: 0,
+      status: 'active',
+      manager: data.manager || 'Demo',
+      start_date: data.start_date || '',
+      end_date: data.end_date || '',
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+      platform_accounts: [],
+      campaign_count: 0,
+      ad_group_count: 0,
+      material_count: 0,
+      alert_count: 0,
+      roas: 0,
+    }
+    projects.value.unshift(fallbackProject)
+    showCreateModal.value = false
+    createModalRef.value?.resetForm()
+    router.push({
+      path: '/campaigns/create',
+      query: { projectId: fallbackProject.id }
+    })
   } finally {
     createModalRef.value?.setSubmitting(false)
   }
@@ -280,8 +309,8 @@ const projectTotals = computed(() => {
       <!-- Header -->
       <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
         <div>
-          <h3 class="font-bold text-slate-900 dark:text-white">项目管理</h3>
-          <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">Project / Platform Account / Campaign 的业务容器</p>
+          <h3 class="font-bold text-slate-900 dark:text-white">项目与广告计划</h3>
+          <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">先创建项目，再在项目下管理广告账户、Campaign 和计划</p>
         </div>
         <button
           class="flex items-center gap-2 whitespace-nowrap px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
@@ -320,7 +349,7 @@ const projectTotals = computed(() => {
       <!-- Projects List -->
       <div class="flex-1 overflow-y-auto p-6">
         <div v-if="usingDemoData" class="mb-4 rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-800">
-          当前项目接口为空或不可用，已展示 Demo 项目数据，方便本地验证项目、账户和广告计划的主流程。
+          当前项目接口为空或不可用，已展示 Demo 项目数据；创建项目失败时会生成本地 Demo 项目并继续进入新建广告计划，方便完整测试主流程。
         </div>
 
         <div class="mb-5 grid gap-3 md:grid-cols-4">

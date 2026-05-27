@@ -20,6 +20,16 @@ const timeRange = ref('7d')
 const platform = ref('all')
 const selectedProject = ref('all')
 
+const trendRows = [
+  { date: '05-21', spend: 2840, conversions: 428, roas: 2.12 },
+  { date: '05-22', spend: 3160, conversions: 506, roas: 2.24 },
+  { date: '05-23', spend: 3510, conversions: 582, roas: 2.38 },
+  { date: '05-24', spend: 3920, conversions: 631, roas: 2.31 },
+  { date: '05-25', spend: 4310, conversions: 746, roas: 2.52 },
+  { date: '05-26', spend: 5120, conversions: 891, roas: 2.64 },
+  { date: '05-27', spend: 5600, conversions: 1048, roas: 2.71 },
+]
+
 const metrics = [
   { label: '总消耗', value: '$28,460', delta: '+12.4%', tone: 'default' },
   { label: '转化数', value: '4,832', delta: '+8.7%', tone: 'default' },
@@ -73,6 +83,22 @@ const displayCreativeRows = computed(() => {
   return creativeRows.filter((creative) => creative.project === selectedProject.value.split(' ')[0])
 })
 
+const maxSpend = computed(() => Math.max(...trendRows.map((row) => row.spend)))
+
+const spendPolyline = computed(() => trendRows.map((row, index) => {
+  const x = (index / (trendRows.length - 1)) * 100
+  const y = 100 - (row.spend / maxSpend.value) * 82
+  return `${x},${y}`
+}).join(' '))
+
+const conversionBars = computed(() => {
+  const maxConversions = Math.max(...trendRows.map((row) => row.conversions))
+  return trendRows.map((row) => ({
+    ...row,
+    height: Math.max(12, Math.round((row.conversions / maxConversions) * 100)),
+  }))
+})
+
 const switchPanel = (item: any) => {
   if (item.path) {
     router.push(item.path)
@@ -97,8 +123,8 @@ const switchPanel = (item: any) => {
       <!-- Header -->
       <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
         <div>
-          <h1 class="text-base font-bold text-slate-900 dark:text-white">数据报表</h1>
-          <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">汇总消耗、转化、平台对比、素材排行和策略洞察</p>
+          <h1 class="text-base font-bold text-slate-900 dark:text-white">数据复盘</h1>
+          <p class="mt-0.5 text-xs text-slate-500 dark:text-slate-400">按时间段复盘消耗、转化、平台表现、素材排行和策略洞察</p>
         </div>
         <div class="flex items-center gap-2">
           <select
@@ -135,7 +161,7 @@ const switchPanel = (item: any) => {
       <div class="flex-1 overflow-y-auto p-6">
         <div class="mx-auto max-w-7xl space-y-5">
           <div class="rounded-md border border-blue-200 bg-blue-50 px-4 py-3 text-sm leading-6 text-blue-800">
-            当前为前端 Demo 报表数据，用于验证 Project / Platform Account / Campaign / Material / Metrics 的展示结构。后续将替换为后端报表接口。
+            当前为前端 Demo 复盘数据，用于验证时间段、Project / Platform Account / Campaign / Material / Metrics 的展示结构。后续将替换为后端报表接口。
           </div>
 
           <section class="grid gap-3 md:grid-cols-4">
@@ -153,6 +179,49 @@ const switchPanel = (item: any) => {
                 >
                   {{ metric.delta }}
                 </span>
+              </div>
+            </div>
+          </section>
+
+          <section class="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
+            <div class="mb-4 flex items-center justify-between">
+              <div>
+                <h2 class="text-sm font-bold text-slate-900 dark:text-white">时间段消耗与转化趋势</h2>
+                <p class="mt-1 text-xs text-slate-500">用于复盘不同时间点的预算消耗、转化结果和 ROAS 变化</p>
+              </div>
+              <span class="text-xs text-slate-500">{{ timeRange === '7d' ? '近 7 天' : timeRange === '30d' ? '近 30 天' : '近 90 天' }}</span>
+            </div>
+            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+              <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                <svg viewBox="0 0 100 110" class="h-56 w-full overflow-visible" preserveAspectRatio="none">
+                  <line x1="0" y1="100" x2="100" y2="100" class="stroke-slate-300 dark:stroke-slate-700" stroke-width="0.5" />
+                  <polyline :points="spendPolyline" fill="none" class="stroke-primary" stroke-width="2.5" vector-effect="non-scaling-stroke" />
+                  <circle
+                    v-for="(row, index) in trendRows"
+                    :key="row.date"
+                    :cx="(index / (trendRows.length - 1)) * 100"
+                    :cy="100 - (row.spend / maxSpend) * 82"
+                    r="1.5"
+                    class="fill-primary"
+                    vector-effect="non-scaling-stroke"
+                  />
+                </svg>
+                <div class="-mt-3 grid grid-cols-7 gap-2 text-center text-[11px] text-slate-500">
+                  <span v-for="row in trendRows" :key="`label-${row.date}`">{{ row.date }}</span>
+                </div>
+              </div>
+              <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-200">转化结果</h3>
+                <div class="mt-4 flex h-44 items-end gap-2">
+                  <div
+                    v-for="row in conversionBars"
+                    :key="`bar-${row.date}`"
+                    class="flex flex-1 flex-col items-center justify-end gap-2"
+                  >
+                    <div class="w-full rounded-t bg-primary/80" :style="{ height: `${row.height}%` }"></div>
+                    <span class="text-[10px] text-slate-500">{{ row.date }}</span>
+                  </div>
+                </div>
               </div>
             </div>
           </section>

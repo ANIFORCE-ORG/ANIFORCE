@@ -56,11 +56,15 @@ const toggleCollapse = () => {
 
 const isActivePanel = (itemId: string) => {
   if (props.activePanel) {
+    if (props.activePanel === 'reports' && (itemId === 'reports' || itemId === 'dashboard')) return true
+    if (props.activePanel === 'projects' && (itemId === 'projects' || itemId === 'campaigns')) return true
     return props.activePanel === itemId
   }
   // 根据当前路由判断
   const item = props.navItems.find(i => i.id === itemId)
   if (!item) return false
+  if (route.path === '/monitor' && (itemId === 'reports' || itemId === 'dashboard')) return true
+  if (route.path.startsWith('/projects') && (itemId === 'projects' || itemId === 'campaigns')) return true
   return route.path === item.path || route.path.startsWith(item.path + '/')
 }
 
