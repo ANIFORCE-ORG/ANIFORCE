@@ -28,9 +28,11 @@
 CREATE TABLE organizations (
     id VARCHAR(36) PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
+    org_code VARCHAR(50) UNIQUE NOT NULL,  -- 组织代码，用于加入团队检索
     description TEXT,
     owner_id VARCHAR(36) NOT NULL,  -- 组织创建者
-    status VARCHAR(20) DEFAULT 'active',  -- 'active', 'inactive', 'suspended'
+    invite_code VARCHAR(100) ,  -- 邀请码
+    status VARCHAR(20) DEFAULT 'active',  -- 'active', 'dismissed'
     created_at DATETIME NOT NULL,
     updated_at DATETIME NOT NULL,
     

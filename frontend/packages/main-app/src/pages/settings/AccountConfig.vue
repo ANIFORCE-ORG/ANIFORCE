@@ -6,6 +6,7 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import { navItems } from '@/config/navigation'
 import { userApi } from '@/api/user'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
+import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -171,19 +172,200 @@ const myOrganizations = ref([
   }
 ])
 
+// 创建团队弹窗
+const showCreateOrgDialog = ref(false)
+const createOrgForm = ref({
+  name: '',
+  orgId: '',
+  description: ''
+})
+const createOrgError = ref('')
+
+// 加入团队弹窗
+const showJoinOrgDialog = ref(false)
+const joinOrgForm = ref({
+  orgId: '',
+  inviteCode: ''
+})
+const joinOrgError = ref('')
+
+// 确认对话框
+const showConfirmDialog = ref(false)
+const confirmDialogConfig = ref({
+  title: '',
+  message: '',
+  confirmText: '确定',
+  confirmButtonClass: 'bg-red-500 hover:bg-red-600',
+  onConfirm: () => {}
+})
+
 const handleCreateOrganization = () => {
-  console.log('创建团队')
-  // TODO: 打开创建团队对话框
+  showCreateOrgDialog.value = true
+  createOrgForm.value = {
+    name: '',
+    orgId: '',
+    description: ''
+  }
+  createOrgError.value = ''
+}
+
+const handleCancelCreateOrg = () => {
+  showCreateOrgDialog.value = false
+  createOrgForm.value = {
+    name: '',
+    orgId: '',
+    description: ''
+  }
+  createOrgError.value = ''
+}
+
+const handleSubmitCreateOrg = async () => {
+  createOrgError.value = ''
+  
+  // 验证表单
+  if (!createOrgForm.value.name.trim()) {
+    createOrgError.value = '请输入团队名称'
+    return
+  }
+  if (!createOrgForm.value.orgId.trim()) {
+    createOrgError.value = '请输入团队 ID'
+    return
+  }
+  
+  try {
+    // TODO: 调用创建团队 API
+    console.log('创建团队:', createOrgForm.value)
+    
+    // 模拟创建成功
+    myOrganizations.value.push({
+      id: createOrgForm.value.orgId,
+      name: createOrgForm.value.name,
+      role: 'admin',
+      memberCount: 1,
+      createdAt: new Date().toISOString().split('T')[0]
+    })
+    
+    showCreateOrgDialog.value = false
+    success('团队创建成功')
+  } catch (err: any) {
+    console.error('创建团队失败:', err)
+    createOrgError.value = err.response?.data?.detail || '创建团队失败，请稍后重试'
+  }
 }
 
 const handleJoinOrganization = () => {
-  console.log('加入团队')
-  // TODO: 打开加入团队对话框
+  showJoinOrgDialog.value = true
+  joinOrgForm.value = {
+    orgId: '',
+    inviteCode: ''
+  }
+  joinOrgError.value = ''
+}
+
+const handleCancelJoinOrg = () => {
+  showJoinOrgDialog.value = false
+  joinOrgForm.value = {
+    orgId: '',
+    inviteCode: ''
+  }
+  joinOrgError.value = ''
+}
+
+const handleSubmitJoinOrg = async () => {
+  joinOrgError.value = ''
+  
+  // 验证表单
+  if (!joinOrgForm.value.orgId.trim()) {
+    joinOrgError.value = '请输入团队 ID'
+    return
+  }
+  if (!joinOrgForm.value.inviteCode.trim()) {
+    joinOrgError.value = '请输入邀请码'
+    return
+  }
+  
+  try {
+    // TODO: 调用加入团队 API
+    console.log('加入团队:', joinOrgForm.value)
+    
+    // 模拟加入成功
+    myOrganizations.value.push({
+      id: joinOrgForm.value.orgId,
+      name: '新加入的团队',
+      role: 'member',
+      memberCount: 5,
+      createdAt: new Date().toISOString().split('T')[0]
+    })
+    
+    showJoinOrgDialog.value = false
+    success('成功加入团队')
+  } catch (err: any) {
+    console.error('加入团队失败:', err)
+    joinOrgError.value = err.response?.data?.detail || '加入团队失败，请检查团队 ID 和邀请码'
+  }
 }
 
 const handleViewOrganization = (orgId: string) => {
   console.log('查看团队:', orgId)
   // TODO: 跳转到团队详情页面
+}
+
+const handleManageMembers = (orgId: string) => {
+  console.log('管理成员:', orgId)
+  // TODO: 跳转到团队成员管理页面
+}
+
+const handleDisbandOrganization = (orgId: string) => {
+  console.log('解散团队:', orgId)
+  const org = myOrganizations.value.find(o => o.id === orgId)
+  if (!org) return
+  
+  confirmDialogConfig.value = {
+    title: '解散团队',
+    message: `确定要解散「${org.name}」吗？此操作不可恢复，所有成员将失去访问权限。`,
+    confirmText: '解散团队',
+    confirmButtonClass: 'bg-red-500 hover:bg-red-600',
+    onConfirm: () => {
+      // TODO: 调用解散团队 API
+      const index = myOrganizations.value.findIndex(o => o.id === orgId)
+      if (index !== -1) {
+        myOrganizations.value.splice(index, 1)
+        success('团队已解散')
+      }
+    }
+  }
+  showConfirmDialog.value = true
+}
+
+const handleLeaveOrganization = (orgId: string) => {
+  console.log('离开团队:', orgId)
+  const org = myOrganizations.value.find(o => o.id === orgId)
+  if (!org) return
+  
+  confirmDialogConfig.value = {
+    title: '离开团队',
+    message: `确定要离开「${org.name}」吗？离开后需要重新获取邀请才能加入。`,
+    confirmText: '离开团队',
+    confirmButtonClass: 'bg-red-500 hover:bg-red-600',
+    onConfirm: () => {
+      // TODO: 调用离开团队 API
+      const index = myOrganizations.value.findIndex(o => o.id === orgId)
+      if (index !== -1) {
+        myOrganizations.value.splice(index, 1)
+        success('已离开团队')
+      }
+    }
+  }
+  showConfirmDialog.value = true
+}
+
+const handleConfirmDialogClose = () => {
+  showConfirmDialog.value = false
+}
+
+const handleConfirmDialogConfirm = () => {
+  confirmDialogConfig.value.onConfirm()
+  showConfirmDialog.value = false
 }
 
 onMounted(() => {
@@ -426,13 +608,39 @@ onMounted(() => {
                     </div>
                   </div>
 
-                  <!-- 查看按钮 -->
-                  <button
-                    class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                    @click.stop="handleViewOrganization(org.id)"
-                  >
-                    <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_forward</span>
-                  </button>
+                  <!-- 操作按钮 -->
+                  <div class="flex items-center gap-2" @click.stop>
+                    <!-- 管理员按钮 -->
+                    <template v-if="org.role === 'admin'">
+                      <button
+                        @click="handleManageMembers(org.id)"
+                        class="px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        管理成员
+                      </button>
+                      <button
+                        @click="handleDisbandOrganization(org.id)"
+                        class="px-3 py-1.5 rounded-md text-sm font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        解散团队
+                      </button>
+                    </template>
+                    <!-- 成员按钮 -->
+                    <template v-else>
+                       <button
+                        @click="handleViewOrganization(org.id)"
+                        class="px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                      >
+                        团队详情
+                      </button>
+                      <button
+                        @click="handleLeaveOrganization(org.id)"
+                        class="px-3 py-1.5 rounded-md text-sm font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                      >
+                        离开团队
+                      </button>
+                    </template>
+                  </div>
                 </div>
               </div>
 
@@ -452,6 +660,169 @@ onMounted(() => {
       </div>
     </main>
   </div>
+
+  <!-- 创建团队弹窗 -->
+  <div
+    v-if="showCreateOrgDialog"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    @click.self="handleCancelCreateOrg"
+  >
+    <div class="bg-white dark:bg-slate-800 rounded-md shadow-xl w-full max-w-2xl mx-4">
+      <!-- 弹窗标题 -->
+      <div class="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">创建团队</h3>
+        <button
+          @click="handleCancelCreateOrg"
+          class="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        >
+          <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">close</span>
+        </button>
+      </div>
+
+      <!-- 表单内容 -->
+      <div class="p-6 space-y-4">
+        <!-- 团队名称 -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            团队名称 <span class="text-red-500">*</span>
+          </label>
+          <input
+            v-model="createOrgForm.name"
+            type="text"
+            class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="请输入团队名称"
+          />
+        </div>
+
+        <!-- 团队 ID -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            团队 ID <span class="text-red-500">*</span>
+          </label>
+          <input
+            v-model="createOrgForm.orgId"
+            type="text"
+            class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="请输入团队 ID（英文字母、数字、下划线）"
+          />
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">团队 ID 用于邀请成员加入，创建后不可修改</p>
+        </div>
+
+        <!-- 团队描述 -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            团队描述
+          </label>
+          <textarea
+            v-model="createOrgForm.description"
+            rows="3"
+            class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary resize-none"
+            placeholder="请输入团队描述（可选）"
+          ></textarea>
+        </div>
+
+        <!-- 错误提示 -->
+        <div v-if="createOrgError" class="text-sm text-red-500">{{ createOrgError }}</div>
+      </div>
+
+      <!-- 底部按钮 -->
+      <div class="flex items-center justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-700">
+        <button
+          @click="handleCancelCreateOrg"
+          class="px-4 py-2 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        >
+          取消
+        </button>
+        <button
+          @click="handleSubmitCreateOrg"
+          class="px-4 py-2 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+        >
+          创建团队
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 加入团队弹窗 -->
+  <div
+    v-if="showJoinOrgDialog"
+    class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm"
+    @click.self="handleCancelJoinOrg"
+  >
+    <div class="bg-white dark:bg-slate-800 rounded-md shadow-xl w-full max-w-md mx-4">
+      <!-- 弹窗标题 -->
+      <div class="flex items-center justify-between p-6 border-b border-slate-200 dark:border-slate-700">
+        <h3 class="text-lg font-semibold text-slate-900 dark:text-white">加入团队</h3>
+        <button
+          @click="handleCancelJoinOrg"
+          class="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        >
+          <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">close</span>
+        </button>
+      </div>
+
+      <!-- 表单内容 -->
+      <div class="p-6 space-y-4">
+        <!-- 团队 ID -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            团队 ID <span class="text-red-500">*</span>
+          </label>
+          <input
+            v-model="joinOrgForm.orgId"
+            type="text"
+            class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="请输入团队 ID"
+          />
+        </div>
+
+        <!-- 邀请码 -->
+        <div>
+          <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            邀请码 <span class="text-red-500">*</span>
+          </label>
+          <input
+            v-model="joinOrgForm.inviteCode"
+            type="text"
+            class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary"
+            placeholder="请输入邀请码"
+          />
+          <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">请向团队管理员获取邀请码</p>
+        </div>
+
+        <!-- 错误提示 -->
+        <div v-if="joinOrgError" class="text-sm text-red-500">{{ joinOrgError }}</div>
+      </div>
+
+      <!-- 底部按钮 -->
+      <div class="flex items-center justify-end gap-3 p-6 border-t border-slate-200 dark:border-slate-700">
+        <button
+          @click="handleCancelJoinOrg"
+          class="px-4 py-2 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        >
+          取消
+        </button>
+        <button
+          @click="handleSubmitJoinOrg"
+          class="px-4 py-2 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+        >
+          加入团队
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 确认对话框 -->
+  <ConfirmDialog
+    :show="showConfirmDialog"
+    :title="confirmDialogConfig.title"
+    :message="confirmDialogConfig.message"
+    :confirm-text="confirmDialogConfig.confirmText"
+    :confirm-button-class="confirmDialogConfig.confirmButtonClass"
+    @confirm="handleConfirmDialogConfirm"
+    @cancel="handleConfirmDialogClose"
+    @close="handleConfirmDialogClose"
+  />
 
   <!-- Toast 提示容器 -->
   <ToastContainer />
