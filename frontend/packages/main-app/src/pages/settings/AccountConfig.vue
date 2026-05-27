@@ -5,8 +5,10 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import { navItems } from '@/config/navigation'
 import { userApi } from '@/api/user'
+import { organizationApi, type OrganizationResponse } from '@/api/organization'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
+import OrganizationDetail from '@/components/settings/OrganizationDetail.vue'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
@@ -155,22 +157,7 @@ const handleUpgradePlan = () => {
 }
 
 // 团队相关
-const myOrganizations = ref([
-  {
-    id: 'org_001',
-    name: 'ACME 营销团队',
-    role: 'admin',
-    memberCount: 5,
-    createdAt: '2024-01-15'
-  },
-  {
-    id: 'org_002',
-    name: '东南亚推广组',
-    role: 'member',
-    memberCount: 3,
-    createdAt: '2024-02-20'
-  }
-])
+const myOrganizations = ref<OrganizationResponse[]>([])
 
 // 创建团队弹窗
 const showCreateOrgDialog = ref(false)
@@ -199,7 +186,12 @@ const confirmDialogConfig = ref({
   onConfirm: () => {}
 })
 
+// 团队详情弹窗
+const showOrgDetailDialog = ref(false)
+const selectedOrganization = ref<OrganizationResponse | null>(null)
+
 const handleCreateOrganization = () => {
+  console.log('创建团队按钮被点击')
   showCreateOrgDialog.value = true
   createOrgForm.value = {
     name: '',
@@ -233,18 +225,13 @@ const handleSubmitCreateOrg = async () => {
   }
   
   try {
-    // TODO: 调用创建团队 API
-    console.log('创建团队:', createOrgForm.value)
-    
-    // 模拟创建成功
-    myOrganizations.value.push({
-      id: createOrgForm.value.orgId,
+    const newOrg = await organizationApi.create({
       name: createOrgForm.value.name,
-      role: 'admin',
-      memberCount: 1,
-      createdAt: new Date().toISOString().split('T')[0]
+      org_code: createOrgForm.value.orgId,
+      description: createOrgForm.value.description || undefined
     })
     
+    myOrganizations.value.push(newOrg)
     showCreateOrgDialog.value = false
     success('团队创建成功')
   } catch (err: any) {
@@ -285,18 +272,12 @@ const handleSubmitJoinOrg = async () => {
   }
   
   try {
-    // TODO: 调用加入团队 API
-    console.log('加入团队:', joinOrgForm.value)
-    
-    // 模拟加入成功
-    myOrganizations.value.push({
-      id: joinOrgForm.value.orgId,
-      name: '新加入的团队',
-      role: 'member',
-      memberCount: 5,
-      createdAt: new Date().toISOString().split('T')[0]
+    const joinedOrg = await organizationApi.join({
+      org_code: joinOrgForm.value.orgId,
+      invite_code: joinOrgForm.value.inviteCode
     })
     
+    myOrganizations.value.push(joinedOrg)
     showJoinOrgDialog.value = false
     success('成功加入团队')
   } catch (err: any) {
@@ -305,9 +286,9 @@ const handleSubmitJoinOrg = async () => {
   }
 }
 
-const handleViewOrganization = (orgId: string) => {
-  console.log('查看团队:', orgId)
-  // TODO: 跳转到团队详情页面
+const handleViewOrganization = (org: OrganizationResponse) => {
+  selectedOrganization.value = org
+  showOrgDetailDialog.value = true
 }
 
 const handleManageMembers = (orgId: string) => {
@@ -325,12 +306,17 @@ const handleDisbandOrganization = (orgId: string) => {
     message: `确定要解散「${org.name}」吗？此操作不可恢复，所有成员将失去访问权限。`,
     confirmText: '解散团队',
     confirmButtonClass: 'bg-red-500 hover:bg-red-600',
-    onConfirm: () => {
-      // TODO: 调用解散团队 API
-      const index = myOrganizations.value.findIndex(o => o.id === orgId)
-      if (index !== -1) {
-        myOrganizations.value.splice(index, 1)
+    onConfirm: async () => {
+      try {
+        await organizationApi.disband(orgId)
+        const index = myOrganizations.value.findIndex(o => o.id === orgId)
+        if (index !== -1) {
+          myOrganizations.value.splice(index, 1)
+        }
         success('团队已解散')
+      } catch (err: any) {
+        console.error('解散团队失败:', err)
+        error(err.response?.data?.detail || '解散团队失败')
       }
     }
   }
@@ -347,12 +333,17 @@ const handleLeaveOrganization = (orgId: string) => {
     message: `确定要离开「${org.name}」吗？离开后需要重新获取邀请才能加入。`,
     confirmText: '离开团队',
     confirmButtonClass: 'bg-red-500 hover:bg-red-600',
-    onConfirm: () => {
-      // TODO: 调用离开团队 API
-      const index = myOrganizations.value.findIndex(o => o.id === orgId)
-      if (index !== -1) {
-        myOrganizations.value.splice(index, 1)
+    onConfirm: async () => {
+      try {
+        await organizationApi.leave(orgId)
+        const index = myOrganizations.value.findIndex(o => o.id === orgId)
+        if (index !== -1) {
+          myOrganizations.value.splice(index, 1)
+        }
         success('已离开团队')
+      } catch (err: any) {
+        console.error('离开团队失败:', err)
+        error(err.response?.data?.detail || '离开团队失败')
       }
     }
   }
@@ -368,8 +359,27 @@ const handleConfirmDialogConfirm = () => {
   showConfirmDialog.value = false
 }
 
+const loadOrganizations = async () => {
+  try {
+    myOrganizations.value = await organizationApi.getMyOrganizations()
+  } catch (err: any) {
+    console.error('加载组织列表失败:', err)
+    error('加载组织列表失败')
+  }
+}
+
+const handleCloseOrgDetail = () => {
+  showOrgDetailDialog.value = false
+  selectedOrganization.value = null
+}
+
+const handleRefreshOrganizations = () => {
+  loadOrganizations()
+}
+
 onMounted(() => {
   console.log('账号配置页面加载')
+  loadOrganizations()
 })
 </script>
 
@@ -570,7 +580,7 @@ onMounted(() => {
                   v-for="org in myOrganizations"
                   :key="org.id"
                   class="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
-                  @click="handleViewOrganization(org.id)"
+                  @click="handleViewOrganization(org)"
                 >
                   <div class="flex items-center gap-4">
                     <!-- 团队图标 -->
@@ -598,11 +608,11 @@ onMounted(() => {
                       <div class="flex items-center gap-4 mt-1 text-sm text-slate-500 dark:text-slate-400">
                         <span class="flex items-center gap-1">
                           <span class="material-symbols-outlined text-base">person</span>
-                          {{ org.memberCount }} 名成员
+                          {{ org.member_count }} 名成员
                         </span>
                         <span class="flex items-center gap-1">
                           <span class="material-symbols-outlined text-base">calendar_today</span>
-                          创建于 {{ org.createdAt }}
+                          创建于 {{ new Date(org.created_at).toLocaleDateString() }}
                         </span>
                       </div>
                     </div>
@@ -613,7 +623,7 @@ onMounted(() => {
                     <!-- 管理员按钮 -->
                     <template v-if="org.role === 'admin'">
                       <button
-                        @click="handleManageMembers(org.id)"
+                        @click="handleViewOrganization(org)"
                         class="px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                       >
                         管理成员
@@ -628,7 +638,7 @@ onMounted(() => {
                     <!-- 成员按钮 -->
                     <template v-else>
                        <button
-                        @click="handleViewOrganization(org.id)"
+                        @click.stop="handleViewOrganization(org)"
                         class="px-3 py-1.5 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                       >
                         团队详情
@@ -822,6 +832,14 @@ onMounted(() => {
     @confirm="handleConfirmDialogConfirm"
     @cancel="handleConfirmDialogClose"
     @close="handleConfirmDialogClose"
+  />
+
+  <!-- 团队详情弹窗 -->
+  <OrganizationDetail
+    :show="showOrgDetailDialog"
+    :organization="selectedOrganization"
+    @close="handleCloseOrgDetail"
+    @refresh="handleRefreshOrganizations"
   />
 
   <!-- Toast 提示容器 -->
