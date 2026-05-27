@@ -1,45 +1,58 @@
 <script setup lang="ts">
-import { onMounted, ref } from 'vue'
-import { getOrganizations, setCurrentOrganization } from '@/api/organizations'
-import { useOrganizationContext } from '@/composables/useOrganizationContext'
+import { computed, onMounted, ref } from 'vue'
+import { organizationApi, type OrganizationResponse } from '@/api/organization'
 
-const {
-  organizations,
-  currentOrganization,
-  selectedOrganizationId,
-  useDemoOrganizations,
-  selectOrganization,
-} = useOrganizationContext()
-
+const TEAM_STORAGE_KEY = 'animagus_current_team'
 const loading = ref(false)
+const teams = ref<OrganizationResponse[]>([])
+const selectedTeamId = ref(localStorage.getItem(TEAM_STORAGE_KEY) || '')
+
+const currentTeam = computed(() => {
+  return teams.value.find((team) => team.id === selectedTeamId.value) || teams.value[0] || null
+})
+
+const demoTeams: OrganizationResponse[] = [
+  {
+    id: 'org-aniforce-growth',
+    name: 'ANIFORCE Growth',
+    org_code: 'ANIFORCE',
+    description: 'Demo team',
+    owner_id: 'demo-user',
+    status: 'active',
+    member_count: 4,
+    role: 'admin',
+    created_at: '2026-05-01T09:00:00Z',
+  },
+]
+
+const selectTeam = (teamId: string) => {
+  selectedTeamId.value = teamId
+  localStorage.setItem(TEAM_STORAGE_KEY, teamId)
+}
 
 const loadOrganizations = async () => {
   loading.value = true
   try {
-    const data = await getOrganizations()
+    const data = await organizationApi.getMyOrganizations()
     if (data.length > 0) {
-      organizations.value = data
-      if (!data.some((organization) => organization.id === selectedOrganizationId.value)) {
-        selectOrganization(data[0].id)
+      teams.value = data
+      if (!data.some((team) => team.id === selectedTeamId.value)) {
+        selectTeam(data[0].id)
       }
     } else {
-      useDemoOrganizations()
+      teams.value = demoTeams
+      selectTeam(demoTeams[0].id)
     }
   } catch {
-    useDemoOrganizations()
+    teams.value = demoTeams
+    selectTeam(demoTeams[0].id)
   } finally {
     loading.value = false
   }
 }
 
 const handleSelect = async (event: Event) => {
-  const organizationId = (event.target as HTMLSelectElement).value
-  selectOrganization(organizationId)
-  try {
-    await setCurrentOrganization(organizationId)
-  } catch {
-    // Backend organization context is not available in local demo yet.
-  }
+  selectTeam((event.target as HTMLSelectElement).value)
 }
 
 onMounted(() => {
@@ -51,25 +64,25 @@ onMounted(() => {
   <div class="rounded-md border border-slate-200 bg-white p-3 dark:border-slate-700 dark:bg-slate-800">
     <div class="mb-2 flex items-center justify-between gap-3">
       <div class="min-w-0">
-        <div class="text-xs font-medium text-slate-500 dark:text-slate-400">当前组织</div>
+        <div class="text-xs font-medium text-slate-500 dark:text-slate-400">当前团队</div>
         <div class="truncate text-sm font-semibold text-slate-900 dark:text-white">
-          {{ currentOrganization?.name || '未选择组织' }}
+          {{ currentTeam?.name || '未选择团队' }}
         </div>
       </div>
-      <span class="material-symbols-outlined text-primary text-lg">corporate_fare</span>
+      <span class="material-symbols-outlined text-primary text-lg">groups</span>
     </div>
     <select
       class="w-full rounded-md border border-slate-200 bg-slate-50 px-2.5 py-2 text-sm text-slate-700 outline-none transition-colors focus:border-primary focus:bg-white dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-      :value="selectedOrganizationId"
+      :value="selectedTeamId"
       :disabled="loading"
       @change="handleSelect"
     >
       <option
-        v-for="organization in organizations"
-        :key="organization.id"
-        :value="organization.id"
+        v-for="team in teams"
+        :key="team.id"
+        :value="team.id"
       >
-        {{ organization.name }}
+        {{ team.name }}
       </option>
     </select>
   </div>

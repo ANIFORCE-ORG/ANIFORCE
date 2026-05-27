@@ -12,20 +12,11 @@ const showSystemPanel = ref(false)
 
 const settingCards = [
   {
-    id: 'organizations',
-    icon: 'corporate_fare',
-    title: '组织与权限',
-    description: '管理组织、成员角色和广告账户的数据隔离边界',
-    action: '管理组织',
-    enabled: true,
-    path: '/organization-settings'
-  },
-  {
     id: 'agent-account',
     icon: 'admin_panel_settings',
-    title: '系统账号设置',
-    description: '管理团队成员、登录身份和基础账号信息',
-    action: '进入账号设置',
+    title: '账号与团队',
+    description: '管理登录身份、团队成员和成员权限',
+    action: '进入设置',
     enabled: true,
     path: '/account-config'
   },
@@ -96,7 +87,7 @@ onMounted(() => {
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <div class="border-b border-slate-200 dark:border-slate-800 px-6 py-4">
         <h1 class="text-xl font-bold text-slate-900 dark:text-white">设置</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">管理 Agent 系统账号、系统配置和广告平台连接</p>
+        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">管理账号团队、系统配置和广告平台连接</p>
       </div>
 
       <div class="flex-1 overflow-y-auto p-6">

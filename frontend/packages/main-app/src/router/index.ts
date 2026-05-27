@@ -82,7 +82,7 @@ const router = createRouter({
     {
       path: '/organization-settings',
       name: 'organization-settings',
-      component: () => import('@/pages/settings/OrganizationSettings.vue'),
+      redirect: '/account-config',
     },
     {
       path: '/account-config',

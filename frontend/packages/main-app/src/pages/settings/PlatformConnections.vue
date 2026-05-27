@@ -786,7 +786,7 @@ onMounted(async () => {
               <div>
                 <h2 class="text-sm font-semibold text-slate-900 dark:text-white">可投放广告账户</h2>
                 <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
-                  当前组织：{{ currentOrganization?.name || '未选择组织' }}，创建广告前需要选择一个满足前置条件的账户
+                  当前团队：{{ currentOrganization?.name || '未选择团队' }}，创建广告前需要选择一个满足前置条件的账户
                 </p>
               </div>
               <button

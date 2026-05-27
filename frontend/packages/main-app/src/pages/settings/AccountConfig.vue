@@ -378,8 +378,8 @@ onMounted(() => {
             <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back</span>
           </button>
           <div>
-            <h1 class="text-xl font-bold text-slate-900 dark:text-white">系统账号设置</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">管理团队成员、登录身份和基础账号信息</p>
+            <h1 class="text-xl font-bold text-slate-900 dark:text-white">账号与团队</h1>
+            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">管理登录身份、团队成员和成员权限</p>
           </div>
         </div>
       </div>
