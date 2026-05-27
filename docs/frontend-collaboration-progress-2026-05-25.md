@@ -100,6 +100,10 @@ This branch keeps the mainline frontend structure and adds the current website, 
   - Workspace
   - Account settings
   - Logout
+- Added auth frontend placeholders for the SaaS 0.5 email-first account model:
+  - Login page now has an actionable forgot-password flow.
+  - Register page now includes email verification code input and send-code action.
+  - Frontend calls `/auth/email/send-code` and `/auth/password/reset`, with local fallback messaging until email service is ready.
 - Extended platform connection settings with organization-aware platform account readiness:
   - Synced ad account list with Demo fallback.
   - Account readiness checks for Page/IG, Pixel/Dataset, billing, Manager Account, and conversion assets.

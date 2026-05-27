@@ -2,6 +2,7 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import { sendEmailCode } from '@/api/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -9,12 +10,15 @@ const auth = useAuthStore()
 const email = ref('')
 const password = ref('')
 const name = ref('')
+const emailCode = ref('')
 const loading = ref(false)
+const sendingCode = ref(false)
 const error = ref('')
+const codeSent = ref(false)
 
 async function handleRegister() {
   // 验证输入
-  if (!name.value || !email.value || !password.value) {
+  if (!name.value || !email.value || !password.value || !emailCode.value) {
     error.value = '请填写所有必填项'
     return
   }
@@ -50,6 +54,25 @@ async function handleRegister() {
     error.value = err.message || '注册失败，请稍后重试'
   } finally {
     loading.value = false
+  }
+}
+
+async function handleSendEmailCode() {
+  if (!isValidEmail(email.value)) {
+    error.value = '请先输入有效的邮箱地址'
+    return
+  }
+
+  sendingCode.value = true
+  error.value = ''
+  try {
+    await sendEmailCode({ email: email.value, scenario: 'register' })
+    codeSent.value = true
+  } catch {
+    codeSent.value = true
+    error.value = '邮箱服务未接入，当前验证码为前端占位；后端接入后将发送真实邮件'
+  } finally {
+    sendingCode.value = false
   }
 }
 
@@ -124,6 +147,31 @@ function goToLogin() {
                 :disabled="loading"
                 required
               />
+            </div>
+
+            <!-- 密码 -->
+            <div>
+              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1.5">
+                邮箱验证码 <span class="text-red-500">*</span>
+              </label>
+              <div class="flex gap-2">
+                <input
+                  v-model="emailCode"
+                  type="text"
+                  class="min-w-0 flex-1 px-4 py-2.5 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  placeholder="输入验证码"
+                  :disabled="loading"
+                  required
+                />
+                <button
+                  type="button"
+                  class="whitespace-nowrap rounded-xl border-2 border-primary px-4 py-2.5 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-50"
+                  :disabled="loading || sendingCode"
+                  @click="handleSendEmailCode"
+                >
+                  {{ codeSent ? '重新发送' : sendingCode ? '发送中...' : '发送验证码' }}
+                </button>
+              </div>
             </div>
 
             <!-- 密码 -->

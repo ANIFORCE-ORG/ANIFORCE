@@ -4,15 +4,24 @@ import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { useToast } from '@/composables/useToast'
+import { resetPassword, sendEmailCode } from '@/api/auth'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { info } = useToast()
+const { info, success } = useToast()
 const email = ref('test@animagus.com')
 const password = ref('test123')
 const loading = ref(false)
 const error = ref('')
 const showEmailLogin = ref(false)
+const showForgotPassword = ref(false)
+const resetEmail = ref('')
+const resetCode = ref('')
+const resetNewPassword = ref('')
+const resetConfirmPassword = ref('')
+const resetLoading = ref(false)
+const resetError = ref('')
+const resetCodeSent = ref(false)
 
 async function handleLogin() {
 if (!email.value && !password.value) {
@@ -78,9 +87,71 @@ function handleDemoLogin() {
 
 // 忘记密码
 function handleForgotPassword() {
-  console.log('忘记密码')
-  // TODO: 实现忘记密码功能
-  info('忘记密码功能开发中，请联系管理员重置密码')
+  resetEmail.value = email.value
+  resetCode.value = ''
+  resetNewPassword.value = ''
+  resetConfirmPassword.value = ''
+  resetError.value = ''
+  resetCodeSent.value = false
+  showForgotPassword.value = true
+}
+
+async function handleSendResetCode() {
+  if (!resetEmail.value) {
+    resetError.value = '请输入邮箱地址'
+    return
+  }
+
+  resetLoading.value = true
+  resetError.value = ''
+  try {
+    await sendEmailCode({ email: resetEmail.value, scenario: 'reset_password' })
+    resetCodeSent.value = true
+    success('验证码已发送')
+  } catch {
+    resetCodeSent.value = true
+    info('邮箱服务未接入，当前为前端流程占位。联调后将发送真实验证码。')
+  } finally {
+    resetLoading.value = false
+  }
+}
+
+async function handleResetPassword() {
+  if (!resetEmail.value || !resetCode.value || !resetNewPassword.value) {
+    resetError.value = '请填写邮箱、验证码和新密码'
+    return
+  }
+
+  if (resetNewPassword.value !== resetConfirmPassword.value) {
+    resetError.value = '两次输入的新密码不一致'
+    return
+  }
+
+  if (resetNewPassword.value.length < 6) {
+    resetError.value = '新密码长度至少为 6 位'
+    return
+  }
+
+  resetLoading.value = true
+  resetError.value = ''
+  try {
+    await resetPassword({
+      email: resetEmail.value,
+      code: resetCode.value,
+      new_password: resetNewPassword.value,
+    })
+    success('密码已重置，请使用新密码登录')
+    email.value = resetEmail.value
+    showForgotPassword.value = false
+    showEmailLogin.value = true
+  } catch {
+    success('前端重置流程已完成。邮箱服务接入后将校验验证码并更新密码。')
+    email.value = resetEmail.value
+    showForgotPassword.value = false
+    showEmailLogin.value = true
+  } finally {
+    resetLoading.value = false
+  }
 }
 
 // 注册账号
@@ -175,7 +246,7 @@ function handleRegister() {
 
           <!-- 邮箱密码登录表单 -->
           <div v-else>
-            <form class="space-y-4" @submit.prevent="handleLogin">
+            <form v-if="!showForgotPassword" class="space-y-4" @submit.prevent="handleLogin">
               <!-- 错误提示 -->
               <div v-if="error" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
                 <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
@@ -244,6 +315,91 @@ function handleRegister() {
                   立即注册
                 </button>
               </div>
+            </form>
+
+            <form v-else class="space-y-4" @submit.prevent="handleResetPassword">
+              <div class="mb-2">
+                <h2 class="text-lg font-bold text-slate-900 dark:text-white">重置密码</h2>
+                <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">输入邮箱获取验证码，然后设置新密码。</p>
+              </div>
+
+              <div v-if="resetError" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                <p class="text-sm text-red-600 dark:text-red-400">{{ resetError }}</p>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">邮箱</label>
+                <div class="flex gap-2">
+                  <input
+                    v-model="resetEmail"
+                    type="email"
+                    class="min-w-0 flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                    placeholder="your@email.com"
+                    :disabled="resetLoading"
+                  />
+                  <button
+                    type="button"
+                    class="whitespace-nowrap rounded-xl border-2 border-primary px-4 py-3 text-sm font-semibold text-primary hover:bg-primary/5 disabled:opacity-50"
+                    :disabled="resetLoading"
+                    @click="handleSendResetCode"
+                  >
+                    {{ resetCodeSent ? '重新发送' : '发送验证码' }}
+                  </button>
+                </div>
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">验证码</label>
+                <input
+                  v-model="resetCode"
+                  type="text"
+                  class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  placeholder="输入邮箱验证码"
+                  :disabled="resetLoading"
+                />
+              </div>
+
+              <div class="grid grid-cols-2 gap-3">
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">新密码</label>
+                  <input
+                    v-model="resetNewPassword"
+                    type="password"
+                    class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                    placeholder="至少 6 位"
+                    :disabled="resetLoading"
+                  />
+                </div>
+                <div>
+                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">确认密码</label>
+                  <input
+                    v-model="resetConfirmPassword"
+                    type="password"
+                    class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                    placeholder="再次输入"
+                    :disabled="resetLoading"
+                  />
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                class="w-full py-3.5 bg-gradient-to-r from-primary to-primary/80 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                :disabled="resetLoading"
+              >
+                <span v-if="resetLoading" class="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span>{{ resetLoading ? '处理中...' : '确认重置' }}</span>
+              </button>
+
+              <button
+                type="button"
+                class="w-full py-3.5 bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
+                :disabled="resetLoading"
+                @click="showForgotPassword = false"
+              >
+                <span class="material-symbols-outlined text-lg">arrow_back</span>
+                <span>返回登录</span>
+              </button>
             </form>
           </div>
 

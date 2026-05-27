@@ -27,10 +27,29 @@ export interface LoginResponse {
   }
 }
 
+export interface SendEmailCodeRequest {
+  email: string
+  scenario: 'register' | 'reset_password'
+}
+
+export interface ResetPasswordRequest {
+  email: string
+  code: string
+  new_password: string
+}
+
 /**
  * 刷新 access token（后端接口）
  * 注意：此函数仅用于后端 API 调用，不处理 localStorage
  */
 export async function refreshToken(refreshToken: string): Promise<LoginResponse> {
   return await http.post<LoginResponse>('/auth/refresh', { refresh_token: refreshToken })
+}
+
+export async function sendEmailCode(data: SendEmailCodeRequest): Promise<{ message?: string }> {
+  return await http.post<{ message?: string }>('/auth/email/send-code', data)
+}
+
+export async function resetPassword(data: ResetPasswordRequest): Promise<{ message?: string }> {
+  return await http.post<{ message?: string }>('/auth/password/reset', data)
 }
