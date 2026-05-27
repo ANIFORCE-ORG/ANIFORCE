@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import OrganizationSwitcher from './OrganizationSwitcher.vue'
 
 interface NavItem {
   id: string
@@ -19,6 +20,7 @@ interface Props {
   navItems?: NavItem[]
   sessions?: Session[]
   activePanel?: string
+  showOrganization?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -30,7 +32,8 @@ const props = withDefaults(defineProps<Props>(), {
     { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
   ],
   sessions: () => [],
-  activePanel: ''
+  activePanel: '',
+  showOrganization: true
 })
 
 const emit = defineEmits<{
@@ -80,6 +83,8 @@ const handleSessionClick = (session: Session) => {
   >
     <!-- Navigation -->
     <nav class="flex-1 overflow-y-auto pb-0 p-4 pt-6 space-y-6 overflow-x-hidden">
+      <OrganizationSwitcher v-if="showOrganization && !isCollapsed" />
+
       <!-- 功能导航 -->
       <div>
         <div 

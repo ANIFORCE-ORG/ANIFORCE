@@ -69,9 +69,11 @@ export async function createCampaign(data: {
   project_id: string
   name: string
   platform: string
+  platform_account_id?: string
   budget: number
   status?: string
   material_ids?: string[]
+  config?: Record<string, any>
 }): Promise<Campaign> {
   return http.post<Campaign>('/campaigns', data)
 }

@@ -80,6 +80,41 @@ This branch keeps the mainline frontend structure and adds the current website, 
   - Dashboard alert actions use icon-style controls
 - Preserved the three-column product workspace pattern for business pages.
 
+### SaaS 0.5 Organization Foundation - 2026-05-27
+
+- Added the SaaS 0.5 iteration plan and API/database collaboration specification:
+  - `docs/saas-0.5-iteration-plan-2026-05-27.md`
+  - `docs/API_REQUIREMENTS.md`
+- Added organization context as the first frontend implementation step after the 2026-05-26 product alignment:
+  - Shared organization selector in the business sidebar.
+  - New settings entry and page at `/organization-settings`.
+  - Organization list, current organization, member roles, invitation form, and create-organization flow.
+- The new organization page uses frontend Demo fallback until backend implements:
+  - `GET /organizations`
+  - `POST /organizations`
+  - `GET /organizations/:id/members`
+  - `POST /organizations/:id/invitations`
+  - `POST /me/current-organization`
+- `/home` first-entry onboarding is intentionally deferred until organization, platform-account, and campaign object contracts are stable.
+- Fixed the logged-in header account menu so users can now open:
+  - Workspace
+  - Account settings
+  - Logout
+- Extended platform connection settings with organization-aware platform account readiness:
+  - Synced ad account list with Demo fallback.
+  - Account readiness checks for Page/IG, Pixel/Dataset, billing, Manager Account, and conversion assets.
+  - Direct entry from platform account to `/campaigns/create`.
+- Reworked campaign creation into the SaaS 0.5 object model:
+  - Step 1: Project and platform account.
+  - Step 2: Campaign objective, budget, and bidding.
+  - Step 3: Ad Group timing, audience, region, and interests.
+  - Step 4: Material and Creative Version fields.
+  - Step 5: Review and draft submission.
+- Added material upload flow with OSS upload-token placeholder:
+  - Attempts `/materials/upload-token`.
+  - Falls back to local preview material for frontend Demo flow when backend storage is not ready.
+- Added report project filtering and connected platform/project/material display states for `/monitor`.
+
 ## Important Local Files
 
 - Website: `frontend/packages/main-app/src/pages/MarketingHome.vue`
@@ -91,6 +126,12 @@ This branch keeps the mainline frontend structure and adds the current website, 
 - Creative module: `frontend/packages/main-app/src/pages/creatives/Material.vue`
 - Shared Agent sessions: `frontend/packages/main-app/src/composables/useWorkspaceSessions.ts`
 - Platform account frontend API: `frontend/packages/main-app/src/api/platformAccounts.ts`
+- Organization settings: `frontend/packages/main-app/src/pages/settings/OrganizationSettings.vue`
+- Organization frontend API: `frontend/packages/main-app/src/api/organizations.ts`
+- Organization shared context: `frontend/packages/main-app/src/composables/useOrganizationContext.ts`
+- Organization sidebar switcher: `frontend/packages/main-app/src/components/layout/OrganizationSwitcher.vue`
+- Platform connections and account readiness: `frontend/packages/main-app/src/pages/settings/PlatformConnections.vue`
+- Campaign create five-step flow: `frontend/packages/main-app/src/pages/campaigns/CreateCampaign.vue`
 
 ## How To Continue Next Time
 

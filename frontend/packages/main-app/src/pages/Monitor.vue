@@ -18,6 +18,7 @@ const quickHints = [
 
 const timeRange = ref('7d')
 const platform = ref('all')
+const selectedProject = ref('all')
 
 const metrics = [
   { label: '总消耗', value: '$28,460', delta: '+12.4%', tone: 'default' },
@@ -27,9 +28,9 @@ const metrics = [
 ]
 
 const platformRows = [
-  { name: 'Meta', account: 'Candy Blast Meta UA', campaigns: 5, spend: '$12,840', installs: '2,180', cpi: '$5.89', roas: '2.31x', trend: 68 },
-  { name: 'Google', account: 'DramaBox Google Ads', campaigns: 3, spend: '$8,620', installs: '1,426', cpi: '$6.04', roas: '2.12x', trend: 54 },
-  { name: 'TikTok', account: 'Candy Blast TikTok US', campaigns: 4, spend: '$7,000', installs: '1,226', cpi: '$5.71', roas: '2.86x', trend: 78 },
+  { name: 'Meta', project: 'Candy Blast 全球推广', account: 'Candy Blast Meta UA', campaigns: 5, spend: '$12,840', installs: '2,180', cpi: '$5.89', roas: '2.31x', trend: 68 },
+  { name: 'Google', project: 'DramaBox 北美订阅转化', account: 'DramaBox Google Ads', campaigns: 3, spend: '$8,620', installs: '1,426', cpi: '$6.04', roas: '2.12x', trend: 54 },
+  { name: 'TikTok', project: 'Candy Blast 全球推广', account: 'Candy Blast TikTok US', campaigns: 4, spend: '$7,000', installs: '1,226', cpi: '$5.71', roas: '2.86x', trend: 78 },
 ]
 
 const insights = [
@@ -44,20 +45,33 @@ const creativeRows = [
   { name: 'Character_Static_A', project: 'DramaBox', type: '图片', ctr: '2.7%', cvr: '7.4%', roas: '1.9x' },
 ]
 
+const projectRows = [
+  { name: 'Candy Blast 全球推广', budget: '$68,000', spend: '$19,840', pacing: '29.2%', campaigns: 9, alerts: 2, roas: '2.56x' },
+  { name: 'DramaBox 北美订阅转化', budget: '$92,000', spend: '$8,620', pacing: '9.4%', campaigns: 3, alerts: 1, roas: '2.12x' },
+  { name: 'DTC 新品黑五预热', budget: '$45,000', spend: '$0', pacing: '0%', campaigns: 0, alerts: 0, roas: '-' },
+]
+
 const filteredPlatformRows = computed(() => {
-  if (platform.value === 'all') return platformRows
-  return platformRows.filter(row => row.name.toLowerCase() === platform.value)
+  return platformRows.filter((row) => {
+    const platformMatched = platform.value === 'all' || row.name.toLowerCase() === platform.value
+    const projectMatched = selectedProject.value === 'all' || row.project === selectedProject.value
+    return platformMatched && projectMatched
+  })
 })
 
 const displayPlatformRows = computed(() =>
   filteredPlatformRows.value.length > 0 ? filteredPlatformRows.value : platformRows
 )
 
-const projectRows = [
-  { name: 'Candy Blast 全球推广', budget: '$68,000', spend: '$19,840', pacing: '29.2%', campaigns: 9, alerts: 2, roas: '2.56x' },
-  { name: 'DramaBox 北美订阅转化', budget: '$92,000', spend: '$8,620', pacing: '9.4%', campaigns: 3, alerts: 1, roas: '2.12x' },
-  { name: 'DTC 新品黑五预热', budget: '$45,000', spend: '$0', pacing: '0%', campaigns: 0, alerts: 0, roas: '-' },
-]
+const displayProjectRows = computed(() => {
+  if (selectedProject.value === 'all') return projectRows
+  return projectRows.filter((project) => project.name === selectedProject.value)
+})
+
+const displayCreativeRows = computed(() => {
+  if (selectedProject.value === 'all') return creativeRows
+  return creativeRows.filter((creative) => creative.project === selectedProject.value.split(' ')[0])
+})
 
 const switchPanel = (item: any) => {
   if (item.path) {
@@ -103,6 +117,13 @@ const switchPanel = (item: any) => {
             <option value="meta">Meta</option>
             <option value="google">Google</option>
             <option value="tiktok">TikTok</option>
+          </select>
+          <select
+            v-model="selectedProject"
+            class="h-9 rounded-md border border-slate-200 bg-white px-3 text-sm text-slate-700 focus:outline-none focus:ring-2 focus:ring-primary/20 dark:border-slate-700 dark:bg-slate-800 dark:text-slate-300"
+          >
+            <option value="all">全部项目</option>
+            <option v-for="project in projectRows" :key="project.name" :value="project.name">{{ project.name }}</option>
           </select>
           <button class="inline-flex h-9 w-9 items-center justify-center rounded-md bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700">
             <span class="material-symbols-outlined text-lg">download</span>
@@ -207,7 +228,7 @@ const switchPanel = (item: any) => {
             </div>
             <div class="grid gap-3 lg:grid-cols-3">
               <article
-                v-for="project in projectRows"
+                v-for="project in displayProjectRows"
                 :key="project.name"
                 class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900"
               >
@@ -245,7 +266,7 @@ const switchPanel = (item: any) => {
             </div>
             <div class="grid gap-3 lg:grid-cols-3">
               <article
-                v-for="creative in creativeRows"
+                v-for="creative in displayCreativeRows"
                 :key="creative.name"
                 class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-800 dark:bg-slate-900"
               >
@@ -267,6 +288,9 @@ const switchPanel = (item: any) => {
                   </div>
                 </div>
               </article>
+            </div>
+            <div v-if="displayCreativeRows.length === 0" class="rounded-md border border-dashed border-slate-200 p-8 text-center text-sm text-slate-500 dark:border-slate-800">
+              当前筛选条件下暂无素材表现数据，后续接入 `GET /reports/materials` 后按真实数据展示。
             </div>
           </section>
         </div>

@@ -21,7 +21,7 @@ const initialPlatform = ref(route.query.platform as string || '')
 const platformAccountId = ref(route.query.platformAccountId as string || '')
 
 const currentStep = ref(1)
-const totalSteps = 4
+const totalSteps = 5
 const contentScrollRef = ref<HTMLElement | null>(null)
 
 const switchPanel = (item: any) => {
@@ -31,10 +31,11 @@ const switchPanel = (item: any) => {
 }
 
 const steps = [
-  { id: 1, name: '准备', icon: 'settings', description: '项目、平台和账户' },
-  { id: 2, name: '创建', icon: 'edit', description: '目标、预算和出价' },
-  { id: 3, name: '执行', icon: 'rocket_launch', description: '素材、地区和受众' },
-  { id: 4, name: '确认', icon: 'check_circle', description: '确认并提交' }
+  { id: 1, name: '项目账户', icon: 'settings', description: '项目、平台和账户' },
+  { id: 2, name: '投放活动', icon: 'flag', description: 'Campaign 目标和预算' },
+  { id: 3, name: '计划设置', icon: 'tune', description: 'Ad Group 人群和版位' },
+  { id: 4, name: '素材创意', icon: 'video_library', description: '素材、文案和链接' },
+  { id: 5, name: '确认提交', icon: 'check_circle', description: '保存草稿或提交发布' }
 ]
 
 // 准备阶段数据
@@ -59,6 +60,7 @@ const accountChecks = computed(() => [
 ])
 
 // 创建阶段数据
+const campaignName = ref('')
 const campaignObjective = ref('install')
 const objectives = [
   { id: 'install', name: '应用安装', description: '增加应用下载量', icon: 'download' },
@@ -79,12 +81,26 @@ const biddingStrategies = [
 ]
 
 const targetCPA = ref(8.0)
+
+// 计划阶段数据
+const adGroupName = ref('')
 const startDate = ref('')
 const endDate = ref('')
 
 // 执行阶段数据
 const selectedMaterials = ref<Material[]>([])
 const materialThumbnails = ref<Record<string, string>>({})
+const creativeHeadline = ref('')
+const creativePrimaryText = ref('')
+const creativeDescription = ref('')
+const landingUrl = ref('')
+const callToAction = ref('INSTALL_NOW')
+const callToActions = [
+  { id: 'INSTALL_NOW', name: '立即安装' },
+  { id: 'LEARN_MORE', name: '了解更多' },
+  { id: 'SHOP_NOW', name: '立即购买' },
+  { id: 'SIGN_UP', name: '立即注册' },
+]
 
 const removeMaterial = (materialId: string) => {
   const index = selectedMaterials.value.findIndex(m => m.id === materialId)
@@ -134,17 +150,22 @@ const canProceedStep1 = computed(() => {
 })
 
 const canProceedStep2 = computed(() => {
-  return campaignObjective.value !== '' && dailyBudget.value > 0 && startDate.value !== '' && endDate.value !== ''
+  return campaignObjective.value !== '' && dailyBudget.value > 0
 })
 
 const canProceedStep3 = computed(() => {
-  return true
+  return startDate.value !== '' && endDate.value !== ''
+})
+
+const canProceedStep4 = computed(() => {
+  return landingUrl.value.trim() !== '' || selectedMaterials.value.length === 0
 })
 
 const canProceed = computed(() => {
   if (currentStep.value === 1) return canProceedStep1.value
   if (currentStep.value === 2) return canProceedStep2.value
   if (currentStep.value === 3) return canProceedStep3.value
+  if (currentStep.value === 4) return canProceedStep4.value
   return true
 })
 
@@ -208,15 +229,33 @@ const handleSubmit = async () => {
   
   try {
     // 构建广告计划名称
-    const campaignName = `${selectedGroup.value.name} - ${platforms.find(p => p.id === selectedPlatform.value)?.name}`
+    const defaultCampaignName = `${selectedGroup.value.name} - ${platforms.find(p => p.id === selectedPlatform.value)?.name}`
+    const finalCampaignName = campaignName.value.trim() || defaultCampaignName
+    const finalAdGroupName = adGroupName.value.trim() || `${finalCampaignName} - Default Ad Group`
 
     if (selectedGroup.value.id.startsWith('demo-project')) {
       console.log('Demo 创建广告计划草稿:', {
         project_id: selectedGroup.value.id,
-        name: campaignName,
+        name: finalCampaignName,
         platform: selectedPlatform.value,
         platform_account_id: selectedPlatformAccountId.value,
         budget: dailyBudget.value,
+        ad_group: {
+          name: finalAdGroupName,
+          regions: targetRegions.value,
+          age_range: ageRange.value,
+          gender: gender.value,
+          interests: targetInterests.value,
+          start_date: startDate.value,
+          end_date: endDate.value,
+        },
+        creative: {
+          headline: creativeHeadline.value,
+          primary_text: creativePrimaryText.value,
+          description: creativeDescription.value,
+          landing_url: landingUrl.value,
+          cta: callToAction.value,
+        },
         material_ids: selectedMaterials.value.map(m => m.id)
       })
       router.push('/campaign')
@@ -226,11 +265,34 @@ const handleSubmit = async () => {
     // 调用API创建广告计划
     const campaign = await createCampaign({
       project_id: selectedGroup.value.id,
-      name: campaignName,
+      name: finalCampaignName,
       platform: selectedPlatform.value,
+      platform_account_id: selectedPlatformAccountId.value,
       budget: dailyBudget.value,
       status: 'draft',
-      material_ids: selectedMaterials.value.map(m => m.id)
+      material_ids: selectedMaterials.value.map(m => m.id),
+      config: {
+        objective: campaignObjective.value,
+        budget_type: budgetType.value,
+        bid_strategy: biddingStrategy.value,
+        target_cpa: targetCPA.value,
+        ad_group: {
+          name: finalAdGroupName,
+          regions: targetRegions.value,
+          age_range: ageRange.value,
+          gender: gender.value,
+          interests: targetInterests.value,
+          start_date: startDate.value,
+          end_date: endDate.value,
+        },
+        creative: {
+          headline: creativeHeadline.value,
+          primary_text: creativePrimaryText.value,
+          description: creativeDescription.value,
+          landing_url: landingUrl.value,
+          cta: callToAction.value,
+        }
+      }
     })
     
     console.log('广告计划创建成功:', campaign)
@@ -326,7 +388,9 @@ const handleCreateMaterial = () => {
 // 页面加载时，如果有projectId参数，自动加载该项目作为默认分组
 onMounted(async () => {
   if (initialPlatform.value) {
-    selectedPlatform.value = initialPlatform.value
+    const normalizedPlatform = initialPlatform.value.toLowerCase()
+    const platformByQuery = platforms.find(platform => platform.id.toLowerCase() === normalizedPlatform)
+    selectedPlatform.value = platformByQuery?.id || initialPlatform.value
   }
 
   if (projectId.value) {
@@ -540,6 +604,25 @@ onMounted(async () => {
 
       <!-- Step 2: 创建 -->
       <div v-if="currentStep === 2" class="space-y-4">
+        <div class="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-200">
+          这一段对应平台 Campaign 层，保存投放活动目标、预算模式和出价策略；具体人群、地区、版位在下一步 Ad Group 中设置。
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary">campaign</span>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">投放活动名称</h3>
+          </div>
+          <input
+            v-model="campaignName"
+            class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+            placeholder="例如 Candy Blast US Install Campaign"
+          />
+          <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+            不填写时将自动使用项目和平台生成名称。
+          </p>
+        </div>
+
         <!-- 推广目标 -->
         <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
@@ -632,6 +715,25 @@ onMounted(async () => {
             />
           </div>
         </div>
+      </div>
+
+      <!-- Step 3: 计划设置 -->
+      <div v-if="currentStep === 3" class="space-y-4">
+        <div class="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-200">
+          这一段对应 Ad Group / Ad Set 层，保存投放时间、人群、地区和版位。不同平台的专有字段后续由 `GET /platforms/:platform/form-config` 下发。
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary">format_list_bulleted</span>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">计划名称</h3>
+          </div>
+          <input
+            v-model="adGroupName"
+            class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+            placeholder="例如 US iOS Broad Audience"
+          />
+        </div>
 
         <!-- 投放时间 -->
         <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
@@ -657,63 +759,6 @@ onMounted(async () => {
               />
             </div>
           </div>
-        </div>
-      </div>
-
-      <!-- Step 3: 执行 -->
-      <div v-if="currentStep === 3" class="space-y-4">
-        <!-- 选择素材 -->
-        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">video_library</span>
-            <h3 class="text-base font-bold text-slate-900 dark:text-white">选择素材</h3>
-            <span class="text-xs text-slate-500 dark:text-slate-400">草稿可先跳过，发布前补齐</span>
-          </div>
-          
-          <!-- 已选择的素材列表 -->
-          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-2 gap-3 mb-4">
-            <div
-              v-for="material in selectedMaterials"
-              :key="material.id"
-              class="rounded-md p-3 border border-primary bg-primary/5 relative"
-            >
-              <div class="flex items-center gap-3">
-                <div class="w-16 h-16 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
-                  <img
-                    v-if="materialThumbnails[material.id]"
-                    :src="materialThumbnails[material.id]"
-                    :alt="material.name"
-                    class="w-full h-full object-cover"
-                  />
-                  <span v-else class="material-symbols-outlined text-2xl text-slate-400">
-                    {{ material.type === 'video' ? 'videocam' : 'image' }}
-                  </span>
-                </div>
-                <div class="flex-1">
-                  <div class="font-medium text-slate-900 dark:text-white text-sm mb-1">{{ material.name }}</div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
-                    {{ material.type === 'video' ? '视频' : '图片' }} · CTR {{ material.ctr_estimate || 0 }}%
-                  </div>
-                </div>
-              </div>
-              <!-- 移除按钮 -->
-              <button
-                @click="removeMaterial(material.id)"
-                class="absolute top-2 right-2 w-6 h-6 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"
-              >
-                <span class="material-symbols-outlined text-sm">close</span>
-              </button>
-            </div>
-          </div>
-          
-          <!-- 添加素材按钮 -->
-          <button
-            @click="handleOpenMaterialModal"
-            class="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-dashed border-primary/30 px-4 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
-          >
-            <span class="material-symbols-outlined">add_circle</span>
-            <span>添加素材</span>
-          </button>
         </div>
 
         <!-- 定向配置 - 投放地区 -->
@@ -802,8 +847,120 @@ onMounted(async () => {
         </div>
       </div>
 
-      <!-- Step 4: 确认 -->
+      <!-- Step 4: 素材创意 -->
       <div v-if="currentStep === 4" class="space-y-4">
+        <div class="rounded-md border border-blue-100 bg-blue-50 p-4 text-sm text-blue-800 dark:border-blue-900/40 dark:bg-blue-900/20 dark:text-blue-200">
+          这一段对应素材资产和 Creative Version。素材文件、标题、文案、落地页和 CTA 应保存为版本，不覆盖历史投放创意。
+        </div>
+
+        <!-- 选择素材 -->
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary">video_library</span>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">选择素材</h3>
+            <span class="text-xs text-slate-500 dark:text-slate-400">草稿可先跳过，发布前补齐</span>
+          </div>
+
+          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-2 gap-3 mb-4">
+            <div
+              v-for="material in selectedMaterials"
+              :key="material.id"
+              class="rounded-md p-3 border border-primary bg-primary/5 relative"
+            >
+              <div class="flex items-center gap-3">
+                <div class="w-16 h-16 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+                  <img
+                    v-if="materialThumbnails[material.id]"
+                    :src="materialThumbnails[material.id]"
+                    :alt="material.name"
+                    class="w-full h-full object-cover"
+                  />
+                  <span v-else class="material-symbols-outlined text-2xl text-slate-400">
+                    {{ material.type === 'video' ? 'videocam' : 'image' }}
+                  </span>
+                </div>
+                <div class="flex-1">
+                  <div class="font-medium text-slate-900 dark:text-white text-sm mb-1">{{ material.name }}</div>
+                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                    {{ material.type === 'video' ? '视频' : '图片' }} · CTR {{ material.ctr_estimate || 0 }}%
+                  </div>
+                </div>
+              </div>
+              <button
+                @click="removeMaterial(material.id)"
+                class="absolute top-2 right-2 w-6 h-6 rounded-md bg-slate-200 dark:bg-slate-700 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"
+              >
+                <span class="material-symbols-outlined text-sm">close</span>
+              </button>
+            </div>
+          </div>
+
+          <button
+            @click="handleOpenMaterialModal"
+            class="flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-md border border-dashed border-primary/30 px-4 py-3 text-sm font-semibold text-primary transition-colors hover:bg-primary/5"
+          >
+            <span class="material-symbols-outlined">add_circle</span>
+            <span>添加素材</span>
+          </button>
+        </div>
+
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary">draw</span>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">创意版本</h3>
+          </div>
+          <div class="space-y-4">
+            <div class="grid grid-cols-2 gap-3">
+              <label class="block">
+                <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">标题</span>
+                <input
+                  v-model="creativeHeadline"
+                  class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  placeholder="例如 Play smarter today"
+                />
+              </label>
+              <label class="block">
+                <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">CTA</span>
+                <select
+                  v-model="callToAction"
+                  class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                >
+                  <option v-for="cta in callToActions" :key="cta.id" :value="cta.id">{{ cta.name }}</option>
+                </select>
+              </label>
+            </div>
+            <label class="block">
+              <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">主文案</span>
+              <textarea
+                v-model="creativePrimaryText"
+                rows="3"
+                class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                placeholder="用于广告正文的核心卖点"
+              />
+            </label>
+            <label class="block">
+              <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">描述</span>
+              <input
+                v-model="creativeDescription"
+                class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                placeholder="补充描述，按平台选填"
+              />
+            </label>
+            <label class="block">
+              <span class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">落地页 / 商店链接</span>
+              <input
+                v-model="landingUrl"
+                class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                placeholder="https://..."
+              />
+              <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">选择素材后发布前必须补齐；保存草稿时可暂缺。</p>
+            </label>
+          </div>
+        </div>
+      </div>
+
+      <!-- Step 4: 确认 -->
+      <div v-if="currentStep === 5" class="space-y-4">
         <!-- 准备阶段 -->
         <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
@@ -859,23 +1016,23 @@ onMounted(async () => {
             <div class="flex justify-between">
               <span class="text-slate-500 dark:text-slate-400">投放时间</span>
               <span class="font-medium text-slate-900 dark:text-white">
-                {{ startDate || '/' }} - {{ endDate || '/' }}
+                在计划设置中配置
               </span>
             </div>
           </div>
         </div>
 
-        <!-- 执行阶段 -->
+        <!-- 计划设置 -->
         <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
           <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">rocket_launch</span>
-            <h3 class="text-base font-bold text-slate-900 dark:text-white">执行阶段</h3>
+            <span class="material-symbols-outlined text-primary">tune</span>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">计划设置</h3>
           </div>
           <div class="space-y-3 text-sm">
             <div>
-              <div class="text-slate-500 dark:text-slate-400 mb-2">选择素材</div>
+              <div class="text-slate-500 dark:text-slate-400 mb-2">计划名称</div>
               <div class="font-medium text-slate-900 dark:text-white">
-                {{ selectedMaterials.length }} 个素材
+                {{ adGroupName || '自动生成' }}
               </div>
             </div>
             <div>
@@ -895,6 +1052,28 @@ onMounted(async () => {
               <div class="font-medium text-slate-900 dark:text-white">
                 {{ targetInterests.length > 0 ? targetInterests.join('、') : '不限' }}
               </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 素材创意 -->
+        <div class="bg-white dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800 p-4">
+          <div class="flex items-center gap-2 mb-4">
+            <span class="material-symbols-outlined text-primary">video_library</span>
+            <h3 class="text-base font-bold text-slate-900 dark:text-white">素材创意</h3>
+          </div>
+          <div class="space-y-3 text-sm">
+            <div class="flex justify-between">
+              <span class="text-slate-500 dark:text-slate-400">选择素材</span>
+              <span class="font-medium text-slate-900 dark:text-white">{{ selectedMaterials.length }} 个素材</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500 dark:text-slate-400">标题</span>
+              <span class="font-medium text-slate-900 dark:text-white">{{ creativeHeadline || '-' }}</span>
+            </div>
+            <div class="flex justify-between">
+              <span class="text-slate-500 dark:text-slate-400">落地页</span>
+              <span class="max-w-[360px] truncate font-medium text-slate-900 dark:text-white">{{ landingUrl || '保存草稿后补齐' }}</span>
             </div>
           </div>
         </div>

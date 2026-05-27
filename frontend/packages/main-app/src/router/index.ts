@@ -80,6 +80,11 @@ const router = createRouter({
       component: () => import('@/pages/settings/Settings.vue'),
     },
     {
+      path: '/organization-settings',
+      name: 'organization-settings',
+      component: () => import('@/pages/settings/OrganizationSettings.vue'),
+    },
+    {
       path: '/account-config',
       name: 'account-config',
       component: () => import('@/pages/settings/AccountConfig.vue'),
@@ -102,7 +107,7 @@ router.beforeEach((to, _from, next) => {
   const auth = useAuthStore()
   
   // 需要登录的页面列表
-  const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/account-config', '/ai-usage-config', '/platform-connections']
+  const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/organization-settings', '/account-config', '/ai-usage-config', '/platform-connections']
   
   // 未登录用户访问需要登录的页面,重定向到登录页
   if (requiresAuth.includes(to.path) && !auth.isLoggedIn) {

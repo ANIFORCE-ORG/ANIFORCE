@@ -7,6 +7,7 @@ import { http } from './http'
 export interface Material {
   id: string
   user_id: string
+  org_id?: string
   project_ids: string[]
   campaign_ids: string[]
   name: string
@@ -19,6 +20,13 @@ export interface Material {
   duration?: number
   file_size?: number
   created_at: string
+}
+
+export interface MaterialUploadToken {
+  upload_url: string
+  storage_key: string
+  public_url?: string
+  headers?: Record<string, string>
 }
 
 export interface MaterialImage {
@@ -110,6 +118,17 @@ export async function createMaterial(data: {
   ctr_estimate?: number
 }): Promise<Material> {
   return http.post<Material>('/materials', data)
+}
+
+/**
+ * 获取 OSS / COS 上传签名
+ */
+export async function getMaterialUploadToken(data: {
+  filename: string
+  content_type: string
+  file_size: number
+}): Promise<MaterialUploadToken> {
+  return http.post<MaterialUploadToken>('/materials/upload-token', data)
 }
 
 /**

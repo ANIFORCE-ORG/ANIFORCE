@@ -16,12 +16,16 @@ const publicCopy = {
     home: '首页',
     start: '马上体验',
     login: '登录',
+    workspace: '进入系统',
+    account: '账户设置',
     logout: '退出登录',
   },
   en: {
     home: 'Home',
     start: 'Start now',
     login: 'Login',
+    workspace: 'Workspace',
+    account: 'Account',
     logout: 'Log out',
   },
 }
@@ -40,8 +44,18 @@ const handleUserClick = () => {
   if (!auth.isLoggedIn) {
     router.push('/login')
   } else {
-    router.push('/home')
+    showUserMenu.value = !showUserMenu.value
   }
+}
+
+const goWorkspace = () => {
+  showUserMenu.value = false
+  router.push('/home')
+}
+
+const goAccountSettings = () => {
+  showUserMenu.value = false
+  router.push('/account-config')
 }
 
 const handleLogout = () => {
@@ -84,6 +98,7 @@ const handleLogout = () => {
               <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ auth.user?.name }}</div>
               <div class="text-xs text-slate-500 dark:text-slate-400">投放经理 · FunGame Studio</div>
             </div>
+            <span class="material-symbols-outlined text-base text-slate-500">expand_more</span>
           </button>
 
           <!-- User Dropdown Menu -->
@@ -96,6 +111,20 @@ const handleLogout = () => {
                 <p class="text-sm font-semibold">{{ auth.user?.name }}</p>
                 <p class="text-xs text-slate-500">{{ auth.user?.email }}</p>
               </div>
+              <button
+                class="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+                @click="goWorkspace"
+              >
+                <span class="material-symbols-outlined text-[18px]">space_dashboard</span>
+                {{ publicCopy[language].workspace }}
+              </button>
+              <button
+                class="w-full flex items-center gap-2 px-4 py-2 text-sm text-slate-700 hover:bg-slate-50 dark:text-slate-200 dark:hover:bg-slate-800 transition-colors"
+                @click="goAccountSettings"
+              >
+                <span class="material-symbols-outlined text-[18px]">manage_accounts</span>
+                {{ publicCopy[language].account }}
+              </button>
               <button
                 class="w-full flex items-center gap-2 px-4 py-2 text-sm text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                 @click="handleLogout"

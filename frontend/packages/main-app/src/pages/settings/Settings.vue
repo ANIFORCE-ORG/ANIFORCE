@@ -12,6 +12,15 @@ const showSystemPanel = ref(false)
 
 const settingCards = [
   {
+    id: 'organizations',
+    icon: 'corporate_fare',
+    title: '组织与权限',
+    description: '管理组织、成员角色和广告账户的数据隔离边界',
+    action: '管理组织',
+    enabled: true,
+    path: '/organization-settings'
+  },
+  {
     id: 'agent-account',
     icon: 'admin_panel_settings',
     title: '系统账号设置',

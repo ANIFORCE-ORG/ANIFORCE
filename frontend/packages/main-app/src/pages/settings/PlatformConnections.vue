@@ -8,14 +8,26 @@ import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { navItems } from '@/config/navigation'
 import { platformApi, type PlatformConnectionResponse } from '@/api/platform'
+import {
+  getPlatformAccounts,
+  getPlatformAccountReadiness,
+  syncPlatformAccounts,
+  type PlatformAccount,
+  type PlatformAccountAssetStatus,
+} from '@/api/platformAccounts'
 import { useToast } from '@/composables/useToast'
+import { useOrganizationContext } from '@/composables/useOrganizationContext'
 
 const router = useRouter()
 const { success, error: showError } = useToast()
+const { currentOrganization } = useOrganizationContext()
 const activePlatform = ref<'meta' | 'google' | 'tiktok'>('meta')
 const showConfigDialog = ref(false)
 const connections = ref<PlatformConnectionResponse[]>([])
+const platformAccounts = ref<PlatformAccount[]>([])
+const readinessChecks = ref<Record<string, PlatformAccountAssetStatus[]>>({})
 const loading = ref(false)
+const accountsLoading = ref(false)
 const editingConnection = ref<PlatformConnectionResponse | null>(null)
 const showDeleteConfirm = ref(false)
 const deletingConnection = ref<PlatformConnectionResponse | null>(null)
@@ -69,9 +81,132 @@ const loadConnections = async () => {
     connections.value = await platformApi.getAllConnections()
   } catch (err: any) {
     console.error('加载连接失败:', err)
-    showError('加载平台连接失败')
+    connections.value = []
   } finally {
     loading.value = false
+  }
+}
+
+const demoAccounts: PlatformAccount[] = [
+  {
+    id: 'pa-meta-candy',
+    org_id: 'org-aniforce-growth',
+    platform: 'meta',
+    account_id: 'act_1029384756',
+    external_account_id: '1029384756',
+    account_name: 'Candy Blast Meta UA',
+    business_name: 'FunGame Business Manager',
+    auth_status: 'authorized',
+    account_status: 'active',
+    readiness_status: 'ready',
+    currency: 'USD',
+    timezone: 'America/Los_Angeles',
+    last_sync_at: '2026-05-27T09:30:00Z',
+  },
+  {
+    id: 'pa-meta-dtc',
+    org_id: 'org-aniforce-growth',
+    platform: 'meta',
+    account_id: 'act_6677889900',
+    external_account_id: '6677889900',
+    account_name: 'DTC Meta Prospecting',
+    business_name: 'DTC Growth BM',
+    auth_status: 'authorized',
+    account_status: 'active',
+    readiness_status: 'warning',
+    currency: 'USD',
+    timezone: 'Asia/Singapore',
+    last_sync_at: '2026-05-27T08:40:00Z',
+  },
+  {
+    id: 'pa-google-drama',
+    org_id: 'org-aniforce-growth',
+    platform: 'google',
+    account_id: 'gads_559210',
+    external_account_id: '559210',
+    account_name: 'DramaBox Google Ads',
+    business_name: 'DramaBox MCC',
+    auth_status: 'authorized',
+    account_status: 'active',
+    readiness_status: 'warning',
+    currency: 'USD',
+    timezone: 'Asia/Singapore',
+    last_sync_at: '2026-05-26T22:15:00Z',
+  },
+]
+
+const demoReadinessChecks: Record<string, PlatformAccountAssetStatus[]> = {
+  'pa-meta-candy': [
+    { label: 'Page', status: 'connected', detail: 'Candy Blast Official' },
+    { label: 'Instagram', status: 'connected', detail: '@candyblast' },
+    { label: 'Pixel / Dataset', status: 'connected', detail: 'Install dataset ready' },
+    { label: '支付状态', status: 'connected', detail: 'Billing active' },
+  ],
+  'pa-meta-dtc': [
+    { label: 'Page', status: 'connected', detail: 'DTC Store' },
+    { label: 'Instagram', status: 'optional', detail: 'Optional for current placement' },
+    { label: 'Pixel / Dataset', status: 'missing', detail: 'Need dataset before purchase campaign' },
+    { label: '支付状态', status: 'connected', detail: 'Billing active' },
+  ],
+  'pa-google-drama': [
+    { label: 'Manager Account', status: 'connected', detail: 'MCC linked' },
+    { label: 'Conversion', status: 'missing', detail: 'Waiting backend Google MA sync' },
+    { label: 'Billing', status: 'unknown', detail: 'Pending API check' },
+  ],
+}
+
+const platformNameMap: Record<string, string> = {
+  meta: 'Meta',
+  google: 'Google',
+  tiktok: 'TikTok',
+}
+
+const loadPlatformAccounts = async () => {
+  accountsLoading.value = true
+  try {
+    platformAccounts.value = await getPlatformAccounts({
+      platform: activePlatform.value,
+      org_id: currentOrganization.value?.id,
+    })
+    if (platformAccounts.value.length === 0) {
+      platformAccounts.value = demoAccounts.filter((account) => account.platform === activePlatform.value)
+    }
+  } catch {
+    platformAccounts.value = demoAccounts.filter((account) => account.platform === activePlatform.value)
+  } finally {
+    accountsLoading.value = false
+  }
+
+  await loadReadinessChecks()
+}
+
+const loadReadinessChecks = async () => {
+  const checks: Record<string, PlatformAccountAssetStatus[]> = {}
+  await Promise.all(platformAccounts.value.map(async (account) => {
+    try {
+      const response = await getPlatformAccountReadiness(account.id)
+      checks[account.id] = response.checks
+    } catch {
+      checks[account.id] = demoReadinessChecks[account.id] || [
+        { label: '授权状态', status: account.auth_status === 'authorized' ? 'connected' : 'missing' },
+        { label: '账户状态', status: account.account_status === 'active' ? 'connected' : 'unknown' },
+      ]
+    }
+  }))
+  readinessChecks.value = checks
+}
+
+const handleSyncAccounts = async () => {
+  accountsLoading.value = true
+  try {
+    await syncPlatformAccounts(activePlatform.value)
+    await loadPlatformAccounts()
+    success('广告账户已同步')
+  } catch {
+    await loadPlatformAccounts()
+    showError('账户同步接口未就绪，当前展示 Demo 账户')
+  } finally {
+    accountsLoading.value = false
   }
 }
 
@@ -79,6 +214,7 @@ const handleSaveConfig = async (data: any) => {
   console.log('保存配置:', data)
   closeConfigDialog()
   await loadConnections()
+  await loadPlatformAccounts()
   success('配置已保存')
 }
 
@@ -151,24 +287,15 @@ const formatDate = (dateStr: string) => {
 
 // 根据当前选中的平台过滤连接列表
 const filteredConnections = computed(() => {
-  const platformMap: Record<string, string> = {
-    'meta': 'Meta',
-    'google': 'Google',
-    'tiktok': 'TikTok'
-  }
-  const platformName = platformMap[activePlatform.value]
+  const platformName = platformNameMap[activePlatform.value]
   return connections.value.filter(conn => conn.platform === platformName)
 })
 
 // 判断各平台是否已接入（至少有一个账号状态为 authorized）
 const isPlatformConnected = (platformId: string) => {
-  const platformMap: Record<string, string> = {
-    'meta': 'Meta',
-    'google': 'Google',
-    'tiktok': 'TikTok'
-  }
-  const platformName = platformMap[platformId]
+  const platformName = platformNameMap[platformId]
   return connections.value.some(conn => conn.platform === platformName && conn.status === 'active')
+    || platformAccounts.value.some(account => account.platform === platformId && account.auth_status === 'authorized')
 }
 
 const getStatusText = (status: string) => {
@@ -191,8 +318,44 @@ const getStatusClass = (status: string) => {
   return classMap[status] || classMap['unauthorized']
 }
 
+const getReadinessText = (status?: string) => {
+  const textMap: Record<string, string> = {
+    ready: '可创建广告',
+    warning: '需补充资产',
+    blocked: '阻塞',
+    unknown: '待同步',
+  }
+  return textMap[status || 'unknown']
+}
+
+const getReadinessClass = (status?: string) => {
+  const classMap: Record<string, string> = {
+    ready: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    warning: 'bg-amber-50 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    blocked: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    unknown: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  }
+  return classMap[status || 'unknown']
+}
+
+const getAssetStatusClass = (status: PlatformAccountAssetStatus['status']) => {
+  const classMap: Record<PlatformAccountAssetStatus['status'], string> = {
+    connected: 'bg-green-50 text-green-700 dark:bg-green-900/30 dark:text-green-300',
+    missing: 'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+    optional: 'bg-blue-50 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    unknown: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+  }
+  return classMap[status]
+}
+
+const handlePlatformChange = async (platformId: 'meta' | 'google' | 'tiktok') => {
+  activePlatform.value = platformId
+  await loadPlatformAccounts()
+}
+
 onMounted(() => {
   loadConnections()
+  loadPlatformAccounts()
   
   // 检查 URL 参数，显示授权结果
   const urlParams = new URLSearchParams(window.location.search)
@@ -252,7 +415,7 @@ onMounted(() => {
               :class="activePlatform === platform.id 
                 ? 'border-primary bg-primary/5' 
                 : 'border-slate-200 dark:border-slate-700'"
-              @click="activePlatform = platform.id"
+              @click="handlePlatformChange(platform.id)"
             >
               <div class="flex items-center justify-between">
                 <div class="font-semibold text-slate-900 dark:text-white">{{ platform.label }}</div>
@@ -421,6 +584,84 @@ onMounted(() => {
                   </tr>
                 </tbody>
               </table>
+            </div>
+          </section>
+
+          <!-- 可投放广告账户 -->
+          <section class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
+            <div class="flex items-center justify-between gap-4 px-5 py-4 border-b border-slate-200 dark:border-slate-700">
+              <div>
+                <h2 class="text-sm font-semibold text-slate-900 dark:text-white">可投放广告账户</h2>
+                <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+                  当前组织：{{ currentOrganization?.name || '未选择组织' }}，创建广告前需要选择一个满足前置条件的账户
+                </p>
+              </div>
+              <button
+                class="inline-flex items-center gap-1.5 rounded-md border border-slate-200 px-3 py-2 text-sm font-medium text-slate-700 transition-colors hover:bg-slate-50 dark:border-slate-700 dark:text-slate-200 dark:hover:bg-slate-700 whitespace-nowrap"
+                :disabled="accountsLoading"
+                @click="handleSyncAccounts"
+              >
+                <span class="material-symbols-outlined text-base" :class="accountsLoading ? 'animate-spin' : ''">sync</span>
+                同步账户
+              </button>
+            </div>
+
+            <div v-if="accountsLoading" class="p-8 text-center text-slate-500 dark:text-slate-400">
+              <span class="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
+              <p class="mt-2 text-sm">加载广告账户中...</p>
+            </div>
+
+            <div v-else-if="platformAccounts.length === 0" class="p-8 text-center text-slate-500 dark:text-slate-400">
+              <span class="material-symbols-outlined text-5xl mb-2">account_balance_wallet</span>
+              <p class="text-sm">暂无 {{ platforms.find(p => p.id === activePlatform)?.label }} 广告账户</p>
+              <p class="text-xs mt-1">完成平台授权后点击「同步账户」获取可投放账户</p>
+            </div>
+
+            <div v-else class="divide-y divide-slate-200 dark:divide-slate-700">
+              <article
+                v-for="account in platformAccounts"
+                :key="account.id"
+                class="p-5"
+              >
+                <div class="flex flex-wrap items-start justify-between gap-4">
+                  <div class="min-w-0">
+                    <div class="flex flex-wrap items-center gap-2">
+                      <h3 class="text-sm font-semibold text-slate-900 dark:text-white">{{ account.account_name }}</h3>
+                      <span class="rounded px-2 py-1 text-xs font-medium" :class="getReadinessClass(account.readiness_status)">
+                        {{ getReadinessText(account.readiness_status) }}
+                      </span>
+                    </div>
+                    <div class="mt-1 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                      <span>{{ account.business_name || '未同步 Business' }}</span>
+                      <span class="font-mono">{{ account.account_id }}</span>
+                      <span>{{ account.currency || '-' }} · {{ account.timezone || '-' }}</span>
+                      <span>最近同步 {{ account.last_sync_at ? formatDate(account.last_sync_at) : '待同步' }}</span>
+                    </div>
+                  </div>
+                  <button
+                    class="rounded-md bg-primary px-3 py-2 text-sm font-medium text-white transition-colors hover:bg-primary/90 whitespace-nowrap"
+                    @click="router.push({ path: '/campaigns/create', query: { platform: activePlatform, platformAccountId: account.id } })"
+                  >
+                    创建广告
+                  </button>
+                </div>
+
+                <div class="mt-4 grid gap-2 md:grid-cols-4">
+                  <div
+                    v-for="check in readinessChecks[account.id] || []"
+                    :key="`${account.id}-${check.label}`"
+                    class="rounded-md border border-slate-200 bg-slate-50 p-3 dark:border-slate-700 dark:bg-slate-900"
+                  >
+                    <div class="flex items-center justify-between gap-2">
+                      <span class="text-xs font-medium text-slate-700 dark:text-slate-200">{{ check.label }}</span>
+                      <span class="rounded px-1.5 py-0.5 text-[11px] font-medium" :class="getAssetStatusClass(check.status)">
+                        {{ check.status }}
+                      </span>
+                    </div>
+                    <p class="mt-2 line-clamp-2 text-xs text-slate-500 dark:text-slate-400">{{ check.detail || '待平台同步确认' }}</p>
+                  </div>
+                </div>
+              </article>
             </div>
           </section>
         </div>
