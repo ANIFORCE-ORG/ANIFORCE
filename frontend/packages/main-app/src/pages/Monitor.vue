@@ -20,22 +20,45 @@ const timeRange = ref('7d')
 const platform = ref('all')
 const selectedProject = ref('all')
 
-const trendRows = [
-  { date: '05-21', spend: 2840, conversions: 428, roas: 2.12 },
-  { date: '05-22', spend: 3160, conversions: 506, roas: 2.24 },
-  { date: '05-23', spend: 3510, conversions: 582, roas: 2.38 },
-  { date: '05-24', spend: 3920, conversions: 631, roas: 2.31 },
-  { date: '05-25', spend: 4310, conversions: 746, roas: 2.52 },
-  { date: '05-26', spend: 5120, conversions: 891, roas: 2.64 },
-  { date: '05-27', spend: 5600, conversions: 1048, roas: 2.71 },
-]
+const trendRowsByRange = {
+  '7d': [
+    { date: '05-21', spend: 2840, conversions: 428, roas: 2.12 },
+    { date: '05-22', spend: 3160, conversions: 506, roas: 2.24 },
+    { date: '05-23', spend: 3510, conversions: 582, roas: 2.38 },
+    { date: '05-24', spend: 3920, conversions: 631, roas: 2.31 },
+    { date: '05-25', spend: 4310, conversions: 746, roas: 2.52 },
+    { date: '05-26', spend: 5120, conversions: 891, roas: 2.64 },
+    { date: '05-27', spend: 5600, conversions: 1048, roas: 2.71 },
+  ],
+  '30d': [
+    { date: 'W1', spend: 12840, conversions: 2180, roas: 2.18 },
+    { date: 'W2', spend: 15620, conversions: 2564, roas: 2.26 },
+    { date: 'W3', spend: 18430, conversions: 3086, roas: 2.39 },
+    { date: 'W4', spend: 22310, conversions: 3742, roas: 2.54 },
+    { date: 'W5', spend: 24680, conversions: 4210, roas: 2.62 },
+  ],
+  '90d': [
+    { date: 'Mar', spend: 42800, conversions: 7020, roas: 2.04 },
+    { date: 'Apr', spend: 58700, conversions: 9860, roas: 2.28 },
+    { date: 'May', spend: 81200, conversions: 13740, roas: 2.51 },
+  ],
+}
 
-const metrics = [
-  { label: '总消耗', value: '$28,460', delta: '+12.4%', tone: 'default' },
-  { label: '转化数', value: '4,832', delta: '+8.7%', tone: 'default' },
-  { label: 'CPI', value: '$5.89', delta: '-6.2%', tone: 'good' },
-  { label: 'ROAS', value: '2.43x', delta: '+0.18x', tone: 'good' },
-]
+type TrendRange = keyof typeof trendRowsByRange
+
+const trendRows = computed(() => trendRowsByRange[timeRange.value as TrendRange])
+
+const totalSpend = computed(() => trendRows.value.reduce((sum, row) => sum + row.spend, 0))
+const totalConversions = computed(() => trendRows.value.reduce((sum, row) => sum + row.conversions, 0))
+const avgCpi = computed(() => totalSpend.value / Math.max(1, totalConversions.value))
+const avgRoas = computed(() => trendRows.value.reduce((sum, row) => sum + row.roas, 0) / trendRows.value.length)
+
+const metrics = computed(() => [
+  { label: '总消耗', value: `$${totalSpend.value.toLocaleString()}`, delta: timeRange.value === '7d' ? '+12.4%' : timeRange.value === '30d' ? '+18.1%' : '+26.7%', tone: 'default' },
+  { label: '转化数', value: totalConversions.value.toLocaleString(), delta: timeRange.value === '7d' ? '+8.7%' : timeRange.value === '30d' ? '+15.2%' : '+21.4%', tone: 'default' },
+  { label: 'CPI', value: `$${avgCpi.value.toFixed(2)}`, delta: '-6.2%', tone: 'good' },
+  { label: 'ROAS', value: `${avgRoas.value.toFixed(2)}x`, delta: '+0.18x', tone: 'good' },
+])
 
 const platformRows = [
   { name: 'Meta', project: 'Candy Blast 全球推广', account: 'Candy Blast Meta UA', campaigns: 5, spend: '$12,840', installs: '2,180', cpi: '$5.89', roas: '2.31x', trend: 68 },
@@ -83,17 +106,19 @@ const displayCreativeRows = computed(() => {
   return creativeRows.filter((creative) => creative.project === selectedProject.value.split(' ')[0])
 })
 
-const maxSpend = computed(() => Math.max(...trendRows.map((row) => row.spend)))
+const maxSpend = computed(() => Math.max(...trendRows.value.map((row) => row.spend)))
+const minSpend = computed(() => Math.min(...trendRows.value.map((row) => row.spend)))
 
-const spendPolyline = computed(() => trendRows.map((row, index) => {
-  const x = (index / (trendRows.length - 1)) * 100
-  const y = 100 - (row.spend / maxSpend.value) * 82
+const spendPolyline = computed(() => trendRows.value.map((row, index) => {
+  const x = trendRows.value.length === 1 ? 50 : (index / (trendRows.value.length - 1)) * 100
+  const normalized = (row.spend - minSpend.value) / Math.max(1, maxSpend.value - minSpend.value)
+  const y = 88 - normalized * 70
   return `${x},${y}`
 }).join(' '))
 
 const conversionBars = computed(() => {
-  const maxConversions = Math.max(...trendRows.map((row) => row.conversions))
-  return trendRows.map((row) => ({
+  const maxConversions = Math.max(...trendRows.value.map((row) => row.conversions))
+  return trendRows.value.map((row) => ({
     ...row,
     height: Math.max(12, Math.round((row.conversions / maxConversions) * 100)),
   }))
@@ -183,42 +208,56 @@ const switchPanel = (item: any) => {
             </div>
           </section>
 
-          <section class="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
-            <div class="mb-4 flex items-center justify-between">
+          <section class="rounded-md border border-slate-200 bg-white p-5 dark:border-slate-800 dark:bg-slate-950">
+            <div class="mb-5 flex items-center justify-between">
               <div>
-                <h2 class="text-sm font-bold text-slate-900 dark:text-white">时间段消耗与转化趋势</h2>
-                <p class="mt-1 text-xs text-slate-500">用于复盘不同时间点的预算消耗、转化结果和 ROAS 变化</p>
+                <h2 class="text-sm font-bold text-slate-900 dark:text-white">时间段复盘趋势</h2>
+                <p class="mt-1 text-xs text-slate-500">消耗曲线和转化柱状随顶部时间段切换实时调整</p>
               </div>
-              <span class="text-xs text-slate-500">{{ timeRange === '7d' ? '近 7 天' : timeRange === '30d' ? '近 30 天' : '近 90 天' }}</span>
+              <span class="rounded bg-slate-100 px-2.5 py-1 text-xs font-semibold text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                {{ timeRange === '7d' ? '近 7 天' : timeRange === '30d' ? '近 30 天' : '近 90 天' }}
+              </span>
             </div>
-            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px]">
+            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
               <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                <svg viewBox="0 0 100 110" class="h-56 w-full overflow-visible" preserveAspectRatio="none">
-                  <line x1="0" y1="100" x2="100" y2="100" class="stroke-slate-300 dark:stroke-slate-700" stroke-width="0.5" />
-                  <polyline :points="spendPolyline" fill="none" class="stroke-primary" stroke-width="2.5" vector-effect="non-scaling-stroke" />
+                <div class="mb-3 flex items-center justify-between">
+                  <div>
+                    <p class="text-xs font-semibold text-slate-500">消耗趋势</p>
+                    <p class="mt-1 text-xl font-bold text-slate-950 dark:text-white">${{ totalSpend.toLocaleString() }}</p>
+                  </div>
+                  <span class="rounded bg-white px-2 py-1 text-xs font-semibold text-primary dark:bg-slate-950">Spend</span>
+                </div>
+                <svg viewBox="0 0 100 100" class="h-44 w-full overflow-visible" preserveAspectRatio="none">
+                  <line x1="0" y1="88" x2="100" y2="88" class="stroke-slate-300 dark:stroke-slate-700" stroke-width="0.5" />
+                  <line x1="0" y1="18" x2="100" y2="18" class="stroke-slate-200 dark:stroke-slate-800" stroke-width="0.35" stroke-dasharray="2 2" />
+                  <polyline :points="spendPolyline" fill="none" class="stroke-primary" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" />
                   <circle
                     v-for="(row, index) in trendRows"
                     :key="row.date"
-                    :cx="(index / (trendRows.length - 1)) * 100"
-                    :cy="100 - (row.spend / maxSpend) * 82"
-                    r="1.5"
-                    class="fill-primary"
+                    :cx="trendRows.length === 1 ? 50 : (index / (trendRows.length - 1)) * 100"
+                    :cy="88 - ((row.spend - minSpend) / Math.max(1, maxSpend - minSpend)) * 70"
+                    r="2.2"
+                    class="fill-white stroke-primary"
+                    stroke-width="1.5"
                     vector-effect="non-scaling-stroke"
                   />
                 </svg>
-                <div class="-mt-3 grid grid-cols-7 gap-2 text-center text-[11px] text-slate-500">
+                <div class="mt-1 flex justify-between text-[11px] text-slate-500">
                   <span v-for="row in trendRows" :key="`label-${row.date}`">{{ row.date }}</span>
                 </div>
               </div>
               <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                <h3 class="text-xs font-semibold text-slate-700 dark:text-slate-200">转化结果</h3>
-                <div class="mt-4 flex h-44 items-end gap-2">
+                <div class="mb-3">
+                  <p class="text-xs font-semibold text-slate-500">转化结果</p>
+                  <p class="mt-1 text-xl font-bold text-slate-950 dark:text-white">{{ totalConversions.toLocaleString() }}</p>
+                </div>
+                <div class="flex h-44 items-end gap-2">
                   <div
                     v-for="row in conversionBars"
                     :key="`bar-${row.date}`"
                     class="flex flex-1 flex-col items-center justify-end gap-2"
                   >
-                    <div class="w-full rounded-t bg-primary/80" :style="{ height: `${row.height}%` }"></div>
+                    <div class="w-full rounded-t bg-slate-300 transition-all dark:bg-slate-700" :style="{ height: `${row.height}%` }"></div>
                     <span class="text-[10px] text-slate-500">{{ row.date }}</span>
                   </div>
                 </div>

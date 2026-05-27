@@ -48,7 +48,6 @@ const selectedAccount = computed(() =>
   accounts.value.find(account => account.id === selectedAccountId.value) || null
 )
 
-const materialReady = computed(() => false)
 const hasPlatformReady = computed(() => Boolean(activeMetaConnection.value || usingDemoAccount.value))
 
 const setupSteps = computed<Array<{
@@ -59,38 +58,26 @@ const setupSteps = computed<Array<{
 }>>(() => [
   {
     id: 'project',
-    title: '业务项目',
-    description: selectedProject.value ? selectedProject.value.name : '创建或选择一个业务项目。',
+    title: '创建投放项目',
+    description: selectedProject.value ? selectedProject.value.name : '先建立广告投放的业务容器。',
     status: selectedProject.value ? 'completed' : 'in_progress',
   },
   {
-    id: 'platform',
-    title: '广告平台',
-    description: hasPlatformReady.value ? 'Meta 已授权或使用 Demo 账户，可以继续创建草稿。' : '连接 Meta 广告账户，后续再扩展 Google 和 TikTok。',
-    status: hasPlatformReady.value ? 'completed' : 'not_started',
-  },
-  {
     id: 'account',
-    title: '广告账户',
-    description: selectedAccount.value ? selectedAccount.value.account_name : '选择一个已授权广告账户并绑定到项目。',
+    title: '绑定广告账户',
+    description: selectedAccount.value ? selectedAccount.value.account_name : '选择 Meta Demo 或真实授权账户。',
     status: selectedAccount.value ? 'completed' : 'not_started',
   },
   {
     id: 'assets',
-    title: '投放前置资产',
-    description: '第一版先校验广告账户；Page、Pixel/Dataset、App 作为发布前检查项。',
+    title: '检查投放资产',
+    description: '确认账户、Page/Pixel/App 等发布前置条件。',
     status: selectedAccount.value ? 'completed' : 'not_started',
   },
   {
-    id: 'creative',
-    title: '素材准备',
-    description: materialReady.value ? '已有可用素材。' : '可以先创建草稿，提交发布前再补齐素材。',
-    status: selectedAccount.value ? 'in_progress' : 'not_started',
-  },
-  {
     id: 'campaign',
-    title: '创建计划',
-    description: '带着项目、平台和广告账户进入创建计划页。',
+    title: '创建广告计划',
+    description: '进入五段式表单，创建第一条 Campaign / Ad Group 草稿。',
     status: selectedProject.value && selectedAccount.value ? 'in_progress' : 'not_started',
   },
 ])
@@ -324,10 +311,10 @@ onMounted(async () => {
           <div>
             <p class="text-sm font-semibold text-primary">新任务</p>
             <h1 class="mt-2 text-3xl font-black tracking-tight text-slate-950 dark:text-white">
-              配置你的第一个广告工作流
+              配置你的第一个广告投放
             </h1>
             <p class="mt-3 max-w-3xl text-sm leading-7 text-slate-600 dark:text-slate-400">
-              在创建广告计划前，先完成项目、平台授权和广告账户绑定。真实发布会进入异步任务，第一阶段先确保草稿创建路径稳定。
+              按照项目、账户、资产、计划四步完成配置。流程会直接衔接广告投放页里的创建路径，先保证第一条草稿可以跑通。
             </p>
           </div>
 
@@ -372,7 +359,7 @@ onMounted(async () => {
             <div class="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
                 <div>
-                  <h2 class="text-base font-black text-slate-950 dark:text-white">1. 业务项目</h2>
+                  <h2 class="text-base font-black text-slate-950 dark:text-white">1. 创建投放项目</h2>
                   <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                     项目是素材、账户和计划的业务容器。一个项目后续可以包含多个投放活动。
                   </p>
@@ -419,7 +406,7 @@ onMounted(async () => {
             <div class="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 class="text-base font-black text-slate-950 dark:text-white">2. 广告平台授权</h2>
+                  <h2 class="text-base font-black text-slate-950 dark:text-white">2. 授权广告平台</h2>
                   <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                     第一阶段优先打通 Meta。Google 和 TikTok 保持展示，后续接入同一账户模型。
                   </p>
@@ -455,7 +442,7 @@ onMounted(async () => {
             <div class="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 class="text-base font-black text-slate-950 dark:text-white">3. 广告账户绑定</h2>
+                  <h2 class="text-base font-black text-slate-950 dark:text-white">3. 选择广告账户</h2>
                   <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                     创建计划前必须选择一个已授权广告账户。账户资产完整度会在真实发布前继续校验。
                   </p>
@@ -499,7 +486,7 @@ onMounted(async () => {
 
             <div class="grid gap-5 lg:grid-cols-2">
               <div class="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
-                <h2 class="text-base font-black text-slate-950 dark:text-white">4. 投放前置资产</h2>
+                <h2 class="text-base font-black text-slate-950 dark:text-white">4. 检查投放资产</h2>
                 <div class="mt-4 space-y-3">
                   <div class="flex items-center justify-between rounded-md bg-slate-50 px-3 py-2 text-sm dark:bg-slate-900">
                     <span>广告账户授权</span>
@@ -513,7 +500,7 @@ onMounted(async () => {
               </div>
 
               <div class="rounded-md border border-slate-200 bg-white p-4 dark:border-slate-800 dark:bg-slate-950">
-                <h2 class="text-base font-black text-slate-950 dark:text-white">5. 素材准备</h2>
+                <h2 class="text-base font-black text-slate-950 dark:text-white">素材准备</h2>
                 <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">
                   可以先创建投放草稿。提交发布前需要补齐素材文件、文案、链接和 CTA。
                 </p>
@@ -529,7 +516,7 @@ onMounted(async () => {
             <div class="rounded-md border border-slate-200 bg-slate-950 p-4 text-white">
               <div class="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
                 <div>
-                  <h2 class="text-base font-black">6. 创建第一条广告计划草稿</h2>
+                  <h2 class="text-base font-black">创建第一条广告计划草稿</h2>
                   <p class="mt-1 text-xs leading-5 text-slate-300">
                     草稿会带入当前项目、Meta 平台和广告账户。真实发布任务等后端接口补齐后再开放。
                   </p>
