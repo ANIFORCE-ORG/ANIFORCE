@@ -1,9 +1,13 @@
 """用户模型"""
 import uuid
 from datetime import datetime
+from typing import TYPE_CHECKING
 from sqlalchemy import String, DateTime
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 from app.config.database import Base
+
+if TYPE_CHECKING:
+    from app.models.organization import Organization
 
 
 class User(Base):
@@ -20,3 +24,4 @@ class User(Base):
     projects: Mapped[list["Project"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     materials: Mapped[list["Material"]] = relationship(back_populates="user", cascade="all, delete-orphan")
     platform_connections: Mapped[list["PlatformConnection"]] = relationship(back_populates="user", cascade="all, delete-orphan")
+    owned_organizations: Mapped[list["Organization"]] = relationship(back_populates="owner", foreign_keys="Organization.owner_id")

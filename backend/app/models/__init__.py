@@ -6,6 +6,8 @@ from app.models.material import Material, MaterialType
 from app.models.metric import Metric
 from app.models.platform_connection import PlatformConnection
 from app.models.sub_account_binding import SubAccountBinding
+from app.models.organization import Organization
+from app.models.organization_member import OrganizationMember
 
 __all__ = [
     "User",
@@ -18,4 +20,6 @@ __all__ = [
     "Metric",
     "PlatformConnection",
     "SubAccountBinding",
+    "Organization",
+    "OrganizationMember",
 ]

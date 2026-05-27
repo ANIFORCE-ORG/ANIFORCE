@@ -58,42 +58,6 @@ const settingCards = [
   }
 ]
 
-const userEmail = ref(auth.user?.email || 'test@animagus.com')
-
-const currentPlan = ref({
-  name: 'Seed',
-  icon: '🌱',
-  color: 'text-orange-600',
-  bgColor: 'bg-orange-50 dark:bg-orange-900/30'
-})
-
-const usage = ref({
-  monthlyUsed: 2.40,
-  monthlyLimit: 100,
-  aiCalls: 156,
-  aiCallsLimit: 10000,
-  materialsGenerated: 23,
-  materialsLimit: 500
-})
-
-const aiUsageSummary = ref({
-  total_tokens: 15600,
-  estimated_cost_usd: 0.234,
-  by_scenario: {
-    'chat_general': { total_tokens: 8500, estimated_cost_usd: 0.128 },
-    'material_generation': { total_tokens: 4200, estimated_cost_usd: 0.063 },
-    'campaign_analysis': { total_tokens: 2900, estimated_cost_usd: 0.043 }
-  }
-})
-
-const aiUsageLogs = ref([
-  { id: 1, scenario: 'chat_general', model: 'gpt-4', total_tokens: 450, status: 'success' },
-  { id: 2, scenario: 'material_generation', model: 'gpt-4', total_tokens: 820, status: 'success' },
-  { id: 3, scenario: 'campaign_analysis', model: 'gpt-3.5', total_tokens: 320, status: 'success' }
-])
-
-const dailyTokenLimit = ref(60000)
-
 const switchPanel = (item: any) => {
   if (item.path) {
     router.push(item.path)
@@ -118,25 +82,6 @@ const handleCardClick = (cardId: string) => {
       showSystemPanel.value = true
       break
   }
-}
-
-const handleEditEmail = () => {
-  const newEmail = prompt('请输入新的邮箱地址:', userEmail.value)
-  if (newEmail && newEmail.trim()) {
-    userEmail.value = newEmail.trim()
-    console.log('更新邮箱:', newEmail)
-  }
-}
-
-const handleDeleteAccount = () => {
-  const confirmed = confirm('确定要删除账户吗？此操作不可恢复！')
-  if (confirmed) {
-    console.log('删除账户')
-  }
-}
-
-const handleUpgradePlan = () => {
-  console.log('升级套餐')
 }
 
 onMounted(() => {
