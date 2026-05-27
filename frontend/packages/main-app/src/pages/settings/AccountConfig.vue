@@ -153,6 +153,39 @@ const handleUpgradePlan = () => {
   console.log('升级套餐')
 }
 
+// 团队相关
+const myOrganizations = ref([
+  {
+    id: 'org_001',
+    name: 'ACME 营销团队',
+    role: 'admin',
+    memberCount: 5,
+    createdAt: '2024-01-15'
+  },
+  {
+    id: 'org_002',
+    name: '东南亚推广组',
+    role: 'member',
+    memberCount: 3,
+    createdAt: '2024-02-20'
+  }
+])
+
+const handleCreateOrganization = () => {
+  console.log('创建团队')
+  // TODO: 打开创建团队对话框
+}
+
+const handleJoinOrganization = () => {
+  console.log('加入团队')
+  // TODO: 打开加入团队对话框
+}
+
+const handleViewOrganization = (orgId: string) => {
+  console.log('查看团队:', orgId)
+  // TODO: 跳转到团队详情页面
+}
+
 onMounted(() => {
   console.log('账号配置页面加载')
 })
@@ -324,78 +357,97 @@ onMounted(() => {
             </div>
           </section>
 
-          <!-- 会员等级 & 用量 -->
+          <!-- 我的团队 -->
           <section>
-            <h3 class="text-base font-semibold text-slate-900 dark:text-white mb-3">会员等级 & 用量</h3>
+            <h3 class="text-base font-semibold text-slate-900 dark:text-white mb-3">我的团队</h3>
             <div class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md p-6">
-              <div class="flex items-center justify-between mb-6">
-                <div class="flex items-center gap-3">
-                  <span class="text-2xl">{{ currentPlan.icon }}</span>
-                  <span class="text-base font-semibold" :class="currentPlan.color">{{ currentPlan.name }}</span>
-                </div>
+              <!-- 操作按钮 -->
+              <div class="flex items-center gap-3 mb-6">
                 <button
-                  class="px-4 py-2 rounded-md border border-primary text-primary hover:bg-primary/10 transition-colors text-sm font-medium"
-                  @click="handleUpgradePlan"
+                  @click="handleCreateOrganization"
+                  class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                 >
-                  升级套餐
+                  <span class="material-symbols-outlined text-xl">add</span>
+                  <span>创建团队</span>
+                </button>
+                <button
+                  @click="handleJoinOrganization"
+                  class="flex items-center gap-2 px-4 py-2 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                >
+                  <span class="material-symbols-outlined text-xl">group_add</span>
+                  <span>加入团队</span>
                 </button>
               </div>
 
-              <div class="space-y-4">
-                <!-- 月度用量 -->
-                <div>
-                  <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm text-slate-600 dark:text-slate-400">月度用量</span>
-                    <span class="text-sm font-semibold text-primary">{{ usage.monthlyUsed }}% used</span>
-                  </div>
-                  <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      class="h-full bg-primary rounded-full transition-all"
-                      :style="{ width: `${usage.monthlyUsed}%` }"
-                    ></div>
-                  </div>
+              <!-- 团队列表 -->
+              <div v-if="myOrganizations.length > 0" class="space-y-3">
+                <div class="text-sm text-slate-500 dark:text-slate-400 mb-3">
+                  您所属的团队 ({{ myOrganizations.length }})
                 </div>
-
-                <!-- AI 调用次数 -->
-                <div class="pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2">
-                      <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-lg">psychology</span>
-                      <span class="text-sm text-slate-600 dark:text-slate-400">AI 调用次数</span>
+                <div
+                  v-for="org in myOrganizations"
+                  :key="org.id"
+                  class="flex items-center justify-between p-4 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors cursor-pointer"
+                  @click="handleViewOrganization(org.id)"
+                >
+                  <div class="flex items-center gap-4">
+                    <!-- 团队图标 -->
+                    <div class="w-12 h-12 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+                      <span class="material-symbols-outlined text-2xl text-primary">groups</span>
                     </div>
-                    <span class="text-sm font-semibold text-slate-900 dark:text-white">
-                      {{ usage.aiCalls.toLocaleString() }} / {{ usage.aiCallsLimit.toLocaleString() }}
-                    </span>
-                  </div>
-                  <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      class="h-full bg-emerald-500 rounded-full transition-all"
-                      :style="{ width: `${(usage.aiCalls / usage.aiCallsLimit) * 100}%` }"
-                    ></div>
-                  </div>
-                </div>
-
-                <!-- 素材生成数量 -->
-                <div class="pt-4 border-t border-slate-200 dark:border-slate-700">
-                  <div class="flex items-center justify-between mb-2">
-                    <div class="flex items-center gap-2">
-                      <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-lg">video_library</span>
-                      <span class="text-sm text-slate-600 dark:text-slate-400">素材生成数量</span>
+                    
+                    <!-- 团队信息 -->
+                    <div>
+                      <div class="flex items-center gap-2">
+                        <h4 class="font-semibold text-slate-900 dark:text-white">{{ org.name }}</h4>
+                        <span
+                          v-if="org.role === 'admin'"
+                          class="px-2 py-0.5 rounded text-xs font-medium bg-orange-100 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400"
+                        >
+                          管理员
+                        </span>
+                        <span
+                          v-else
+                          class="px-2 py-0.5 rounded text-xs font-medium bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+                        >
+                          成员
+                        </span>
+                      </div>
+                      <div class="flex items-center gap-4 mt-1 text-sm text-slate-500 dark:text-slate-400">
+                        <span class="flex items-center gap-1">
+                          <span class="material-symbols-outlined text-base">person</span>
+                          {{ org.memberCount }} 名成员
+                        </span>
+                        <span class="flex items-center gap-1">
+                          <span class="material-symbols-outlined text-base">calendar_today</span>
+                          创建于 {{ org.createdAt }}
+                        </span>
+                      </div>
                     </div>
-                    <span class="text-sm font-semibold text-slate-900 dark:text-white">
-                      {{ usage.materialsGenerated }} / {{ usage.materialsLimit }}
-                    </span>
                   </div>
-                  <div class="h-1.5 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
-                    <div
-                      class="h-full bg-purple-500 rounded-full transition-all"
-                      :style="{ width: `${(usage.materialsGenerated / usage.materialsLimit) * 100}%` }"
-                    ></div>
-                  </div>
+
+                  <!-- 查看按钮 -->
+                  <button
+                    class="p-2 rounded-md hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                    @click.stop="handleViewOrganization(org.id)"
+                  >
+                    <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_forward</span>
+                  </button>
                 </div>
+              </div>
+
+              <!-- 空状态 -->
+              <div v-else class="text-center py-12">
+                <div class="w-16 h-16 mx-auto mb-4 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                  <span class="material-symbols-outlined text-4xl text-slate-400">groups</span>
+                </div>
+                <p class="text-slate-600 dark:text-slate-400 mb-2">您还没有加入任何团队</p>
+                <p class="text-sm text-slate-500 dark:text-slate-500">创建或加入团队，与成员协作管理广告投放</p>
               </div>
             </div>
           </section>
+
+        
         </div>
       </div>
     </main>
