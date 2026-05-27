@@ -100,6 +100,24 @@ class PlatformConnectionResponse(BaseModel):
         from_attributes = True
 
 
+class SubAccountRequest(BaseModel):
+    """子账号请求"""
+    name: str
+    customer_id: str
+
+
+class SubAccountResponse(BaseModel):
+    """子账号响应"""
+    id: str
+    name: str
+    customer_id: str
+    status: str
+    updated_at: datetime
+    
+    class Config:
+        from_attributes = True
+
+
 # ==================== API 路由 ====================
 # 注意：平台配置现在通过数据库 PlatformConnection 模型管理
 # 每个用户可以配置多个平台账号，配置存储在数据库中而非全局 settings
@@ -772,4 +790,166 @@ async def get_meta_authorize_url(
         raise
     except Exception as e:
         logger.error(f"Failed to get authorize URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 子账号管理 API（使用独立表） ====================
+
+@router.get("/google/{connection_id}/sub-accounts", response_model=List[SubAccountResponse])
+async def get_sub_accounts(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Google 账户的子账号列表
+    从 sub_account_bindings 表查询
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 验证连接是否存在且属于当前用户
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 从 SubAccountBinding 表查询子账号
+        from app.models import SubAccountBinding
+        stmt = select(SubAccountBinding).where(
+            SubAccountBinding.parent_connection_id == connection_id
+        ).order_by(SubAccountBinding.created_at.desc())
+        
+        result = await db.execute(stmt)
+        bindings = result.scalars().all()
+        
+        logger.info(f"Found {len(bindings)} sub accounts for connection {connection_id}")
+        
+        # 转换为响应格式
+        return [
+            SubAccountResponse(
+                id=binding.id,
+                name=binding.sub_account_name,
+                customer_id=binding.customer_id,
+                status=binding.status,
+                updated_at=binding.updated_at
+            )
+            for binding in bindings
+        ]
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get sub accounts: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/google/{connection_id}/sub-accounts", response_model=SubAccountResponse)
+async def add_sub_account(
+    connection_id: str,
+    request: SubAccountRequest,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    添加 Google 子账号
+    保存到 sub_account_bindings 表
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 验证连接是否存在且属于当前用户
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 创建新的子账号绑定
+        from app.models import SubAccountBinding
+        new_binding = SubAccountBinding(
+            parent_connection_id=connection_id,
+            sub_account_name=request.name,
+            customer_id=request.customer_id,
+            status="active"
+        )
+        
+        db.add(new_binding)
+        await db.commit()
+        await db.refresh(new_binding)
+        
+        logger.info(f"Added sub account {new_binding.id} for connection {connection_id}")
+        
+        return SubAccountResponse(
+            id=new_binding.id,
+            name=new_binding.sub_account_name,
+            customer_id=new_binding.customer_id,
+            status=new_binding.status,
+            updated_at=new_binding.updated_at
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to add sub account: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.delete("/google/{connection_id}/sub-accounts/{sub_account_id}")
+async def delete_sub_account(
+    connection_id: str,
+    sub_account_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    删除 Google 子账号
+    从 sub_account_bindings 表删除
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 验证连接是否存在且属于当前用户
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 查找并删除子账号
+        from app.models import SubAccountBinding
+        stmt = select(SubAccountBinding).where(
+            SubAccountBinding.id == sub_account_id,
+            SubAccountBinding.parent_connection_id == connection_id
+        )
+        result = await db.execute(stmt)
+        binding = result.scalar_one_or_none()
+        
+        if not binding:
+            raise HTTPException(status_code=404, detail="子账号不存在")
+        
+        await db.delete(binding)
+        await db.commit()
+        
+        logger.info(f"Deleted sub account {sub_account_id} from connection {connection_id}")
+        
+        return {"message": "子账号已删除", "sub_account_id": sub_account_id}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to delete sub account: {e}")
         raise HTTPException(status_code=500, detail=str(e))

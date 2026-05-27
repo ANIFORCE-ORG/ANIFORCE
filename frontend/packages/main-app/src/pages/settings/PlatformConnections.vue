@@ -15,12 +15,12 @@ import {
   type PlatformAccount,
   type PlatformAccountAssetStatus,
 } from '@/api/platformAccounts'
+import { organizationApi, type OrganizationResponse } from '@/api/organization'
 import { useToast } from '@/composables/useToast'
-import { useOrganizationContext } from '@/composables/useOrganizationContext'
 
 const router = useRouter()
 const { success, error: showError } = useToast()
-const { currentOrganization } = useOrganizationContext()
+const currentOrganization = ref<OrganizationResponse | null>(null)
 const activePlatform = ref<'meta' | 'google' | 'tiktok'>('meta')
 const showConfigDialog = ref(false)
 const connections = ref<PlatformConnectionResponse[]>([])
@@ -31,6 +31,15 @@ const accountsLoading = ref(false)
 const editingConnection = ref<PlatformConnectionResponse | null>(null)
 const showDeleteConfirm = ref(false)
 const deletingConnection = ref<PlatformConnectionResponse | null>(null)
+
+// 子账号管理
+const expandedAccounts = ref<Set<string>>(new Set())
+const subAccounts = ref<Record<string, any[]>>({})
+const loadingSubAccounts = ref<Set<string>>(new Set())
+const showAddSubAccountDialog = ref(false)
+const currentParentConnectionId = ref<string | null>(null)
+const newSubAccountName = ref('')
+const newSubAccountCustomerId = ref('')
 
 const platforms = [
   {
@@ -159,6 +168,25 @@ const platformNameMap: Record<string, string> = {
   meta: 'Meta',
   google: 'Google',
   tiktok: 'TikTok',
+}
+
+const loadCurrentOrganization = async () => {
+  try {
+    const organizations = await organizationApi.getMyOrganizations()
+    currentOrganization.value = organizations[0] || null
+  } catch {
+    currentOrganization.value = {
+      id: 'org-aniforce-growth',
+      name: 'ANIFORCE Growth',
+      org_code: 'ANIFORCE',
+      description: 'Demo organization',
+      owner_id: 'demo-user',
+      status: 'active',
+      member_count: 4,
+      role: 'admin',
+      created_at: '2026-05-01T09:00:00Z',
+    }
+  }
 }
 
 const loadPlatformAccounts = async () => {
@@ -348,14 +376,102 @@ const getAssetStatusClass = (status: PlatformAccountAssetStatus['status']) => {
   return classMap[status]
 }
 
+// 切换子账号展开/收起
+const toggleSubAccounts = async (connectionId: string) => {
+  if (expandedAccounts.value.has(connectionId)) {
+    expandedAccounts.value.delete(connectionId)
+  } else {
+    expandedAccounts.value.add(connectionId)
+    if (!subAccounts.value[connectionId]) {
+      await loadSubAccounts(connectionId)
+    }
+  }
+}
+
+// 加载子账号列表
+const loadSubAccounts = async (connectionId: string) => {
+  loadingSubAccounts.value.add(connectionId)
+  try {
+    const accounts = await platformApi.getSubAccounts(connectionId)
+    subAccounts.value[connectionId] = accounts
+  } catch (err: any) {
+    console.error('加载子账号失败:', err)
+    subAccounts.value[connectionId] = []
+    showError('加载子账号失败')
+  } finally {
+    loadingSubAccounts.value.delete(connectionId)
+  }
+}
+
+const isExpanded = (connectionId: string) => {
+  return expandedAccounts.value.has(connectionId)
+}
+
+const openAddSubAccountDialog = (connectionId: string) => {
+  currentParentConnectionId.value = connectionId
+  newSubAccountName.value = ''
+  newSubAccountCustomerId.value = ''
+  showAddSubAccountDialog.value = true
+}
+
+const closeAddSubAccountDialog = () => {
+  showAddSubAccountDialog.value = false
+  currentParentConnectionId.value = null
+  newSubAccountName.value = ''
+  newSubAccountCustomerId.value = ''
+}
+
+const handleAddSubAccount = async () => {
+  if (!currentParentConnectionId.value || !newSubAccountName.value || !newSubAccountCustomerId.value) {
+    showError('请填写完整的子账号信息')
+    return
+  }
+
+  try {
+    const newSubAccount = await platformApi.addSubAccount(currentParentConnectionId.value, {
+      name: newSubAccountName.value,
+      customer_id: newSubAccountCustomerId.value
+    })
+
+    if (!subAccounts.value[currentParentConnectionId.value]) {
+      subAccounts.value[currentParentConnectionId.value] = []
+    }
+    subAccounts.value[currentParentConnectionId.value].push(newSubAccount)
+
+    success('子账号添加成功')
+    closeAddSubAccountDialog()
+  } catch (err: any) {
+    console.error('添加子账号失败:', err)
+    showError('添加子账号失败')
+  }
+}
+
+const handleDeleteSubAccount = async (connectionId: string, subAccountId: string) => {
+  try {
+    await platformApi.deleteSubAccount(connectionId, subAccountId)
+
+    if (subAccounts.value[connectionId]) {
+      subAccounts.value[connectionId] = subAccounts.value[connectionId].filter(
+        (account) => account.id !== subAccountId
+      )
+    }
+
+    success('子账号已删除')
+  } catch (err: any) {
+    console.error('删除子账号失败:', err)
+    showError('删除子账号失败')
+  }
+}
+
 const handlePlatformChange = async (platformId: 'meta' | 'google' | 'tiktok') => {
   activePlatform.value = platformId
   await loadPlatformAccounts()
 }
 
-onMounted(() => {
-  loadConnections()
-  loadPlatformAccounts()
+onMounted(async () => {
+  await loadCurrentOrganization()
+  await loadConnections()
+  await loadPlatformAccounts()
   
   // 检查 URL 参数，显示授权结果
   const urlParams = new URLSearchParams(window.location.search)
@@ -519,6 +635,7 @@ onMounted(() => {
               <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-700/50">
                   <tr>
+                    <th v-if="activePlatform === 'google'" class="px-3 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400 w-12"></th>
                     <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">账户名称</th>
                     <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">APP ID</th>
                     <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">授权范围</th>
@@ -528,60 +645,136 @@ onMounted(() => {
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
-                  <tr v-for="connection in filteredConnections" :key="connection.id" class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                    <td class="px-5 py-4 text-sm text-slate-900 dark:text-white">
-                      {{ connection.account_name || '-' }}
-                    </td>
-                    <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 font-mono">
-                      {{ connection.account_id }}
-                    </td>
-                    <td class="px-5 py-4 text-xs">
-                      <div class="flex flex-wrap gap-1">
-                        <span
-                          v-for="scope in connection.scopes"
-                          :key="scope"
-                          class="px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                  <template v-for="connection in filteredConnections" :key="connection.id">
+                    <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
+                      <td v-if="activePlatform === 'google'" class="px-3 py-4 text-center">
+                        <button
+                          class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                          :class="{ 'text-primary': isExpanded(connection.id) }"
+                          @click="toggleSubAccounts(connection.id)"
                         >
-                          {{ scope }}
+                          <span class="material-symbols-outlined text-lg transition-transform" :class="{ 'rotate-90': isExpanded(connection.id) }">
+                            chevron_right
+                          </span>
+                        </button>
+                      </td>
+                      <td class="px-5 py-4 text-sm text-slate-900 dark:text-white">
+                        {{ connection.account_name || '-' }}
+                      </td>
+                      <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 font-mono">
+                        {{ connection.account_id }}
+                      </td>
+                      <td class="px-5 py-4 text-xs">
+                        <div class="flex flex-wrap gap-1">
+                          <span
+                            v-for="scope in connection.scopes"
+                            :key="scope"
+                            class="px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                          >
+                            {{ scope }}
+                          </span>
+                          <span v-if="!connection.scopes || connection.scopes.length === 0" class="text-slate-400">-</span>
+                        </div>
+                      </td>
+                      <td class="px-5 py-4 text-xs">
+                        <span class="px-2 py-1 rounded font-medium" :class="getStatusClass(connection.status)">
+                          {{ getStatusText(connection.status) }}
                         </span>
-                        <span v-if="!connection.scopes || connection.scopes.length === 0" class="text-slate-400">-</span>
-                      </div>
-                    </td>
-                    <td class="px-5 py-4 text-xs">
-                      <span class="px-2 py-1 rounded font-medium" :class="getStatusClass(connection.status)">
-                        {{ getStatusText(connection.status) }}
-                      </span>
-                    </td>
-                    <td class="px-5 py-4 text-xs text-slate-600 dark:text-slate-400">
-                      {{ formatDate(connection.updated_at) }}
-                    </td>
-                    <td class="px-5 py-4 text-right">
-                      <div class="flex items-center justify-end gap-2">
-                        <button
-                          class="px-3 py-1.5 rounded text-xs font-medium border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                          @click="handleEdit(connection)"
-                        >
-                          编辑
-                        </button>
-                        <button
-                          class="px-3 py-1.5 rounded text-xs font-medium border transition-colors"
-                          :class="connection.status === 'active' 
-                            ? 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'
-                            : 'border-primary text-primary hover:bg-primary/5'"
-                          :disabled="connection.status === 'active'"
-                          @click="handleAuthorize(connection)"
-                        >
-                          授权
-                        </button>
-                        <button
-                          class="px-3 py-1.5 rounded text-xs font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
-                          @click="handleDelete(connection)"
-                        >
-                          删除
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
+                      </td>
+                      <td class="px-5 py-4 text-xs text-slate-600 dark:text-slate-400">
+                        {{ formatDate(connection.updated_at) }}
+                      </td>
+                      <td class="px-5 py-4 text-right">
+                        <div class="flex items-center justify-end gap-2">
+                          <button
+                            class="px-3 py-1.5 rounded text-xs font-medium border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                            @click="handleEdit(connection)"
+                          >
+                            编辑
+                          </button>
+                          <button
+                            class="px-3 py-1.5 rounded text-xs font-medium border transition-colors"
+                            :class="connection.status === 'active' 
+                              ? 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'
+                              : 'border-primary text-primary hover:bg-primary/5'"
+                            :disabled="connection.status === 'active'"
+                            @click="handleAuthorize(connection)"
+                          >
+                            授权
+                          </button>
+                          <button
+                            class="px-3 py-1.5 rounded text-xs font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                            @click="handleDelete(connection)"
+                          >
+                            删除
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+
+                    <tr v-if="activePlatform === 'google' && isExpanded(connection.id)" class="bg-slate-50/70 dark:bg-slate-700/20">
+                      <td colspan="7" class="px-0 py-0">
+                        <div class="px-8 py-4">
+                          <div v-if="loadingSubAccounts.has(connection.id)" class="text-center py-4">
+                            <span class="material-symbols-outlined animate-spin text-2xl text-slate-400">progress_activity</span>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">加载子账号中...</p>
+                          </div>
+
+                          <div v-else-if="subAccounts[connection.id] && subAccounts[connection.id].length > 0">
+                            <div class="mb-3 flex items-center justify-between">
+                              <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-300">子账号列表</h4>
+                              <div class="flex items-center gap-3">
+                                <span class="text-xs text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].length }} 个子账号</span>
+                                <button
+                                  class="px-3 py-1.5 rounded text-xs font-medium bg-primary text-white hover:bg-primary/90 transition-colors whitespace-nowrap"
+                                  @click="openAddSubAccountDialog(connection.id)"
+                                >
+                                  添加子账号
+                                </button>
+                              </div>
+                            </div>
+                            <div class="space-y-2">
+                              <div
+                                v-for="subAccount in subAccounts[connection.id]"
+                                :key="subAccount.id"
+                                class="flex items-center justify-between gap-4 rounded-md bg-white p-3 border border-slate-200 dark:bg-slate-800 dark:border-slate-600"
+                              >
+                                <div class="min-w-0">
+                                  <div class="flex items-center gap-2">
+                                    <span class="text-sm font-medium text-slate-900 dark:text-white">{{ subAccount.name }}</span>
+                                    <span class="px-2 py-0.5 rounded text-xs font-medium" :class="getStatusClass(subAccount.status)">
+                                      {{ getStatusText(subAccount.status) }}
+                                    </span>
+                                  </div>
+                                  <div class="mt-1 flex flex-wrap gap-4 text-xs text-slate-500 dark:text-slate-400">
+                                    <span>Customer ID: {{ subAccount.customer_id }}</span>
+                                    <span>更新时间: {{ formatDate(subAccount.updated_at) }}</span>
+                                  </div>
+                                </div>
+                                <button
+                                  class="px-3 py-1.5 rounded text-xs font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors whitespace-nowrap"
+                                  @click="handleDeleteSubAccount(connection.id, subAccount.id)"
+                                >
+                                  删除
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div v-else class="text-center py-4">
+                            <span class="material-symbols-outlined text-3xl text-slate-300 dark:text-slate-600">folder_open</span>
+                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-3">暂无子账号</p>
+                            <button
+                              class="px-4 py-2 rounded text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors whitespace-nowrap"
+                              @click="openAddSubAccountDialog(connection.id)"
+                            >
+                              添加子账号
+                            </button>
+                          </div>
+                        </div>
+                      </td>
+                    </tr>
+                  </template>
                 </tbody>
               </table>
             </div>
@@ -667,6 +860,59 @@ onMounted(() => {
         </div>
       </div>
     </main>
+
+    <!-- 添加子账号弹窗 -->
+    <div v-if="showAddSubAccountDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+      <div class="bg-white dark:bg-slate-800 rounded-md shadow-xl w-full max-w-md mx-4">
+        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
+          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">添加子账号</h3>
+        </div>
+
+        <div class="px-6 py-4 space-y-4">
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              子账号名称 <span class="text-red-500">*</span>
+            </label>
+            <input
+              v-model="newSubAccountName"
+              type="text"
+              placeholder="请输入子账号名称"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+          </div>
+
+          <div>
+            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              Customer ID <span class="text-red-500">*</span>
+            </label>
+            <input
+              v-model="newSubAccountCustomerId"
+              type="text"
+              placeholder="请输入 Google Customer ID"
+              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+            />
+            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">格式：123-456-7890</p>
+          </div>
+        </div>
+
+        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+          <button
+            class="px-4 py-2 rounded-md text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            @click="closeAddSubAccountDialog"
+          >
+            取消
+          </button>
+          <button
+            class="px-4 py-2 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+            :disabled="!newSubAccountName || !newSubAccountCustomerId"
+            :class="{ 'opacity-50 cursor-not-allowed': !newSubAccountName || !newSubAccountCustomerId }"
+            @click="handleAddSubAccount"
+          >
+            确定添加
+          </button>
+        </div>
+      </div>
+    </div>
 
     <!-- Meta 配置弹窗组件 -->
     <MetaConfigDialog
