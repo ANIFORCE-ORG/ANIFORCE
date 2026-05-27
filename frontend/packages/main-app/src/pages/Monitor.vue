@@ -1,10 +1,17 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import VChart from 'vue-echarts'
+import { use } from 'echarts/core'
+import { CanvasRenderer } from 'echarts/renderers'
+import { BarChart, LineChart } from 'echarts/charts'
+import { GridComponent, LegendComponent, TooltipComponent } from 'echarts/components'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { navItems } from '@/config/navigation'
 import { useWorkspaceSessions } from '@/composables/useWorkspaceSessions'
+
+use([CanvasRenderer, LineChart, BarChart, GridComponent, TooltipComponent, LegendComponent])
 
 const router = useRouter()
 const workspaceSessions = useWorkspaceSessions('reports')
@@ -106,22 +113,77 @@ const displayCreativeRows = computed(() => {
   return creativeRows.filter((creative) => creative.project === selectedProject.value.split(' ')[0])
 })
 
-const maxSpend = computed(() => Math.max(...trendRows.value.map((row) => row.spend)))
-const minSpend = computed(() => Math.min(...trendRows.value.map((row) => row.spend)))
-
-const spendPolyline = computed(() => trendRows.value.map((row, index) => {
-  const x = trendRows.value.length === 1 ? 50 : (index / (trendRows.value.length - 1)) * 100
-  const normalized = (row.spend - minSpend.value) / Math.max(1, maxSpend.value - minSpend.value)
-  const y = 88 - normalized * 70
-  return `${x},${y}`
-}).join(' '))
-
-const conversionBars = computed(() => {
-  const maxConversions = Math.max(...trendRows.value.map((row) => row.conversions))
-  return trendRows.value.map((row) => ({
-    ...row,
-    height: Math.max(12, Math.round((row.conversions / maxConversions) * 100)),
-  }))
+const trendChartOption = computed(() => {
+  return {
+    color: ['#2563eb', '#10b981', '#f59e0b'],
+    tooltip: {
+      trigger: 'axis',
+      backgroundColor: '#0f172a',
+      borderWidth: 0,
+      textStyle: { color: '#fff', fontSize: 12 },
+      valueFormatter: (value: number | string) => typeof value === 'number' ? value.toLocaleString() : value,
+    },
+    legend: {
+      top: 0,
+      right: 0,
+      itemWidth: 10,
+      itemHeight: 10,
+      textStyle: { color: '#64748b', fontSize: 12 },
+      data: ['消耗', '转化', 'ROAS'],
+    },
+    grid: { left: 42, right: 24, top: 48, bottom: 34 },
+    xAxis: {
+      type: 'category',
+      boundaryGap: false,
+      data: trendRows.value.map((row) => row.date),
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisTick: { show: false },
+      axisLabel: { color: '#64748b', fontSize: 11 },
+    },
+    yAxis: [
+      {
+        type: 'value',
+        name: '消耗 / 转化',
+        nameTextStyle: { color: '#94a3b8', fontSize: 11 },
+        splitLine: { lineStyle: { color: '#eef2f7' } },
+        axisLabel: { color: '#64748b', fontSize: 11 },
+      },
+      {
+        type: 'value',
+        name: 'ROAS',
+        nameTextStyle: { color: '#94a3b8', fontSize: 11 },
+        splitLine: { show: false },
+        axisLabel: { color: '#64748b', fontSize: 11 },
+      },
+    ],
+    series: [
+      {
+        name: '消耗',
+        type: 'line',
+        smooth: true,
+        symbolSize: 7,
+        lineStyle: { width: 3 },
+        areaStyle: { opacity: 0.08 },
+        data: trendRows.value.map((row) => row.spend),
+      },
+      {
+        name: '转化',
+        type: 'bar',
+        barWidth: timeRange.value === '90d' ? 28 : 16,
+        itemStyle: { borderRadius: [4, 4, 0, 0], opacity: 0.78 },
+        data: trendRows.value.map((row) => row.conversions),
+      },
+      {
+        name: 'ROAS',
+        type: 'line',
+        yAxisIndex: 1,
+        smooth: true,
+        symbolSize: 6,
+        lineStyle: { width: 2 },
+        data: trendRows.value.map((row) => row.roas),
+      },
+    ],
+  }
 })
 
 const switchPanel = (item: any) => {
@@ -218,48 +280,25 @@ const switchPanel = (item: any) => {
                 {{ timeRange === '7d' ? '近 7 天' : timeRange === '30d' ? '近 30 天' : '近 90 天' }}
               </span>
             </div>
-            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_280px]">
+            <div class="grid gap-4 lg:grid-cols-[minmax(0,1fr)_260px]">
               <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                <div class="mb-3 flex items-center justify-between">
-                  <div>
-                    <p class="text-xs font-semibold text-slate-500">消耗趋势</p>
-                    <p class="mt-1 text-xl font-bold text-slate-950 dark:text-white">${{ totalSpend.toLocaleString() }}</p>
-                  </div>
-                  <span class="rounded bg-white px-2 py-1 text-xs font-semibold text-primary dark:bg-slate-950">Spend</span>
-                </div>
-                <svg viewBox="0 0 100 100" class="h-44 w-full overflow-visible" preserveAspectRatio="none">
-                  <line x1="0" y1="88" x2="100" y2="88" class="stroke-slate-300 dark:stroke-slate-700" stroke-width="0.5" />
-                  <line x1="0" y1="18" x2="100" y2="18" class="stroke-slate-200 dark:stroke-slate-800" stroke-width="0.35" stroke-dasharray="2 2" />
-                  <polyline :points="spendPolyline" fill="none" class="stroke-primary" stroke-width="3" vector-effect="non-scaling-stroke" stroke-linecap="round" stroke-linejoin="round" />
-                  <circle
-                    v-for="(row, index) in trendRows"
-                    :key="row.date"
-                    :cx="trendRows.length === 1 ? 50 : (index / (trendRows.length - 1)) * 100"
-                    :cy="88 - ((row.spend - minSpend) / Math.max(1, maxSpend - minSpend)) * 70"
-                    r="2.2"
-                    class="fill-white stroke-primary"
-                    stroke-width="1.5"
-                    vector-effect="non-scaling-stroke"
-                  />
-                </svg>
-                <div class="mt-1 flex justify-between text-[11px] text-slate-500">
-                  <span v-for="row in trendRows" :key="`label-${row.date}`">{{ row.date }}</span>
-                </div>
+                <VChart class="h-72 w-full" :option="trendChartOption" autoresize />
               </div>
-              <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
-                <div class="mb-3">
-                  <p class="text-xs font-semibold text-slate-500">转化结果</p>
-                  <p class="mt-1 text-xl font-bold text-slate-950 dark:text-white">{{ totalConversions.toLocaleString() }}</p>
+              <div class="grid gap-3">
+                <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <p class="text-xs font-semibold text-slate-500">消耗</p>
+                  <p class="mt-2 text-2xl font-bold text-slate-950 dark:text-white">${{ totalSpend.toLocaleString() }}</p>
+                  <p class="mt-1 text-xs text-slate-500">所选时间段总消耗</p>
                 </div>
-                <div class="flex h-44 items-end gap-2">
-                  <div
-                    v-for="row in conversionBars"
-                    :key="`bar-${row.date}`"
-                    class="flex flex-1 flex-col items-center justify-end gap-2"
-                  >
-                    <div class="w-full rounded-t bg-slate-300 transition-all dark:bg-slate-700" :style="{ height: `${row.height}%` }"></div>
-                    <span class="text-[10px] text-slate-500">{{ row.date }}</span>
-                  </div>
+                <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <p class="text-xs font-semibold text-slate-500">转化</p>
+                  <p class="mt-2 text-2xl font-bold text-slate-950 dark:text-white">{{ totalConversions.toLocaleString() }}</p>
+                  <p class="mt-1 text-xs text-slate-500">安装 / 注册 / 购买合计</p>
+                </div>
+                <div class="rounded-md border border-slate-200 bg-slate-50 p-4 dark:border-slate-800 dark:bg-slate-900">
+                  <p class="text-xs font-semibold text-slate-500">平均 ROAS</p>
+                  <p class="mt-2 text-2xl font-bold text-emerald-600">{{ avgRoas.toFixed(2) }}x</p>
+                  <p class="mt-1 text-xs text-slate-500">按周期点位均值计算</p>
                 </div>
               </div>
             </div>
