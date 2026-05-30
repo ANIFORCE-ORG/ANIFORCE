@@ -7,13 +7,32 @@ const { language } = useLanguage()
 const copy = {
   cn: {
     hero: {
-      eyebrow: 'aniforce',
-      title: '新一代 RTC 广告 AI 引擎',
-      highlights: ['跨平台', '实时素材创作', '7x24盯盘', 'AI复盘归因', '可持续优化'],
-      primaryCta: '马上体验',
-      secondary: '连接广告账户、生成素材、创建计划、监控复盘，放在一个持续优化的投放工作台里。',
+      eyebrow: '新一代 RTC 广告 AI 引擎',
+      title: '智能营销，自动增长',
+      highlights: ['实时素材创作', '7x24盯盘', 'AI复盘归因', '可持续优化'],
+      primaryCta: '免费体验',
+      secondaryCta: '产品功能',
+      secondary: 'ANIFORCE 利用 AI 技术自动规划、执行和优化广告投放策略。从策略制定到创意生成，从预算分配到效果监控，让增长变得简单高效。',
       previewTitle: '广告工作台',
       live: '实时运行',
+      optimization: {
+        title: 'AI 优化建议',
+        items: [
+          { label: '转移预算至高转化素材', value: '+12%' },
+          { label: '降低冷启动计划出价', value: '-8%' },
+          { label: '新增相似用户包', value: 'Ready' },
+        ],
+      },
+    },
+    featureSection: {
+      title: '强大的功能特性',
+      subtitle: 'AI驱动的全流程营销自动化，覆盖分析、生产、投放与监控。',
+      items: [
+        { icon: 'auto_awesome', title: 'AI智能优化', body: '自动分析投放数据，实时优化广告策略，帮助团队提升预算使用效率和整体 ROI。' },
+        { icon: 'trending_up', title: '数据驱动增长', body: '深度洞察市场趋势，精准定位目标用户，加速业务增长并降低试错成本。' },
+        { icon: 'psychology', title: '创意生成', body: 'AI辅助创意素材生成，快速产出高质量广告内容，并根据表现进行持续迭代。' },
+        { icon: 'speed', title: '自动化投放', body: '一键启动广告投放，自动调整预算和出价策略，让执行链路更轻、更稳。' },
+      ],
     },
     why: {
       eyebrow: '为什么需要新的广告 AI 引擎',
@@ -62,8 +81,27 @@ const copy = {
     cta: {
       eyebrow: 'aniforce',
       title: '让广告投放进入实时智能时代',
-      button: '马上体验',
+      button: '免费体验',
       body: '从第一个广告账户开始，把素材、计划和复盘结果沉淀为可持续优化的工作流。',
+    },
+    contact: {
+      eyebrow: '免费体验',
+      title: '让你的投放团队先少开 5 个后台。',
+      body: '留下联系方式，ANIFORCE将为你升级现有的广告投放流程。',
+      marks: [
+        { value: '30 min', label: '快速梳理投放流程' },
+        { value: 'API', label: '确认渠道字段与权限' },
+        { value: 'Demo', label: '按团队角色演示闭环' },
+      ],
+      fields: {
+        name: '姓名',
+        namePlaceholder: '你的称呼',
+        company: '公司 / 团队',
+        companyPlaceholder: '增长团队名称',
+        contact: '联系方式',
+        contactPlaceholder: '邮箱或微信',
+        submit: '提交体验需求',
+      },
     },
     product: {
       demo: {
@@ -101,13 +139,32 @@ const copy = {
   },
   en: {
     hero: {
-      eyebrow: 'aniforce',
-      title: 'The next-generation RTC advertising AI engine',
-      highlights: ['Cross-platform', 'Real-time creative', '24/7 monitoring', 'AI review attribution', 'Continuous optimization'],
-      primaryCta: 'Start now',
-      secondary: 'Connect ad accounts, create assets, launch campaigns, monitor performance, and review results in one improving workspace.',
+      eyebrow: 'The next-generation RTC advertising AI engine',
+      title: 'Intelligent marketing, automatic growth',
+      highlights: ['Real-time creative', '24/7 monitoring', 'AI review attribution', 'Continuous optimization'],
+      primaryCta: 'Free trial',
+      secondaryCta: 'Product',
+      secondary: 'ANIFORCE uses AI to plan, execute, and optimize advertising strategies. From strategy and creative generation to budget allocation and performance monitoring, growth becomes simpler and more efficient.',
       previewTitle: 'Advertising workspace',
       live: 'Live',
+      optimization: {
+        title: 'AI optimization',
+        items: [
+          { label: 'Move budget to high-converting creatives', value: '+12%' },
+          { label: 'Lower bids for cold-start campaigns', value: '-8%' },
+          { label: 'Add lookalike audiences', value: 'Ready' },
+        ],
+      },
+    },
+    featureSection: {
+      title: 'Powerful product features',
+      subtitle: 'AI-driven marketing automation across analysis, creative production, media execution, and monitoring.',
+      items: [
+        { icon: 'auto_awesome', title: 'AI optimization', body: 'Analyze delivery data and improve advertising strategies in real time to increase budget efficiency and ROI.' },
+        { icon: 'trending_up', title: 'Data-driven growth', body: 'Identify market trends and target audiences more precisely to accelerate growth and reduce testing costs.' },
+        { icon: 'psychology', title: 'Creative generation', body: 'Produce quality advertising assets quickly with AI and continuously iterate based on performance.' },
+        { icon: 'speed', title: 'Automated delivery', body: 'Launch campaigns quickly and continuously adjust budgets and bid strategies with less manual work.' },
+      ],
     },
     why: {
       eyebrow: 'Why a new advertising AI engine',
@@ -156,8 +213,27 @@ const copy = {
     cta: {
       eyebrow: 'aniforce',
       title: 'Bring advertising into the RTC intelligence era',
-      button: 'Start now',
+      button: 'Free trial',
       body: 'Start with the first ad account and turn assets, campaigns, and review results into a workflow that keeps improving.',
+    },
+    contact: {
+      eyebrow: 'Free trial',
+      title: 'Let your media team open 5 fewer dashboards.',
+      body: 'Leave your contact information. ANIFORCE will upgrade your existing advertising workflow.',
+      marks: [
+        { value: '30 min', label: 'Map your media workflow' },
+        { value: 'API', label: 'Review channel fields and access' },
+        { value: 'Demo', label: 'Demo by team role' },
+      ],
+      fields: {
+        name: 'Name',
+        namePlaceholder: 'Your name',
+        company: 'Company / Team',
+        companyPlaceholder: 'Growth team name',
+        contact: 'Contact',
+        contactPlaceholder: 'Email or WeChat',
+        submit: 'Submit request',
+      },
     },
     product: {
       demo: {
@@ -200,7 +276,10 @@ const pageCopy = computed(() => copy[language.value])
 
 <template>
   <main class="bg-background-light text-slate-950">
-    <section class="relative overflow-hidden border-b border-slate-200 bg-white px-5 pb-14 pt-12 sm:px-6 lg:px-10 lg:pb-18 lg:pt-16">
+    <section id="top" class="relative isolate overflow-hidden border-b border-slate-200 bg-white px-5 pb-14 pt-12 sm:px-6 lg:px-10 lg:pb-18 lg:pt-16">
+      <div class="signal-field" aria-hidden="true">
+        <span v-for="index in 28" :key="index" class="signal-dot"></span>
+      </div>
       <div class="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
         <div>
           <p class="inline-flex rounded-md bg-primary/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-primary">{{ pageCopy.hero.eyebrow }}</p>
@@ -220,14 +299,23 @@ const pageCopy = computed(() => copy[language.value])
               {{ item }}
             </span>
           </div>
-          <RouterLink
-            to="/contact"
-            class="mt-8 inline-flex items-center justify-center rounded-md bg-primary px-6 py-3 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-primary/90"
-          >
-            {{ pageCopy.hero.primaryCta }}
-          </RouterLink>
+          <div class="mt-8 flex flex-wrap gap-3">
+            <a
+              href="#contact"
+              class="inline-flex items-center justify-center rounded-md bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800"
+            >
+              {{ pageCopy.hero.primaryCta }}
+            </a>
+            <a
+              href="#features"
+              class="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary"
+            >
+              {{ pageCopy.hero.secondaryCta }}
+            </a>
+          </div>
         </div>
 
+        <div class="relative">
         <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-blue-100/80">
           <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
             <div class="flex items-center gap-2">
@@ -340,11 +428,44 @@ const pageCopy = computed(() => copy[language.value])
               </aside>
             </div>
           </div>
+          </div>
+          <div class="ai-float-card">
+            <h3><span class="material-symbols-outlined">psychology</span>{{ pageCopy.hero.optimization.title }}</h3>
+            <div v-for="item in pageCopy.hero.optimization.items" :key="item.label" class="optimization-row">
+              <span>{{ item.label }}</span>
+              <strong>{{ item.value }}</strong>
+            </div>
+          </div>
         </div>
       </div>
     </section>
 
-    <section class="border-b border-slate-200 bg-background-light px-5 py-16 sm:px-6 lg:px-10">
+    <section id="features" class="border-b border-slate-200 bg-white px-5 py-16 sm:px-6 lg:px-10">
+      <div class="mx-auto max-w-7xl">
+        <div class="max-w-4xl">
+          <p class="text-sm font-semibold uppercase text-primary">{{ pageCopy.featureSection.title }}</p>
+          <h2 class="mt-4 text-3xl font-bold leading-snug tracking-tight md:text-4xl">
+            {{ pageCopy.featureSection.subtitle }}
+          </h2>
+        </div>
+
+        <div class="mt-10 grid gap-5 md:grid-cols-2 lg:grid-cols-4">
+          <article
+            v-for="item in pageCopy.featureSection.items"
+            :key="item.title"
+            class="min-h-56 rounded-md border border-slate-200 bg-slate-50 p-6 transition-all hover:-translate-y-1 hover:border-primary/40 hover:bg-white hover:shadow-lg hover:shadow-slate-200/70"
+          >
+            <div class="mb-5 grid h-12 w-12 place-items-center rounded-md bg-primary/10 text-primary">
+              <span class="material-symbols-outlined text-[26px]">{{ item.icon }}</span>
+            </div>
+            <h3 class="text-lg font-semibold leading-snug">{{ item.title }}</h3>
+            <p class="mt-3 text-sm leading-7 text-slate-600">{{ item.body }}</p>
+          </article>
+        </div>
+      </div>
+    </section>
+
+    <section id="automation" class="border-b border-slate-200 bg-background-light px-5 py-16 sm:px-6 lg:px-10">
       <div class="mx-auto max-w-7xl">
         <div class="max-w-3xl">
           <p class="text-sm font-semibold uppercase text-primary">{{ pageCopy.why.eyebrow }}</p>
@@ -371,7 +492,7 @@ const pageCopy = computed(() => copy[language.value])
       </div>
     </section>
 
-    <section class="bg-white px-5 py-16 sm:px-6 lg:px-10">
+    <section id="performance" class="bg-white px-5 py-16 sm:px-6 lg:px-10">
       <div class="mx-auto max-w-7xl">
         <div class="max-w-4xl">
           <p class="text-sm font-semibold uppercase text-primary">{{ pageCopy.workflow.eyebrow }}</p>
@@ -405,19 +526,224 @@ const pageCopy = computed(() => copy[language.value])
       </div>
     </section>
 
-    <section class="border-t border-slate-200 bg-background-light px-5 py-16 sm:px-6 lg:px-10">
-      <div class="mx-auto max-w-7xl">
-        <div class="rounded-md border border-blue-100 bg-primary px-6 py-10 text-white shadow-lg shadow-blue-100 md:px-10">
-          <p class="text-sm font-semibold uppercase text-blue-100">{{ pageCopy.cta.eyebrow }}</p>
-          <h2 class="mt-3 text-3xl font-bold leading-snug md:text-4xl">
-            {{ pageCopy.cta.title }}
+    <section id="contact" class="bg-slate-950 px-5 py-20 text-white sm:px-6 lg:px-10">
+      <div class="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.75fr)]">
+        <div>
+          <p class="text-sm font-semibold uppercase text-blue-200">{{ pageCopy.contact.eyebrow }}</p>
+          <h2 class="mt-4 max-w-3xl text-3xl font-bold leading-snug md:text-4xl">
+            {{ pageCopy.contact.title }}
           </h2>
-          <p class="mt-4 max-w-2xl text-sm leading-7 text-blue-50">{{ pageCopy.cta.body }}</p>
-          <RouterLink to="/contact" class="mt-7 inline-flex items-center justify-center rounded-md bg-white px-6 py-3 text-sm font-semibold text-primary hover:bg-blue-50">
-            {{ pageCopy.cta.button }}
-          </RouterLink>
+          <p class="mt-5 max-w-2xl text-base leading-8 text-slate-300">{{ pageCopy.contact.body }}</p>
+          <div class="mt-8 grid gap-3 sm:grid-cols-3">
+            <div
+              v-for="mark in pageCopy.contact.marks"
+              :key="mark.value"
+              class="rounded-md border border-white/15 bg-white/10 p-4"
+            >
+              <strong class="block text-2xl">{{ mark.value }}</strong>
+              <span class="mt-2 block text-xs text-slate-300">{{ mark.label }}</span>
+            </div>
+          </div>
         </div>
+
+        <form class="rounded-md border border-white/15 bg-white/10 p-5" @submit.prevent>
+          <label class="mb-4 block">
+            <span class="mb-2 block text-sm text-slate-300">{{ pageCopy.contact.fields.name }}</span>
+            <input class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300" :placeholder="pageCopy.contact.fields.namePlaceholder" autocomplete="name" />
+          </label>
+          <label class="mb-4 block">
+            <span class="mb-2 block text-sm text-slate-300">{{ pageCopy.contact.fields.company }}</span>
+            <input class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300" :placeholder="pageCopy.contact.fields.companyPlaceholder" autocomplete="organization" />
+          </label>
+          <label class="mb-4 block">
+            <span class="mb-2 block text-sm text-slate-300">{{ pageCopy.contact.fields.contact }}</span>
+            <input class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300" :placeholder="pageCopy.contact.fields.contactPlaceholder" autocomplete="email" />
+          </label>
+          <button class="w-full rounded-md bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-[6px_6px_0_rgba(19,127,236,0.9)] transition-all hover:-translate-y-0.5" type="submit">
+            {{ pageCopy.contact.fields.submit }}
+          </button>
+        </form>
       </div>
     </section>
   </main>
 </template>
+
+<style scoped>
+.ai-float-card {
+  position: absolute;
+  right: -22px;
+  bottom: 34px;
+  width: min(260px, 48%);
+  padding: 14px;
+  border: 1px solid rgba(203, 213, 225, 0.85);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.95);
+  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.15);
+  animation: hoverFloat 4.5s ease-in-out infinite;
+}
+
+.ai-float-card h3 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 12px;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.ai-float-card .material-symbols-outlined {
+  color: #137fec;
+  font-size: 20px;
+}
+
+.optimization-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 32px;
+  color: #475569;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.optimization-row strong {
+  color: #059669;
+}
+
+.signal-field {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  background:
+    linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+  background-size: 54px 54px;
+  opacity: 0.9;
+}
+
+.signal-field::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(90deg, rgba(255, 255, 255, 0.96) 0%, rgba(255, 255, 255, 0.76) 44%, rgba(255, 255, 255, 0.34) 100%),
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), #fff 94%);
+}
+
+.signal-field::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    repeating-linear-gradient(12deg, transparent 0 76px, rgba(19, 127, 236, 0.12) 77px 78px, transparent 79px 154px),
+    repeating-linear-gradient(-9deg, transparent 0 90px, rgba(16, 185, 129, 0.1) 91px 92px, transparent 93px 170px);
+  animation: signalFlow 16s linear infinite;
+}
+
+.signal-dot {
+  position: absolute;
+  z-index: 1;
+  width: 9px;
+  height: 9px;
+  border-radius: 2px;
+  background: #137fec;
+  box-shadow: 0 0 0 10px rgba(19, 127, 236, 0.12);
+  animation: signalBlink 2.4s ease-in-out infinite, signalDrift 10s linear infinite;
+}
+
+.signal-dot:nth-child(4n + 1) {
+  background: #10b981;
+  box-shadow: 0 0 0 10px rgba(16, 185, 129, 0.13);
+}
+
+.signal-dot:nth-child(4n + 2) {
+  background: #f59e0b;
+  box-shadow: 0 0 0 10px rgba(245, 158, 11, 0.13);
+}
+
+.signal-dot:nth-child(4n + 3) {
+  background: #466c78;
+  box-shadow: 0 0 0 10px rgba(70, 108, 120, 0.13);
+}
+
+.signal-dot:nth-child(1) { left: 8%; top: 18%; animation-delay: -0.2s; }
+.signal-dot:nth-child(2) { left: 18%; top: 72%; animation-delay: -1.1s; }
+.signal-dot:nth-child(3) { left: 28%; top: 34%; animation-delay: -1.8s; }
+.signal-dot:nth-child(4) { left: 38%; top: 78%; animation-delay: -0.6s; }
+.signal-dot:nth-child(5) { left: 48%; top: 22%; animation-delay: -1.4s; }
+.signal-dot:nth-child(6) { left: 58%; top: 62%; animation-delay: -2.1s; }
+.signal-dot:nth-child(7) { left: 68%; top: 30%; animation-delay: -0.9s; }
+.signal-dot:nth-child(8) { left: 78%; top: 70%; animation-delay: -1.7s; }
+.signal-dot:nth-child(9) { left: 88%; top: 26%; animation-delay: -2.5s; }
+.signal-dot:nth-child(10) { left: 12%; top: 46%; animation-delay: -0.4s; }
+.signal-dot:nth-child(11) { left: 22%; top: 14%; animation-delay: -1.9s; }
+.signal-dot:nth-child(12) { left: 32%; top: 58%; animation-delay: -2.7s; }
+.signal-dot:nth-child(13) { left: 42%; top: 42%; animation-delay: -1.2s; }
+.signal-dot:nth-child(14) { left: 52%; top: 82%; animation-delay: -2.2s; }
+.signal-dot:nth-child(15) { left: 62%; top: 18%; animation-delay: -0.8s; }
+.signal-dot:nth-child(16) { left: 72%; top: 50%; animation-delay: -1.6s; }
+.signal-dot:nth-child(17) { left: 82%; top: 38%; animation-delay: -2.4s; }
+.signal-dot:nth-child(18) { left: 92%; top: 66%; animation-delay: -0.7s; }
+.signal-dot:nth-child(19) { left: 6%; top: 84%; animation-delay: -2.8s; }
+.signal-dot:nth-child(20) { left: 16%; top: 28%; animation-delay: -1.3s; }
+.signal-dot:nth-child(21) { left: 26%; top: 88%; animation-delay: -2.6s; }
+.signal-dot:nth-child(22) { left: 36%; top: 12%; animation-delay: -0.5s; }
+.signal-dot:nth-child(23) { left: 46%; top: 68%; animation-delay: -1.5s; }
+.signal-dot:nth-child(24) { left: 56%; top: 36%; animation-delay: -2.3s; }
+.signal-dot:nth-child(25) { left: 66%; top: 88%; animation-delay: -0.1s; }
+.signal-dot:nth-child(26) { left: 76%; top: 16%; animation-delay: -1s; }
+.signal-dot:nth-child(27) { left: 86%; top: 54%; animation-delay: -2s; }
+.signal-dot:nth-child(28) { left: 96%; top: 34%; animation-delay: -2.9s; }
+
+@keyframes signalBlink {
+  0%,
+  100% {
+    opacity: 0.32;
+    transform: scale(0.82);
+  }
+  45% {
+    opacity: 0.9;
+    transform: scale(1);
+  }
+}
+
+@keyframes signalDrift {
+  0% {
+    translate: -14px 0;
+  }
+  100% {
+    translate: 18px 0;
+  }
+}
+
+@keyframes signalFlow {
+  from {
+    background-position: 0 0, 0 0;
+  }
+  to {
+    background-position: 220px 120px, -180px 90px;
+  }
+}
+
+@keyframes hoverFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(-10px);
+  }
+}
+
+@media (max-width: 768px) {
+  .ai-float-card {
+    position: relative;
+    right: auto;
+    bottom: auto;
+    width: auto;
+    margin-top: 12px;
+  }
+}
+</style>

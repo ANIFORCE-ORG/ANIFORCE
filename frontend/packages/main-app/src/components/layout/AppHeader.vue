@@ -14,7 +14,10 @@ const showUserMenu = ref(false)
 const publicCopy = {
   cn: {
     home: '首页',
-    start: '马上体验',
+    product: '产品功能',
+    automation: '自动化工作流',
+    performance: '广告效果',
+    trial: '免费体验',
     login: '登录',
     workspace: '进入系统',
     account: '账户设置',
@@ -22,7 +25,10 @@ const publicCopy = {
   },
   en: {
     home: 'Home',
-    start: 'Start now',
+    product: 'Product',
+    automation: 'Automation',
+    performance: 'Performance',
+    trial: 'Free trial',
     login: 'Login',
     workspace: 'Workspace',
     account: 'Account',
@@ -38,6 +44,15 @@ const handleLogoClick = () => {
   } else {
     router.push('/')
   }
+}
+
+const goHomeSection = async (hash: string) => {
+  if (route.path !== '/') {
+    await router.push({ path: '/', hash: `#${hash}` })
+    return
+  }
+
+  document.getElementById(hash)?.scrollIntoView({ behavior: 'smooth' })
 }
 
 const handleUserClick = () => {
@@ -69,16 +84,15 @@ const handleLogout = () => {
   <header class="flex items-center justify-between px-6 py-3 md:px-12 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md sticky top-0 z-50">
     <!-- Logo -->
     <div class="flex items-center gap-3 cursor-pointer shrink-0" @click="handleLogoClick">
-      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-        <span class="material-symbols-outlined text-xl">rocket_launch</span>
-      </div>
-      <h2 class="text-lg font-bold tracking-tight">ANIFORCE</h2>
+      <img class="h-12 w-auto max-w-[220px] object-contain" src="/images/logo-blue.png" alt="ANIFORCE" />
     </div>
 
     <!-- Navigation -->
-    <nav v-if="isPublicPage()" class="hidden md:flex items-center gap-6">
-      <RouterLink class="text-sm font-medium text-slate-600 hover:text-primary" to="/">{{ publicCopy[language].home }}</RouterLink>
-      <RouterLink class="text-sm font-medium text-slate-600 hover:text-primary" to="/contact">{{ publicCopy[language].start }}</RouterLink>
+    <nav v-if="isPublicPage()" class="hidden md:flex items-center gap-7">
+      <button class="public-nav-link" type="button" @click="goHomeSection('top')">{{ publicCopy[language].home }}</button>
+      <button class="public-nav-link" type="button" @click="goHomeSection('features')">{{ publicCopy[language].product }}</button>
+      <button class="public-nav-link" type="button" @click="goHomeSection('automation')">{{ publicCopy[language].automation }}</button>
+      <button class="public-nav-link" type="button" @click="goHomeSection('performance')">{{ publicCopy[language].performance }}</button>
     </nav>
 
     <!-- Right Actions -->
@@ -143,11 +157,19 @@ const handleLogout = () => {
 
       <!-- 未登录状态 -->
       <template v-else>
-        <button
+        <RouterLink
           class="px-4 py-2 text-sm text-slate-700 dark:text-slate-300 hover:text-primary transition-colors font-medium"
-          @click="handleUserClick"
+          to="/login"
         >
           {{ publicCopy[language].login }}
+        </RouterLink>
+        <button
+          v-if="isPublicPage()"
+          class="hidden rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800 md:inline-flex"
+          type="button"
+          @click="goHomeSection('contact')"
+        >
+          {{ publicCopy[language].trial }}
         </button>
       </template>
 
@@ -189,5 +211,37 @@ const handleLogout = () => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+
+.public-nav-link {
+  position: relative;
+  padding: 8px 0;
+  border: 0;
+  color: rgb(71 85 105);
+  background: transparent;
+  font-size: 24px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.public-nav-link::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 2px;
+  height: 2px;
+  transform: scaleX(0);
+  transform-origin: left;
+  background: #137fec;
+  transition: transform 180ms ease;
+}
+
+.public-nav-link:hover {
+  color: #137fec;
+}
+
+.public-nav-link:hover::after {
+  transform: scaleX(1);
 }
 </style>
