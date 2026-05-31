@@ -1,0 +1,4881 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ANIFORCE - 平台连接与新任务计划创建</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #3b82e8;
+      --primary-600: #2563d8;
+      --primary-soft: #eaf2ff;
+      --text: #111827;
+      --muted: #63708a;
+      --subtle: #8a96aa;
+      --line: #dbe3ef;
+      --line-2: #edf1f7;
+      --bg: #f7f9fc;
+      --panel: #ffffff;
+      --ok: #16a34a;
+      --warn: #b7791f;
+      --danger: #dc2626;
+      --shadow: 0 20px 58px rgba(15, 23, 42, .08);
+      --sidebar: 320px;
+      color-scheme: light;
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; min-height: 100%; }
+    body {
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      color: var(--text);
+      background: #fff;
+      letter-spacing: 0;
+    }
+    button, input, select, textarea { font: inherit; }
+    button { cursor: pointer; }
+    .material-symbols-outlined {
+      font-family: "Material Symbols Outlined";
+      font-weight: normal;
+      font-style: normal;
+      font-size: 22px;
+      line-height: 1;
+      letter-spacing: normal;
+      text-transform: none;
+      display: inline-block;
+      white-space: nowrap;
+      word-wrap: normal;
+      direction: ltr;
+      -webkit-font-feature-settings: "liga";
+      -webkit-font-smoothing: antialiased;
+      font-variation-settings: "FILL" 0, "wght" 430, "GRAD" 0, "opsz" 24;
+    }
+    .app { min-height: 100vh; display: flex; flex-direction: column; background: #fff; }
+    .topbar {
+      height: 88px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 48px;
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, .94);
+      backdrop-filter: blur(16px);
+      position: sticky;
+      top: 0;
+      z-index: 30;
+    }
+    .brand { display: flex; align-items: center; gap: 16px; }
+    .brand-mark, .avatar {
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      flex: 0 0 auto;
+    }
+    .brand-mark {
+      width: 48px;
+      height: 48px;
+      color: #fff;
+      background: var(--primary);
+      box-shadow: 0 10px 24px rgba(59, 130, 232, .2);
+    }
+    .brand strong { font-size: 24px; font-weight: 800; letter-spacing: -.02em; }
+    .top-actions { display: flex; align-items: center; gap: 20px; }
+    .user { display: flex; align-items: center; gap: 12px; }
+    .avatar {
+      width: 46px;
+      height: 46px;
+      border: 3px solid #b9d3fb;
+      color: var(--primary-600);
+      background: #eff6ff;
+      font-weight: 800;
+    }
+    .user strong, .user span { display: block; white-space: nowrap; }
+    .user strong { font-size: 16px; line-height: 1.2; }
+    .user span { margin-top: 3px; color: #5e6b85; font-size: 14px; font-weight: 600; }
+    .icon-button {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      color: #4b5567;
+      background: transparent;
+      border-radius: 999px;
+    }
+    .icon-button:hover { background: #f1f5fb; color: var(--primary-600); }
+    .shell { flex: 1; display: grid; grid-template-columns: var(--sidebar) minmax(0, 1fr); min-height: calc(100vh - 88px); }
+    .sidebar {
+      border-right: 1px solid var(--line);
+      background: #fff;
+      min-height: calc(100vh - 88px);
+      padding: 46px 18px 22px;
+      position: sticky;
+      top: 88px;
+      align-self: start;
+    }
+    .side-section + .side-section { margin-top: 28px; }
+    .side-label {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 0 2px 18px;
+      color: #55657d;
+      font-size: 15px;
+      font-weight: 800;
+    }
+    .nav-list { display: grid; gap: 8px; }
+    .nav-item {
+      width: 100%;
+      min-height: 58px;
+      display: flex;
+      align-items: center;
+      gap: 17px;
+      border: 0;
+      border-radius: 999px;
+      padding: 0 18px;
+      background: transparent;
+      color: #4c5a73;
+      text-align: left;
+      font-size: 18px;
+      font-weight: 600;
+    }
+    .nav-item .material-symbols-outlined { font-size: 24px; color: currentColor; }
+    .nav-item:hover { background: #f6f9fe; color: var(--primary-600); }
+    .nav-item.active {
+      color: #2f7be6;
+      background: #eaf2ff;
+      font-weight: 800;
+    }
+    .history-item {
+      width: 100%;
+      min-height: 62px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 0;
+      border-radius: 999px;
+      padding: 0 18px;
+      color: #4f5e76;
+      background: transparent;
+      text-align: left;
+      font-size: 16px;
+      font-weight: 700;
+    }
+    .history-item span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+    .history-item.active { color: #2f7be6; background: #eaf2ff; }
+    .main { min-width: 0; background: #fff; }
+    .page { display: none; min-height: calc(100vh - 88px); }
+    .page.active { display: block; }
+    .page-head {
+      min-height: 110px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 24px 32px;
+      border-bottom: 1px solid var(--line);
+      background: #fff;
+    }
+    .page-head.compact { min-height: 92px; }
+    .page-title-row { display: flex; align-items: center; gap: 18px; min-width: 0; }
+    .back-button {
+      width: 42px;
+      height: 42px;
+      border: 0;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      color: #334155;
+      background: transparent;
+    }
+    .back-button:hover { background: #f1f5f9; }
+    h1, h2, h3, p { margin-top: 0; }
+    .page-head h1 { margin-bottom: 7px; font-size: 28px; line-height: 1.15; letter-spacing: -.03em; }
+    .page-head p { margin-bottom: 0; color: #687791; font-size: 17px; font-weight: 600; }
+    .content { padding: 32px; }
+    .settings-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 20px; }
+    .settings-card, .panel, .metric-card, .table-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+    }
+    .settings-card {
+      min-height: 240px;
+      padding: 34px 26px 28px;
+      display: flex;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 24px;
+    }
+    .settings-card .card-title { display: flex; align-items: center; gap: 16px; }
+    .settings-card .material-symbols-outlined { color: #347ee9; font-size: 31px; }
+    .settings-card h2 { margin: 0; font-size: 22px; line-height: 1.25; }
+    .settings-card p { margin: 0; min-height: 44px; color: #65738d; font-size: 17px; font-weight: 600; line-height: 1.55; }
+    .settings-card button { margin-top: auto; }
+    .btn {
+      min-height: 48px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 20px;
+      background: #fff;
+      color: #344054;
+      font-size: 16px;
+      font-weight: 800;
+      transition: .16s ease;
+    }
+    .btn.primary { border-color: var(--primary); background: var(--primary); color: #fff; }
+    .btn.primary:hover { background: var(--primary-600); border-color: var(--primary-600); }
+    .btn.soft { border-color: #cfe0fb; background: #eef6ff; color: var(--primary-600); }
+    .btn.ghost { border-color: transparent; background: transparent; }
+    .btn.danger { border-color: #fecaca; background: #fff5f5; color: #b42318; }
+    .btn.danger:hover { border-color: #fda4af; background: #fff1f2; color: #991b1b; }
+    .btn:disabled { cursor: not-allowed; opacity: .52; }
+    .grid-2 { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+    .grid-4 { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
+    .panel { padding: 24px; }
+    .panel-title { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 18px; }
+    .panel-title h2, .panel-title h3 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
+    .panel-title p { margin: 6px 0 0; color: var(--muted); font-size: 14px; line-height: 1.6; }
+    .platform-tabs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; margin-bottom: 32px; }
+    .platform-tab {
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      background: #fff;
+      text-align: left;
+      padding: 25px 22px;
+      min-height: 106px;
+      transition: .16s ease;
+    }
+    .platform-tab.active { border-color: var(--primary-600); box-shadow: inset 0 0 0 1px rgba(37, 99, 216, .1); }
+    .platform-tab:hover { border-color: #9ec2f5; }
+    .platform-tab-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+    .platform-tab strong { font-size: 22px; line-height: 1.2; }
+    .platform-tab p { margin: 14px 0 0; color: #556177; font-size: 16px; line-height: 1.45; font-weight: 600; }
+    .status-pill, .chip {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      white-space: nowrap;
+      border-radius: 999px;
+      padding: 6px 10px;
+      font-size: 12px;
+      font-weight: 900;
+    }
+    .status-pill.connected { color: #047857; background: #ecfdf3; }
+    .status-pill.pending { color: #9a5b13; background: #fff7e8; }
+    .status-pill.expired { color: #b91c1c; background: #fef2f2; }
+    .connection-panel { padding: 28px; }
+    .platform-detail-head { display: flex; align-items: center; gap: 13px; margin-bottom: 22px; }
+    .platform-detail-head .material-symbols-outlined { color: #1f63bf; font-size: 32px; }
+    .platform-detail-head strong { font-size: 20px; }
+    .platform-detail-desc { color: #64738c; font-size: 17px; font-weight: 650; margin-bottom: 24px; }
+    .steps { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-bottom: 30px; }
+    .step-pill {
+      min-height: 56px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      display: flex;
+      align-items: center;
+      padding: 0 18px;
+      color: #273449;
+      background: #f8fafc;
+      font-size: 16px;
+      font-weight: 650;
+    }
+    .warning {
+      display: flex;
+      gap: 12px;
+      align-items: flex-start;
+      border: 1px solid #fed7aa;
+      background: #fff8ed;
+      color: #8a4b0f;
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 18px;
+    }
+    .warning strong { display: block; margin-bottom: 4px; color: #7c3f07; }
+    .warning p { margin: 0; color: #9a5b13; line-height: 1.6; }
+    .connection-actions { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin-top: 20px; }
+    .connection-actions p { margin: 0; color: #64738c; font-size: 16px; font-weight: 650; }
+    .table-card { overflow: hidden; margin-top: 32px; }
+    .table-head {
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .table-head h2 { margin: 0; font-size: 18px; }
+    table { width: 100%; border-collapse: collapse; }
+    th, td { padding: 15px 20px; text-align: left; border-bottom: 1px solid var(--line-2); vertical-align: middle; }
+    th { color: #5f6c81; background: #f8fafc; font-size: 13px; font-weight: 900; }
+    td { color: #253044; font-size: 14px; }
+    tr:hover td { background: #fbfdff; }
+    .row-actions { display: flex; justify-content: flex-end; gap: 8px; }
+    .mini {
+      min-height: 34px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 10px;
+      background: #fff;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 800;
+    }
+    .mini:hover { border-color: #a9c7f2; color: var(--primary-600); background: #f8fbff; }
+    .scope-list { display: flex; flex-wrap: wrap; gap: 6px; }
+    .chip { color: #1f4e8f; background: #edf5ff; border: 1px solid #d9e8ff; }
+    .sub-row td { background: #f8fbff; }
+    .sub-account-list { display: grid; gap: 10px; }
+    .sub-account {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      border: 1px solid #d9e8ff;
+      border-radius: 8px;
+      padding: 12px 14px;
+      background: #fff;
+    }
+    .empty-state { padding: 44px 20px; text-align: center; color: #6b778f; }
+    .empty-state .material-symbols-outlined { display: block; margin: 0 auto 8px; font-size: 54px; color: #94a3b8; }
+    .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px; }
+    .field { display: grid; gap: 8px; }
+    .field.full { grid-column: 1 / -1; }
+    .field label { color: #475569; font-size: 13px; font-weight: 900; }
+    .field input, .field select, .field textarea {
+      width: 100%;
+      min-height: 48px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 14px;
+      color: #263348;
+      background: #fff;
+      outline: none;
+    }
+    .field textarea { min-height: 106px; padding: 12px 14px; resize: vertical; line-height: 1.6; }
+    .field input:focus, .field select:focus, .field textarea:focus { border-color: #7fb1f5; box-shadow: 0 0 0 3px rgba(59, 130, 232, .12); }
+    .readonly {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 12px 0 14px;
+      background: #f8fafc;
+      color: #52617a;
+      font-weight: 650;
+    }
+    .scope-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .scope-option {
+      display: flex;
+      align-items: flex-start;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 15px 16px;
+      background: #fff;
+    }
+    .scope-option input { width: 19px; height: 19px; accent-color: var(--primary); margin-top: 1px; }
+    .scope-option strong { display: block; }
+    .scope-option span { display: block; color: #64738c; margin-top: 5px; font-size: 12px; line-height: 1.45; }
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      z-index: 60;
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 32px;
+      background: rgba(0, 0, 0, .48);
+    }
+    .modal-backdrop.active { display: flex; }
+    .modal {
+      width: min(1176px, calc(100vw - 72px));
+      max-height: calc(100vh - 72px);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 34px 100px rgba(15, 23, 42, .35);
+    }
+    .modal.small { width: min(520px, calc(100vw - 40px)); }
+    .drawer-backdrop {
+      align-items: stretch;
+      justify-content: flex-end;
+      padding: 0;
+      background: rgba(15, 23, 42, .34);
+    }
+    .modal.drawer {
+      width: min(760px, calc(100vw - 28px));
+      max-height: none;
+      height: 100vh;
+      border-radius: 8px 0 0 8px;
+    }
+    .modal-head {
+      min-height: 104px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 32px;
+      border-bottom: 1px solid var(--line);
+    }
+    .modal-head h2 { margin: 0; font-size: 26px; letter-spacing: -.03em; }
+    .modal-body { padding: 32px; overflow: auto; }
+    .modal-foot {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 22px 32px 32px;
+      border-top: 1px solid var(--line);
+    }
+    .modal-foot .right { display: flex; gap: 12px; }
+    .toast-wrap {
+      position: fixed;
+      right: 24px;
+      bottom: 24px;
+      z-index: 90;
+      display: grid;
+      gap: 10px;
+      pointer-events: none;
+    }
+    .toast {
+      min-width: 260px;
+      border: 1px solid #bbf7d0;
+      border-radius: 8px;
+      padding: 13px 16px;
+      background: #f0fdf4;
+      color: #166534;
+      box-shadow: 0 14px 34px rgba(15, 23, 42, .12);
+      font-weight: 800;
+    }
+    .task-layout { display: grid; grid-template-columns: minmax(0, 1fr) 360px; gap: 24px; }
+    .task-hero {
+      border-bottom: 1px solid var(--line);
+      padding: 28px 32px;
+      background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+    .task-hero h1 { margin-bottom: 10px; font-size: 30px; letter-spacing: -.04em; }
+    .task-hero p { margin: 0; color: #65738d; font-size: 16px; line-height: 1.7; font-weight: 650; }
+    .stepper { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin-top: 22px; }
+    .task-step {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px 16px;
+      background: #fff;
+      color: #52617a;
+      font-weight: 850;
+    }
+    .task-step em {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      color: #64748b;
+      background: #eef2f7;
+      font-style: normal;
+      font-size: 13px;
+    }
+    .task-step.active { border-color: var(--primary); color: var(--primary-600); background: #f7fbff; }
+    .task-step.active em { color: #fff; background: var(--primary); }
+    .task-card { border: 1px solid var(--line); border-radius: 8px; background: #fff; padding: 24px; margin-bottom: 20px; }
+    .task-card h2 { margin-bottom: 8px; font-size: 21px; }
+    .task-card > p { color: var(--muted); line-height: 1.6; }
+    .segmented { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; padding: 4px; background: #f8fafc; }
+    .segmented button {
+      min-height: 36px;
+      border: 0;
+      border-radius: 6px;
+      padding: 0 14px;
+      background: transparent;
+      color: #64748b;
+      font-weight: 850;
+    }
+    .segmented button.active { color: var(--primary-600); background: #fff; box-shadow: 0 2px 10px rgba(15, 23, 42, .07); }
+    .platform-source {
+      display: grid;
+      gap: 10px;
+      border: 1px solid #cfe0fb;
+      border-radius: 8px;
+      padding: 16px;
+      background: #f7fbff;
+      margin: 18px 0;
+    }
+    .platform-source strong { color: #194f96; }
+    .platform-source p { margin: 0; color: #5e6b85; line-height: 1.6; }
+    .asset-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+    .asset-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+      transition: .15s ease;
+    }
+    .asset-card.selected { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(59, 130, 232, .12); }
+    .asset-thumb {
+      height: 106px;
+      display: grid;
+      place-items: center;
+      border-radius: 7px;
+      margin-bottom: 12px;
+      color: #1f4e8f;
+      background: linear-gradient(135deg, #eaf2ff, #f8fafc);
+      font-size: 34px;
+      font-weight: 900;
+    }
+    .asset-card strong { display: block; }
+    .asset-card p { margin: 8px 0 12px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .side-panel { position: sticky; top: 116px; align-self: start; }
+    .summary-list { display: grid; gap: 12px; }
+    .summary-item {
+      display: flex;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 12px 0;
+      border-bottom: 1px solid var(--line-2);
+      color: #64748b;
+      font-size: 14px;
+    }
+    .summary-item b { color: #111827; text-align: right; }
+    .result-stack { display: grid; gap: 12px; margin-top: 18px; }
+    .created-card {
+      border: 1px solid #cfe0fb;
+      border-radius: 8px;
+      padding: 16px;
+      background: #f8fbff;
+    }
+    .created-card strong { display: block; color: #173b74; }
+    .created-card span { display: block; color: #65738d; margin-top: 6px; font-size: 13px; }
+    .copy-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 14px; }
+    .project-note {
+      border: 1px solid #cfe0fb;
+      background: #f7fbff;
+      border-radius: 8px;
+      padding: 16px;
+      color: #52617a;
+      line-height: 1.7;
+      margin-bottom: 18px;
+    }
+    .project-card {
+      min-height: 292px;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 22px;
+      background: #fff;
+      transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+    .project-card:hover { border-color: #b9d3f5; box-shadow: 0 14px 32px rgba(15, 23, 42, .06); transform: translateY(-1px); }
+    .project-card h3 { margin-bottom: 8px; font-size: 17px; line-height: 1.35; letter-spacing: 0; }
+    .project-card.clickable { transition: .16s ease; }
+    .project-card.clickable:hover { border-color: #b9d3f5; box-shadow: 0 12px 28px rgba(15, 23, 42, .06); }
+    .project-card.expanded { border-color: #9fc2f2; background: #fbfdff; }
+    .project-card-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .project-card-title { min-width: 0; }
+    .project-card-title p { margin: 0; color: #64748b; line-height: 1.7; }
+    .project-card-actions {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      align-items: center;
+      gap: 10px;
+      margin-top: auto;
+      padding-top: 24px;
+    }
+    .project-card-actions .btn { width: 100%; min-width: 0; justify-content: center; padding: 0 10px; }
+    .project-card-actions .btn.ghost { border-color: transparent; background: transparent; color: #1f2a44; }
+    .project-card-actions .btn.ghost:hover { border-color: #d9e8ff; background: #f8fbff; color: var(--primary-600); }
+    .batch-actions {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+    .select-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 850;
+      cursor: pointer;
+    }
+    .select-check input {
+      width: 16px;
+      height: 16px;
+      accent-color: var(--primary);
+    }
+    .project-card .select-check {
+      align-self: flex-start;
+      margin-bottom: 12px;
+    }
+    .project-toggle {
+      min-height: 34px;
+      white-space: nowrap;
+    }
+    .project-detail {
+      margin-top: 18px;
+      border-top: 1px solid var(--line);
+      padding-top: 18px;
+    }
+    .project-detail-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+      color: #334155;
+      font-size: 13px;
+      font-weight: 850;
+    }
+    .adset-list { display: grid; gap: 12px; }
+    .adset-row {
+      border: 1px solid #d9e8ff;
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+    .adset-row-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 12px;
+    }
+    .adset-row h4 { margin: 0; font-size: 14px; }
+    .adset-row p { margin: 5px 0 0; color: #64748b; font-size: 12px; line-height: 1.6; }
+    .meta-field-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .meta-field {
+      border-top: 1px solid var(--line-2);
+      padding-top: 8px;
+      color: #64748b;
+      font-size: 12px;
+      line-height: 1.45;
+    }
+    .meta-field strong { display: block; color: #111827; margin-top: 3px; word-break: break-word; }
+    .creative-strip {
+      display: grid;
+      gap: 8px;
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--line-2);
+    }
+    .creative-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) 100px minmax(0, 1.3fr) 76px;
+      gap: 10px;
+      align-items: center;
+      color: #475569;
+      font-size: 12px;
+    }
+    .creative-row strong { color: #111827; }
+    .project-task-list { display: grid; gap: 10px; }
+    .project-task-item {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 14px;
+      background: #fff;
+    }
+    .project-task-item h3 { margin: 0 0 8px; font-size: 15px; }
+    .project-task-item p { margin: 0; color: #64748b; line-height: 1.6; }
+    .project-task-meta { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+    .project-subpage {
+      min-height: calc(100vh - 76px);
+      background: #f7f9fc;
+    }
+    .subpage-head {
+      min-height: 86px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      border-bottom: 1px solid var(--line);
+      padding: 18px 28px;
+      background: #fff;
+    }
+    .subpage-title {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      min-width: 0;
+    }
+    .subpage-title h1 { margin: 0 0 5px; font-size: 22px; letter-spacing: -.02em; }
+    .subpage-title p { margin: 0; color: #64748b; font-size: 13px; font-weight: 650; }
+    .subpage-actions { display: flex; flex-wrap: wrap; gap: 10px; justify-content: flex-end; }
+    .subpage-content {
+      display: grid;
+      gap: 18px;
+      padding: 24px 28px 34px;
+    }
+    .task-panel {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      background: #fff;
+      box-shadow: 0 10px 26px rgba(15, 23, 42, .035);
+    }
+    .task-panel h2,
+    .task-panel h3 { margin: 0; font-size: 18px; letter-spacing: -.01em; }
+    .task-panel > p { margin: 8px 0 0; color: #64748b; line-height: 1.65; }
+    .task-list-grid { display: grid; gap: 14px; }
+    .project-task-item.interactive {
+      display: grid;
+      gap: 12px;
+      transition: .16s ease;
+    }
+    .project-task-item.interactive:hover { border-color: #b9d3f5; box-shadow: 0 12px 28px rgba(15, 23, 42, .05); }
+    .project-task-head {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 14px;
+    }
+    .task-detail-layout {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 18px;
+      align-items: start;
+    }
+    .campaign-summary {
+      display: grid;
+      gap: 10px;
+      position: sticky;
+      top: 98px;
+    }
+    .campaign-summary .meta-field {
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fbfdff;
+    }
+    .meta-form-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 20px;
+      background: #fff;
+      box-shadow: 0 10px 26px rgba(15, 23, 42, .035);
+    }
+    .meta-form-card + .meta-form-card { margin-top: 18px; }
+    .meta-form-card h2 { margin: 0 0 14px; font-size: 17px; }
+    .material-picker {
+      grid-column: 1 / -1;
+      display: grid;
+      gap: 12px;
+      margin-top: 2px;
+    }
+    .material-picker-head {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      color: #475569;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .material-options {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    .material-option {
+      min-height: 102px;
+      display: grid;
+      align-content: start;
+      gap: 8px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      text-align: left;
+      background: #fff;
+      color: #334155;
+      transition: .16s ease;
+    }
+    .material-option:hover,
+    .material-option.active {
+      border-color: #8cbaf5;
+      background: #f7fbff;
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 232, .12);
+    }
+    .material-option strong { color: #0f172a; font-size: 13px; }
+    .material-option span { color: #64748b; font-size: 12px; line-height: 1.45; }
+    .material-option em {
+      justify-self: start;
+      border-radius: 999px;
+      padding: 3px 8px;
+      color: #174a91;
+      background: #edf5ff;
+      font-style: normal;
+      font-size: 11px;
+      font-weight: 850;
+    }
+    .readonly-field {
+      min-height: 40px;
+      display: flex;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-radius: 7px;
+      padding: 0 12px;
+      color: #52617a;
+      background: #f8fafc;
+      font-weight: 700;
+    }
+    .metric-card { padding: 20px; }
+    .metric-card span { display: block; color: var(--muted); font-size: 13px; font-weight: 800; margin-bottom: 8px; }
+    .metric-card b { display: block; font-size: 28px; letter-spacing: -.04em; }
+    .bar {
+      height: 10px;
+      border-radius: 999px;
+      background: #eef2f7;
+      overflow: hidden;
+      margin-top: 12px;
+    }
+    .bar i { display: block; height: 100%; background: var(--primary); border-radius: inherit; }
+    .hidden { display: none !important; }
+
+    /* Compact visual refinement */
+    :root { --sidebar: 280px; }
+    body { font-size: 14px; line-height: 1.46; -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
+    .material-symbols-outlined { font-size: 20px; }
+    .brand-mark .material-symbols-outlined,
+    .icon-button .material-symbols-outlined,
+    .nav-item .material-symbols-outlined,
+    .history-item .material-symbols-outlined,
+    .back-button .material-symbols-outlined,
+    .btn .material-symbols-outlined,
+    .task-status .material-symbols-outlined {
+      width: 1em;
+      overflow: hidden;
+      flex: 0 0 auto;
+    }
+    .icons-fallback .material-symbols-outlined {
+      width: 18px;
+      height: 18px;
+      display: inline-grid;
+      place-items: center;
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-size: 0 !important;
+      font-variation-settings: normal;
+    }
+    .icons-fallback .material-symbols-outlined::before {
+      content: attr(data-fallback);
+      display: grid;
+      place-items: center;
+      width: 16px;
+      height: 16px;
+      border: 1.5px solid currentColor;
+      border-radius: 5px;
+      font-size: 12px;
+      font-weight: 900;
+      line-height: 1;
+    }
+    .icons-fallback .brand-mark .material-symbols-outlined::before,
+    .icons-fallback .task-status .material-symbols-outlined::before,
+    .icons-fallback .icon-button .material-symbols-outlined::before {
+      border-radius: 999px;
+    }
+    .topbar { height: 76px; padding: 0 36px; }
+    .brand { gap: 12px; }
+    .brand-mark { width: 42px; height: 42px; }
+    .brand strong { font-size: 20px; }
+    .top-actions { gap: 14px; }
+    .avatar { width: 40px; height: 40px; border-width: 2px; }
+    .user strong { font-size: 14px; }
+    .user span { font-size: 12px; }
+    .icon-button { width: 38px; height: 38px; }
+    .shell { min-height: calc(100vh - 76px); }
+    .sidebar { min-height: calc(100vh - 76px); top: 76px; padding: 30px 14px 18px; }
+    .side-section + .side-section { margin-top: 22px; }
+    .side-label { padding-bottom: 12px; font-size: 12px; }
+    .nav-list { gap: 6px; }
+    .nav-item { min-height: 46px; gap: 12px; padding: 0 14px; font-size: 14px; }
+    .nav-item .material-symbols-outlined { font-size: 21px; }
+    .history-item { min-height: 48px; padding: 0 14px; font-size: 13px; }
+    .page { min-height: calc(100vh - 76px); }
+    .page-head { min-height: 88px; padding: 18px 28px; }
+    .page-head.compact { min-height: 78px; }
+    .page-head h1 { margin-bottom: 5px; font-size: 22px; }
+    .page-head p { font-size: 13px; }
+    .content { padding: 24px 28px; }
+    .settings-grid { gap: 16px; }
+    .settings-card { min-height: 200px; padding: 26px 22px 22px; gap: 18px; }
+    .settings-card .material-symbols-outlined { font-size: 26px; }
+    .settings-card h2 { font-size: 18px; }
+    .settings-card p { min-height: 38px; font-size: 13px; }
+    .btn { min-height: 40px; padding: 0 14px; font-size: 13px; border-radius: 6px; transition: border-color .16s ease, background .16s ease, color .16s ease, transform .16s ease; }
+    .btn:hover { transform: translateY(-1px); }
+    .panel { padding: 20px; }
+    .panel-title { margin-bottom: 14px; }
+    .panel-title h2, .panel-title h3 { font-size: 17px; }
+    .panel-title p { font-size: 12px; }
+    .platform-tab { min-height: 94px; padding: 20px 18px; }
+    .platform-tab strong { font-size: 18px; }
+    .platform-tab p { margin-top: 10px; font-size: 13px; }
+    .platform-detail-head strong { font-size: 17px; }
+    .platform-detail-desc, .connection-actions p { font-size: 13px; }
+    .step-pill { min-height: 46px; font-size: 13px; }
+    .table-head { min-height: 54px; padding: 0 20px; }
+    .table-head h2 { font-size: 16px; }
+    th, td { padding: 12px 16px; }
+    th, td, .mini, .summary-item, .created-card span, .asset-card p, .metric-card span { font-size: 12px; }
+    .field { gap: 6px; }
+    .field label { font-size: 12px; }
+    .field input, .field select, .field textarea, .readonly { min-height: 40px; padding-left: 12px; padding-right: 12px; font-size: 13px; }
+    .field textarea { min-height: 92px; padding-top: 10px; padding-bottom: 10px; }
+    .modal-head { min-height: 82px; padding: 0 26px; }
+    .modal-head h2 { font-size: 21px; }
+    .modal-body { padding: 26px; }
+    .modal-foot { padding: 18px 26px 26px; }
+    .toast { min-width: 228px; padding: 12px 14px; font-size: 13px; }
+    .metric-card { padding: 16px; }
+    .metric-card b { font-size: 22px; }
+
+    /* Smaller type scale */
+    body { font-size: 13px; }
+    .brand strong { font-size: 19px; }
+    .user strong { font-size: 13px; }
+    .user span, .page-head p, .task-chat-title p, .subpage-title p, .project-note, .task-panel > p { font-size: 12px; }
+    .nav-item, .history-item, .btn, .field input, .field select, .field textarea, .readonly, td { font-size: 12px; }
+    .page-head h1, .task-chat-title h1, .subpage-title h1 { font-size: 20px; }
+    .project-card h3, .task-panel h2, .task-panel h3, .meta-form-card h2, .panel-title h2, .panel-title h3 { font-size: 16px; }
+    .project-task-item h3, .adset-row h4, .context-card h3 { font-size: 14px; }
+    .chip, .status-pill, th, .mini, .summary-item, .field label, .meta-field, .creative-row, .material-picker-head, .material-option span { font-size: 11px; }
+    .material-option strong { font-size: 12px; }
+    .metric-card b { font-size: 20px; }
+
+    /* Final compact type pass */
+    body { font-size: 12.5px; }
+    .brand strong { font-size: 18px; }
+    .page-head h1, .task-chat-title h1, .subpage-title h1 { font-size: 19px; }
+    .project-card h3, .task-panel h2, .task-panel h3, .meta-form-card h2, .panel-title h2, .panel-title h3 { font-size: 15px; }
+    .project-task-item h3, .adset-row h4, .context-card h3 { font-size: 13px; }
+    .btn, .field input, .field select, .field textarea, .readonly, td, .nav-item, .history-item { font-size: 11.5px; }
+    .chip, .status-pill, th, .mini, .summary-item, .field label, .meta-field, .creative-row, .material-picker-head, .material-option span { font-size: 10.5px; }
+
+    .task-chat-shell {
+      min-height: calc(100vh - 76px);
+      display: flex;
+      flex-direction: column;
+      background: #f7f9fc;
+    }
+    .task-chat-head {
+      border-bottom: 1px solid var(--line);
+      padding: 18px 28px 14px;
+      background: rgba(255, 255, 255, .95);
+    }
+    .task-chat-title {
+      display: flex;
+      align-items: flex-start;
+      justify-content: space-between;
+      gap: 20px;
+      max-width: 1380px;
+      margin: 0 auto;
+    }
+    .task-chat-title h1 { margin-bottom: 6px; font-size: 22px; line-height: 1.18; }
+    .task-chat-title p { margin: 0; color: var(--muted); font-size: 13px; font-weight: 600; }
+    .task-status {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid #d9e8ff;
+      border-radius: 999px;
+      padding: 6px 10px;
+      color: #1f63bf;
+      background: #f3f8ff;
+      font-size: 12px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .chat-stepper {
+      max-width: 1380px;
+      margin: 14px auto 0;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .chat-step {
+      min-height: 44px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 0 12px;
+      background: #fff;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .chat-step em {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      color: #64748b;
+      background: #eef2f7;
+      font-style: normal;
+      font-size: 11px;
+    }
+    .chat-step.active { border-color: var(--primary); color: var(--primary-600); background: #f7fbff; }
+    .chat-step.active em { color: #fff; background: var(--primary); }
+    .task-chat-body {
+      width: 100%;
+      max-width: 1380px;
+      flex: 1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 320px;
+      gap: 18px;
+      margin: 0 auto;
+      padding: 18px 28px 28px;
+    }
+    .chat-panel {
+      height: calc(100vh - 270px);
+      min-height: 560px;
+      max-height: 860px;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #fff;
+      box-shadow: 0 16px 42px rgba(15, 23, 42, .06);
+    }
+    .chat-stream {
+      flex: 1;
+      display: grid;
+      align-content: start;
+      gap: 16px;
+      padding: 22px;
+      overflow: auto;
+    }
+    .chat-message {
+      display: grid;
+      grid-template-columns: 32px minmax(0, 820px);
+      gap: 12px;
+      align-items: flex-start;
+    }
+    .chat-message.from-user {
+      grid-template-columns: minmax(0, 720px) 32px;
+      justify-content: end;
+    }
+    .chat-avatar {
+      width: 32px;
+      height: 32px;
+      display: grid;
+      place-items: center;
+      border-radius: 999px;
+      background: #111827;
+      color: #fff;
+      font-size: 12px;
+      font-weight: 850;
+    }
+    .chat-message.from-user .chat-avatar { background: var(--primary); }
+    .chat-bubble {
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      padding: 18px;
+      background: #fff;
+    }
+    .chat-message.from-user .chat-bubble {
+      border-color: #cfe0fb;
+      background: #eef6ff;
+    }
+    .chat-bubble .task-card {
+      margin: 0;
+      padding: 0;
+      border: 0;
+      background: transparent;
+    }
+    .chat-bubble .panel-title { align-items: flex-start; }
+    .chat-bubble .panel-title h2 { font-size: 18px; }
+    .chat-bubble .panel-title p { max-width: 680px; }
+    .user-summary-title { margin-bottom: 6px; color: #194f96; font-weight: 850; }
+    .chat-bubble p:last-child { margin-bottom: 0; }
+    .platform-source { padding: 14px; margin: 14px 0; }
+    .asset-grid { gap: 12px; }
+    .asset-card { padding: 12px; }
+    .asset-thumb { height: 92px; font-size: 26px; }
+    .project-note { padding: 14px; font-size: 13px; }
+    .prompt-composer {
+      display: grid;
+      gap: 10px;
+      border-top: 1px solid var(--line);
+      padding: 12px;
+      background: #fff;
+    }
+    .composer-input {
+      min-height: 48px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      color: #64748b;
+      background: #f8fafc;
+      font-size: 13px;
+    }
+    .composer-input .material-symbols-outlined { color: var(--primary-600); }
+    .composer-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+    }
+    .composer-actions .right { display: flex; justify-content: flex-end; gap: 8px; }
+    .composer-hint { color: #8a96aa; font-size: 12px; font-weight: 700; }
+    .context-panel {
+      position: sticky;
+      top: 94px;
+      display: grid;
+      gap: 14px;
+      align-self: start;
+    }
+    .context-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fff;
+    }
+    .context-card h3 { margin-bottom: 12px; font-size: 15px; }
+    .context-card .summary-list { gap: 4px; }
+    .context-card .summary-item { padding: 9px 0; }
+    .context-card .summary-item:last-child { border-bottom: 0; }
+    .account-pill {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      padding: 9px 10px;
+      color: #334155;
+      background: #fbfdff;
+      font-size: 12px;
+      font-weight: 750;
+    }
+    .account-pill + .account-pill { margin-top: 8px; }
+    .account-pill span { color: var(--muted); font-weight: 650; }
+
+    .task-chat-shell {
+      height: calc(100vh - 76px);
+      height: calc(100dvh - 76px);
+      min-height: 0;
+      overflow: hidden;
+      background: #ffffff;
+    }
+    .task-chat-head {
+      flex: 0 0 auto;
+      padding: 18px 32px;
+    }
+    .task-chat-title {
+      max-width: 1060px;
+      align-items: center;
+    }
+    .task-chat-body {
+      min-height: 0;
+      max-width: 1060px;
+      display: block;
+      padding: 22px 32px 32px;
+    }
+    .chat-panel {
+      height: 100%;
+      min-height: 0;
+      max-height: none;
+      border: 0;
+      box-shadow: none;
+      background: #fff;
+    }
+    .chat-stream {
+      gap: 22px;
+      padding: 24px 4px 20px;
+    }
+    .chat-message {
+      grid-template-columns: 34px minmax(0, 760px);
+      gap: 14px;
+    }
+    .chat-message.from-user {
+      grid-template-columns: minmax(0, 680px) 34px;
+    }
+    .chat-avatar {
+      width: 34px;
+      height: 34px;
+      border: 1px solid #e5e7eb;
+      background: #111827;
+    }
+    .chat-bubble {
+      border: 0;
+      border-radius: 0;
+      padding: 2px 0;
+      color: #111827;
+      background: transparent;
+      font-size: 14px;
+      line-height: 1.75;
+    }
+    .chat-message.from-user .chat-bubble {
+      border: 1px solid #dbe3ef;
+      border-radius: 18px;
+      padding: 12px 16px;
+      background: #f7f9fc;
+    }
+    .chat-bubble p {
+      margin-bottom: 10px;
+    }
+    .chat-bubble ul {
+      margin: 10px 0 0;
+      padding-left: 19px;
+    }
+    .chat-bubble li + li {
+      margin-top: 5px;
+    }
+    .task-welcome {
+      max-width: 760px;
+      margin: auto 0;
+      padding: 16px 0 8px 48px;
+    }
+    .task-welcome h2 {
+      margin-bottom: 10px;
+      font-size: 28px;
+      line-height: 1.2;
+      letter-spacing: 0;
+    }
+    .task-welcome p {
+      max-width: 620px;
+      color: #63708a;
+      line-height: 1.8;
+      font-weight: 600;
+    }
+    .quick-prompts {
+      flex: 0 0 auto;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      padding: 0 4px 20px 48px;
+    }
+    .prompt-chip {
+      min-height: 36px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 0 14px;
+      color: #344054;
+      background: #fff;
+      font-size: 13px;
+      font-weight: 750;
+    }
+    .prompt-chip:hover {
+      border-color: #bad5fb;
+      color: var(--primary-600);
+      background: #f7fbff;
+    }
+    .prompt-composer {
+      flex: 0 0 auto;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: end;
+      border: 1px solid #d6deeb;
+      border-radius: 26px;
+      padding: 12px;
+      background: #fff;
+      box-shadow: 0 18px 48px rgba(15, 23, 42, .09);
+    }
+    .composer-tool,
+    .composer-send {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border: 0;
+      border-radius: 999px;
+      color: #475569;
+      background: transparent;
+    }
+    .composer-tool:hover {
+      background: #f1f5f9;
+      color: var(--primary-600);
+    }
+    .composer-send {
+      color: #fff;
+      background: #111827;
+    }
+    .composer-send:hover {
+      background: var(--primary-600);
+    }
+    .composer-textarea {
+      width: 100%;
+      min-height: 42px;
+      max-height: 160px;
+      border: 0;
+      outline: 0;
+      resize: none;
+      padding: 10px 2px 7px;
+      color: #111827;
+      background: transparent;
+      line-height: 1.6;
+      font-size: 14px;
+    }
+    .composer-textarea::placeholder {
+      color: #8a96aa;
+    }
+    .assistant-plan {
+      display: grid;
+      gap: 8px;
+      margin-top: 10px;
+    }
+    .assistant-plan-row {
+      display: grid;
+      grid-template-columns: 92px minmax(0, 1fr);
+      gap: 12px;
+      max-width: 560px;
+    }
+    .assistant-plan-row span {
+      color: #64748b;
+      font-weight: 750;
+    }
+    .assistant-plan-row b {
+      color: #111827;
+      font-weight: 750;
+    }
+    .validation-summary {
+      display: grid;
+      gap: 10px;
+      max-width: 100%;
+      margin-top: 12px;
+    }
+    .validation-summary.cols-2,
+    .validation-summary.cols-3 {
+      gap: 14px;
+    }
+    .validation-summary.cols-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .validation-summary.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+    .validation-card {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 16px;
+      background: #fff;
+    }
+    .validation-card.warn {
+      border-color: #f4d7a1;
+      background: #fffaf0;
+    }
+    .validation-card.ok {
+      border-color: #c8ead5;
+      background: #f6fef9;
+    }
+    .validation-card h3 {
+      margin: 0 0 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 15px;
+    }
+    .validation-status {
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: #166534;
+      background: #dcfce7;
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .validation-card.warn .validation-status {
+      color: #92400e;
+      background: #fef3c7;
+    }
+    .field-checks {
+      display: grid;
+      gap: 8px;
+    }
+    .field-check {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      border-top: 1px solid var(--line-2);
+      padding-top: 8px;
+      color: #475569;
+      font-size: 12px;
+      line-height: 1.55;
+    }
+    .field-check:first-child {
+      border-top: 0;
+      padding-top: 0;
+    }
+    .field-check strong {
+      color: #334155;
+    }
+    .field-check b {
+      color: #111827;
+      font-weight: 760;
+      word-break: break-word;
+    }
+    .field-check em {
+      justify-self: start;
+      border-radius: 999px;
+      padding: 2px 8px;
+      color: #166534;
+      background: #dcfce7;
+      font-style: normal;
+      font-weight: 850;
+    }
+    .field-check.missing em,
+    .field-check.invalid em {
+      color: #991b1b;
+      background: #fee2e2;
+    }
+    .field-check.missing b,
+    .field-check.invalid b {
+      color: #991b1b;
+    }
+    .field-check.project-edit-row,
+    .project-flow-step.project-edit-row {
+      width: 100%;
+      text-align: left;
+      cursor: pointer;
+      transition: .16s ease;
+    }
+    .field-check.project-edit-row {
+      border-right: 0;
+      border-bottom: 0;
+      border-left: 0;
+      background: transparent;
+    }
+    .field-check.project-edit-row:hover,
+    .field-check.project-edit-row.active {
+      border-color: #b9d3fb;
+      color: #194f96;
+      background: #f7fbff;
+    }
+    .project-flow-step.project-edit-row {
+      font-family: inherit;
+    }
+    .project-flow-step.project-edit-row:hover,
+    .project-flow-step.project-edit-row.active {
+      border-color: #7fb0f5;
+      box-shadow: inset 0 0 0 1px rgba(59, 130, 232, .08);
+    }
+    .project-edit-panel {
+      border: 1px solid #cfe0fb;
+      border-radius: 8px;
+      padding: 14px;
+      margin: 12px 0;
+      background: #f7fbff;
+    }
+    .project-edit-panel h4 {
+      margin: 0 0 10px;
+      color: #194f96;
+      font-size: 14px;
+    }
+    .project-edit-panel p {
+      margin: 0 0 10px;
+      color: #64748b;
+      font-weight: 650;
+      line-height: 1.6;
+    }
+    .project-edit-input-row {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      margin-top: 10px;
+    }
+    .project-edit-input-row input {
+      min-height: 38px;
+      border: 1px solid #d6deeb;
+      border-radius: 8px;
+      padding: 0 12px;
+      background: #fff;
+      color: #111827;
+      outline: 0;
+    }
+    .project-edit-input-row input:focus {
+      border-color: #9ec2f5;
+      box-shadow: 0 0 0 3px rgba(59, 130, 232, .12);
+    }
+    .assistant-alert {
+      max-width: 820px;
+      border: 1px solid #f4d7a1;
+      border-radius: 8px;
+      padding: 14px 16px;
+      margin: 12px 0;
+      color: #7c4a03;
+      background: #fffaf0;
+      font-weight: 700;
+      line-height: 1.7;
+    }
+    .project-flow-card {
+      max-width: 840px;
+      border: 1px solid #d8e5f7;
+      border-radius: 8px;
+      padding: 16px;
+      margin: 12px 0;
+      background: #fbfdff;
+    }
+    .project-flow-card h3 {
+      margin: 0 0 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .project-flow-status {
+      border-radius: 999px;
+      padding: 4px 9px;
+      color: #194f96;
+      background: #eaf2ff;
+      font-size: 11px;
+      font-weight: 850;
+      white-space: nowrap;
+    }
+    .project-flow-steps {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+      margin-bottom: 12px;
+    }
+    .project-flow-step {
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      padding: 9px 10px;
+      color: #64748b;
+      background: #fff;
+      font-size: 12px;
+      font-weight: 750;
+      line-height: 1.45;
+    }
+    .project-flow-step.done {
+      border-color: #c8ead5;
+      color: #166534;
+      background: #f6fef9;
+    }
+    .project-flow-step.active {
+      border-color: #b9d3fb;
+      color: #194f96;
+      background: #f7fbff;
+    }
+    .account-choice-list {
+      display: grid;
+      gap: 8px;
+      margin: 10px 0 0;
+    }
+    .account-choice {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      border: 1px solid var(--line-2);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fff;
+    }
+    .account-choice strong,
+    .project-preview-grid strong {
+      display: block;
+      color: #111827;
+      font-weight: 800;
+    }
+    .account-choice span,
+    .project-preview-grid span {
+      display: block;
+      margin-top: 3px;
+      color: #64748b;
+      font-size: 12px;
+      font-weight: 650;
+      line-height: 1.45;
+    }
+    .project-preview-grid {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      margin-top: 12px;
+    }
+    .project-preview-grid > div {
+      border-top: 1px solid var(--line-2);
+      padding-top: 9px;
+    }
+    .assistant-action-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+      margin-top: 12px;
+    }
+
+    /* Align page typography with the compact navigation scale */
+    :root {
+      --type-nav: 11.5px;
+      --type-small: 10.5px;
+      --type-body: 11.5px;
+      --type-mid: 12px;
+      --type-section: 13.5px;
+      --type-title: 15px;
+      --type-page-title: 17px;
+    }
+    body,
+    .chat-bubble,
+    .project-card-title p,
+    .project-task-item p,
+    .task-panel > p,
+    .warning p {
+      font-size: var(--type-body);
+    }
+    .nav-item,
+    .history-item,
+    .btn,
+    .field input,
+    .field select,
+    .field textarea,
+    .readonly,
+    td,
+    .composer-input,
+    .composer-textarea,
+    .prompt-chip,
+    .chat-step,
+    .task-status,
+    .account-pill,
+    .field-check {
+      font-size: var(--type-nav);
+    }
+    .user span,
+    .page-head p,
+    .task-hero p,
+    .task-chat-title p,
+    .subpage-title p,
+    .project-note,
+    .panel-title p,
+    .platform-tab p,
+    .platform-detail-desc,
+    .connection-actions p,
+    .asset-card p,
+    .created-card span,
+    .metric-card span,
+    .composer-hint,
+    .adset-row p,
+    .task-welcome p {
+      font-size: var(--type-mid);
+    }
+    .chip,
+    .status-pill,
+    th,
+    .mini,
+    .summary-item,
+    .field label,
+    .meta-field,
+    .creative-row,
+    .scope-option span,
+    .project-detail-head,
+    .material-picker-head,
+    .material-option span,
+    .material-option em,
+    .validation-status,
+    .chat-step em {
+      font-size: var(--type-small);
+    }
+    .material-option strong,
+    .adset-row h4,
+    .project-task-item h3,
+    .context-card h3,
+    .validation-card h3 {
+      font-size: var(--type-section);
+    }
+    .project-card h3,
+    .task-panel h2,
+    .task-panel h3,
+    .meta-form-card h2,
+    .panel-title h2,
+    .panel-title h3,
+    .platform-detail-head strong,
+    .table-head h2,
+    .chat-bubble .panel-title h2 {
+      font-size: var(--type-title);
+    }
+    .page-head h1,
+    .task-chat-title h1,
+    .subpage-title h1,
+    .settings-card h2,
+    .platform-tab strong,
+    .task-hero h1,
+    .task-card h2,
+    .modal-head h2,
+    .task-welcome h2 {
+      font-size: var(--type-page-title);
+    }
+    .metric-card b { font-size: 18px; }
+
+    @media (max-width: 1280px) {
+      .task-chat-body { grid-template-columns: 1fr; }
+      .context-panel { position: static; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    @media (max-width: 900px) {
+      .topbar { height: 68px; padding: 0 14px; }
+      .brand strong { font-size: 18px; }
+      .top-actions { gap: 8px; }
+      .avatar { width: 34px; height: 34px; }
+      .shell, .page, .task-chat-shell { min-height: calc(100vh - 68px); }
+      .sidebar { padding: 12px; }
+      .sidebar .side-section:last-child { display: none; }
+      .nav-item { min-height: 40px; font-size: 13px; }
+      .task-chat-head { padding: 16px 18px 12px; }
+      .task-chat-title { flex-direction: column; gap: 12px; }
+      .chat-stepper, .task-chat-body, .context-panel { grid-template-columns: 1fr; }
+      .task-chat-body { padding: 14px 18px 22px; }
+      .chat-panel { height: 100%; min-height: 0; max-height: none; }
+      .chat-stream { padding: 16px; }
+      .chat-message, .chat-message.from-user { grid-template-columns: 28px minmax(0, 1fr); justify-content: stretch; }
+      .chat-message.from-user .chat-avatar { order: -1; }
+      .chat-avatar { width: 28px; height: 28px; }
+      .chat-bubble .panel-title { flex-direction: column; align-items: stretch; }
+      .segmented { width: 100%; }
+      .segmented button { flex: 1; }
+      .composer-actions { align-items: stretch; flex-direction: column; }
+      .composer-actions .right { justify-content: stretch; }
+      .composer-actions .right .btn { flex: 1; }
+      .task-welcome { padding-left: 0; }
+      .task-welcome h2 { font-size: 23px; }
+      .quick-prompts { padding-left: 0; }
+      .validation-summary.cols-2,
+      .validation-summary.cols-3 { grid-template-columns: 1fr; }
+      .project-flow-steps,
+      .project-preview-grid { grid-template-columns: 1fr; }
+      .account-choice { grid-template-columns: 1fr; }
+      .project-edit-input-row { grid-template-columns: 1fr; }
+      .field-check { grid-template-columns: 1fr; gap: 4px; }
+      .field-check em { justify-self: start; }
+      .subpage-head, .project-task-head { flex-direction: column; align-items: stretch; }
+      .subpage-actions { justify-content: stretch; }
+      .subpage-actions .btn { flex: 1; }
+      .task-detail-layout { grid-template-columns: 1fr; }
+      .campaign-summary { position: static; }
+    }
+    @media (max-width: 1280px) {
+      :root { --sidebar: 286px; }
+      .settings-grid, .asset-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .task-layout { grid-template-columns: 1fr; }
+      .side-panel { position: static; }
+    }
+    @media (max-width: 900px) {
+      .topbar { padding: 0 20px; }
+      .shell { grid-template-columns: 1fr; }
+      .sidebar { position: static; min-height: auto; padding: 18px; border-right: 0; border-bottom: 1px solid var(--line); }
+      .nav-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .nav-item { border-radius: 8px; }
+      .settings-grid, .grid-2, .grid-3, .grid-4, .platform-tabs, .steps, .form-grid, .scope-grid, .asset-grid, .stepper, .meta-field-grid, .material-options {
+        grid-template-columns: 1fr;
+      }
+      .project-card-actions { grid-template-columns: 1fr; }
+      .project-card-head, .adset-row-head, .creative-row { grid-template-columns: 1fr; flex-direction: column; align-items: stretch; }
+      .creative-row { display: grid; }
+      .subpage-content { padding: 20px; }
+      .content, .task-hero { padding: 20px; }
+      .page-head { padding: 20px; }
+      .user span { display: none; }
+      .nav-item,
+      .history-item,
+      .btn,
+      .field input,
+      .field select,
+      .field textarea,
+      .readonly,
+      td,
+      .composer-input,
+      .composer-textarea,
+      .prompt-chip,
+      .chat-step,
+      .task-status,
+      .account-pill,
+      .field-check {
+        font-size: var(--type-nav);
+      }
+      .page-head h1,
+      .task-chat-title h1,
+      .subpage-title h1,
+      .task-welcome h2 {
+        font-size: var(--type-page-title);
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="app">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><span class="material-symbols-outlined">rocket_launch</span></div>
+        <strong>ANIFORCE</strong>
+      </div>
+      <div class="top-actions">
+        <div class="user">
+          <div class="avatar">小</div>
+          <div>
+            <strong>小陈</strong>
+            <span>投放经理 · FunGame Studio</span>
+          </div>
+        </div>
+        <button class="icon-button" type="button" aria-label="通知"><span class="material-symbols-outlined">notifications</span></button>
+      </div>
+    </header>
+
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-section">
+          <div class="side-label">
+            <span>功能导航</span>
+            <button class="icon-button" type="button" aria-label="折叠菜单"><span class="material-symbols-outlined">menu_open</span></button>
+          </div>
+          <div class="nav-list" id="mainNav"></div>
+        </div>
+        <div class="side-section">
+          <div class="side-label"><span>历史会话</span></div>
+          <div class="nav-list">
+            <button class="history-item active" type="button"><span class="material-symbols-outlined">chat</span><span>Candy Blast投放...</span></button>
+            <button class="history-item" type="button"><span class="material-symbols-outlined">chat</span><span>素材优化建议</span></button>
+            <button class="history-item" type="button"><span class="material-symbols-outlined">chat</span><span>东南亚市场测试</span></button>
+          </div>
+        </div>
+      </aside>
+
+      <main class="main">
+        <section class="page" data-page="task" id="taskPage"></section>
+        <section class="page" data-page="dashboard" id="dashboardPage"></section>
+        <section class="page" data-page="projects" id="projectsPage"></section>
+        <section class="page" data-page="campaigns" id="campaignsPage"></section>
+        <section class="page" data-page="materials" id="materialsPage"></section>
+        <section class="page" data-page="reports" id="reportsPage"></section>
+        <section class="page" data-page="settings" id="settingsPage"></section>
+        <section class="page" data-page="account" id="accountPage"></section>
+        <section class="page" data-page="system" id="systemPage"></section>
+        <section class="page" data-page="platform" id="platformPage"></section>
+        <section class="page" data-page="ai" id="aiPage"></section>
+      </main>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="configModal">
+    <div class="modal">
+      <div class="modal-head">
+        <h2 id="configTitle">Meta App 配置</h2>
+        <button class="icon-button" type="button" data-close-modal="configModal" aria-label="关闭"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body" id="configBody"></div>
+      <div class="modal-foot">
+        <span id="scopeCounter" style="color:#64748b;font-weight:700;">已选择 3 个权限</span>
+        <div class="right">
+          <button class="btn primary" type="button" id="saveConfigBtn">保存配置</button>
+          <button class="btn" type="button" id="oauthBtn">前往开发者平台</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="subAccountModal">
+    <div class="modal small">
+      <div class="modal-head">
+        <h2>添加 Google 子账号</h2>
+        <button class="icon-button" type="button" data-close-modal="subAccountModal" aria-label="关闭"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body">
+        <div class="form-grid" style="grid-template-columns:1fr;">
+          <div class="field"><label>子账号名称</label><input id="subNameInput" placeholder="例如 RPG_US_iOS" /></div>
+          <div class="field"><label>Customer ID</label><input id="subCustomerInput" placeholder="例如 123-456-7890" /></div>
+        </div>
+      </div>
+      <div class="modal-foot" style="justify-content:flex-end;">
+        <div class="right">
+          <button class="btn" type="button" data-close-modal="subAccountModal">取消</button>
+          <button class="btn primary" type="button" id="saveSubAccountBtn">添加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop" id="confirmModal">
+    <div class="modal small">
+      <div class="modal-head"><h2 id="confirmModalTitle">确认删除连接</h2></div>
+      <div class="modal-body"><p id="confirmText" style="margin:0;color:#52617a;line-height:1.7;"></p></div>
+      <div class="modal-foot" style="justify-content:flex-end;">
+        <div class="right">
+          <button class="btn" type="button" data-close-modal="confirmModal">取消</button>
+          <button class="btn danger" type="button" id="confirmDeleteBtn">确认删除</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop drawer-backdrop" id="projectModal">
+    <div class="modal drawer">
+      <div class="modal-head">
+        <h2 id="projectModalTitle">Meta 项目配置</h2>
+        <button class="icon-button" type="button" data-close-modal="projectModal" aria-label="关闭"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body" id="projectModalBody"></div>
+      <div class="modal-foot">
+        <span id="projectModalHint" style="color:#64748b;font-weight:700;">项目对应 Meta Campaign 层级</span>
+        <div class="right">
+          <button class="btn" type="button" data-close-modal="projectModal">取消</button>
+          <button class="btn primary" type="button" id="saveProjectBtn">保存项目</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="modal-backdrop drawer-backdrop" id="taskInfoModal">
+    <div class="modal drawer">
+      <div class="modal-head">
+        <h2 id="taskInfoTitle">项目任务信息</h2>
+        <button class="icon-button" type="button" data-close-modal="taskInfoModal" aria-label="关闭"><span class="material-symbols-outlined">close</span></button>
+      </div>
+      <div class="modal-body" id="taskInfoBody"></div>
+      <div class="modal-foot" style="justify-content:flex-end;">
+        <div class="right">
+          <button class="btn primary" type="button" data-close-modal="taskInfoModal">知道了</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast-wrap" id="toastWrap"></div>
+
+  <script>
+    const navItems = [
+      { id: "task", icon: "add_circle", label: "新任务" },
+      { id: "dashboard", icon: "pie_chart", label: "数据概览" },
+      { id: "projects", icon: "folder_open", label: "项目管理" },
+      { id: "campaigns", icon: "ads_click", label: "广告投放" },
+      { id: "materials", icon: "video_library", label: "创意素材" },
+      { id: "reports", icon: "bar_chart", label: "数据报表" },
+      { id: "settings", icon: "settings", label: "账户设置" }
+    ];
+
+    const platforms = {
+      meta: {
+        label: "Meta",
+        title: "Meta Business OAuth",
+        description: "连接 Facebook / Instagram 广告账户，支持真实创建 Campaign",
+        scopes: [
+          ["ads_management", "管理广告系列、广告组和广告"],
+          ["ads_read", "读取广告数据和统计信息"],
+          ["business_management", "管理商务管理平台资源"]
+        ],
+        redirect: "https://8.148.151.36:8010/api/v1/platform-auth/meta/auth_callback"
+      },
+      google: {
+        label: "Google",
+        title: "Google Ads OAuth",
+        description: "连接 Google Ads 账号，后续同步客户账号和投放计划",
+        scopes: [
+          ["https://www.googleapis.com/auth/adwords", "管理 Google Ads 账户"],
+          ["openid", "识别授权用户身份"],
+          ["profile", "读取基础资料用于审计"]
+        ],
+        redirect: "https://8.148.151.36:8010/api/v1/platform-auth/google/auth_callback"
+      },
+      tiktok: {
+        label: "TikTok",
+        title: "TikTok Ads OAuth",
+        description: "连接 TikTok Ads 账号，后续同步广告账户和计划创建能力",
+        scopes: [
+          ["advertiser.read", "读取广告主与账户信息"],
+          ["campaign.write", "创建和管理 Campaign"],
+          ["report.read", "读取投放数据报表"]
+        ],
+        redirect: "https://8.148.151.36:8010/api/v1/platform-auth/tiktok/auth_callback"
+      }
+    };
+
+    const state = {
+      page: "task",
+      activePlatform: "meta",
+      editingPlatform: "meta",
+      deleteId: null,
+      pendingDelete: null,
+      currentGoogleParent: null,
+      taskStep: 1,
+      taskMode: "new",
+      taskCreated: false,
+      taskFlow: "idle",
+      projectCreation: null,
+      projectEditingField: "",
+      lastCreatedProjectId: null,
+      selectedProjects: [],
+      selectedAssets: [],
+      noMaterial: false,
+      planCount: 3,
+      editingProjectId: null,
+      projectSubview: "list",
+      activeProjectId: null,
+      activeTaskId: null,
+      projectFormChannel: "Meta",
+      selectedProjectCopies: [],
+      selectedPlanCopies: [],
+      taskValues: {
+        name: "Candy Blast 美国冷启动计划",
+        country: "美国",
+        channel: "Meta",
+        product: "休闲消除手游",
+        objective: "注册",
+        budgetType: "日预算",
+        budget: "800",
+        bidMetric: "CPA",
+        bid: "7",
+        conversion: "CompleteRegistration",
+        schedule: "2026-06-01 至 2026-06-15，每天 10:00-23:00",
+        naming: "CB_US_Meta_Reg"
+      },
+      connections: [
+        {
+          id: "meta-001",
+          platform: "Meta",
+          account_id: "act_2194875301",
+          account_name: "FunGame Studio Meta Business",
+          app_id: "915728401229",
+          status: "active",
+          scopes: ["ads_management", "ads_read", "business_management"],
+          updated_at: "2026-05-28T10:12:00",
+          subAccounts: []
+        },
+        {
+          id: "google-001",
+          platform: "Google",
+          account_id: "MCC-602-884-1022",
+          account_name: "FunGame Studio Google MCC",
+          app_id: "google-client-0428.apps.googleusercontent.com",
+          status: "active",
+          scopes: ["adwords", "openid", "profile"],
+          updated_at: "2026-05-27T18:40:00",
+          subAccounts: [
+            { id: "g-sub-1", name: "RPG_US_iOS", customer_id: "123-456-7890", status: "active", updated_at: "2026-05-27T19:02:00" },
+            { id: "g-sub-2", name: "Puzzle_SEA_Android", customer_id: "777-230-4108", status: "active", updated_at: "2026-05-27T19:04:00" }
+          ]
+        },
+        {
+          id: "tiktok-001",
+          platform: "TikTok",
+          account_id: "tt_ads_8302019",
+          account_name: "FunGame TikTok Ads Sandbox",
+          app_id: "tiktok-app-293810",
+          status: "unauthorized",
+          scopes: ["advertiser.read", "campaign.write", "report.read"],
+          updated_at: "2026-05-26T11:15:00",
+          subAccounts: []
+        }
+      ],
+      expanded: {}
+    };
+
+    const projects = [
+      {
+        id: "candy-blast-global",
+        name: "Candy Blast 全球投放",
+        aliases: ["candy blast", "candy", "cb", "消除", "休闲消除"],
+        product: "休闲消除手游",
+        countries: ["美国", "东南亚", "巴西"],
+        status: "运行中",
+        plans: "12 个计划",
+        metaCampaign: {
+          campaignName: "CB_Global_Meta_AppPromotion_0520",
+          objective: "App promotion",
+          buyingType: "Auction",
+          specialAdCategories: "None",
+          abTest: "关闭",
+          campaignBudget: "开启",
+          campaignStatus: "Active",
+          budgetType: "Daily budget",
+          budget: "800 USD",
+          bidStrategy: "Highest volume",
+          spendLimit: "18,000 USD",
+          start: "2026-05-20 10:00",
+          end: "2026-06-15 23:00",
+          account: "act_2194875301",
+          campaignId: "238575190410101"
+        },
+        adsets: [
+          {
+            id: "as-candy-us-ios",
+            name: "CB_US_iOS_AEO_Reg_01",
+            status: "Learning",
+            conversionLocation: "App",
+            pixelAppPage: "Candy Blast iOS App",
+            conversionEvent: "CompleteRegistration",
+            performanceGoal: "Maximize number of app events",
+            attribution: "7-day click / 1-day view",
+            targeting: "美国；18-44；英语；Advantage+ audience",
+            placements: "Advantage+ placements",
+            budget: "使用 Campaign budget",
+            schedule: "2026-05-20 至 2026-06-15",
+            ads: [
+              { name: "CB_US_Reels_LevelWin_A", format: "Video 9:16", material: "Candy Level Win", copy: "3 秒关卡胜利钩子 / Install Now", status: "Active" },
+              { name: "CB_US_Feed_StaticReward_B", format: "Image 1:1", material: "Festival Pack", copy: "奖励礼包展示 / Play Game", status: "Review" }
+            ]
+          },
+          {
+            id: "as-candy-br-android",
+            name: "CB_BR_Android_AEO_Purchase_02",
+            status: "Active",
+            conversionLocation: "App",
+            pixelAppPage: "Candy Blast Android App",
+            conversionEvent: "Purchase",
+            performanceGoal: "Maximize value of conversions",
+            attribution: "7-day click",
+            targeting: "巴西；Android；葡语；高价值玩家类似受众",
+            placements: "Facebook Feed / Instagram Reels",
+            budget: "使用 Campaign budget",
+            schedule: "长期投放",
+            ads: [
+              { name: "CB_BR_Reels_IAP_A", format: "Video 9:16", material: "Festival Pack", copy: "礼包付费点展示 / Install Now", status: "Active" }
+            ]
+          }
+        ],
+        tasks: [
+          { id: "task-candy-us-reg", adsetId: "as-candy-us-ios", name: "美国注册扩量任务", type: "创建计划", owner: "小陈", status: "待发布", updatedAt: "2026-05-28 18:20", summary: "补充 2 条 Reels 素材后发布，预算沿用 Campaign budget。" },
+          { id: "task-candy-br-pay", adsetId: "as-candy-br-android", name: "巴西付费事件复盘", type: "数据诊断", owner: "Lina", status: "进行中", updatedAt: "2026-05-28 11:42", summary: "检查 Purchase 事件回传和 ROAS goal 可用性。" }
+        ]
+      },
+      {
+        id: "rpg-x-na",
+        name: "RPG X 北美预约",
+        aliases: ["rpg x", "rpg", "北美预约"],
+        product: "RPG 手游",
+        countries: ["美国", "加拿大"],
+        status: "筹备中",
+        plans: "5 个计划",
+        metaCampaign: {
+          campaignName: "RPGX_NA_Meta_Lead_Reserve_0601",
+          objective: "Leads",
+          buyingType: "Auction",
+          specialAdCategories: "None",
+          abTest: "开启",
+          campaignBudget: "关闭",
+          campaignStatus: "Paused",
+          budgetType: "Lifetime budget",
+          budget: "12,000 USD",
+          bidStrategy: "Cost per result goal",
+          spendLimit: "15,000 USD",
+          start: "2026-06-01 09:00",
+          end: "2026-06-30 23:59",
+          account: "act_2194875301",
+          campaignId: "238575190410202"
+        },
+        adsets: [
+          {
+            id: "as-rpg-us-lead",
+            name: "RPGX_US_LeadForm_Core_01",
+            status: "Draft",
+            conversionLocation: "Instant forms",
+            pixelAppPage: "RPG X Facebook Page",
+            conversionEvent: "Lead",
+            performanceGoal: "Maximize number of leads",
+            attribution: "7-day click / 1-day view",
+            targeting: "美国；18-45；RPG/Anime 兴趣；排除已预约",
+            placements: "Advantage+ placements",
+            budget: "3,000 USD lifetime",
+            schedule: "2026-06-01 至 2026-06-15",
+            ads: [
+              { name: "RPGX_US_Form_Hero_A", format: "Video 4:5", material: "Hero Class Trailer", copy: "预约解锁限定英雄 / Sign Up", status: "Draft" }
+            ]
+          },
+          {
+            id: "as-rpg-ca-web",
+            name: "RPGX_CA_Web_PreReg_02",
+            status: "Draft",
+            conversionLocation: "Website",
+            pixelAppPage: "RPG X Pixel",
+            conversionEvent: "CompleteRegistration",
+            performanceGoal: "Maximize conversions",
+            attribution: "7-day click",
+            targeting: "加拿大；英语；核心 RPG 玩家",
+            placements: "Facebook Feed / Instagram Stories",
+            budget: "120 USD daily",
+            schedule: "2026-06-10 至 2026-06-30",
+            ads: [
+              { name: "RPGX_CA_Stories_Battle_A", format: "Video 9:16", material: "Boss Battle Hook", copy: "30 秒战斗演示 / Learn More", status: "Draft" }
+            ]
+          }
+        ],
+        tasks: [
+          { id: "task-rpg-us-lead", adsetId: "as-rpg-us-lead", name: "北美预约 A/B 测试", type: "实验配置", owner: "小陈", status: "待确认", updatedAt: "2026-05-28 16:05", summary: "对比 Instant Form 与 Website 预约链路，保持同预算周期。" },
+          { id: "task-rpg-ca-web", adsetId: "as-rpg-ca-web", name: "表单字段确认", type: "素材/表单", owner: "Alex", status: "待处理", updatedAt: "2026-05-27 20:18", summary: "确认邮箱、国家、设备系统三个字段是否必填。" }
+        ]
+      },
+      {
+        id: "puzzle-sea",
+        name: "Puzzle SEA 测试",
+        aliases: ["puzzle sea", "puzzle", "sea", "益智"],
+        product: "休闲益智",
+        countries: ["泰国", "印尼", "越南", "东南亚"],
+        status: "运行中",
+        plans: "8 个计划",
+        metaCampaign: {
+          campaignName: "Puzzle_SEA_Meta_AppInstall_Test_0525",
+          objective: "App promotion",
+          buyingType: "Auction",
+          specialAdCategories: "None",
+          abTest: "关闭",
+          campaignBudget: "开启",
+          campaignStatus: "Active",
+          budgetType: "Daily budget",
+          budget: "500 USD",
+          bidStrategy: "Bid cap",
+          spendLimit: "9,000 USD",
+          start: "2026-05-25 10:00",
+          end: "2026-06-20 23:00",
+          account: "act_2194875301",
+          campaignId: "238575190410303"
+        },
+        adsets: [
+          {
+            id: "as-puzzle-th",
+            name: "PZ_TH_Android_Install_01",
+            status: "Active",
+            conversionLocation: "App",
+            pixelAppPage: "Puzzle SEA Android App",
+            conversionEvent: "App Install",
+            performanceGoal: "Maximize installs",
+            attribution: "1-day click",
+            targeting: "泰国；Android；泰语；益智/休闲游戏兴趣",
+            placements: "Instagram Reels / Audience Network",
+            budget: "使用 Campaign budget",
+            schedule: "2026-05-25 至 2026-06-20",
+            ads: [
+              { name: "PZ_TH_Reels_3sHook_A", format: "Video 9:16", material: "3s Puzzle Hook", copy: "连击消除首帧 / Install Now", status: "Active" }
+            ]
+          },
+          {
+            id: "as-puzzle-id",
+            name: "PZ_ID_Broad_AEO_02",
+            status: "Active",
+            conversionLocation: "App",
+            pixelAppPage: "Puzzle SEA Android App",
+            conversionEvent: "TutorialCompletion",
+            performanceGoal: "Maximize number of app events",
+            attribution: "7-day click / 1-day view",
+            targeting: "印尼；Broad；Advantage detailed targeting",
+            placements: "Advantage+ placements",
+            budget: "使用 Campaign budget",
+            schedule: "长期投放",
+            ads: [
+              { name: "PZ_ID_Feed_LevelClear_A", format: "Image 1:1", material: "Level Clear Static", copy: "轻量益智玩法 / Play Game", status: "Active" }
+            ]
+          }
+        ],
+        tasks: [
+          { id: "task-puzzle-th-install", adsetId: "as-puzzle-th", name: "SEA 安装成本监控", type: "投放监控", owner: "小陈", status: "运行中", updatedAt: "2026-05-28 09:30", summary: "当 CPI 连续 2 天高于 1.8 USD 时触发预算回收。" },
+          { id: "task-puzzle-id-event", adsetId: "as-puzzle-id", name: "印尼教程事件校验", type: "事件配置", owner: "Lina", status: "已完成", updatedAt: "2026-05-27 17:24", summary: "TutorialCompletion 事件已同步，等待 48 小时稳定样本。" }
+        ]
+      },
+      {
+        id: "google-uac-global",
+        name: "Candy Blast Google UAC",
+        channel: "Google",
+        aliases: ["google uac", "uac", "google app campaign"],
+        product: "休闲消除手游",
+        countries: ["美国", "加拿大", "英国"],
+        status: "运行中",
+        plans: "6 个计划",
+        campaignConfig: {
+          campaignName: "CB_Global_Google_AppCampaign_0528",
+          objective: "App Campaign",
+          buyingType: "App installs",
+          specialAdCategories: "Google Play / iOS App",
+          abTest: "关闭",
+          campaignBudget: "开启",
+          campaignStatus: "Enabled",
+          budgetType: "Daily budget",
+          budget: "1,200 USD",
+          bidStrategy: "tCPA",
+          spendLimit: "不限",
+          start: "2026-05-28 09:00",
+          end: "长期投放",
+          account: "MCC-602-884-1022",
+          campaignId: "g-9823401201"
+        },
+        adsets: [
+          {
+            id: "gag-cb-us-uac",
+            name: "CB_US_UAC_Reg_AssetGroup_01",
+            status: "Enabled",
+            conversionLocation: "App campaign",
+            pixelAppPage: "Candy Blast Google Play / Firebase",
+            conversionEvent: "first_open + CompleteRegistration",
+            performanceGoal: "tCPA 7 USD",
+            attribution: "Data-driven attribution",
+            targeting: "美国；英语；Android；All users",
+            placements: "Google Search / Play / YouTube / Display",
+            budget: "1,200 USD daily",
+            schedule: "长期投放",
+            ads: [
+              { name: "CB_UAC_AssetGroup_Main", format: "Video 16:9 + Image 1.91:1", material: "YouTube Playable", copy: "标题组 5 条 / 描述 5 条 / 商店截图", status: "Enabled" }
+            ]
+          }
+        ],
+        tasks: [
+          { id: "task-google-uac-reg", adsetId: "gag-cb-us-uac", name: "Google UAC 注册扩量任务", type: "任务信息", owner: "小陈", status: "进行中", updatedAt: "2026-05-29 10:18", summary: "调整 tCPA 与素材组，提升美国 Android 注册量。" }
+        ]
+      },
+      {
+        id: "tiktok-sea-scale",
+        name: "Puzzle SEA TikTok 扩量",
+        channel: "TikTok",
+        aliases: ["tiktok sea", "spark ads", "tt"],
+        product: "休闲益智",
+        countries: ["泰国", "印尼", "越南"],
+        status: "运行中",
+        plans: "9 个计划",
+        campaignConfig: {
+          campaignName: "PZ_SEA_TikTok_AppInstall_0526",
+          objective: "App Promotion",
+          buyingType: "Auction",
+          specialAdCategories: "Android App",
+          abTest: "关闭",
+          campaignBudget: "关闭",
+          campaignStatus: "Active",
+          budgetType: "Daily budget",
+          budget: "650 USD",
+          bidStrategy: "Lowest cost",
+          spendLimit: "10,000 USD",
+          start: "2026-05-26 10:00",
+          end: "2026-06-25 23:00",
+          account: "tt_ads_8302019",
+          campaignId: "tt-730921884"
+        },
+        adsets: [
+          {
+            id: "ttag-pz-th-install",
+            name: "PZ_TH_TikTok_Install_Broad_01",
+            status: "Active",
+            conversionLocation: "App",
+            pixelAppPage: "Puzzle SEA App / TikTok Events API",
+            conversionEvent: "Install",
+            performanceGoal: "Optimize for App Install",
+            attribution: "7-day click / 1-day view",
+            targeting: "泰国；Android；18-34；Broad",
+            placements: "TikTok Feed / Pangle",
+            budget: "180 USD daily",
+            schedule: "2026-05-26 至 2026-06-25",
+            ads: [
+              { name: "PZ_TH_Spark_3sHook_A", format: "Spark Ads Video 9:16", material: "3s Puzzle Hook", copy: "前三秒连击消除 / Download", status: "Active" }
+            ]
+          }
+        ],
+        tasks: [
+          { id: "task-tiktok-th-install", adsetId: "ttag-pz-th-install", name: "TikTok 泰国安装扩量任务", type: "任务信息", owner: "Lina", status: "进行中", updatedAt: "2026-05-29 14:40", summary: "使用 Spark Ads 视频扩量，预算按 Ad Group 独立控制。" }
+        ]
+      }
+    ];
+
+    const assets = [
+      { id: "a1", platform: "Meta", type: "Image 1:1", name: "Candy Level Win", desc: "核心关卡胜利瞬间，适合 Feed 与 Reels 首帧。", score: 91 },
+      { id: "a2", platform: "TikTok", type: "Video 9:16", name: "3s Puzzle Hook", desc: "前三秒展示高爽消除连击，适合冷启动测试。", score: 88 },
+      { id: "a3", platform: "Google", type: "Video 16:9", name: "YouTube Playable", desc: "横版演示玩法与奖励循环，适合 YouTube。", score: 84 },
+      { id: "a4", platform: "Meta", type: "Carousel", name: "Festival Pack", desc: "节日皮肤与礼包展示，适合再营销计划。", score: 86 },
+      { id: "a5", platform: "TikTok", type: "Spark Ads", name: "Creator Tryout", desc: "达人试玩口播结构，适合东南亚扩量。", score: 82 },
+      { id: "a6", platform: "Google", type: "Image 1.91:1", name: "Store Feature", desc: "商店截图重排，适合应用广告素材组。", score: 80 }
+    ];
+
+    const reusePlans = [
+      { name: "CB_US_Meta_Reg_0520", desc: "美国 Meta 注册目标，含 6 个素材和 CPA 7 美元策略。" },
+      { name: "CB_SEA_TikTok_AEO", desc: "东南亚 TikTok AEO 计划，含 Spark Ads 创意组合。" },
+      { name: "CB_Global_Google_UAC", desc: "Google 应用广告全球测试，已绑定 YouTube 与素材组。" }
+    ];
+
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, s => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[s]));
+    }
+
+    const channelUi = {
+      Meta: {
+        projectTag: "Meta Campaign",
+        campaignTitle: "Meta Campaign",
+        planTitle: "Meta Ad Set",
+        creativeTitle: "Meta Ad 素材配置",
+        newTaskNote: "项目即 Campaign；新任务即在该 Campaign 下创建 Ad Set，并在计划层级补充 Meta Ad 素材配置。",
+        objectiveLabel: "Objective",
+        objectiveOptions: ["App promotion", "Sales", "Leads", "Traffic", "Engagement", "Awareness"],
+        buyingLabel: "Buying type",
+        buyingOptions: ["Auction", "Reservation"],
+        categoryLabel: "Special ad categories",
+        categoryOptions: ["None", "Credit", "Employment", "Housing", "Social issues, elections or politics"],
+        budgetSwitchLabel: "Campaign budget 开关",
+        statusOptions: ["Active", "Paused", "Draft"],
+        bidOptions: ["Highest volume", "Cost per result goal", "ROAS goal", "Bid cap"],
+        planLabels: ["Conversion location", "Pixel/App/Page", "Conversion event", "Performance goal", "Attribution setting", "预算/版位"],
+        conversionLocationOptions: ["App", "Website", "Instant forms", "Messaging apps", "Calls"],
+        conversionEventOptions: ["App Install", "CompleteRegistration", "Purchase", "Lead", "TutorialCompletion", "AddToCart"],
+        performanceGoalOptions: ["Maximize installs", "Maximize conversions", "Maximize number of app events", "Maximize value of conversions", "Maximize number of leads"],
+        attributionOptions: ["1-day click", "7-day click", "7-day click / 1-day view"],
+        placementOptions: ["Advantage+ placements", "Facebook Feed / Instagram Reels", "Instagram Reels / Audience Network", "Facebook Feed / Instagram Stories"],
+        adFormatOptions: ["Video 9:16", "Video 4:5", "Image 1:1", "Carousel", "Image 1.91:1"]
+      },
+      Google: {
+        projectTag: "Google Campaign",
+        campaignTitle: "Google Campaign",
+        planTitle: "Google Ad Group / Asset Group",
+        creativeTitle: "Google 素材组配置",
+        newTaskNote: "项目即 Google Campaign；新任务在该 Campaign 下创建 Ad Group 或 Asset Group，并补充标题、描述、图片和视频素材。",
+        objectiveLabel: "Campaign type",
+        objectiveOptions: ["App Campaign", "Performance Max", "Search", "Display", "Video"],
+        buyingLabel: "Conversion goal",
+        buyingOptions: ["App installs", "In-app action", "Purchase", "Lead", "Website traffic"],
+        categoryLabel: "App / Customer",
+        categoryOptions: ["Google Play / iOS App", "Website", "Lead form", "Merchant Center"],
+        budgetSwitchLabel: "Shared budget",
+        statusOptions: ["Enabled", "Paused", "Draft"],
+        bidOptions: ["tCPA", "tCPI", "tROAS", "Maximize conversions", "Maximize conversion value"],
+        planLabels: ["Campaign subtype", "App/Firebase/Conversion source", "Conversion action", "Bidding target", "Attribution model", "预算/Network"],
+        conversionLocationOptions: ["App campaign", "Website", "Performance Max", "Search"],
+        conversionEventOptions: ["first_open", "CompleteRegistration", "Purchase", "Lead", "AddToCart"],
+        performanceGoalOptions: ["tCPA", "tCPI", "tROAS", "Maximize conversions", "Maximize conversion value"],
+        attributionOptions: ["Data-driven attribution", "Last click", "7-day click", "30-day click"],
+        placementOptions: ["Google Search / Play / YouTube / Display", "Search Network", "Display Network", "YouTube"],
+        adFormatOptions: ["Video 16:9 + Image 1.91:1", "Text assets", "Image 1.91:1", "YouTube video", "HTML5 playable"]
+      },
+      TikTok: {
+        projectTag: "TikTok Campaign",
+        campaignTitle: "TikTok Campaign",
+        planTitle: "TikTok Ad Group",
+        creativeTitle: "TikTok Ad Creative 配置",
+        newTaskNote: "项目即 TikTok Campaign；新任务在该 Campaign 下创建 Ad Group，并补充 TikTok Ad Creative 或 Spark Ads 素材。",
+        objectiveLabel: "Advertising objective",
+        objectiveOptions: ["App Promotion", "Website Conversions", "Product Sales", "Traffic", "Reach"],
+        buyingLabel: "Buying type",
+        buyingOptions: ["Auction", "Reach & Frequency"],
+        categoryLabel: "Promotion type",
+        categoryOptions: ["Android App", "iOS App", "Website", "Spark Ads"],
+        budgetSwitchLabel: "Campaign budget optimization",
+        statusOptions: ["Active", "Paused", "Draft"],
+        bidOptions: ["Lowest cost", "Cost cap", "Bid cap", "Value optimization"],
+        planLabels: ["Promotion type", "App/Pixel/Event source", "Optimization event", "Optimization goal", "Attribution setting", "预算/Placement"],
+        conversionLocationOptions: ["App", "Website", "Product catalog", "Lead generation"],
+        conversionEventOptions: ["Install", "CompleteRegistration", "Purchase", "AddToCart", "ViewContent"],
+        performanceGoalOptions: ["Optimize for App Install", "Optimize for Conversion", "Value optimization", "Click optimization"],
+        attributionOptions: ["7-day click / 1-day view", "1-day click", "7-day click"],
+        placementOptions: ["TikTok Feed / Pangle", "TikTok Feed", "Pangle", "Automatic placement"],
+        adFormatOptions: ["Spark Ads Video 9:16", "Video 9:16", "Carousel", "Image"]
+      }
+    };
+
+    function getProjectChannel(project) {
+      return project?.channel || "Meta";
+    }
+
+    function getChannelUi(projectOrChannel) {
+      const channel = typeof projectOrChannel === "string" ? projectOrChannel : getProjectChannel(projectOrChannel);
+      return channelUi[channel] || channelUi.Meta;
+    }
+
+    function getProjectCampaign(project) {
+      return project?.campaignConfig || project?.metaCampaign || {};
+    }
+
+    function formatDate(value) {
+      return new Date(value).toLocaleString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" });
+    }
+
+    function showToast(text) {
+      const wrap = document.getElementById("toastWrap");
+      const el = document.createElement("div");
+      el.className = "toast";
+      el.textContent = text;
+      wrap.appendChild(el);
+      setTimeout(() => el.remove(), 2600);
+    }
+
+    const channelRequirements = {
+      Meta: [
+        { label: "项目", extract: (_, selected) => selected.length ? ok(selected.map(project => project.name).join(" / ")) : missing("至少选择 1 个项目") },
+        { label: "广告账户", extract: (_, __, account) => account ? ok(account.account_name) : missing("Meta 未授权或未连接广告账户") },
+        { label: "Campaign Objective", extract: text => matchObjective(text, { "注册": "OUTCOME_LEADS / CompleteRegistration", "安装": "OUTCOME_APP_PROMOTION", "付费": "OUTCOME_SALES / Purchase", "ROAS": "OUTCOME_SALES / ROAS" }) },
+        { label: "Budget", extract: text => matchBudget(text) },
+        { label: "Geo Targeting", extract: text => matchCountry(text) },
+        { label: "Conversion Event", extract: text => matchConversion(text, "CompleteRegistration / Purchase / Install") },
+        { label: "Ad Creative", extract: text => matchCreative(text, "需要图片、视频、轮播或明确无需新素材") }
+      ],
+      Google: [
+        { label: "项目", extract: (_, selected) => selected.length ? ok(selected.map(project => project.name).join(" / ")) : missing("至少选择 1 个项目") },
+        { label: "MCC / Customer", extract: (_, __, account) => account ? ok(account.account_name) : missing("Google Ads MCC 未授权或未连接") },
+        { label: "Campaign Type", extract: text => /uac|应用|app|应用广告/i.test(text) ? ok("App Campaign / UAC") : /搜索|search/i.test(text) ? ok("Search") : missing("请说明 UAC、搜索、展示或视频等计划类型") },
+        { label: "Bidding", extract: text => matchObjective(text, { "安装": "tCPI / Install", "注册": "tCPA / CompleteRegistration", "付费": "tROAS / Purchase", "ROAS": "tROAS" }) },
+        { label: "Daily Budget", extract: text => matchBudget(text) },
+        { label: "Location", extract: text => matchCountry(text) },
+        { label: "Assets", extract: text => matchCreative(text, "Google 应用广告需要标题、描述、图片/视频素材，或明确不新增素材") }
+      ],
+      TikTok: [
+        { label: "项目", extract: (_, selected) => selected.length ? ok(selected.map(project => project.name).join(" / ")) : missing("至少选择 1 个项目") },
+        { label: "Advertiser", extract: (_, __, account) => account ? ok(account.account_name) : missing("TikTok 当前未授权，请先完成平台授权") },
+        { label: "Advertising Objective", extract: text => matchObjective(text, { "安装": "APP_INSTALL", "注册": "CONVERSIONS / CompleteRegistration", "付费": "PRODUCT_SALES / Purchase", "ROAS": "VALUE / ROAS" }) },
+        { label: "Budget", extract: text => matchBudget(text) },
+        { label: "Placement", extract: text => /spark|达人|信息流|feed|placement/i.test(text) ? ok("已匹配投放版位/素材形态") : missing("请补充 TikTok 版位、Spark Ads 或信息流投放方式") },
+        { label: "Geo", extract: text => matchCountry(text) },
+        { label: "Creative", extract: text => matchCreative(text, "TikTok 通常需要 9:16 视频、Spark Ads 或明确无需新素材") }
+      ]
+    };
+
+    function ok(value) {
+      return { status: "ok", value };
+    }
+
+    function missing(message) {
+      return { status: "missing", message };
+    }
+
+    function invalid(message) {
+      return { status: "invalid", message };
+    }
+
+    function matchObjective(text, map) {
+      const lower = text.toLowerCase();
+      const objective = Object.keys(map).find(key => text.includes(key) || lower.includes(key.toLowerCase()));
+      return objective ? ok(map[objective]) : missing("请补充投放目标，例如注册、安装、付费或 ROAS");
+    }
+
+    function matchBudget(text) {
+      const budget = text.match(/(\d+(?:\.\d+)?)\s*(美元|usd|美金)/i);
+      if (!budget) return missing("请补充预算金额，例如日预算 800 美元");
+      const value = Number(budget[1]);
+      if (!Number.isFinite(value) || value <= 0) return invalid("预算必须大于 0");
+      const budgetType = /总预算|lifetime/i.test(text) ? "总预算" : /日预算|daily|每天/i.test(text) ? "日预算" : "预算类型未写明，默认按日预算校验";
+      return ok(`${budgetType} ${value} USD`);
+    }
+
+    function matchCountry(text) {
+      const countries = ["美国", "加拿大", "东南亚", "巴西", "泰国", "印尼", "越南", "日本", "韩国", "全球"];
+      const matched = countries.filter(country => text.includes(country));
+      return matched.length ? ok(matched.join(" / ")) : missing("请补充投放国家或地区");
+    }
+
+    function matchConversion(text, fallback) {
+      if (/completeRegistration|注册/i.test(text)) return ok("CompleteRegistration");
+      if (/purchase|付费|购买/i.test(text)) return ok("Purchase");
+      if (/install|安装/i.test(text)) return ok("Install");
+      return missing(`请补充转化事件，支持 ${fallback}`);
+    }
+
+    function matchCreative(text, missingMessage) {
+      if (/不需要|无需|无素材|不用新素材/i.test(text)) return ok("无需新素材");
+      if (/素材|视频|图片|轮播|creative|spark|9:16|标题|描述/i.test(text)) return ok("已匹配素材要求");
+      return missing(missingMessage);
+    }
+
+    function hydrateIcons() {
+      const fallback = {
+        rocket_launch: "A",
+        notifications: "!",
+        menu_open: "=",
+        add_circle: "+",
+        pie_chart: "%",
+        folder_open: "F",
+        ads_click: "A",
+        video_library: "V",
+        bar_chart: "|",
+        settings: "*",
+        chat: "C",
+        auto_awesome: "*",
+        edit_note: "+",
+        attach_file: "+",
+        arrow_upward: "^",
+        arrow_back: "<",
+        close: "x",
+        admin_panel_settings: "U",
+        tune: "T",
+        hub: "H",
+        monitoring: "M",
+        key: "K",
+        security: "S",
+        sync: "R",
+        delete: "x",
+        expand_more: "v",
+        expand_less: "^",
+        add: "+",
+        add_task: "+",
+        edit: "E",
+        assignment: "T",
+        inventory_2: "B",
+        content_copy: "C"
+      };
+      document.querySelectorAll(".material-symbols-outlined").forEach(el => {
+        const icon = el.textContent.trim();
+        el.dataset.icon = icon;
+        el.dataset.fallback = fallback[icon] || ".";
+      });
+      const iconFontIsRendering = () => {
+        document.body.classList.remove("icons-fallback");
+        const probe = document.createElement("span");
+        probe.className = "material-symbols-outlined";
+        probe.textContent = "notifications";
+        probe.style.cssText = "position:absolute;left:-9999px;top:-9999px;visibility:hidden;white-space:nowrap;";
+        document.body.appendChild(probe);
+        const width = probe.getBoundingClientRect().width;
+        probe.remove();
+        return width > 0 && width < 32;
+      };
+      const apply = () => {
+        document.body.classList.toggle("icons-fallback", !iconFontIsRendering());
+      };
+      apply();
+      document.fonts?.ready?.then(apply);
+    }
+
+    function setPage(page) {
+      state.page = page;
+      document.querySelectorAll(".page").forEach(el => el.classList.toggle("active", el.dataset.page === page));
+      renderNav();
+      if (page === "task") renderTaskPage();
+      if (page === "platform") renderPlatformPage();
+      if (page === "settings") renderSettingsPage();
+      if (page === "projects") renderProjectsPage();
+      hydrateIcons();
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+
+    function renderNav() {
+      document.getElementById("mainNav").innerHTML = navItems.map(item => `
+        <button class="nav-item ${state.page === item.id || (item.id === "settings" && ["settings","platform","account","system","ai"].includes(state.page)) ? "active" : ""}" type="button" data-page-target="${item.id}">
+          <span class="material-symbols-outlined">${item.icon}</span><span>${item.label}</span>
+        </button>
+      `).join("");
+      hydrateIcons();
+    }
+
+    function renderSettingsPage() {
+      document.getElementById("settingsPage").innerHTML = `
+        <div class="page-head">
+          <div>
+            <h1>设置</h1>
+            <p>管理 Agent 系统账号、系统配置和广告平台连接</p>
+          </div>
+        </div>
+        <div class="content">
+          <div class="settings-grid">
+            ${settingCard("admin_panel_settings", "系统账号设置", "管理团队成员、登录身份和基础账号信息", "进入账号设置", "account", true)}
+            ${settingCard("tune", "系统设置", "配置默认偏好、通知、权限和系统级策略", "进入系统设置", "system", true)}
+            ${settingCard("hub", "平台连接", "连接 Meta、Google、TikTok 广告平台和同步广告账户", "管理平台连接", "platform", true)}
+            ${settingCard("monitoring", "AI 使用量", "查看模型调用、Token 消耗、场景日志和预算限制", "查看使用量", "ai", true)}
+          </div>
+        </div>
+      `;
+      hydrateIcons();
+    }
+
+    function settingCard(icon, title, desc, action, page, enabled) {
+      return `
+        <section class="settings-card">
+          <div class="card-title"><span class="material-symbols-outlined">${icon}</span><h2>${title}</h2></div>
+          <p>${desc}</p>
+          <button class="btn ${enabled ? "primary" : ""}" ${enabled ? "" : "disabled"} type="button" data-page-target="${page}">${action}</button>
+        </section>
+      `;
+    }
+
+    function renderPlatformPage() {
+      const active = platforms[state.activePlatform];
+      const filtered = state.connections.filter(c => c.platform === active.label);
+      document.getElementById("platformPage").innerHTML = `
+        <div class="page-head compact">
+          <div class="page-title-row">
+            <button class="back-button" type="button" data-page-target="settings"><span class="material-symbols-outlined">arrow_back</span></button>
+            <div>
+              <h1>平台连接</h1>
+              <p>配置 Meta、Google、TikTok 的平台授权和广告账户同步</p>
+            </div>
+          </div>
+        </div>
+        <div class="content">
+          <div class="platform-tabs">
+            ${Object.entries(platforms).map(([key, item]) => {
+              const connected = state.connections.some(c => c.platform === item.label && c.status === "active");
+              return `
+                <button class="platform-tab ${state.activePlatform === key ? "active" : ""}" type="button" data-platform="${key}">
+                  <div class="platform-tab-head">
+                    <strong>${item.label}</strong>
+                    <span class="status-pill ${connected ? "connected" : "pending"}">${connected ? "已接入" : "待接入"}</span>
+                  </div>
+                  <p>${item.description}</p>
+                </button>
+              `;
+            }).join("")}
+          </div>
+
+          <section class="panel connection-panel">
+            <div class="platform-detail-head">
+              <span class="material-symbols-outlined">hub</span>
+              <strong>${active.title}</strong>
+            </div>
+            <p class="platform-detail-desc">${active.description}</p>
+            <div class="steps">
+              <div class="step-pill">1. 配置应用信息</div>
+              <div class="step-pill">2. 发起 OAuth 授权</div>
+              <div class="step-pill">3. 平台确认权限</div>
+              <div class="step-pill">4. 同步广告账户</div>
+            </div>
+            ${state.activePlatform !== "meta" ? `
+              <div class="warning">
+                <span class="material-symbols-outlined">construction</span>
+                <div><strong>${active.label} 平台连接功能开发中</strong><p>当前版本保留应用配置、OAuth 授权、账户同步、Campaign 创建等核心能力入口。</p></div>
+              </div>
+            ` : ""}
+            <div class="connection-actions">
+              <p>配置 ${active.label} 广告账户连接</p>
+              <button class="btn primary" type="button" data-open-config="${state.activePlatform}">添加广告账户</button>
+            </div>
+          </section>
+
+          <section class="table-card">
+            <div class="table-head"><h2>已连接的平台账户</h2><span class="chip">${active.label} · ${filtered.length} 个连接</span></div>
+            ${filtered.length ? renderConnectionTable(filtered) : `
+              <div class="empty-state">
+                <span class="material-symbols-outlined">cloud_off</span>
+                <p>暂无 ${active.label} 平台连接</p>
+              </div>
+            `}
+          </section>
+        </div>
+      `;
+    }
+
+    function renderConnectionTable(list) {
+      const google = state.activePlatform === "google";
+      return `
+        <table>
+          <thead>
+            <tr>
+              ${google ? "<th style='width:52px;'></th>" : ""}
+              <th>账户名称</th><th>APP ID</th><th>授权范围</th><th>状态</th><th>更新时间</th><th style="text-align:right;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${list.map(conn => `
+              <tr>
+                ${google ? `<td><button class="mini" type="button" data-toggle-sub="${conn.id}">${state.expanded[conn.id] ? "收起" : "展开"}</button></td>` : ""}
+                <td><strong>${escapeHtml(conn.account_name)}</strong><br><span style="color:#64748b;">${escapeHtml(conn.account_id)}</span></td>
+                <td>${escapeHtml(conn.app_id)}</td>
+                <td><div class="scope-list">${(conn.scopes || []).map(s => `<span class="chip">${escapeHtml(s)}</span>`).join("")}</div></td>
+                <td><span class="status-pill ${conn.status === "active" ? "connected" : conn.status === "expired" ? "expired" : "pending"}">${conn.status === "active" ? "已激活" : conn.status === "expired" ? "已过期" : "未授权"}</span></td>
+                <td>${formatDate(conn.updated_at)}</td>
+                <td><div class="row-actions">
+                  <button class="mini" type="button" data-open-config="${conn.platform.toLowerCase()}" data-edit-id="${conn.id}">编辑</button>
+                  <button class="mini" type="button" data-authorize="${conn.id}">授权</button>
+                  <button class="mini" type="button" data-delete="${conn.id}">删除</button>
+                </div></td>
+              </tr>
+              ${google && state.expanded[conn.id] ? `
+                <tr class="sub-row"><td></td><td colspan="6">
+                  <div class="sub-account-list">
+                    ${(conn.subAccounts || []).map(sub => `
+                      <div class="sub-account">
+                        <div><strong>${escapeHtml(sub.name)}</strong><br><span style="color:#64748b;">Customer ID：${escapeHtml(sub.customer_id)} · ${formatDate(sub.updated_at)}</span></div>
+                        <button class="mini" type="button" data-delete-sub="${conn.id}:${sub.id}">删除子账号</button>
+                      </div>
+                    `).join("")}
+                    <button class="btn soft" type="button" data-add-sub="${conn.id}"><span class="material-symbols-outlined">add_circle</span>添加子账号</button>
+                  </div>
+                </td></tr>
+              ` : ""}
+            `).join("")}
+          </tbody>
+        </table>
+      `;
+    }
+
+    function openConfig(platformKey, editId) {
+      state.editingPlatform = platformKey;
+      const item = platforms[platformKey];
+      const existing = editId ? state.connections.find(c => c.id === editId) : null;
+      document.getElementById("configTitle").textContent = `${item.label} App 配置`;
+      const idLabel = platformKey === "meta" ? "App ID" : platformKey === "google" ? "Client ID" : "App ID";
+      const secretLabel = platformKey === "google" ? "Client Secret" : "App Secret";
+      document.getElementById("configBody").innerHTML = `
+        <div class="form-grid">
+          <div class="field full"><label>Account Name</label><input id="cfgName" placeholder="${item.label} Account Name" value="${escapeHtml(existing?.account_name || "")}"></div>
+          <div class="field"><label>${idLabel}</label><input id="cfgAppId" placeholder="${item.label} ${idLabel}" value="${escapeHtml(existing?.app_id || "")}"></div>
+          <div class="field"><label>${secretLabel}</label><input id="cfgSecret" placeholder="保存后不会在前端回显" type="password"></div>
+          ${platformKey === "google" ? `<div class="field"><label>Manager Customer ID</label><input id="cfgManager" placeholder="例如 602-884-1022"></div><div class="field"><label>Developer Token</label><input id="cfgToken" placeholder="Google Ads Developer Token"></div>` : ""}
+          ${platformKey === "tiktok" ? `<div class="field"><label>Advertiser ID</label><input id="cfgAdvertiser" placeholder="TikTok Advertiser ID"></div>` : ""}
+          <div class="field full"><label>OAuth Redirect URI</label><div class="readonly"><span>${item.redirect}</span><button class="mini" type="button" data-copy-uri="${item.redirect}">复制</button></div><small style="color:#64748b;">需要在 ${item.label} 开发者后台填入同一个地址。</small></div>
+          <div class="field full"><label>授权权限</label><div class="scope-grid" id="scopeGrid">${item.scopes.map(([scope, desc]) => `
+            <label class="scope-option"><input type="checkbox" checked value="${scope}" data-scope-check><span><strong>${scope}</strong><span>${desc}</span></span></label>
+          `).join("")}</div></div>
+        </div>
+      `;
+      updateScopeCounter();
+      document.getElementById("configModal").classList.add("active");
+    }
+
+    function updateScopeCounter() {
+      const count = document.querySelectorAll("[data-scope-check]:checked").length;
+      document.getElementById("scopeCounter").textContent = `已选择 ${count} 个权限`;
+    }
+
+    function saveConfig() {
+      const platformKey = state.editingPlatform;
+      const item = platforms[platformKey];
+      const name = document.getElementById("cfgName").value.trim() || `${item.label} Ads Account`;
+      const appId = document.getElementById("cfgAppId").value.trim() || `${platformKey}-app-${Math.floor(Math.random() * 9000 + 1000)}`;
+      const scopes = Array.from(document.querySelectorAll("[data-scope-check]:checked")).map(el => el.value);
+      state.connections.unshift({
+        id: `${platformKey}-${Date.now()}`,
+        platform: item.label,
+        account_id: platformKey === "google" ? `MCC-${Math.floor(Math.random() * 900)}-${Math.floor(Math.random() * 900)}-${Math.floor(Math.random() * 9000)}` : `${platformKey}_ads_${Math.floor(Math.random() * 900000)}`,
+        account_name: name,
+        app_id: appId,
+        status: "unauthorized",
+        scopes,
+        updated_at: new Date().toISOString(),
+        subAccounts: []
+      });
+      document.getElementById("configModal").classList.remove("active");
+      renderPlatformPage();
+      showToast("配置已保存");
+    }
+
+    function renderTaskPage() {
+      const messages = state.taskMessages || [];
+      document.getElementById("taskPage").innerHTML = `
+        <div class="task-chat-shell">
+          <div class="task-chat-head">
+            <div class="task-chat-title">
+              <div>
+                <h1>新任务</h1>
+                <p>像 ChatGPT 一样描述投放目标、预算、素材或国家，系统会在对话中整理任务草稿。</p>
+              </div>
+              <span class="task-status"><span class="material-symbols-outlined">auto_awesome</span>对话创建模式</span>
+            </div>
+          </div>
+          <div class="task-chat-body">
+            <main class="chat-panel">
+              <div class="chat-stream" id="taskChatStream">
+                ${messages.length ? messages.map(renderConversationMessage).join("") : renderTaskWelcome()}
+              </div>
+              ${renderQuickPrompts()}
+              <div class="prompt-composer">
+                <button class="composer-tool" type="button" aria-label="添加附件"><span class="material-symbols-outlined">attach_file</span></button>
+                <textarea class="composer-textarea" id="taskPromptInput" rows="1" placeholder="告诉我你想创建什么任务，例如：帮 Candy Blast 在美国创建 Meta 注册计划，日预算 800 美元。"></textarea>
+                <button class="composer-send" type="button" data-send-task aria-label="发送"><span class="material-symbols-outlined">arrow_upward</span></button>
+              </div>
+            </main>
+          </div>
+        </div>
+      `;
+      hydrateIcons();
+      requestAnimationFrame(() => {
+        const stream = document.getElementById("taskChatStream");
+        if (stream) stream.scrollTop = stream.scrollHeight;
+      });
+    }
+
+    function renderTaskWelcome() {
+      return `
+        <div class="task-welcome">
+          <h2>今天要创建什么投放任务？</h2>
+          <p>直接描述你想创建新项目还是新任务。我会先识别意图；如果是新项目，会在当前对话里逐步校验渠道、账户授权和 Campaign 字段，再生成项目并展示项目信息。</p>
+        </div>
+      `;
+    }
+
+    function renderQuickPrompts() {
+      const prompts = [
+        "新建一个 Candy Quest 北美 Meta 项目，日预算 1000 美元，目标注册",
+        "我要创建新项目，产品 RPG X，渠道 Google，美国和加拿大",
+        "为 Candy Blast 创建美国 Meta 注册计划，日预算 800 美元",
+        "复用上周 TikTok 计划，改成东南亚安装目标"
+      ];
+      return `<div class="quick-prompts">${prompts.map(text => `<button class="prompt-chip" type="button" data-task-prompt="${escapeHtml(text)}">${escapeHtml(text)}</button>`).join("")}</div>`;
+    }
+
+    function renderConversationMessage(message) {
+      const fromUser = message.role === "user";
+      return `
+        <article class="chat-message ${fromUser ? "from-user" : "from-assistant"}">
+          ${fromUser ? "" : `<div class="chat-avatar">AI</div>`}
+          <div class="chat-bubble">${message.html}</div>
+          ${fromUser ? `<div class="chat-avatar">我</div>` : ""}
+        </article>
+      `;
+    }
+
+    function sendTaskPrompt() {
+      const input = document.getElementById("taskPromptInput");
+      const text = input?.value.trim();
+      if (!text) return;
+      state.taskMessages = state.taskMessages || [];
+      state.taskMessages.push({ role: "user", html: `<p>${escapeHtml(text)}</p>` });
+      state.taskMessages.push({ role: "assistant", html: handleTaskConversation(text) });
+      state.taskCreated = false;
+      renderTaskPage();
+    }
+
+    function handleTaskConversation(text) {
+      if (isProjectInfoRequest(text) && state.lastCreatedProjectId) {
+        const project = projects.find(item => item.id === state.lastCreatedProjectId);
+        if (project) return renderCreatedProjectReply(project, "这是刚刚在当前对话里创建的新项目。");
+      }
+      const intent = detectTaskIntent(text);
+      if (intent === "task") {
+        state.taskFlow = "task";
+        state.projectCreation = null;
+      }
+      if (intent === "project" || (state.taskFlow === "project" && intent !== "task")) {
+        state.taskFlow = "project";
+        return handleProjectCreationConversation(text);
+      }
+
+      const matchedProjects = matchProjectsFromPrompt(text);
+      if (matchedProjects.length) {
+        mergeSelectedProjects(matchedProjects.map(project => project.id));
+      }
+      state.taskFlow = "task";
+      return buildTaskReply(text);
+    }
+
+    function detectTaskIntent(text) {
+      const normalized = text.toLowerCase();
+      const projectSignals = isStartNewProjectRequest(text) || /campaign\s*项目|campaign/i.test(text);
+      const taskSignals = /新任务|创建任务|创建计划|新建计划|ad\s*set|adgroup|ad group|计划|任务|素材测试|复用/i.test(normalized);
+      if (taskSignals && !projectSignals) return "task";
+      if (projectSignals && !taskSignals) return "project";
+      if (projectSignals && /项目/.test(text)) return "project";
+      if (taskSignals) return "task";
+      return state.taskFlow === "project" ? "project" : "task";
+    }
+
+    function handleProjectCreationConversation(text) {
+      if (isProjectInfoRequest(text) && state.lastCreatedProjectId) {
+        const project = projects.find(item => item.id === state.lastCreatedProjectId);
+        if (project) return renderCreatedProjectReply(project, "这是刚刚在当前对话里创建的新项目。");
+      }
+
+      const startNewProject = isStartNewProjectRequest(text);
+      if (startNewProject) {
+        state.projectCreation = createProjectDraft();
+        state.projectEditingField = "";
+      }
+      const draft = state.projectCreation || createProjectDraft();
+      state.projectCreation = draft;
+
+      mergeProjectDraftFromText(draft, text);
+      if (draft.channel && isAuthorizationMessage(text)) {
+        ensureChannelAuthorized(draft.channel, text);
+      }
+      mergeProjectDraftFromText(draft, text);
+
+      const validation = validateProjectDraft(draft);
+      if (isConfirmProjectCreate(text)) {
+        if (validation.canCreate) {
+          const project = createProjectFromDialogDraft(draft);
+          state.projectCreation = null;
+          state.projectEditingField = "";
+          state.taskFlow = "idle";
+          state.lastCreatedProjectId = project.id;
+          state.selectedProjects = [project.id];
+          return renderCreatedProjectReply(project, "新项目已创建，已同步到项目管理列表。");
+        }
+        return renderProjectCreationReply(draft, validation, "你已确认创建，但仍有必填校验没有通过。");
+      }
+
+      return renderProjectCreationReply(draft, validation);
+    }
+
+    function isStartNewProjectRequest(text) {
+      if (isConfirmProjectCreate(text)) return false;
+      return /新项目|新建项目|创建项目|创建新项目|新增项目|建项目|项目创建/i.test(text)
+        || /(新建|创建|新增|建)(?:一个|1个)?[^，。；\n]{0,64}项目/i.test(text);
+    }
+
+    function createProjectDraft() {
+      return {
+        channel: "",
+        account: "",
+        accountName: "",
+        accountType: "",
+        connectionId: "",
+        name: "",
+        product: "",
+        countries: [],
+        objective: "",
+        budget: "",
+        campaignName: "",
+        buyingType: "",
+        bidStrategy: "",
+        start: "",
+        end: "",
+        createdProjectId: ""
+      };
+    }
+
+    function mergeProjectDraftFromText(draft, text) {
+      const channels = detectChannels(text);
+      if (channels.length) draft.channel = channels[0];
+
+      const product = extractProjectProduct(text);
+      if (product) draft.product = product;
+
+      const projectName = extractProjectName(text, draft.channel);
+      if (projectName) draft.name = projectName;
+
+      const countries = extractProjectCountries(text);
+      if (countries.length) draft.countries = countries;
+
+      const objective = extractProjectObjective(text, draft.channel);
+      if (objective) draft.objective = objective;
+
+      const budget = matchBudget(text);
+      if (budget.status === "ok") draft.budget = budget.value;
+
+      const campaignName = extractCampaignName(text);
+      if (campaignName) draft.campaignName = campaignName;
+
+      const start = text.match(/(?:开始|start)\s*(?:时间)?\s*[:：]?\s*([^，。；\n]{4,32})/i);
+      if (start) draft.start = start[1].trim();
+      const end = text.match(/(?:结束|end)\s*(?:时间)?\s*[:：]?\s*([^，。；\n]{4,32})/i);
+      if (end) draft.end = end[1].trim();
+
+      if (draft.channel) {
+        const accounts = getAvailableProjectAccounts(draft.channel);
+        const matchedAccount = matchProjectAccountFromText(text, accounts);
+        if (matchedAccount) applyDraftAccount(draft, matchedAccount);
+      }
+    }
+
+    function extractProjectName(text, channel) {
+      const explicit = text.match(/(?:项目名称|项目名|project name|命名为|项目叫|名称是|名称为)\s*[:：]?\s*([^，。；\n]{2,56})/i);
+      if (explicit) {
+        const name = cleanProjectName(explicit[1], channel);
+        return isMeaningfulProjectValue(name) ? name : "";
+      }
+
+      const beforeProject = text.match(/(?:新建|创建|新增|建)(?:一个|1个)?\s*([^，。；\n]{2,64}?)\s*(?:投放)?项目/i);
+      if (beforeProject && !/^新$/.test(beforeProject[1].trim())) {
+        const name = cleanProjectName(beforeProject[1], channel);
+        return isMeaningfulProjectValue(name) ? name : "";
+      }
+
+      return "";
+    }
+
+    function cleanProjectName(value, channel) {
+      let name = String(value || "")
+        .replace(/^(一个|新的?|投放|项目|名称|叫|为|是)\s*/i, "")
+        .replace(/(项目|campaign|投放项目)$/i, "")
+        .replace(/(渠道|账户|产品|国家|地区|目标|预算).*$/i, "")
+        .trim();
+      ["Meta", "Google", "TikTok", "facebook", "instagram", "谷歌", "抖音"].forEach(word => {
+        name = name.replace(new RegExp(`\\s*${word}\\s*`, "ig"), " ");
+      });
+      if (channel) name = name.replace(new RegExp(`\\s*${channel}\\s*`, "ig"), " ");
+      return name.replace(/\s{2,}/g, " ").trim();
+    }
+
+    function extractProjectProduct(text) {
+      const product = text.match(/(?:产品|游戏|应用|App)\s*(?:是|为|叫|:|：)?\s*([^，。；\n]{2,42})/i);
+      if (!product) return "";
+      const value = product[1].replace(/(渠道|国家|地区|目标|预算).*$/i, "").trim();
+      return isMeaningfulProjectValue(value) ? value : "";
+    }
+
+    function isMeaningfulProjectValue(value) {
+      const normalized = String(value || "").trim();
+      if (normalized.length < 2) return false;
+      if (/^(一个|1个|新的?|项目|新项目|投放|投放项目|计划|新计划|任务|新任务|campaign)$/i.test(normalized)) return false;
+      if (/^(meta|google|tiktok|facebook|instagram|谷歌|抖音|脸书)$/i.test(normalized)) return false;
+      return /[\u4e00-\u9fa5A-Za-z0-9]/.test(normalized);
+    }
+
+    function extractProjectCountries(text) {
+      const countryMap = {
+        "北美": ["美国", "加拿大"],
+        "美国": ["美国"],
+        "加拿大": ["加拿大"],
+        "东南亚": ["东南亚"],
+        "SEA": ["东南亚"],
+        "巴西": ["巴西"],
+        "泰国": ["泰国"],
+        "印尼": ["印尼"],
+        "越南": ["越南"],
+        "日本": ["日本"],
+        "韩国": ["韩国"],
+        "全球": ["全球"]
+      };
+      const matched = [];
+      Object.entries(countryMap).forEach(([keyword, values]) => {
+        const pattern = keyword === "SEA" ? /sea/i : new RegExp(keyword, "i");
+        if (pattern.test(text)) values.forEach(item => matched.push(item));
+      });
+      return Array.from(new Set(matched));
+    }
+
+    function extractProjectObjective(text, channel) {
+      if (/注册|lead|completeRegistration/i.test(text)) return channel === "Google" ? "App Campaign registrations / tCPA" : "CompleteRegistration / Leads";
+      if (/安装|install/i.test(text)) return channel === "Google" ? "App Campaign installs / tCPI" : "App promotion / Install";
+      if (/付费|购买|purchase|sales/i.test(text)) return "Purchase / Sales";
+      if (/roas|价值|value/i.test(text)) return "ROAS / Value optimization";
+      if (/流量|traffic/i.test(text)) return "Traffic";
+      return "";
+    }
+
+    function extractCampaignName(text) {
+      const campaign = text.match(/(?:Campaign 名称|Campaign名|campaign name|计划名称|广告系列名称)\s*[:：]?\s*([^，。；\n]{2,56})/i);
+      return campaign ? campaign[1].trim() : "";
+    }
+
+    function getAvailableProjectAccounts(channel, includeUnauthorized = false) {
+      return state.connections
+        .filter(conn => conn.platform === channel && (includeUnauthorized || conn.status === "active"))
+        .flatMap(conn => {
+          const rows = [{
+            id: conn.account_id,
+            name: conn.account_name,
+            type: channel === "Google" ? "MCC" : "广告账户",
+            connectionId: conn.id,
+            status: conn.status
+          }];
+          if (channel === "Google") {
+            (conn.subAccounts || []).filter(sub => includeUnauthorized || sub.status === "active").forEach(sub => {
+              rows.push({
+                id: sub.customer_id,
+                name: sub.name,
+                type: "Customer",
+                connectionId: conn.id,
+                status: sub.status
+              });
+            });
+          }
+          return rows;
+        });
+    }
+
+    function matchProjectAccountFromText(text, accounts) {
+      if (!accounts.length) return null;
+      const lower = text.toLowerCase();
+      const direct = accounts.find(account => {
+        return lower.includes(String(account.id).toLowerCase()) || lower.includes(String(account.name).toLowerCase());
+      });
+      if (direct) return direct;
+      if (/默认账户|唯一账户|当前账户|这个账户|确认账户|选择账户|用此账户|使用账户|账户确认/i.test(text) && accounts.length === 1) {
+        return accounts[0];
+      }
+      const ordinal = text.match(/第\s*([一二三四五12345])\s*(?:个)?账户/i);
+      if (ordinal) {
+        const map = { 一: 1, 二: 2, 三: 3, 四: 4, 五: 5 };
+        const index = Number(map[ordinal[1]] || ordinal[1]) - 1;
+        return accounts[index] || null;
+      }
+      return null;
+    }
+
+    function applyDraftAccount(draft, account) {
+      draft.account = account.id;
+      draft.accountName = account.name;
+      draft.accountType = account.type;
+      draft.connectionId = account.connectionId;
+    }
+
+    function isAuthorizationMessage(text) {
+      return /授权|鉴权|oauth|已授权|完成授权|授权完成|完成鉴权|激活|同步账户/i.test(text);
+    }
+
+    function ensureChannelAuthorized(channel, text) {
+      if (!isAuthorizationMessage(text)) return null;
+      let conn = state.connections.find(item => item.platform === channel);
+      if (!conn) {
+        const key = channel.toLowerCase();
+        conn = {
+          id: `${key}-dialog-${Date.now()}`,
+          platform: channel,
+          account_id: channel === "Google" ? `MCC-${Math.floor(Math.random() * 900)}-${Math.floor(Math.random() * 900)}-${Math.floor(Math.random() * 9000)}` : `${key}_ads_${Math.floor(Math.random() * 900000)}`,
+          account_name: `${channel} Dialog Authorized Account`,
+          app_id: `${key}-dialog-app`,
+          status: "active",
+          scopes: (platforms[key]?.scopes || []).map(item => item[0]),
+          updated_at: new Date().toISOString(),
+          subAccounts: []
+        };
+        state.connections.unshift(conn);
+        return conn;
+      }
+      conn.status = "active";
+      conn.updated_at = new Date().toISOString();
+      return conn;
+    }
+
+    function isConfirmProjectCreate(text) {
+      return /确认创建项目|确认新建项目|创建项目吧|可以创建|确认创建|提交项目|生成项目/i.test(text);
+    }
+
+    function isProjectInfoRequest(text) {
+      return /查看.*项目|项目.*信息|刚刚.*项目|新项目详情|项目详情/i.test(text);
+    }
+
+    function validateProjectDraft(draft) {
+      const fields = [];
+      fields.push({ key: "intent", label: "创建意图", status: "ok", value: "新项目 / Campaign 层级" });
+
+      if (draft.channel) {
+        fields.push({ key: "channel", label: "投放渠道", status: "ok", value: draft.channel });
+      } else {
+        fields.push({ key: "channel", label: "投放渠道", status: "missing", message: "请先选择 Meta、Google 或 TikTok" });
+      }
+
+      const accounts = draft.channel ? getAvailableProjectAccounts(draft.channel) : [];
+      if (!draft.channel) {
+        fields.push({ key: "account", label: "账户鉴权", status: "missing", message: "选择渠道后再校验可用账户" });
+      } else if (!accounts.length) {
+        fields.push({ key: "account", label: "账户鉴权", status: "missing", message: `${draft.channel} 尚未完成授权或没有可用广告账户` });
+      } else if (!draft.account) {
+        fields.push({ key: "account", label: "账户选择", status: "missing", message: "请从已授权账户中选择 1 个用于创建项目" });
+      } else {
+        fields.push({ key: "account", label: "账户选择", status: "ok", value: `${draft.accountName} (${draft.account})` });
+      }
+
+      const projectName = getDraftProjectName(draft);
+      fields.push(projectName
+        ? { key: "name", label: "项目名称", status: "ok", value: projectName }
+        : { key: "name", label: "项目名称", status: "missing", message: "请补充项目名称，或提供产品、国家和渠道用于自动命名" });
+
+      const product = getDraftProduct(draft);
+      fields.push(product
+        ? { key: "product", label: "产品", status: "ok", value: product }
+        : { key: "product", label: "产品", status: "missing", message: "请补充产品或应用名称" });
+
+      fields.push(draft.countries.length
+        ? { key: "countries", label: "投放国家", status: "ok", value: draft.countries.join(" / ") }
+        : { key: "countries", label: "投放国家", status: "missing", message: "请补充国家或地区，例如美国、北美、东南亚" });
+
+      fields.push(draft.objective
+        ? { key: "objective", label: "Campaign Objective", status: "ok", value: draft.objective }
+        : { key: "objective", label: "Campaign Objective", status: "missing", message: "请补充注册、安装、付费、ROAS 或流量目标" });
+
+      fields.push(draft.budget
+        ? { key: "budget", label: "Budget", status: "ok", value: draft.budget }
+        : { key: "budget", label: "Budget", status: "missing", message: "请补充预算，例如日预算 800 美元" });
+
+      return { fields, accounts, canCreate: fields.every(field => field.status === "ok") };
+    }
+
+    function getDraftProjectName(draft) {
+      if (isMeaningfulProjectValue(draft.name)) return draft.name;
+      const product = draft.product;
+      if (!product || !draft.channel) return "";
+      const country = draft.countries[0] || "Global";
+      return `${product} ${country} ${draft.channel} 投放项目`;
+    }
+
+    function getDraftProduct(draft) {
+      return isMeaningfulProjectValue(draft.product) ? draft.product : "";
+    }
+
+    function renderProjectCreationReply(draft, validation, leadingMessage = "") {
+      const channel = draft.channel;
+      const activeStep = !channel ? 2 : !draft.account ? 3 : validation.canCreate ? 3 : 3;
+      return `
+        <p><strong>我判断这是创建新项目，不是创建新任务。</strong></p>
+        ${leadingMessage ? `<div class="assistant-alert">${escapeHtml(leadingMessage)}</div>` : ""}
+        <section class="project-flow-card">
+          <h3>新项目创建校验 <span class="project-flow-status">${validation.canCreate ? "可创建" : "等待补充"}</span></h3>
+          <div class="project-flow-steps">
+            <button class="project-flow-step project-edit-row done ${state.projectEditingField === "intent" ? "active" : ""}" type="button" data-project-edit-field="intent">1. 识别意图<br>新项目 / Campaign</button>
+            <button class="project-flow-step project-edit-row ${channel ? "done" : activeStep === 2 ? "active" : ""} ${state.projectEditingField === "channel" ? "active" : ""}" type="button" data-project-edit-field="channel">2. 选择渠道<br>${escapeHtml(channel || "待选择")}</button>
+            <button class="project-flow-step project-edit-row ${draft.account ? "done" : activeStep === 3 ? "active" : ""} ${state.projectEditingField === "account" ? "active" : ""}" type="button" data-project-edit-field="account">3. 账户鉴权<br>${escapeHtml(draft.accountName || "待选择账户")}</button>
+          </div>
+          ${renderProjectValidationFields(validation.fields)}
+          ${renderProjectEditPanel(draft, validation)}
+          ${renderProjectNextAction(draft, validation)}
+          ${renderProjectDraftPreview(draft)}
+        </section>
+        <p>${escapeHtml(getProjectCreationHint(draft, validation))}</p>
+      `;
+    }
+
+    function renderProjectValidationFields(fields) {
+      return `
+        <div class="field-checks">
+          ${fields.map(field => `
+            <button class="field-check project-edit-row ${field.status} ${state.projectEditingField === field.key ? "active" : ""}" type="button" data-project-edit-field="${escapeHtml(field.key)}">
+              <strong>${escapeHtml(field.label)}</strong>
+              <b>${escapeHtml(field.value || field.message || "未匹配")}</b>
+              <em>${field.status === "ok" ? "通过" : field.status === "invalid" ? "错误" : "待补充"}</em>
+            </button>
+          `).join("")}
+        </div>
+      `;
+    }
+
+    function renderProjectEditPanel(draft, validation) {
+      const field = state.projectEditingField;
+      if (!field) return "";
+      const config = getProjectEditConfig(field, draft, validation);
+      if (!config) return "";
+      return `
+        <section class="project-edit-panel">
+          <h4>${escapeHtml(config.title)}</h4>
+          <p>${escapeHtml(config.desc)}</p>
+          ${config.options?.length ? `
+            <div class="assistant-action-row">
+              ${config.options.map(option => `
+                <button class="mini" type="button" data-project-edit-option="${escapeHtml(field)}" data-project-edit-value="${escapeHtml(option.value)}">${escapeHtml(option.label)}</button>
+              `).join("")}
+            </div>
+          ` : ""}
+          ${config.input ? `
+            <div class="project-edit-input-row">
+              <input data-project-edit-input="${escapeHtml(field)}" value="${escapeHtml(config.input.value || "")}" placeholder="${escapeHtml(config.input.placeholder)}" />
+              <button class="mini" type="button" data-save-project-edit="${escapeHtml(field)}">保存</button>
+            </div>
+          ` : ""}
+        </section>
+      `;
+    }
+
+    function getProjectEditConfig(field, draft, validation) {
+      const accounts = draft.channel ? getAvailableProjectAccounts(draft.channel) : [];
+      const currentCountries = draft.countries.join(" / ");
+      const configs = {
+        intent: {
+          title: "编辑创建层级",
+          desc: "当前按新项目 / Campaign 层级校验；如果要创建计划或任务，可以切换回新任务校验。",
+          options: [{ label: "切换为新任务校验", value: "task" }]
+        },
+        channel: {
+          title: "编辑投放渠道",
+          desc: "渠道会决定后续账户、Campaign 字段和任务层级字段。切换渠道后需要重新选择账户。",
+          options: ["Meta", "Google", "TikTok"].map(item => ({ label: item, value: item }))
+        },
+        account: {
+          title: "编辑账户鉴权",
+          desc: draft.channel ? `请选择 1 个已授权的 ${draft.channel} 账户用于创建项目。` : "请先选择投放渠道，再选择对应账户。",
+          options: accounts.map(account => ({ label: `${account.name} (${account.id})`, value: account.id }))
+        },
+        name: {
+          title: "编辑项目名称",
+          desc: "项目名称必须是明确的业务名称，不能使用“新”“一个项目”等泛词。",
+          input: { value: draft.name, placeholder: "例如 Candy Quest 北美 Meta 投放项目" }
+        },
+        product: {
+          title: "编辑产品",
+          desc: "填写产品、游戏或应用名称，后续会用于 Campaign 命名和项目归属。",
+          input: { value: draft.product, placeholder: "例如 Candy Quest" }
+        },
+        countries: {
+          title: "编辑投放国家",
+          desc: "可选择常用地区，也可以手动输入多个国家，使用 /、逗号或顿号分隔。",
+          options: ["美国", "美国 / 加拿大", "东南亚", "巴西", "全球"].map(item => ({ label: item, value: item })),
+          input: { value: currentCountries, placeholder: "例如 美国 / 加拿大" }
+        },
+        objective: {
+          title: "编辑 Campaign Objective",
+          desc: "选择本项目的 Campaign 目标，后续任务会继承该方向做计划字段校验。",
+          options: [
+            { label: "注册", value: "CompleteRegistration / Leads" },
+            { label: "安装", value: "App promotion / Install" },
+            { label: "付费", value: "Purchase / Sales" },
+            { label: "ROAS", value: "ROAS / Value optimization" },
+            { label: "流量", value: "Traffic" }
+          ],
+          input: { value: draft.objective, placeholder: "例如 CompleteRegistration / Leads" }
+        },
+        budget: {
+          title: "编辑 Budget",
+          desc: "填写 Campaign 预算，可直接输入日预算或总预算。",
+          options: ["日预算 800 USD", "日预算 1000 USD", "总预算 18000 USD"].map(item => ({ label: item, value: item })),
+          input: { value: draft.budget, placeholder: "例如 日预算 800 USD" }
+        }
+      };
+      return configs[field];
+    }
+
+    function applyProjectFieldEdit(field, value) {
+      if (field === "intent" && value === "task") {
+        state.taskFlow = "task";
+        state.projectCreation = null;
+        state.projectEditingField = "";
+        const messages = state.taskMessages || [];
+        const lastAssistant = [...messages].reverse().find(message => message.role === "assistant");
+        if (lastAssistant) lastAssistant.html = buildTaskReply("创建新任务");
+        renderTaskPage();
+        return;
+      }
+
+      const draft = state.projectCreation || createProjectDraft();
+      state.projectCreation = draft;
+      const raw = String(value || "").trim();
+
+      if (field === "channel") {
+        if (draft.channel !== raw) {
+          draft.account = "";
+          draft.accountName = "";
+          draft.accountType = "";
+          draft.connectionId = "";
+        }
+        draft.channel = raw;
+      }
+      if (field === "account") {
+        const account = getAvailableProjectAccounts(draft.channel).find(item => item.id === raw);
+        if (account) applyDraftAccount(draft, account);
+      }
+      if (field === "name") {
+        draft.name = isMeaningfulProjectValue(raw) ? raw : "";
+      }
+      if (field === "product") {
+        draft.product = isMeaningfulProjectValue(raw) ? raw : "";
+      }
+      if (field === "countries") {
+        draft.countries = splitProjectCountries(raw).filter(item => item !== "未配置国家");
+      }
+      if (field === "objective") {
+        draft.objective = raw;
+      }
+      if (field === "budget") {
+        const matched = matchBudget(raw);
+        if (matched.status === "ok") {
+          draft.budget = matched.value;
+        } else if (/^\d+(?:\.\d+)?$/.test(raw)) {
+          draft.budget = `日预算 ${raw} USD`;
+        } else {
+          draft.budget = raw;
+        }
+      }
+
+      refreshProjectCreationReply();
+    }
+
+    function saveProjectEditInput(field) {
+      const input = document.querySelector(`[data-project-edit-input='${field}']`);
+      applyProjectFieldEdit(field, input?.value || "");
+    }
+
+    function refreshProjectCreationReply() {
+      const draft = state.projectCreation;
+      if (!draft) return;
+      const validation = validateProjectDraft(draft);
+      const messages = state.taskMessages || [];
+      for (let i = messages.length - 1; i >= 0; i -= 1) {
+        if (messages[i].role === "assistant") {
+          messages[i].html = renderProjectCreationReply(draft, validation);
+          break;
+        }
+      }
+      renderTaskPage();
+    }
+
+    function renderProjectNextAction(draft, validation) {
+      if (!draft.channel) {
+        return `
+          <div class="assistant-action-row">
+            ${["Meta", "Google", "TikTok"].map(channel => `<button class="mini" type="button" data-task-prompt-submit="渠道选择 ${channel}">${channel}</button>`).join("")}
+          </div>
+        `;
+      }
+
+      if (!validation.accounts.length) {
+        return `
+          <div class="assistant-alert">${escapeHtml(draft.channel)} 当前没有已授权账户。可以在对话里输入“授权 ${draft.channel} 并同步账户”，完成鉴权后我会继续账户选择。</div>
+          <div class="assistant-action-row">
+            <button class="mini" type="button" data-task-prompt-submit="授权 ${escapeHtml(draft.channel)} 并同步账户">完成授权</button>
+          </div>
+        `;
+      }
+
+      if (!draft.account) {
+        return `
+          <div class="account-choice-list">
+            ${validation.accounts.map((account, index) => `
+              <div class="account-choice">
+                <div><strong>${escapeHtml(account.name)}</strong><span>${escapeHtml(account.type)} · ${escapeHtml(account.id)}</span></div>
+                <button class="mini" type="button" data-task-prompt-submit="选择账户 ${escapeHtml(account.name)}">选择第 ${index + 1} 个</button>
+              </div>
+            `).join("")}
+          </div>
+        `;
+      }
+
+      if (validation.canCreate) {
+        return `
+          <div class="assistant-action-row">
+            <button class="mini" type="button" data-task-prompt-submit="确认创建项目">确认创建项目</button>
+            <button class="mini" type="button" data-task-prompt-submit="修改项目预算">修改字段</button>
+          </div>
+        `;
+      }
+
+      return "";
+    }
+
+    function renderProjectDraftPreview(draft) {
+      const name = getDraftProjectName(draft) || "待命名项目";
+      return `
+        <div class="project-preview-grid">
+          <div><strong>${escapeHtml(name)}</strong><span>项目名称</span></div>
+          <div><strong>${escapeHtml(draft.channel || "待选择")}</strong><span>投放渠道</span></div>
+          <div><strong>${escapeHtml(draft.accountName || "待选择")}</strong><span>广告账户</span></div>
+          <div><strong>${escapeHtml(getDraftProduct(draft) || "待补充")}</strong><span>产品</span></div>
+          <div><strong>${escapeHtml(draft.countries.join(" / ") || "待补充")}</strong><span>国家/地区</span></div>
+          <div><strong>${escapeHtml(draft.objective || "待补充")}</strong><span>Campaign Objective</span></div>
+          <div><strong>${escapeHtml(draft.budget || "待补充")}</strong><span>预算</span></div>
+          <div><strong>${escapeHtml(draft.campaignName || generateCampaignName(draft))}</strong><span>Campaign 名称</span></div>
+        </div>
+      `;
+    }
+
+    function getProjectCreationHint(draft, validation) {
+      const missing = validation.fields.find(field => field.status !== "ok");
+      if (!missing) return "校验已通过。你可以直接回复“确认创建项目”，我会创建项目并在当前对话窗口展示项目信息。";
+      if (missing.label === "投放渠道") return "请先选择渠道，例如“渠道选择 Meta”。";
+      if (missing.label === "账户鉴权") return `请先完成 ${draft.channel || "对应渠道"} 授权，例如“授权 ${draft.channel || "Meta"} 并同步账户”。`;
+      if (missing.label === "账户选择") return "请从上面的已授权账户里选择一个，也可以回复“选择第一个账户”。";
+      return `请继续补充：${missing.message}`;
+    }
+
+    function createProjectFromDialogDraft(draft) {
+      const now = new Date();
+      const channel = draft.channel || "Meta";
+      const ui = getChannelUi(channel);
+      const project = {
+        id: `${channel.toLowerCase()}-dialog-project-${Date.now()}`,
+        name: getDraftProjectName(draft),
+        channel,
+        aliases: [getDraftProjectName(draft).toLowerCase(), getDraftProduct(draft).toLowerCase()].filter(Boolean),
+        product: getDraftProduct(draft),
+        countries: draft.countries.length ? draft.countries : ["未配置国家"],
+        status: "草稿",
+        plans: "0 个计划",
+        adsets: [],
+        tasks: [
+          {
+            id: `task-project-${Date.now()}`,
+            adsetId: "",
+            name: `新建 ${channel} Campaign 配置`,
+            type: "项目配置",
+            owner: "小陈",
+            status: "草稿",
+            updatedAt: formatDate(now.toISOString()),
+            summary: "通过新任务对话窗口完成新项目创建、渠道选择和账户鉴权。"
+          }
+        ]
+      };
+      project.campaignConfig = {
+        campaignName: draft.campaignName || generateCampaignName(draft),
+        objective: draft.objective || ui.objectiveOptions[0],
+        buyingType: draft.buyingType || ui.buyingOptions[0],
+        specialAdCategories: ui.categoryOptions[0],
+        abTest: "关闭",
+        campaignBudget: "开启",
+        campaignStatus: "Draft",
+        budgetType: /总预算|Lifetime/i.test(draft.budget) ? "Lifetime budget" : "Daily budget",
+        budget: draft.budget,
+        bidStrategy: draft.bidStrategy || ui.bidOptions[0],
+        spendLimit: "",
+        start: draft.start || formatDate(now.toISOString()),
+        end: draft.end || "待确认",
+        account: draft.account,
+        campaignId: "待创建"
+      };
+      project.metaCampaign = channel === "Meta" ? project.campaignConfig : project.metaCampaign;
+      projects.unshift(project);
+      draft.createdProjectId = project.id;
+      return project;
+    }
+
+    function generateCampaignName(draft) {
+      const channel = draft.channel || "CH";
+      const product = (getDraftProduct(draft) || "Project").replace(/\s+/g, "_");
+      const country = (draft.countries[0] || "Global").replace(/\s+/g, "_");
+      const date = new Date();
+      const mm = String(date.getMonth() + 1).padStart(2, "0");
+      const dd = String(date.getDate()).padStart(2, "0");
+      return `${product}_${country}_${channel}_Campaign_${mm}${dd}`;
+    }
+
+    function renderCreatedProjectReply(project, title) {
+      return `
+        <p><strong>${escapeHtml(title || "新项目已创建。")}</strong></p>
+        ${renderCreatedProjectCard(project)}
+        <p>后续在这个对话窗口继续输入“为这个项目创建新任务”，我会把它作为已选项目继续做计划层级校验。</p>
+      `;
+    }
+
+    function renderCreatedProjectCard(project) {
+      const campaign = getProjectCampaign(project);
+      const ui = getChannelUi(project);
+      return `
+        <section class="project-flow-card">
+          <h3>${escapeHtml(project.name)} <span class="project-flow-status">${escapeHtml(ui.projectTag)}</span></h3>
+          <div class="project-preview-grid">
+            <div><strong>${escapeHtml(project.product)}</strong><span>产品</span></div>
+            <div><strong>${escapeHtml(project.countries.join(" / "))}</strong><span>投放国家</span></div>
+            <div><strong>${escapeHtml(project.channel)}</strong><span>渠道</span></div>
+            <div><strong>${escapeHtml(campaign.account || "待选择")}</strong><span>广告账户</span></div>
+            <div><strong>${escapeHtml(campaign.campaignName || project.name)}</strong><span>${escapeHtml(ui.campaignTitle)}</span></div>
+            <div><strong>${escapeHtml(campaign.objective || "-")}</strong><span>Objective</span></div>
+            <div><strong>${escapeHtml(campaign.budget || "-")}</strong><span>Budget</span></div>
+            <div><strong>${escapeHtml(project.status)}</strong><span>项目状态</span></div>
+          </div>
+        </section>
+      `;
+    }
+
+    function buildTaskReply(text) {
+      const selectedProjects = getSelectedProjects();
+      const channels = detectChannels(text);
+      const channelList = channels.length ? channels : ["Meta", "Google", "TikTok"];
+      const validations = channelList.map(channel => validateChannelForm(channel, text, selectedProjects));
+      const hasIssues = validations.some(item => item.issues.length);
+
+      return `
+        <p><strong>${hasIssues ? "我已识别到任务意图，但有字段需要补充或修正。" : "已完成基础任务表单校验，下面是按渠道拆分的创建字段。"}</strong></p>
+        ${renderSelectedProjectSummary(selectedProjects)}
+        ${!selectedProjects.length ? `<div class="assistant-alert">创建新任务前必须匹配至少 1 个项目，最多 99 个。请在输入里写出项目名称，例如 Candy Blast、RPG X 或 Puzzle SEA。</div>` : ""}
+        ${!channels.length ? `<div class="assistant-alert">未在输入中识别到投放渠道。请明确选择 Meta、Google、TikTok 中的 1 个或多个渠道；下面先展示三渠道所需字段供你补充。</div>` : ""}
+        <div class="validation-summary cols-${Math.min(3, validations.length)}">
+          ${validations.map(renderChannelValidation).join("")}
+        </div>
+        <p>${hasIssues || !selectedProjects.length ? "请直接在对话里补充缺失字段，例如“项目选 Candy Blast，Meta 和 TikTok，目标注册，日预算 800 美元，国家美国”。" : "如果这些字段无误，可以继续输入“确认创建”；如果要调整，直接说要修改的字段即可。"}</p>
+      `;
+    }
+
+    function getSelectedProjects() {
+      const selected = new Set(state.selectedProjects || []);
+      return projects.filter(project => selected.has(project.id));
+    }
+
+    function mergeSelectedProjects(projectIds) {
+      const selected = new Set(state.selectedProjects || []);
+      projectIds.forEach(id => {
+        if (selected.size < 99) selected.add(id);
+      });
+      state.selectedProjects = Array.from(selected);
+    }
+
+    function matchProjectsFromPrompt(text) {
+      const normalized = text.toLowerCase();
+      return projects.filter(project => {
+        const names = [project.name, project.product, ...project.aliases].map(item => item.toLowerCase());
+        return names.some(name => normalized.includes(name));
+      });
+    }
+
+    function detectChannels(text) {
+      const found = [];
+      if (/meta|facebook|instagram|fb|脸书/i.test(text)) found.push("Meta");
+      if (/google|谷歌|uac|youtube|admob/i.test(text)) found.push("Google");
+      if (/tiktok|抖音|tt|spark/i.test(text)) found.push("TikTok");
+      return found;
+    }
+
+    function validateChannelForm(channel, text, selectedProjects) {
+      const activeAccount = state.connections.find(conn => conn.platform === channel && conn.status === "active");
+      const fields = channelRequirements[channel].map(rule => {
+        const result = rule.extract(text, selectedProjects, activeAccount);
+        const status = result.status || (result.value ? "ok" : "missing");
+        return { ...rule, ...result, status };
+      });
+      const issues = fields.filter(field => field.status !== "ok").map(field => field.message || `${field.label} 无法匹配`);
+      return { channel, activeAccount, fields, issues };
+    }
+
+    function renderSelectedProjectSummary(selectedProjects) {
+      if (!selectedProjects.length) return "";
+      return `
+        <div class="assistant-plan">
+          <div class="assistant-plan-row"><span>已选项目</span><b>${escapeHtml(selectedProjects.map(project => project.name).join(" / "))}</b></div>
+          <div class="assistant-plan-row"><span>项目数量</span><b>${selectedProjects.length} / 99</b></div>
+        </div>
+      `;
+    }
+
+    function renderChannelValidation(result) {
+      const ok = !result.issues.length;
+      return `
+        <section class="validation-card ${ok ? "ok" : "warn"}">
+          <h3>${escapeHtml(result.channel)} 创建字段校验 <span class="validation-status">${ok ? "可创建" : `${result.issues.length} 项待确认`}</span></h3>
+          <div class="field-checks">
+            ${result.fields.map(field => `
+              <div class="field-check ${field.status}">
+                <strong>${escapeHtml(field.label)}</strong>
+                <b>${escapeHtml(field.value || field.message || "未匹配")}</b>
+                <em>${field.status === "ok" ? "匹配" : field.status === "invalid" ? "错误" : "缺失"}</em>
+              </div>
+            `).join("")}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderProjectsPage() {
+      const project = getActiveProject();
+      if (state.projectSubview === "tasks" && project) {
+        renderProjectTasksPage(project);
+        return;
+      }
+      if (state.projectSubview === "taskDetail" && project) {
+        renderTaskDetailPage(project);
+        return;
+      }
+      if (state.projectSubview === "newTask" && project) {
+        renderCreateMetaTaskPage(project);
+        return;
+      }
+      if (state.projectSubview === "editTask" && project) {
+        renderEditMetaTaskPage(project);
+        return;
+      }
+      renderProjectListPage();
+    }
+
+    function renderProjectListPage() {
+      document.getElementById("projectsPage").innerHTML = `
+        <div class="page-head">
+          <div><h1>项目管理</h1><p>项目用于承载产品、国家、预算池和计划归属；账户授权不在这里重复配置</p></div>
+          <div class="batch-actions">
+            <button class="btn" type="button" data-copy-selected-projects><span class="material-symbols-outlined">content_copy</span>批量复制项目</button>
+            <button class="btn danger" type="button" data-delete-selected-projects><span class="material-symbols-outlined">delete</span>批量删除项目</button>
+            <button class="btn primary" type="button" data-open-project-form><span class="material-symbols-outlined">add</span>新建项目</button>
+          </div>
+        </div>
+        <div class="content">
+          <div class="project-note"><strong>账户与权限配置已迁移</strong><br>管理员账号、投放账号、OAuth 授权范围、广告账户同步和 Google 子账号都在「账户设置 / 平台连接」统一维护。项目管理只保留项目维度信息，创建计划时自动读取可用连接。</div>
+          <div class="grid-3">
+            ${projects.map(projectCard).join("")}
+          </div>
+        </div>
+      `;
+      hydrateIcons();
+    }
+
+    function projectCard(project) {
+      const channel = getProjectChannel(project);
+      const ui = getChannelUi(channel);
+      const campaign = getProjectCampaign(project);
+      return `
+        <article class="project-card">
+          <label class="select-check"><input type="checkbox" data-copy-project="${escapeHtml(project.id)}" />选择项目</label>
+          <div class="project-card-head">
+            <div class="project-card-title">
+              <h3>${escapeHtml(project.name)}</h3>
+              <p>${escapeHtml(project.product)}<br>${escapeHtml(project.countries.join(" / "))}</p>
+            </div>
+          </div>
+          <div class="scope-list" style="margin-top:12px;">
+            <span class="chip">${escapeHtml(ui.projectTag)}</span>
+            <span class="chip">${escapeHtml(project.status)}</span>
+            <span class="chip">${escapeHtml(project.plans)}</span>
+            <span class="chip">${escapeHtml(campaign.objective || "未配置目标")}</span>
+          </div>
+          <div class="project-card-actions">
+            <button class="btn soft" type="button" data-open-task-window="${escapeHtml(project.id)}"><span class="material-symbols-outlined">add_task</span>创建新任务</button>
+            <button class="btn" type="button" data-open-project-form data-project-id="${escapeHtml(project.id)}"><span class="material-symbols-outlined">edit</span>编辑项目</button>
+            <button class="btn ghost" type="button" data-view-project-tasks="${escapeHtml(project.id)}"><span class="material-symbols-outlined">assignment</span>查看任务</button>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderProjectTasksPage(project) {
+      const tasks = project.tasks || [];
+      const ui = getChannelUi(project);
+      document.getElementById("projectsPage").innerHTML = `
+        <section class="project-subpage">
+          ${renderSubpageHead(
+            `${project.name} · 任务信息`,
+            `展示当前项目下已创建或进行中的任务；点击任务可查看对应 ${ui.planTitle} 与素材信息。`,
+            `<button class="btn" type="button" data-back-projects><span class="material-symbols-outlined">arrow_back</span>返回项目管理</button>
+             <button class="btn" type="button" data-copy-selected-plans="${escapeHtml(project.id)}"><span class="material-symbols-outlined">content_copy</span>批量复制计划</button>
+             <button class="btn danger" type="button" data-delete-selected-plans="${escapeHtml(project.id)}"><span class="material-symbols-outlined">delete</span>批量删除计划</button>
+             <button class="btn primary" type="button" data-open-task-window="${escapeHtml(project.id)}"><span class="material-symbols-outlined">add_task</span>创建新任务</button>`
+          )}
+          <div class="subpage-content">
+            <div class="project-note"><strong>项目任务</strong><br>任务详情承接 ${ui.planTitle} 层级信息，并在计划层级展示对应素材信息。</div>
+            ${tasks.length ? `<div class="task-list-grid">${tasks.map(task => renderTaskListItem(project, task)).join("")}</div>` : `<div class="empty-state"><span class="material-symbols-outlined">assignment</span>暂无任务信息</div>`}
+          </div>
+        </section>
+      `;
+      hydrateIcons();
+    }
+
+    function renderTaskListItem(project, task) {
+      const adset = getTaskAdset(project, task);
+      return `
+        <article class="project-task-item interactive">
+          <div class="project-task-head">
+            <div style="display:flex;gap:12px;align-items:flex-start;">
+              <label class="select-check" style="margin-top:2px;"><input type="checkbox" data-copy-plan="${escapeHtml(task.id)}" />选择</label>
+              <div>
+              <h3>${escapeHtml(task.name)}</h3>
+              <p>${escapeHtml(task.summary)}</p>
+              </div>
+            </div>
+            <button class="mini" type="button" data-view-task-detail="${escapeHtml(project.id)}:${escapeHtml(task.id)}">查看详情</button>
+          </div>
+          <div class="project-task-meta">
+            <span class="chip">${escapeHtml(task.owner)}</span>
+            <span class="chip">${escapeHtml(task.updatedAt)}</span>
+            <span class="chip">${escapeHtml(adset?.name || "未绑定计划")}</span>
+          </div>
+        </article>
+      `;
+    }
+
+    function renderTaskDetailPage(project) {
+      const task = getActiveTask(project);
+      const adset = getTaskAdset(project, task) || {};
+      const ui = getChannelUi(project);
+      document.getElementById("projectsPage").innerHTML = `
+        <section class="project-subpage">
+          ${renderSubpageHead(
+            `${task?.name || "任务详情"} · ${ui.planTitle}`,
+            `具体任务信息对应 ${ui.planTitle} 层级，下方补充该计划下的素材信息。`,
+            `<button class="btn" type="button" data-back-project-tasks="${escapeHtml(project.id)}"><span class="material-symbols-outlined">arrow_back</span>返回任务列表</button>
+             <button class="btn" type="button" data-back-projects>返回项目管理</button>
+             <button class="btn" type="button" data-edit-meta-task="${escapeHtml(project.id)}:${escapeHtml(task?.id || "")}"><span class="material-symbols-outlined">edit</span>编辑任务</button>
+             <button class="btn primary" type="button" data-open-task-window="${escapeHtml(project.id)}"><span class="material-symbols-outlined">add_task</span>创建新任务</button>`
+          )}
+          <div class="subpage-content task-detail-layout">
+            <div class="task-list-grid">
+              <section class="task-panel">
+                <h2>${escapeHtml(task?.name || "未命名任务")}</h2>
+                <p>${escapeHtml(task?.summary || "暂无任务描述")}</p>
+                <div class="project-task-meta">
+                  <span class="chip">${escapeHtml(task?.owner || "小陈")}</span>
+                  <span class="chip">${escapeHtml(task?.updatedAt || "-")}</span>
+                  <span class="chip">${escapeHtml(adset?.name || "未绑定计划")}</span>
+                </div>
+              </section>
+              <section class="task-panel">
+                <h2>${escapeHtml(ui.planTitle)} 字段</h2>
+                <div class="adset-list" style="margin-top:14px;">${renderAdsetRow(project, adset)}</div>
+              </section>
+            </div>
+            ${renderCampaignSummary(project)}
+          </div>
+        </section>
+      `;
+      hydrateIcons();
+    }
+
+    function renderEditMetaTaskPage(project) {
+      const task = getActiveTask(project);
+      const values = getMetaTaskValuesFromTask(project, task);
+      const ui = getChannelUi(project);
+      document.getElementById("projectsPage").innerHTML = `
+        <section class="project-subpage">
+          ${renderSubpageHead(
+            `${task?.name || "任务"} · 编辑`,
+            `编辑当前任务绑定的 ${ui.planTitle} 与计划层级素材配置。`,
+            `<button class="btn" type="button" data-view-task-detail="${escapeHtml(project.id)}:${escapeHtml(task?.id || "")}"><span class="material-symbols-outlined">arrow_back</span>返回详情</button>
+             <button class="btn" type="button" data-back-project-tasks="${escapeHtml(project.id)}">返回任务列表</button>
+             <button class="btn primary" type="button" data-update-meta-task="${escapeHtml(project.id)}:${escapeHtml(task?.id || "")}">保存编辑</button>`
+          )}
+          <div class="subpage-content task-detail-layout">
+            <div>
+              <div class="project-note"><strong>任务编辑</strong><br>修改会同步更新任务信息、${ui.planTitle} 字段和当前计划下的素材。</div>
+              ${renderMetaTaskForm(values)}
+            </div>
+            ${renderCampaignSummary(project)}
+          </div>
+        </section>
+      `;
+      hydrateIcons();
+    }
+
+    function renderCreateMetaTaskPage(project) {
+      const defaults = getMetaTaskDefaults(project);
+      const ui = getChannelUi(project);
+      document.getElementById("projectsPage").innerHTML = `
+        <section class="project-subpage">
+          ${renderSubpageHead(
+            `${project.name} · 创建新任务`,
+            `新任务在当前 ${ui.campaignTitle} 下创建 ${ui.planTitle}，并补充该计划下的素材。`,
+            `<button class="btn" type="button" data-back-projects><span class="material-symbols-outlined">arrow_back</span>返回项目管理</button>
+             <button class="btn" type="button" data-back-project-tasks="${escapeHtml(project.id)}">查看任务</button>
+             <button class="btn primary" type="button" data-save-meta-task="${escapeHtml(project.id)}">保存任务</button>`
+          )}
+          <div class="subpage-content task-detail-layout">
+            <div>
+              <div class="project-note"><strong>${escapeHtml(getProjectChannel(project))} 新任务逻辑</strong><br>${escapeHtml(ui.newTaskNote)}</div>
+              ${renderMetaTaskForm(defaults)}
+            </div>
+            ${renderCampaignSummary(project)}
+          </div>
+        </section>
+      `;
+      hydrateIcons();
+    }
+
+    function renderSubpageHead(title, desc, actions) {
+      return `
+        <div class="subpage-head">
+          <div class="subpage-title">
+            <div>
+              <h1>${escapeHtml(title)}</h1>
+              <p>${escapeHtml(desc)}</p>
+            </div>
+          </div>
+          <div class="subpage-actions">${actions}</div>
+        </div>
+      `;
+    }
+
+    function renderMetaTaskForm(values) {
+      const ui = getChannelUi(values.channel || "Meta");
+      return `
+        <section class="meta-form-card">
+          <h2>任务与 ${escapeHtml(ui.planTitle)} 配置</h2>
+          <div class="form-grid">
+            ${renderMetaTaskInput("任务名称", "taskName", values.taskName)}
+            ${renderMetaTaskInput(`${ui.planTitle} 名称`, "adsetName", values.adsetName)}
+            ${renderMetaTaskSelect(ui.planLabels[0], "conversionLocation", ui.conversionLocationOptions, values.conversionLocation)}
+            ${renderMetaTaskInput(ui.planLabels[1], "pixelAppPage", values.pixelAppPage)}
+            ${renderMetaTaskSelect(ui.planLabels[2], "conversionEvent", ui.conversionEventOptions, values.conversionEvent)}
+            ${renderMetaTaskSelect(ui.planLabels[3], "performanceGoal", ui.performanceGoalOptions, values.performanceGoal)}
+            ${renderMetaTaskSelect(ui.planLabels[4], "attribution", ui.attributionOptions, values.attribution)}
+            ${renderMetaTaskInput("预算", "budget", values.budget)}
+            ${renderMetaTaskInput("排期", "schedule", values.schedule)}
+            ${renderMetaTaskInput("定向", "targeting", values.targeting, "国家；年龄；语言；受众")}
+            ${renderMetaTaskSelect("版位/Network", "placements", ui.placementOptions, values.placements)}
+            ${renderMetaTaskSelect("状态", "status", [...new Set(["Draft", ...ui.statusOptions, "Learning"])], values.status)}
+          </div>
+        </section>
+        <section class="meta-form-card">
+          <h2>${escapeHtml(ui.creativeTitle)}</h2>
+          <div class="form-grid">
+            ${renderMetaTaskInput("素材/广告名称", "adName", values.adName)}
+            ${renderMetaTaskSelect("素材格式", "adFormat", ui.adFormatOptions, values.adFormat)}
+            ${renderMetaTaskInput("素材名称", "material", values.material)}
+            ${renderMetaTaskInput("文案/CTA", "copy", values.copy)}
+            ${renderMetaTaskSelect("Ad 状态", "adStatus", ["Draft", "Review", "Active", "Paused"], values.adStatus)}
+            ${renderMetaTaskInput("负责人", "owner", values.owner)}
+            ${renderMaterialPicker(values.material, values.channel || "Meta")}
+          </div>
+        </section>
+      `;
+    }
+
+    function renderMaterialPicker(selectedMaterial, channel = "Meta") {
+      const metaAssets = assets.filter(asset => asset.platform === channel);
+      return `
+        <div class="material-picker">
+          <div class="material-picker-head">
+            <span>素材选择</span>
+            <span>${metaAssets.length} 个 ${escapeHtml(channel)} 素材可用</span>
+          </div>
+          <div class="material-options">
+            ${metaAssets.map(asset => {
+              const selected = asset.name === selectedMaterial;
+              return `
+                <button class="material-option ${selected ? "active" : ""}" type="button" data-material-option="${escapeHtml(asset.name)}" data-material-format="${escapeHtml(asset.type)}">
+                  <strong>${escapeHtml(asset.name)}</strong>
+                  <span>${escapeHtml(asset.desc)}</span>
+                  <em>${escapeHtml(asset.type)} · ${escapeHtml(asset.score)}分</em>
+                </button>
+              `;
+            }).join("")}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMetaTaskInput(label, field, value, placeholder = "") {
+      return `<div class="field"><label>${label}</label><input data-meta-task-field="${field}" value="${escapeHtml(value || "")}" placeholder="${escapeHtml(placeholder || label)}" /></div>`;
+    }
+
+    function renderMetaTaskSelect(label, field, options, selected) {
+      return `
+        <div class="field">
+          <label>${label}</label>
+          <select data-meta-task-field="${field}">
+            <option value="" ${selected ? "" : "selected"}>请选择${escapeHtml(label)}</option>
+            ${options.map(option => `<option value="${escapeHtml(option)}" ${option === selected ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+          </select>
+        </div>
+      `;
+    }
+
+    function renderCampaignSummary(project) {
+      const ui = getChannelUi(project);
+      const campaign = getProjectCampaign(project);
+      return `
+        <aside class="task-panel campaign-summary">
+          <h3>${escapeHtml(ui.campaignTitle)}</h3>
+          ${renderMetaField("Campaign 名称", campaign.campaignName || project.name)}
+          ${renderMetaField(ui.objectiveLabel, campaign.objective)}
+          ${renderMetaField(ui.buyingLabel, campaign.buyingType)}
+          ${renderMetaField(ui.budgetSwitchLabel, `${campaign.campaignBudget || "-"}；${campaign.budgetType || "-"} ${campaign.budget || ""}`)}
+          ${renderMetaField("Bid strategy", campaign.bidStrategy)}
+          ${renderMetaField("Start / End", `${campaign.start || "-"} / ${campaign.end || "-"}`)}
+        </aside>
+      `;
+    }
+
+    function renderAdsetRow(project, adset = {}) {
+      const ui = getChannelUi(project);
+      return `
+        <div class="adset-row">
+          <div class="adset-row-head">
+            <div>
+              <h4>${escapeHtml(adset.name || "未命名 Ad Set")}</h4>
+              <p>${escapeHtml(adset.targeting || "未配置定向")} · ${escapeHtml(adset.schedule || "未配置排期")}</p>
+            </div>
+            <span class="chip">${escapeHtml(adset.status || "Draft")}</span>
+          </div>
+          <div class="meta-field-grid">
+            ${renderMetaField(ui.planLabels[0], adset.conversionLocation)}
+            ${renderMetaField(ui.planLabels[1], adset.pixelAppPage)}
+            ${renderMetaField(ui.planLabels[2], adset.conversionEvent)}
+            ${renderMetaField(ui.planLabels[3], adset.performanceGoal)}
+            ${renderMetaField(ui.planLabels[4], adset.attribution)}
+            ${renderMetaField(ui.planLabels[5], `${adset.budget || "-"}；${adset.placements || "-"}`)}
+          </div>
+          <div class="creative-strip">
+            ${(adset.ads || []).map(ad => `
+              <div class="creative-row">
+                <strong>${escapeHtml(ad.name)}</strong>
+                <span>${escapeHtml(ad.format)}</span>
+                <span>${escapeHtml(ad.material)} · ${escapeHtml(ad.copy)}</span>
+                <span class="chip">${escapeHtml(ad.status)}</span>
+              </div>
+            `).join("") || `<div class="creative-row"><strong>暂无 Ad 素材</strong><span>-</span><span>保存任务后补充素材</span><span class="chip">Draft</span></div>`}
+          </div>
+        </div>
+      `;
+    }
+
+    function renderMetaField(label, value) {
+      return `<div class="meta-field"><span>${escapeHtml(label)}</span><strong>${escapeHtml(value || "-")}</strong></div>`;
+    }
+
+    function getMetaTaskDefaults(project) {
+      const channel = getProjectChannel(project);
+      return {
+        channel,
+        taskName: "",
+        adsetName: "",
+        conversionLocation: "",
+        pixelAppPage: "",
+        conversionEvent: "",
+        performanceGoal: "",
+        attribution: "",
+        budget: "",
+        schedule: "",
+        targeting: "",
+        placements: "",
+        status: "",
+        adName: "",
+        adFormat: "",
+        material: "",
+        copy: "",
+        adStatus: "",
+        owner: ""
+      };
+    }
+
+    function getActiveProject() {
+      return projects.find(item => item.id === state.activeProjectId) || null;
+    }
+
+    function getActiveTask(project) {
+      return (project?.tasks || []).find(item => item.id === state.activeTaskId) || (project?.tasks || [])[0] || null;
+    }
+
+    function getTaskAdset(project, task) {
+      if (!project || !task) return null;
+      return (project.adsets || []).find(item => item.id === task.adsetId) || null;
+    }
+
+    function openProjectTaskList(projectId) {
+      state.activeProjectId = projectId;
+      state.activeTaskId = null;
+      state.projectSubview = "tasks";
+      renderProjectsPage();
+    }
+
+    function openProjectTaskCreate(projectId) {
+      state.activeProjectId = projectId;
+      state.activeTaskId = null;
+      state.projectSubview = "newTask";
+      renderProjectsPage();
+    }
+
+    function openProjectTaskDetail(projectId, taskId) {
+      state.activeProjectId = projectId;
+      state.activeTaskId = taskId;
+      state.projectSubview = "taskDetail";
+      renderProjectsPage();
+    }
+
+    function openProjectTaskEdit(projectId, taskId) {
+      state.activeProjectId = projectId;
+      state.activeTaskId = taskId;
+      state.projectSubview = "editTask";
+      renderProjectsPage();
+    }
+
+    function backToProjectList() {
+      state.projectSubview = "list";
+      state.activeProjectId = null;
+      state.activeTaskId = null;
+      renderProjectsPage();
+    }
+
+    function collectMetaTaskValues() {
+      const values = {};
+      document.querySelectorAll("[data-meta-task-field]").forEach(el => {
+        values[el.dataset.metaTaskField] = el.value.trim();
+      });
+      return values;
+    }
+
+    function validateRequiredTaskFields(values) {
+      const required = [
+        ["taskName", "任务名称"],
+        ["adsetName", "计划名称"],
+        ["conversionLocation", "转换地点/计划类型"],
+        ["pixelAppPage", "像素/应用/页面"],
+        ["conversionEvent", "转换事件"],
+        ["performanceGoal", "绩效目标"],
+        ["attribution", "归因设置"],
+        ["budget", "预算"],
+        ["schedule", "排期"],
+        ["targeting", "定向"],
+        ["placements", "版位/Network"],
+        ["status", "状态"],
+        ["adName", "素材/广告名称"],
+        ["adFormat", "素材格式"],
+        ["material", "素材名称"],
+        ["copy", "文案/CTA"],
+        ["adStatus", "Ad 状态"],
+        ["owner", "负责人"]
+      ];
+      return required.filter(([key]) => !values[key]).map(([, label]) => label);
+    }
+
+    function planStatusToTaskStatus(status) {
+      if (["Active", "Enabled", "Learning"].includes(status)) return "待发布";
+      if (status === "Paused") return "已暂停";
+      return "草稿";
+    }
+
+    function updateMaterialSelection(materialName, format) {
+      const materialInput = document.querySelector("[data-meta-task-field='material']");
+      const formatSelect = document.querySelector("[data-meta-task-field='adFormat']");
+      if (materialInput) materialInput.value = materialName;
+      if (formatSelect && format) formatSelect.value = format;
+      document.querySelectorAll("[data-material-option]").forEach(option => {
+        option.classList.toggle("active", option.dataset.materialOption === materialName);
+      });
+    }
+
+    function saveMetaTaskConfig(projectId) {
+      const project = projects.find(item => item.id === projectId);
+      if (!project) return;
+      const values = collectMetaTaskValues();
+      const missing = validateRequiredTaskFields(values);
+      if (missing.length) {
+        showToast(`请先补充：${missing.slice(0, 3).join("、")}${missing.length > 3 ? "等字段" : ""}`);
+        return;
+      }
+      const adsetId = `as-${Date.now()}`;
+      const adset = {
+        id: adsetId,
+        name: values.adsetName,
+        status: values.status || "Draft",
+        conversionLocation: values.conversionLocation,
+        pixelAppPage: values.pixelAppPage,
+        conversionEvent: values.conversionEvent,
+        performanceGoal: values.performanceGoal,
+        attribution: values.attribution,
+        targeting: values.targeting,
+        placements: values.placements,
+        budget: values.budget,
+        schedule: values.schedule,
+        ads: [
+          {
+            name: values.adName,
+            format: values.adFormat,
+            material: values.material,
+            copy: values.copy,
+            status: values.adStatus || "Draft"
+          }
+        ]
+      };
+      const task = {
+        id: `task-${Date.now()}`,
+        adsetId,
+        name: values.taskName,
+        type: "创建计划",
+        owner: values.owner,
+        status: planStatusToTaskStatus(values.status),
+        updatedAt: formatDate(new Date().toISOString()),
+        summary: `在 ${getProjectCampaign(project).campaignName || project.name} 下创建 ${values.adsetName}，优化 ${values.conversionEvent}。`
+      };
+      project.adsets = [...(project.adsets || []), adset];
+      project.tasks = [...(project.tasks || []), task];
+      adjustProjectPlanCount(project, 1);
+      state.activeTaskId = null;
+      state.projectSubview = "tasks";
+      renderProjectsPage();
+      showToast(`${getProjectChannel(project)} 新任务已保存`);
+    }
+
+    function getMetaTaskValuesFromTask(project, task) {
+      const channel = getProjectChannel(project);
+      const ui = getChannelUi(channel);
+      const adset = getTaskAdset(project, task) || {};
+      const ad = (adset.ads || [])[0] || {};
+      return {
+        channel,
+        taskName: task?.name || `${project.name} 编辑任务`,
+        adsetName: adset.name || "",
+        conversionLocation: adset.conversionLocation || ui.conversionLocationOptions[0],
+        pixelAppPage: adset.pixelAppPage || `${project.product} App`,
+        conversionEvent: adset.conversionEvent || ui.conversionEventOptions[0],
+        performanceGoal: adset.performanceGoal || ui.performanceGoalOptions[0],
+        attribution: adset.attribution || ui.attributionOptions[0],
+        budget: adset.budget || "使用 Campaign budget",
+        schedule: adset.schedule || "长期投放",
+        targeting: adset.targeting || `${project.countries.join(" / ")}；18-45；Advantage+ audience`,
+        placements: adset.placements || ui.placementOptions[0],
+        status: adset.status || "Draft",
+        adName: ad.name || `${adset.name || "New"}_Ad`,
+        adFormat: ad.format || ui.adFormatOptions[0],
+        material: ad.material || "待选择素材",
+        copy: ad.copy || "核心卖点文案 / Install Now",
+        adStatus: ad.status || "Draft",
+        owner: task?.owner || "小陈"
+      };
+    }
+
+    function updateMetaTaskConfig(projectId, taskId) {
+      const project = projects.find(item => item.id === projectId);
+      const task = (project?.tasks || []).find(item => item.id === taskId);
+      if (!project || !task) return;
+      const values = collectMetaTaskValues();
+      const missing = validateRequiredTaskFields(values);
+      if (missing.length) {
+        showToast(`请先补充：${missing.slice(0, 3).join("、")}${missing.length > 3 ? "等字段" : ""}`);
+        return;
+      }
+      let adset = getTaskAdset(project, task);
+      if (!adset) {
+        adset = { id: `as-${Date.now()}`, ads: [] };
+        project.adsets = [...(project.adsets || []), adset];
+        task.adsetId = adset.id;
+      }
+      Object.assign(adset, {
+        name: values.adsetName,
+        status: values.status || "Draft",
+        conversionLocation: values.conversionLocation,
+        pixelAppPage: values.pixelAppPage,
+        conversionEvent: values.conversionEvent,
+        performanceGoal: values.performanceGoal,
+        attribution: values.attribution,
+        targeting: values.targeting,
+        placements: values.placements,
+        budget: values.budget,
+        schedule: values.schedule,
+        ads: [
+          {
+            name: values.adName,
+            format: values.adFormat,
+            material: values.material,
+            copy: values.copy,
+            status: values.adStatus || "Draft"
+          }
+        ]
+      });
+      Object.assign(task, {
+        name: values.taskName,
+        owner: values.owner || task.owner,
+        status: planStatusToTaskStatus(values.status),
+        updatedAt: formatDate(new Date().toISOString()),
+        summary: `已更新 ${values.adsetName}，优化 ${values.conversionEvent}，素材 ${values.material || "待选择"}。`
+      });
+      state.projectSubview = "taskDetail";
+      renderProjectsPage();
+      showToast("任务编辑已保存");
+    }
+
+    function clonePlain(value) {
+      return JSON.parse(JSON.stringify(value));
+    }
+
+    function uniqueId(prefix) {
+      return `${prefix}-${Date.now()}-${Math.floor(Math.random() * 9000 + 1000)}`;
+    }
+
+    function adjustProjectPlanCount(project, delta) {
+      const current = Number.parseInt(project.plans, 10);
+      const fallback = (project.adsets || []).length;
+      const next = Math.max(0, Number.isFinite(current) ? current + delta : fallback);
+      project.plans = `${next} 个计划`;
+    }
+
+    function cloneProject(project) {
+      const clone = clonePlain(project);
+      const suffix = Date.now();
+      const adsetMap = new Map();
+      clone.id = `${project.id}-copy-${suffix}`;
+      clone.name = `${project.name} 复制`;
+      clone.aliases = [...(project.aliases || []), `${project.name.toLowerCase()} copy`];
+      clone.adsets = (project.adsets || []).map(adset => {
+        const next = clonePlain(adset);
+        const nextId = uniqueId("plan-copy");
+        adsetMap.set(adset.id, nextId);
+        next.id = nextId;
+        next.name = `${adset.name}_Copy`;
+        next.ads = (adset.ads || []).map(ad => ({ ...ad, name: `${ad.name}_Copy` }));
+        return next;
+      });
+      clone.tasks = (project.tasks || []).map(task => ({
+        ...clonePlain(task),
+        id: uniqueId("task-copy"),
+        adsetId: adsetMap.get(task.adsetId) || task.adsetId,
+        name: `${task.name} 复制`,
+        updatedAt: formatDate(new Date().toISOString())
+      }));
+      const campaign = clone.campaignConfig || clone.metaCampaign;
+      if (campaign) {
+        campaign.campaignName = `${campaign.campaignName || project.name}_Copy`;
+        campaign.campaignId = "待创建";
+      }
+      if (clone.channel === "Meta" && clone.campaignConfig) clone.metaCampaign = clone.campaignConfig;
+      return clone;
+    }
+
+    function copySelectedProjects() {
+      const selectedIds = Array.from(document.querySelectorAll("[data-copy-project]:checked")).map(el => el.dataset.copyProject);
+      if (!selectedIds.length) {
+        showToast("请先选择要复制的项目");
+        return;
+      }
+      const copies = selectedIds.map(id => projects.find(project => project.id === id)).filter(Boolean).map(cloneProject);
+      projects.unshift(...copies);
+      renderProjectsPage();
+      showToast(`已复制 ${copies.length} 个项目`);
+    }
+
+    function clonePlanForProject(project, task) {
+      const adset = getTaskAdset(project, task);
+      const nextTask = clonePlain(task);
+      nextTask.id = uniqueId("task-copy");
+      nextTask.name = `${task.name} 复制`;
+      nextTask.updatedAt = formatDate(new Date().toISOString());
+      if (!adset) {
+        return { task: nextTask, adset: null };
+      }
+      const nextAdset = clonePlain(adset);
+      nextAdset.id = uniqueId("plan-copy");
+      nextAdset.name = `${adset.name}_Copy`;
+      nextAdset.ads = (adset.ads || []).map(ad => ({ ...ad, name: `${ad.name}_Copy` }));
+      nextTask.adsetId = nextAdset.id;
+      nextTask.summary = `复制 ${adset.name}，保留原计划字段和素材配置。`;
+      return { task: nextTask, adset: nextAdset };
+    }
+
+    function copySelectedPlans(projectId) {
+      const project = projects.find(item => item.id === projectId);
+      if (!project) return;
+      const selectedIds = Array.from(document.querySelectorAll("[data-copy-plan]:checked")).map(el => el.dataset.copyPlan);
+      if (!selectedIds.length) {
+        showToast("请先选择要复制的计划");
+        return;
+      }
+      const copies = selectedIds.map(id => (project.tasks || []).find(task => task.id === id)).filter(Boolean).map(task => clonePlanForProject(project, task));
+      project.adsets = [...(project.adsets || []), ...copies.map(item => item.adset).filter(Boolean)];
+      project.tasks = [...(project.tasks || []), ...copies.map(item => item.task)];
+      adjustProjectPlanCount(project, copies.length);
+      renderProjectsPage();
+      showToast(`已复制 ${copies.length} 个计划`);
+    }
+
+    function openConfirmDelete(title, message, payload) {
+      state.pendingDelete = payload;
+      document.getElementById("confirmModalTitle").textContent = title;
+      document.getElementById("confirmText").textContent = message;
+      document.getElementById("confirmDeleteBtn").textContent = "确认删除";
+      document.getElementById("confirmModal").classList.add("active");
+    }
+
+    function promptDeleteSelectedProjects() {
+      const selectedIds = Array.from(document.querySelectorAll("[data-copy-project]:checked")).map(el => el.dataset.copyProject);
+      const selectedProjects = projects.filter(project => selectedIds.includes(project.id));
+      if (!selectedProjects.length) {
+        showToast("请先选择要删除的项目");
+        return;
+      }
+      openConfirmDelete(
+        "确认批量删除项目",
+        `将删除 ${selectedProjects.length} 个项目，项目下的计划、任务和素材配置会一并移除。`,
+        { type: "projects", ids: selectedProjects.map(project => project.id) }
+      );
+    }
+
+    function promptDeleteSelectedPlans(projectId) {
+      const project = projects.find(item => item.id === projectId);
+      if (!project) return;
+      const selectedIds = Array.from(document.querySelectorAll("[data-copy-plan]:checked")).map(el => el.dataset.copyPlan);
+      const selectedTasks = (project.tasks || []).filter(task => selectedIds.includes(task.id));
+      if (!selectedTasks.length) {
+        showToast("请先选择要删除的计划");
+        return;
+      }
+      openConfirmDelete(
+        "确认批量删除计划",
+        `将删除 ${selectedTasks.length} 个计划，对应任务条目和计划素材配置会一并移除。`,
+        { type: "plans", projectId, ids: selectedTasks.map(task => task.id) }
+      );
+    }
+
+    function confirmPendingDelete() {
+      const pending = state.pendingDelete || (state.deleteId ? { type: "connection", id: state.deleteId } : null);
+      if (!pending) return;
+
+      if (pending.type === "projects") {
+        const selected = new Set(pending.ids);
+        const deletedCount = projects.filter(project => selected.has(project.id)).length;
+        projects.splice(0, projects.length, ...projects.filter(project => !selected.has(project.id)));
+        state.projectSubview = "list";
+        state.activeProjectId = null;
+        state.activeTaskId = null;
+        state.pendingDelete = null;
+        state.deleteId = null;
+        document.getElementById("confirmModal").classList.remove("active");
+        renderProjectsPage();
+        showToast(`已删除 ${deletedCount} 个项目`);
+        return;
+      }
+
+      if (pending.type === "plans") {
+        const project = projects.find(item => item.id === pending.projectId);
+        const selected = new Set(pending.ids);
+        const deletedTasks = (project?.tasks || []).filter(task => selected.has(task.id));
+        const deletedAdsetIds = new Set(deletedTasks.map(task => task.adsetId).filter(Boolean));
+        if (project) {
+          project.tasks = (project.tasks || []).filter(task => !selected.has(task.id));
+          project.adsets = (project.adsets || []).filter(adset => !deletedAdsetIds.has(adset.id));
+          adjustProjectPlanCount(project, -deletedTasks.length);
+        }
+        state.projectSubview = "tasks";
+        state.activeProjectId = pending.projectId;
+        state.activeTaskId = null;
+        state.pendingDelete = null;
+        state.deleteId = null;
+        document.getElementById("confirmModal").classList.remove("active");
+        renderProjectsPage();
+        showToast(`已删除 ${deletedTasks.length} 个计划`);
+        return;
+      }
+
+      state.connections = state.connections.filter(c => c.id !== pending.id);
+      state.deleteId = null;
+      state.pendingDelete = null;
+      document.getElementById("confirmModal").classList.remove("active");
+      renderPlatformPage();
+      showToast("连接已删除");
+    }
+
+    function openProjectForm(projectId) {
+      const project = projectId ? projects.find(item => item.id === projectId) : null;
+      const channel = getProjectChannel(project) || "Meta";
+      const campaign = getProjectCampaign(project);
+      state.editingProjectId = project?.id || null;
+      state.projectFormChannel = channel;
+      document.getElementById("projectModalTitle").textContent = project ? `编辑 ${channel} 项目` : "新建投放项目";
+      document.getElementById("projectModalHint").textContent = project ? `正在编辑 ${project.name}` : "项目对应渠道 Campaign 层级";
+      document.getElementById("projectModalBody").innerHTML = renderProjectForm(project, campaign);
+      document.getElementById("projectModal").classList.add("active");
+    }
+
+    function renderProjectForm(project, campaign) {
+      const channel = state.projectFormChannel || getProjectChannel(project);
+      const ui = getChannelUi(channel);
+      return `
+        <div class="project-note"><strong>${escapeHtml(ui.campaignTitle)} 框架</strong><br>项目对应 ${escapeHtml(ui.campaignTitle)} 层级；下层计划对应 ${escapeHtml(ui.planTitle)}，素材对应 ${escapeHtml(ui.creativeTitle)}。这里配置项目归属与 Campaign 字段。</div>
+        <div class="form-grid">
+          ${renderFormSelect("投放渠道", "channel", ["Meta", "Google", "TikTok"], channel, "data-project-channel")}
+          ${renderFormInput("项目名称", "name", project?.name || "", "例如 CB_US_Meta_AppPromotion")}
+          ${renderFormInput("产品", "product", project?.product || "", "例如 休闲消除手游")}
+          ${renderFormInput("投放国家", "countries", project?.countries?.join(" / ") || "", "例如 美国 / 加拿大")}
+          ${renderFormInput("广告账户", "account", campaign.account || defaultAccountForChannel(channel), `${channel} Account ID`)}
+          ${renderFormInput("Campaign 名称", "campaignName", campaign.campaignName || "", `${channel} Campaign Name`)}
+          ${renderFormSelect(ui.objectiveLabel, "objective", ui.objectiveOptions, campaign.objective || ui.objectiveOptions[0])}
+          ${renderFormSelect(ui.buyingLabel, "buyingType", ui.buyingOptions, campaign.buyingType || ui.buyingOptions[0])}
+          ${renderFormSelect(ui.categoryLabel, "specialAdCategories", ui.categoryOptions, campaign.specialAdCategories || ui.categoryOptions[0])}
+          ${renderFormSelect("A/B test", "abTest", ["关闭", "开启"], campaign.abTest || "关闭")}
+          ${renderFormSelect(ui.budgetSwitchLabel, "campaignBudget", ["开启", "关闭"], campaign.campaignBudget || "开启")}
+          ${renderFormSelect("状态", "campaignStatus", ui.statusOptions, campaign.campaignStatus || ui.statusOptions[0])}
+          ${renderFormSelect("Budget type", "budgetType", ["Daily budget", "Lifetime budget"], campaign.budgetType || "Daily budget")}
+          ${renderFormInput("daily/lifetime budget", "budget", campaign.budget || "", "例如 800 USD")}
+          ${renderFormSelect("bid strategy", "bidStrategy", ui.bidOptions, campaign.bidStrategy || ui.bidOptions[0])}
+          ${renderFormInput("spend limit", "spendLimit", campaign.spendLimit || "", "例如 18,000 USD")}
+          ${renderFormInput("start", "start", campaign.start || "", "例如 2026-06-01 10:00")}
+          ${renderFormInput("end", "end", campaign.end || "", "例如 2026-06-30 23:00")}
+        </div>
+      `;
+    }
+
+    function renderFormInput(label, field, value, placeholder) {
+      return `<div class="field"><label>${label}</label><input data-project-field="${field}" value="${escapeHtml(value)}" placeholder="${escapeHtml(placeholder)}" /></div>`;
+    }
+
+    function renderFormSelect(label, field, options, selected, extraAttr = "") {
+      return `
+        <div class="field">
+          <label>${label}</label>
+          <select data-project-field="${field}" ${extraAttr}>
+            ${options.map(option => `<option value="${escapeHtml(option)}" ${option === selected ? "selected" : ""}>${escapeHtml(option)}</option>`).join("")}
+          </select>
+        </div>
+      `;
+    }
+
+    function defaultAccountForChannel(channel) {
+      if (channel === "Google") return "MCC-602-884-1022";
+      if (channel === "TikTok") return "tt_ads_8302019";
+      return "act_2194875301";
+    }
+
+    function saveProjectConfig() {
+      const values = {};
+      document.querySelectorAll("[data-project-field]").forEach(el => {
+        values[el.dataset.projectField] = el.value.trim();
+      });
+      if (!values.name) { showToast("请填写项目名称"); return; }
+
+      let project = state.editingProjectId ? projects.find(item => item.id === state.editingProjectId) : null;
+      if (!project) {
+        project = {
+          id: `${(values.channel || "meta").toLowerCase()}-project-${Date.now()}`,
+          name: values.name,
+          channel: values.channel || "Meta",
+          aliases: [values.name.toLowerCase()],
+          product: values.product || "未填写产品",
+          countries: splitProjectCountries(values.countries),
+          status: mapCampaignStatus(values.campaignStatus),
+          plans: "0 个计划",
+          adsets: [],
+          tasks: [
+            { id: `task-project-${Date.now()}`, adsetId: "", name: `新建 ${values.channel || "Meta"} Campaign 配置`, type: "项目配置", owner: "小陈", status: "草稿", updatedAt: formatDate(new Date().toISOString()), summary: "已创建 Campaign 层级配置，等待继续补充计划与素材。" }
+          ]
+        };
+        projects.unshift(project);
+      }
+
+      project.name = values.name;
+      project.channel = values.channel || project.channel || "Meta";
+      project.product = values.product || project.product;
+      project.countries = splitProjectCountries(values.countries);
+      project.status = mapCampaignStatus(values.campaignStatus);
+      project.campaignConfig = {
+        campaignName: values.campaignName,
+        objective: values.objective,
+        buyingType: values.buyingType,
+        specialAdCategories: values.specialAdCategories,
+        abTest: values.abTest,
+        campaignBudget: values.campaignBudget,
+        campaignStatus: values.campaignStatus,
+        budgetType: values.budgetType,
+        budget: values.budget,
+        bidStrategy: values.bidStrategy,
+        spendLimit: values.spendLimit,
+        start: values.start,
+        end: values.end,
+        account: values.account,
+        campaignId: getProjectCampaign(project).campaignId || "待创建"
+      };
+      project.metaCampaign = project.channel === "Meta" ? project.campaignConfig : project.metaCampaign;
+
+      document.getElementById("projectModal").classList.remove("active");
+      state.projectSubview = "list";
+      state.activeProjectId = null;
+      renderProjectsPage();
+      showToast("项目配置已保存");
+    }
+
+    function splitProjectCountries(value) {
+      const countries = String(value || "").split(/[\/、,，]/).map(item => item.trim()).filter(Boolean);
+      return countries.length ? countries : ["未配置国家"];
+    }
+
+    function mapCampaignStatus(status) {
+      return ["Active", "Enabled"].includes(status) ? "运行中" : status === "Paused" ? "已暂停" : "草稿";
+    }
+
+    function renderSimplePages() {
+      document.getElementById("dashboardPage").innerHTML = simplePage("数据概览", "实时查看跨平台投放表现、预算消耗和增长趋势", [
+        ["总消耗", "$128,420", 72], ["ROAS", "2.84", 84], ["新增注册", "48,920", 64], ["活跃计划", "25", 58]
+      ]);
+      document.getElementById("campaignsPage").innerHTML = simpleTablePage("广告投放", "统一查看 Meta、Google、TikTok 计划与创建状态", ["计划名称","渠道","状态","预算","成本目标"], [
+        ["CB_US_Meta_Reg_01","Meta","待发布","800 USD/日","CPA 7"], ["CB_SEA_TikTok_AEO","TikTok","运行中","500 USD/日","CPA 5.8"], ["CB_Global_Google_UAC","Google","学习期","1200 USD/日","ROAS 180%"]
+      ]);
+      document.getElementById("materialsPage").innerHTML = simpleTablePage("创意素材", "管理素材库、AI 生成素材、本地上传和跨平台复用", ["素材名称","类型","平台","评分","状态"], [
+        ["Candy Level Win","Image 1:1","Meta","91","待审核"], ["3s Puzzle Hook","Video 9:16","TikTok","88","可投放"], ["YouTube Playable","Video 16:9","Google","84","可投放"]
+      ]);
+      document.getElementById("reportsPage").innerHTML = simpleTablePage("数据报表", "沉淀跨渠道数据报表、归因指标和素材表现", ["报表","范围","更新时间","状态","操作"], [
+        ["Candy Blast日报","全渠道","2026-05-28 10:00","已生成","查看"], ["素材CTR排行","Meta / TikTok","2026-05-28 09:30","已生成","查看"], ["预算预警","全部项目","2026-05-28 08:00","监控中","查看"]
+      ]);
+      document.getElementById("accountPage").innerHTML = simpleTablePage("系统账号设置", "管理团队成员、登录身份和基础账号信息", ["成员","角色","权限组","状态","最近登录"], [
+        ["小陈","投放经理","Campaign Operator","启用","2026-05-28 10:12"], ["Lina","管理员","Admin","启用","2026-05-27 18:22"], ["Alex","素材运营","Creative Editor","启用","2026-05-27 15:40"]
+      ], true);
+      document.getElementById("systemPage").innerHTML = simplePage("系统设置", "配置默认偏好、通知、权限和系统级策略", [
+        ["默认币种", "USD", 100], ["预算提醒", "85%", 85], ["审批策略", "开启", 100], ["异常通知", "实时", 100]
+      ], true);
+      document.getElementById("aiPage").innerHTML = simplePage("AI 使用量", "查看模型调用、Token 消耗、场景日志和预算限制", [
+        ["今日调用", "1,284", 54], ["Token 消耗", "3.8M", 76], ["素材生成", "142", 62], ["预算使用", "68%", 68]
+      ], true);
+    }
+
+    function simplePage(title, desc, metrics, withBack = false) {
+      return `
+        <div class="page-head">
+          <div class="page-title-row">
+            ${withBack ? `<button class="back-button" type="button" data-page-target="settings"><span class="material-symbols-outlined">arrow_back</span></button>` : ""}
+            <div><h1>${title}</h1><p>${desc}</p></div>
+          </div>
+        </div>
+        <div class="content"><div class="grid-4">${metrics.map(([label, value, pct]) => `<div class="metric-card"><span>${label}</span><b>${value}</b><div class="bar"><i style="width:${pct}%;"></i></div></div>`).join("")}</div></div>
+      `;
+    }
+
+    function simpleTablePage(title, desc, heads, rows, withBack = false) {
+      return `
+        <div class="page-head">
+          <div class="page-title-row">
+            ${withBack ? `<button class="back-button" type="button" data-page-target="settings"><span class="material-symbols-outlined">arrow_back</span></button>` : ""}
+            <div><h1>${title}</h1><p>${desc}</p></div>
+          </div>
+          <button class="btn primary" type="button">${title === "广告投放" ? "新建计划" : "新增"}</button>
+        </div>
+        <div class="content"><section class="table-card"><table><thead><tr>${heads.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>${rows.map(row => `<tr>${row.map(cell => `<td>${cell}</td>`).join("")}</tr>`).join("")}</tbody></table></section></div>
+      `;
+    }
+
+    document.addEventListener("click", event => {
+      const target = event.target.closest("button, input, select");
+      if (!target) return;
+
+      const page = target.dataset.pageTarget;
+      if (page) { setPage(page); return; }
+
+      const platform = target.dataset.platform;
+      if (platform) { state.activePlatform = platform; renderPlatformPage(); return; }
+
+      if (target.dataset.openConfig) { openConfig(target.dataset.openConfig, target.dataset.editId); return; }
+
+      if (target.dataset.openProjectForm !== undefined) { openProjectForm(target.dataset.projectId); return; }
+
+      if (target.dataset.copySelectedProjects !== undefined) { copySelectedProjects(); return; }
+
+      if (target.dataset.deleteSelectedProjects !== undefined) { promptDeleteSelectedProjects(); return; }
+
+      if (target.dataset.copySelectedPlans) { copySelectedPlans(target.dataset.copySelectedPlans); return; }
+
+      if (target.dataset.deleteSelectedPlans) { promptDeleteSelectedPlans(target.dataset.deleteSelectedPlans); return; }
+
+      if (target.dataset.openTaskWindow) { openProjectTaskCreate(target.dataset.openTaskWindow); return; }
+
+      if (target.dataset.viewProjectTasks) { openProjectTaskList(target.dataset.viewProjectTasks); return; }
+
+      if (target.dataset.backProjects !== undefined) { backToProjectList(); return; }
+
+      if (target.dataset.backProjectTasks) { openProjectTaskList(target.dataset.backProjectTasks); return; }
+
+      if (target.dataset.viewTaskDetail) {
+        const [projectId, taskId] = target.dataset.viewTaskDetail.split(":");
+        openProjectTaskDetail(projectId, taskId);
+        return;
+      }
+
+      if (target.dataset.editMetaTask) {
+        const [projectId, taskId] = target.dataset.editMetaTask.split(":");
+        openProjectTaskEdit(projectId, taskId);
+        return;
+      }
+
+      if (target.dataset.saveMetaTask) { saveMetaTaskConfig(target.dataset.saveMetaTask); return; }
+
+      if (target.dataset.updateMetaTask) {
+        const [projectId, taskId] = target.dataset.updateMetaTask.split(":");
+        updateMetaTaskConfig(projectId, taskId);
+        return;
+      }
+
+      if (target.dataset.materialOption) {
+        updateMaterialSelection(target.dataset.materialOption, target.dataset.materialFormat);
+        return;
+      }
+
+      if (target.dataset.closeModal) {
+        if (target.dataset.closeModal === "confirmModal") {
+          state.pendingDelete = null;
+          state.deleteId = null;
+        }
+        document.getElementById(target.dataset.closeModal).classList.remove("active");
+        return;
+      }
+
+      if (target.dataset.copyUri) { navigator.clipboard?.writeText(target.dataset.copyUri); showToast("Redirect URI 已复制"); return; }
+
+      if (target.dataset.authorize) {
+        const conn = state.connections.find(c => c.id === target.dataset.authorize);
+        if (conn) { conn.status = "active"; conn.updated_at = new Date().toISOString(); renderPlatformPage(); showToast("授权成功"); }
+        return;
+      }
+
+      if (target.dataset.delete) {
+        const conn = state.connections.find(c => c.id === target.dataset.delete);
+        state.deleteId = target.dataset.delete;
+        openConfirmDelete(
+          "确认删除连接",
+          `将删除 ${conn?.account_name || "该连接"}，已创建计划不会被删除。`,
+          { type: "connection", id: target.dataset.delete }
+        );
+        return;
+      }
+
+      if (target.dataset.toggleSub) { state.expanded[target.dataset.toggleSub] = !state.expanded[target.dataset.toggleSub]; renderPlatformPage(); return; }
+
+      if (target.dataset.addSub) {
+        state.currentGoogleParent = target.dataset.addSub;
+        document.getElementById("subNameInput").value = "";
+        document.getElementById("subCustomerInput").value = "";
+        document.getElementById("subAccountModal").classList.add("active");
+        return;
+      }
+
+      if (target.dataset.deleteSub) {
+        const [cid, sid] = target.dataset.deleteSub.split(":");
+        const conn = state.connections.find(c => c.id === cid);
+        if (conn) conn.subAccounts = conn.subAccounts.filter(s => s.id !== sid);
+        renderPlatformPage();
+        showToast("子账号已删除");
+        return;
+      }
+
+      if (target.dataset.projectEditField) {
+        state.projectEditingField = target.dataset.projectEditField;
+        refreshProjectCreationReply();
+        return;
+      }
+
+      if (target.dataset.projectEditOption) {
+        state.projectEditingField = target.dataset.projectEditOption;
+        applyProjectFieldEdit(target.dataset.projectEditOption, target.dataset.projectEditValue || "");
+        return;
+      }
+
+      if (target.dataset.saveProjectEdit) {
+        state.projectEditingField = target.dataset.saveProjectEdit;
+        saveProjectEditInput(target.dataset.saveProjectEdit);
+        return;
+      }
+
+      if (target.dataset.taskPromptSubmit) {
+        const input = document.getElementById("taskPromptInput");
+        if (input) input.value = target.dataset.taskPromptSubmit;
+        sendTaskPrompt();
+        return;
+      }
+
+      if (target.dataset.taskPrompt) {
+        const input = document.getElementById("taskPromptInput");
+        if (input) {
+          input.value = target.dataset.taskPrompt;
+          input.focus();
+        }
+        return;
+      }
+
+      if (target.dataset.sendTask !== undefined) { sendTaskPrompt(); return; }
+
+    });
+
+    document.addEventListener("change", event => {
+      if (event.target.matches("[data-project-channel]")) {
+        state.projectFormChannel = event.target.value;
+        const project = state.editingProjectId ? projects.find(item => item.id === state.editingProjectId) : null;
+        document.getElementById("projectModalTitle").textContent = project ? `编辑 ${state.projectFormChannel} 项目` : "新建投放项目";
+        document.getElementById("projectModalBody").innerHTML = renderProjectForm(project, getProjectCampaign(project));
+        hydrateIcons();
+        return;
+      }
+      if (event.target.matches("[data-scope-check]")) updateScopeCounter();
+      if (event.target.matches("[data-task-field]")) collectTaskFields();
+      if (event.target.id === "planCountInput") {
+        state.planCount = Math.max(0, Math.min(99, Number(event.target.value || 0)));
+        renderTaskPage();
+      }
+    });
+
+    document.addEventListener("keydown", event => {
+      if (event.target.matches("[data-project-edit-input]") && event.key === "Enter") {
+        event.preventDefault();
+        state.projectEditingField = event.target.dataset.projectEditInput;
+        saveProjectEditInput(event.target.dataset.projectEditInput);
+        return;
+      }
+      if (event.target.id !== "taskPromptInput") return;
+      if (event.key === "Enter" && !event.shiftKey) {
+        event.preventDefault();
+        sendTaskPrompt();
+      }
+    });
+
+    function collectTaskFields() {
+      document.querySelectorAll("[data-task-field]").forEach(el => {
+        state.taskValues[el.dataset.taskField] = el.value;
+      });
+    }
+
+    document.getElementById("saveConfigBtn").addEventListener("click", saveConfig);
+    document.getElementById("saveProjectBtn").addEventListener("click", saveProjectConfig);
+    document.getElementById("oauthBtn").addEventListener("click", () => showToast("已打开授权准备流程"));
+    document.getElementById("confirmDeleteBtn").addEventListener("click", confirmPendingDelete);
+    document.getElementById("saveSubAccountBtn").addEventListener("click", () => {
+      const parent = state.connections.find(c => c.id === state.currentGoogleParent);
+      const name = document.getElementById("subNameInput").value.trim();
+      const customer = document.getElementById("subCustomerInput").value.trim();
+      if (!name || !customer) { showToast("请填写完整的子账号信息"); return; }
+      parent.subAccounts.push({ id: `g-sub-${Date.now()}`, name, customer_id: customer, status: "active", updated_at: new Date().toISOString() });
+      document.getElementById("subAccountModal").classList.remove("active");
+      state.expanded[parent.id] = true;
+      renderPlatformPage();
+      showToast("子账号添加成功");
+    });
+
+    function boot() {
+      renderNav();
+      renderSettingsPage();
+      renderPlatformPage();
+      renderTaskPage();
+      renderProjectsPage();
+      renderSimplePages();
+      setPage("task");
+    }
+    boot();
+  </script>
+</body>
+</html>

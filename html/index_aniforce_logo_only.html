@@ -1,0 +1,2113 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Aniforce | 智能增长投放中台</title>
+    <meta
+      name="description"
+      content="Aniforce 是面向全球增长团队的智能投放中台，连接广告账户、计划、素材、指标与诊断建议。"
+    />
+    <style>
+      :root {
+        --paper: #f6f5ef;
+        --paper-2: #eef4ef;
+        --ink: #151a17;
+        --ink-soft: #2f3934;
+        --muted: #626d66;
+        --muted-2: #7c867f;
+        --line: #d9dfd7;
+        --line-strong: #b9c4bb;
+        --surface: #fffefa;
+        --surface-2: #f9fbf7;
+        --teal: #0f766e;
+        --teal-soft: #dcefeb;
+        --coral: #e15a3f;
+        --coral-soft: #ffe3da;
+        --amber: #c9912f;
+        --amber-soft: #f6ead0;
+        --olive: #70835a;
+        --steel: #466c78;
+        --shadow: 0 24px 70px rgba(28, 39, 33, 0.14);
+        --radius: 8px;
+        --max: 1180px;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      html {
+        scroll-behavior: smooth;
+      }
+
+      body {
+        margin: 0;
+        color: var(--ink);
+        background: var(--paper);
+        font-family:
+          Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+          "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+        line-height: 1.55;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        pointer-events: none;
+        background-image:
+          linear-gradient(rgba(21, 26, 23, 0.035) 1px, transparent 1px),
+          linear-gradient(90deg, rgba(21, 26, 23, 0.035) 1px, transparent 1px);
+        background-size: 44px 44px;
+        mask-image: linear-gradient(to bottom, rgba(0, 0, 0, 0.48), transparent 52%);
+        z-index: -2;
+      }
+
+      a {
+        color: inherit;
+        text-decoration: none;
+      }
+
+      button,
+      input,
+      textarea {
+        font: inherit;
+      }
+
+      ::selection {
+        color: var(--ink);
+        background: #ffd8cc;
+      }
+
+      .site-header {
+        position: sticky;
+        top: 0;
+        z-index: 20;
+        border-bottom: 1px solid rgba(217, 223, 215, 0.9);
+        background: rgba(246, 245, 239, 0.86);
+        backdrop-filter: blur(18px);
+      }
+
+      .nav {
+        width: min(100% - 40px, var(--max));
+        height: 68px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 24px;
+      }
+
+      .brand {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        font-weight: 760;
+      }
+
+      .brand img {
+        width: 158px;
+        height: auto;
+        display: block;
+      }
+
+      .nav-links {
+        display: flex;
+        align-items: center;
+        gap: 26px;
+        font-size: 14px;
+        color: var(--ink-soft);
+      }
+
+      .nav-links a {
+        position: relative;
+        padding: 8px 0;
+      }
+
+      .nav-links a::after {
+        content: "";
+        position: absolute;
+        left: 0;
+        right: 0;
+        bottom: 2px;
+        height: 2px;
+        transform: scaleX(0);
+        transform-origin: left;
+        background: var(--coral);
+        transition: transform 180ms ease;
+      }
+
+      .nav-links a:hover::after {
+        transform: scaleX(1);
+      }
+
+      .nav-cta {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        height: 40px;
+        padding: 0 16px;
+        border: 1px solid var(--ink);
+        border-radius: 8px;
+        color: var(--surface);
+        background: var(--ink);
+        font-size: 14px;
+        font-weight: 680;
+        transition:
+          transform 180ms ease,
+          box-shadow 180ms ease,
+          background 180ms ease;
+      }
+
+      .nav-cta:hover {
+        transform: translateY(-1px);
+        background: #26302b;
+        box-shadow: 0 10px 26px rgba(21, 26, 23, 0.2);
+      }
+
+      .hero {
+        position: relative;
+        min-height: calc(100svh - 124px);
+        padding: 94px 0 44px;
+        overflow: hidden;
+        isolation: isolate;
+      }
+
+      .signal-canvas {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        z-index: -3;
+        background: var(--paper);
+      }
+
+      .hero::before {
+        content: "";
+        position: absolute;
+        inset: 0;
+        z-index: -2;
+        background:
+          linear-gradient(90deg, rgba(246, 245, 239, 0.96) 0%, rgba(246, 245, 239, 0.76) 42%, rgba(246, 245, 239, 0.24) 100%),
+          linear-gradient(180deg, rgba(246, 245, 239, 0.1), rgba(246, 245, 239, 0.94));
+      }
+
+      .hero-inner {
+        width: min(100% - 40px, var(--max));
+        margin: 0 auto;
+        position: relative;
+      }
+
+      .hero-copy {
+        width: min(680px, 100%);
+        position: relative;
+        z-index: 2;
+      }
+
+      .eyebrow {
+        display: inline-flex;
+        align-items: center;
+        gap: 9px;
+        color: var(--teal);
+        font-size: 13px;
+        font-weight: 760;
+      }
+
+      .eyebrow::before {
+        content: "";
+        width: 24px;
+        height: 2px;
+        background: currentColor;
+      }
+
+      h1,
+      h2,
+      h3,
+      p {
+        margin-top: 0;
+      }
+
+      h1 {
+        margin-bottom: 22px;
+        font-size: 78px;
+        line-height: 0.95;
+        font-weight: 820;
+        letter-spacing: 0;
+      }
+
+      .hero-logo {
+        display: block;
+        width: min(440px, 88vw);
+        height: auto;
+        margin: 18px 0 20px;
+      }
+
+      .hero-lede {
+        max-width: 620px;
+        margin-bottom: 30px;
+        color: var(--ink-soft);
+        font-size: 21px;
+      }
+
+      .hero-actions {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 28px;
+      }
+
+      .button {
+        min-height: 48px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        padding: 0 18px;
+        border: 1px solid var(--ink);
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 760;
+        transition:
+          transform 180ms ease,
+          box-shadow 180ms ease,
+          background 180ms ease;
+      }
+
+      .button.primary {
+        color: var(--surface);
+        background: var(--ink);
+        box-shadow: 6px 6px 0 var(--amber);
+      }
+
+      .button.secondary {
+        color: var(--ink);
+        background: rgba(255, 254, 250, 0.72);
+      }
+
+      .button:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 18px 36px rgba(21, 26, 23, 0.16);
+      }
+
+      .button.primary:hover {
+        box-shadow: 7px 7px 0 var(--amber), 0 18px 36px rgba(21, 26, 23, 0.16);
+      }
+
+      .proof-points {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        max-width: 720px;
+      }
+
+      .proof-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        min-height: 34px;
+        padding: 0 12px;
+        border: 1px solid rgba(21, 26, 23, 0.14);
+        border-radius: 999px;
+        background: rgba(255, 254, 250, 0.74);
+        color: var(--ink-soft);
+        font-size: 13px;
+      }
+
+      .proof-pill::before {
+        content: "";
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: var(--teal);
+      }
+
+      .proof-pill:nth-child(2)::before {
+        background: var(--coral);
+      }
+
+      .proof-pill:nth-child(3)::before {
+        background: var(--amber);
+      }
+
+      .hero-console {
+        position: absolute;
+        right: 0;
+        bottom: -12px;
+        width: min(548px, 48vw);
+        border: 1px solid rgba(21, 26, 23, 0.18);
+        border-radius: 8px;
+        background: rgba(255, 254, 250, 0.84);
+        box-shadow: var(--shadow);
+        backdrop-filter: blur(18px);
+        overflow: hidden;
+        z-index: 1;
+      }
+
+      .console-top {
+        height: 48px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 0 16px;
+        border-bottom: 1px solid var(--line);
+        background: rgba(249, 251, 247, 0.86);
+      }
+
+      .window-dots {
+        display: flex;
+        gap: 6px;
+      }
+
+      .window-dots span {
+        width: 9px;
+        height: 9px;
+        border-radius: 50%;
+        background: var(--line-strong);
+      }
+
+      .window-dots span:nth-child(1) {
+        background: var(--coral);
+      }
+
+      .window-dots span:nth-child(2) {
+        background: var(--amber);
+      }
+
+      .window-dots span:nth-child(3) {
+        background: var(--teal);
+      }
+
+      .console-title {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .console-body {
+        padding: 18px;
+      }
+
+      .console-kpis {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .console-kpi {
+        padding: 14px;
+        background: rgba(255, 254, 250, 0.78);
+      }
+
+      .console-kpi + .console-kpi {
+        border-left: 1px solid var(--line);
+      }
+
+      .kpi-label {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .kpi-value {
+        margin-top: 3px;
+        font-size: 22px;
+        line-height: 1;
+        font-weight: 820;
+      }
+
+      .console-list {
+        margin-top: 14px;
+        display: grid;
+        gap: 8px;
+      }
+
+      .console-row {
+        display: grid;
+        grid-template-columns: 1fr auto;
+        gap: 12px;
+        align-items: center;
+        min-height: 48px;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: rgba(255, 254, 250, 0.72);
+      }
+
+      .row-name {
+        font-size: 13px;
+        font-weight: 720;
+      }
+
+      .row-sub {
+        color: var(--muted);
+        font-size: 11px;
+      }
+
+      .status {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 92px;
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 999px;
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .status.learning {
+        color: #87510a;
+        background: var(--amber-soft);
+      }
+
+      .status.ready {
+        color: #0d5c55;
+        background: var(--teal-soft);
+      }
+
+      .status.alert {
+        color: #9d351f;
+        background: var(--coral-soft);
+      }
+
+      .quick-strip {
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+        background: var(--surface);
+      }
+
+      .quick-strip-inner {
+        width: min(100% - 40px, var(--max));
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+      }
+
+      .quick-item {
+        min-height: 112px;
+        padding: 22px 24px;
+        border-left: 1px solid var(--line);
+      }
+
+      .quick-item:last-child {
+        border-right: 1px solid var(--line);
+      }
+
+      .quick-value {
+        margin-bottom: 4px;
+        font-size: 26px;
+        line-height: 1;
+        font-weight: 820;
+      }
+
+      .quick-label {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .section {
+        padding: 92px 0;
+      }
+
+      .section.alt {
+        background: var(--paper-2);
+        border-top: 1px solid var(--line);
+        border-bottom: 1px solid var(--line);
+      }
+
+      .section-inner {
+        width: min(100% - 40px, var(--max));
+        margin: 0 auto;
+      }
+
+      .section-header {
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(280px, 0.58fr);
+        gap: 48px;
+        align-items: end;
+        margin-bottom: 42px;
+      }
+
+      h2 {
+        margin-bottom: 0;
+        font-size: 46px;
+        line-height: 1.08;
+        font-weight: 820;
+        letter-spacing: 0;
+      }
+
+      .section-header p {
+        margin-bottom: 0;
+        color: var(--muted);
+        font-size: 17px;
+      }
+
+      .product-frame {
+        border: 1px solid rgba(21, 26, 23, 0.16);
+        border-radius: 8px;
+        background: var(--surface);
+        box-shadow: 0 22px 52px rgba(28, 39, 33, 0.1);
+        overflow: hidden;
+      }
+
+      .product-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 16px;
+        min-height: 62px;
+        padding: 12px 16px;
+        border-bottom: 1px solid var(--line);
+        background: var(--surface-2);
+      }
+
+      .segmented {
+        display: inline-grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 4px;
+        padding: 4px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .tab-button {
+        min-width: 92px;
+        height: 34px;
+        padding: 0 12px;
+        border: 0;
+        border-radius: 6px;
+        color: var(--muted);
+        background: transparent;
+        cursor: pointer;
+        font-size: 13px;
+        font-weight: 720;
+      }
+
+      .tab-button.active {
+        color: var(--surface);
+        background: var(--ink);
+      }
+
+      .toolbar-note {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .product-grid {
+        display: grid;
+        grid-template-columns: 270px minmax(0, 1fr) 300px;
+        min-height: 560px;
+      }
+
+      .product-sidebar,
+      .product-main,
+      .product-insights {
+        padding: 20px;
+      }
+
+      .product-sidebar {
+        border-right: 1px solid var(--line);
+        background: #fbfaf5;
+      }
+
+      .product-insights {
+        border-left: 1px solid var(--line);
+        background: #fbfaf5;
+      }
+
+      .side-label,
+      .table-label {
+        color: var(--muted);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .channel-list {
+        margin-top: 16px;
+        display: grid;
+        gap: 10px;
+      }
+
+      .channel {
+        min-height: 62px;
+        display: grid;
+        grid-template-columns: 34px 1fr;
+        gap: 12px;
+        align-items: center;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .channel-icon {
+        width: 34px;
+        height: 34px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        color: var(--surface);
+        background: var(--teal);
+        font-size: 12px;
+        font-weight: 820;
+      }
+
+      .channel:nth-child(2) .channel-icon {
+        background: var(--coral);
+      }
+
+      .channel:nth-child(3) .channel-icon {
+        background: var(--steel);
+      }
+
+      .channel:nth-child(4) .channel-icon {
+        background: var(--amber);
+      }
+
+      .channel-title {
+        font-size: 14px;
+        font-weight: 760;
+      }
+
+      .channel-meta {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .health-meter {
+        margin-top: 28px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .meter-line {
+        height: 8px;
+        margin: 12px 0;
+        border-radius: 999px;
+        background: linear-gradient(90deg, var(--teal) 0 62%, var(--amber) 62% 78%, var(--coral) 78%);
+      }
+
+      .meter-copy {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .main-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 16px;
+        margin-bottom: 22px;
+      }
+
+      .main-heading h3 {
+        margin: 0;
+        font-size: 24px;
+        line-height: 1.2;
+      }
+
+      .date-chip {
+        display: inline-flex;
+        align-items: center;
+        height: 30px;
+        padding: 0 10px;
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        color: var(--muted);
+        background: var(--surface-2);
+        font-size: 12px;
+      }
+
+      .metric-row {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 10px;
+        margin-bottom: 22px;
+      }
+
+      .metric {
+        min-height: 94px;
+        padding: 14px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface-2);
+      }
+
+      .metric span {
+        color: var(--muted);
+        font-size: 12px;
+      }
+
+      .metric strong {
+        display: block;
+        margin-top: 7px;
+        font-size: 24px;
+        line-height: 1;
+      }
+
+      .campaign-table {
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        overflow: hidden;
+      }
+
+      .campaign-row {
+        display: grid;
+        grid-template-columns: minmax(170px, 1.2fr) 110px 110px 120px 92px;
+        gap: 12px;
+        align-items: center;
+        min-height: 58px;
+        padding: 0 14px;
+        border-top: 1px solid var(--line);
+        background: var(--surface);
+        font-size: 13px;
+      }
+
+      .campaign-row:first-child {
+        border-top: 0;
+        color: var(--muted);
+        background: var(--surface-2);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .campaign-name {
+        font-weight: 760;
+      }
+
+      .bar {
+        height: 8px;
+        border-radius: 999px;
+        background: var(--line);
+        overflow: hidden;
+      }
+
+      .bar span {
+        display: block;
+        height: 100%;
+        border-radius: inherit;
+        background: var(--teal);
+      }
+
+      .bar.warn span {
+        background: var(--amber);
+      }
+
+      .bar.hot span {
+        background: var(--coral);
+      }
+
+      .insight-card {
+        padding: 18px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .insight-card + .insight-card {
+        margin-top: 12px;
+      }
+
+      .insight-title {
+        margin-bottom: 8px;
+        font-size: 15px;
+        font-weight: 790;
+      }
+
+      .insight-copy {
+        margin-bottom: 14px;
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .recommendation {
+        display: inline-flex;
+        align-items: center;
+        min-height: 30px;
+        padding: 0 10px;
+        border-radius: 999px;
+        color: #0d5c55;
+        background: var(--teal-soft);
+        font-size: 12px;
+        font-weight: 760;
+      }
+
+      .features-grid {
+        display: grid;
+        grid-template-columns: repeat(4, 1fr);
+        gap: 16px;
+      }
+
+      .feature-card {
+        min-height: 260px;
+        padding: 22px;
+        border: 1px solid rgba(21, 26, 23, 0.14);
+        border-radius: 8px;
+        background: var(--surface);
+        transition:
+          transform 180ms ease,
+          box-shadow 180ms ease;
+      }
+
+      .feature-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 18px 38px rgba(28, 39, 33, 0.1);
+      }
+
+      .feature-icon {
+        width: 44px;
+        height: 44px;
+        margin-bottom: 28px;
+        display: grid;
+        place-items: center;
+        border-radius: 8px;
+        color: var(--surface);
+        background: var(--teal);
+        font-weight: 820;
+      }
+
+      .feature-card:nth-child(2) .feature-icon {
+        background: var(--coral);
+      }
+
+      .feature-card:nth-child(3) .feature-icon {
+        background: var(--amber);
+      }
+
+      .feature-card:nth-child(4) .feature-icon {
+        background: var(--steel);
+      }
+
+      .feature-card h3 {
+        margin-bottom: 12px;
+        font-size: 20px;
+        line-height: 1.25;
+      }
+
+      .feature-card p {
+        margin-bottom: 0;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .workflow {
+        display: grid;
+        grid-template-columns: 0.9fr 1.25fr;
+        gap: 56px;
+        align-items: start;
+      }
+
+      .workflow-copy {
+        position: sticky;
+        top: 104px;
+      }
+
+      .workflow-copy p {
+        margin-top: 18px;
+        color: var(--muted);
+        font-size: 17px;
+      }
+
+      .steps {
+        border-top: 1px solid var(--line-strong);
+      }
+
+      .step {
+        display: grid;
+        grid-template-columns: 68px 1fr;
+        gap: 20px;
+        padding: 26px 0;
+        border-bottom: 1px solid var(--line-strong);
+      }
+
+      .step-number {
+        width: 48px;
+        height: 48px;
+        display: grid;
+        place-items: center;
+        border: 1px solid var(--ink);
+        border-radius: 8px;
+        background: var(--surface);
+        font-weight: 820;
+        box-shadow: 4px 4px 0 var(--coral);
+      }
+
+      .step h3 {
+        margin-bottom: 8px;
+        font-size: 20px;
+      }
+
+      .step p {
+        margin-bottom: 0;
+        color: var(--muted);
+      }
+
+      .audience-grid {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 18px;
+      }
+
+      .audience-card {
+        padding: 24px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+      }
+
+      .audience-card h3 {
+        margin-bottom: 14px;
+        font-size: 22px;
+      }
+
+      .audience-list {
+        display: grid;
+        gap: 10px;
+        margin: 0;
+        padding: 0;
+        list-style: none;
+      }
+
+      .audience-list li {
+        display: grid;
+        grid-template-columns: 18px 1fr;
+        gap: 10px;
+        color: var(--muted);
+        font-size: 14px;
+      }
+
+      .audience-list li::before {
+        content: "";
+        width: 9px;
+        height: 9px;
+        margin-top: 7px;
+        border-radius: 50%;
+        background: var(--teal);
+      }
+
+      .audience-card:nth-child(2) li::before {
+        background: var(--coral);
+      }
+
+      .audience-card:nth-child(3) li::before {
+        background: var(--amber);
+      }
+
+      .logo-showcase {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 18px;
+      }
+
+      .logo-panel {
+        min-height: 240px;
+        padding: 28px;
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        background: var(--surface);
+        display: grid;
+        align-content: space-between;
+        gap: 28px;
+      }
+
+      .logo-panel.dark {
+        border-color: var(--line);
+        color: var(--ink);
+        background: #f7f9fb;
+      }
+
+      .logo-panel img {
+        max-width: 100%;
+        height: auto;
+        display: block;
+      }
+
+      .logo-panel .logo-mark {
+        width: 112px;
+      }
+
+      .logo-caption {
+        color: var(--muted);
+        font-size: 13px;
+      }
+
+      .logo-panel.dark .logo-caption {
+        color: var(--muted);
+      }
+
+      .contact {
+        padding: 88px 0;
+        background: var(--ink);
+        color: var(--surface);
+      }
+
+      .contact-inner {
+        width: min(100% - 40px, var(--max));
+        margin: 0 auto;
+        display: grid;
+        grid-template-columns: minmax(0, 0.95fr) minmax(320px, 0.75fr);
+        gap: 52px;
+        align-items: start;
+      }
+
+      .contact h2 {
+        color: var(--surface);
+      }
+
+      .contact p {
+        max-width: 590px;
+        color: rgba(255, 254, 250, 0.72);
+        font-size: 17px;
+      }
+
+      .contact-marks {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 10px;
+        margin-top: 34px;
+      }
+
+      .contact-mark {
+        min-height: 86px;
+        padding: 16px;
+        border: 1px solid rgba(255, 254, 250, 0.16);
+        border-radius: 8px;
+        background: rgba(255, 254, 250, 0.06);
+      }
+
+      .contact-mark strong {
+        display: block;
+        margin-bottom: 6px;
+        font-size: 21px;
+      }
+
+      .contact-mark span {
+        color: rgba(255, 254, 250, 0.64);
+        font-size: 12px;
+      }
+
+      .contact-form {
+        padding: 20px;
+        border: 1px solid rgba(255, 254, 250, 0.18);
+        border-radius: 8px;
+        background: rgba(255, 254, 250, 0.08);
+      }
+
+      .field {
+        display: grid;
+        gap: 8px;
+        margin-bottom: 14px;
+      }
+
+      .field label {
+        color: rgba(255, 254, 250, 0.76);
+        font-size: 13px;
+      }
+
+      .field input,
+      .field textarea {
+        width: 100%;
+        border: 1px solid rgba(255, 254, 250, 0.18);
+        border-radius: 8px;
+        color: var(--surface);
+        background: rgba(255, 254, 250, 0.08);
+        outline: none;
+      }
+
+      .field input {
+        height: 46px;
+        padding: 0 13px;
+      }
+
+      .field textarea {
+        min-height: 112px;
+        padding: 12px 13px;
+        resize: vertical;
+      }
+
+      .field input:focus,
+      .field textarea:focus {
+        border-color: var(--amber);
+      }
+
+      .contact-form .button {
+        width: 100%;
+        color: var(--ink);
+        background: var(--surface);
+        box-shadow: 6px 6px 0 var(--coral);
+      }
+
+      .site-footer {
+        border-top: 1px solid rgba(255, 254, 250, 0.12);
+        background: var(--ink);
+        color: rgba(255, 254, 250, 0.68);
+      }
+
+      .footer-inner {
+        width: min(100% - 40px, var(--max));
+        min-height: 82px;
+        margin: 0 auto;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 20px;
+        font-size: 13px;
+      }
+
+      .footer-links {
+        display: flex;
+        gap: 18px;
+      }
+
+      .reveal {
+        opacity: 0;
+        transform: translateY(18px);
+        transition:
+          opacity 520ms ease,
+          transform 520ms ease;
+      }
+
+      .reveal.visible {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      @media (max-width: 1040px) {
+        .nav-links {
+          display: none;
+        }
+
+        .hero {
+          padding-top: 76px;
+        }
+
+        .hero-console {
+          position: relative;
+          right: auto;
+          bottom: auto;
+          width: 100%;
+          margin-top: 34px;
+        }
+
+        h1 {
+          font-size: 68px;
+        }
+
+        .quick-strip-inner,
+        .features-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .quick-item:nth-child(3) {
+          border-left: 1px solid var(--line);
+        }
+
+        .product-grid {
+          grid-template-columns: 220px minmax(0, 1fr);
+        }
+
+        .product-insights {
+          grid-column: 1 / -1;
+          border-top: 1px solid var(--line);
+          border-left: 0;
+          display: grid;
+          grid-template-columns: repeat(3, 1fr);
+          gap: 12px;
+        }
+
+        .insight-card + .insight-card {
+          margin-top: 0;
+        }
+
+        .metric-row {
+          grid-template-columns: repeat(2, 1fr);
+        }
+
+        .campaign-row {
+          grid-template-columns: minmax(160px, 1.2fr) 96px 96px 1fr;
+        }
+
+        .campaign-row > :nth-child(4) {
+          display: none;
+        }
+
+        .section-header,
+        .workflow,
+        .contact-inner {
+          grid-template-columns: 1fr;
+        }
+
+        .workflow-copy {
+          position: static;
+        }
+      }
+
+      @media (max-width: 720px) {
+        .nav {
+          width: min(100% - 28px, var(--max));
+          height: 62px;
+        }
+
+        .nav-cta {
+          display: none;
+        }
+
+        .hero {
+          min-height: calc(100svh - 112px);
+          padding: 58px 0 36px;
+        }
+
+        .hero-inner,
+        .section-inner,
+        .quick-strip-inner,
+        .contact-inner,
+        .footer-inner {
+          width: min(100% - 28px, var(--max));
+        }
+
+        h1 {
+          font-size: 52px;
+        }
+
+        h2 {
+          font-size: 34px;
+        }
+
+        .hero-lede {
+          font-size: 17px;
+        }
+
+        .button {
+          width: 100%;
+        }
+
+        .proof-points {
+          display: none;
+        }
+
+        .hero-console {
+          margin-top: 26px;
+        }
+
+        .console-kpis,
+        .quick-strip-inner,
+        .features-grid,
+        .audience-grid,
+        .logo-showcase,
+        .contact-marks {
+          grid-template-columns: 1fr;
+        }
+
+        .console-kpi + .console-kpi,
+        .quick-item,
+        .quick-item:last-child {
+          border-left: 0;
+          border-right: 0;
+          border-top: 1px solid var(--line);
+        }
+
+        .quick-item:first-child {
+          border-top: 0;
+        }
+
+        .section {
+          padding: 68px 0;
+        }
+
+        .product-toolbar {
+          align-items: stretch;
+          flex-direction: column;
+        }
+
+        .segmented {
+          width: 100%;
+        }
+
+        .tab-button {
+          min-width: 0;
+        }
+
+        .product-grid {
+          grid-template-columns: 1fr;
+          min-height: 0;
+        }
+
+        .product-sidebar,
+        .product-insights {
+          border: 0;
+          border-top: 1px solid var(--line);
+        }
+
+        .product-main {
+          padding: 16px;
+        }
+
+        .product-insights {
+          display: grid;
+          grid-template-columns: 1fr;
+        }
+
+        .main-heading {
+          display: grid;
+        }
+
+        .metric-row {
+          grid-template-columns: 1fr;
+        }
+
+        .campaign-table {
+          overflow-x: auto;
+        }
+
+        .campaign-row {
+          width: 620px;
+          grid-template-columns: 170px 92px 92px 110px 78px;
+        }
+
+        .campaign-row > :nth-child(4) {
+          display: block;
+        }
+
+        .feature-card {
+          min-height: 0;
+        }
+
+        .step {
+          grid-template-columns: 48px 1fr;
+          gap: 16px;
+        }
+
+        .step-number {
+          width: 40px;
+          height: 40px;
+          box-shadow: 3px 3px 0 var(--coral);
+        }
+
+        .footer-inner {
+          align-items: flex-start;
+          flex-direction: column;
+          justify-content: center;
+          padding: 22px 0;
+        }
+      }
+
+      @media (prefers-reduced-motion: reduce) {
+        html {
+          scroll-behavior: auto;
+        }
+
+        *,
+        *::before,
+        *::after {
+          transition-duration: 0.01ms !important;
+          animation-duration: 0.01ms !important;
+          animation-iteration-count: 1 !important;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <header class="site-header">
+      <nav class="nav" aria-label="主导航">
+        <a class="brand" href="#top" aria-label="Aniforce 首页">
+          <img src="assets/aniforce-logo-transparent.svg" alt="Aniforce" />
+        </a>
+        <div class="nav-links" aria-label="页面导航">
+          <a href="#product">产品</a>
+          <a href="#capability">能力</a>
+          <a href="#workflow">流程</a>
+          <a href="#team">团队</a>
+        </div>
+        <a class="nav-cta" href="#contact">预约演示</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-label="Aniforce">
+        <canvas class="signal-canvas" id="signalCanvas" aria-hidden="true"></canvas>
+        <div class="hero-inner">
+          <div class="hero-copy reveal visible">
+            <div class="eyebrow">增长团队的投放控制台</div>
+            <img class="hero-logo" src="assets/aniforce-logo-transparent.svg" alt="Aniforce" />
+            <p class="hero-lede">
+              连接广告账户、计划、素材和转化数据，把 Meta、TikTok、Google
+              等渠道的投放状态、学习期、预算消耗与异常波动收进同一个决策工作台。
+            </p>
+            <div class="hero-actions" aria-label="主要操作">
+              <a class="button primary" href="#contact">
+                <span>预约产品演示</span>
+                <span aria-hidden="true">-></span>
+              </a>
+              <a class="button secondary" href="#product">
+                <span>查看产品界面</span>
+                <span aria-hidden="true">-></span>
+              </a>
+            </div>
+            <div class="proof-points" aria-label="核心特性">
+              <span class="proof-pill">广告计划状态语义化</span>
+              <span class="proof-pill">素材表现自动诊断</span>
+              <span class="proof-pill">预算与异常联动提醒</span>
+            </div>
+          </div>
+
+          <aside class="hero-console reveal visible" aria-label="Aniforce 实时投放看板预览">
+            <div class="console-top">
+              <div class="window-dots" aria-hidden="true">
+                <span></span>
+                <span></span>
+                <span></span>
+              </div>
+              <div class="console-title">Live delivery monitor</div>
+            </div>
+            <div class="console-body">
+              <div class="console-kpis">
+                <div class="console-kpi">
+                  <div class="kpi-label">今日消耗</div>
+                  <div class="kpi-value">$84.6k</div>
+                </div>
+                <div class="console-kpi">
+                  <div class="kpi-label">活跃计划</div>
+                  <div class="kpi-value">318</div>
+                </div>
+                <div class="console-kpi">
+                  <div class="kpi-label">待处理异常</div>
+                  <div class="kpi-value">12</div>
+                </div>
+              </div>
+              <div class="console-list">
+                <div class="console-row">
+                  <div>
+                    <div class="row-name">US iOS Purchase - Broad</div>
+                    <div class="row-sub">ROAS +18.4% / CPA below target</div>
+                  </div>
+                  <span class="status ready">Scaling</span>
+                </div>
+                <div class="console-row">
+                  <div>
+                    <div class="row-name">JP Android Install - Anime</div>
+                    <div class="row-sub">Meta adset learning_stage_info</div>
+                  </div>
+                  <span class="status learning">Learning</span>
+                </div>
+                <div class="console-row">
+                  <div>
+                    <div class="row-name">BR Creative Batch 05</div>
+                    <div class="row-sub">CTR dropped after spend spike</div>
+                  </div>
+                  <span class="status alert">Review</span>
+                </div>
+              </div>
+            </div>
+          </aside>
+        </div>
+      </section>
+
+      <section class="quick-strip" aria-label="平台摘要">
+        <div class="quick-strip-inner">
+          <div class="quick-item reveal">
+            <div class="quick-value">01</div>
+            <div class="quick-label">统一接入广告账户、计划、素材和事件数据</div>
+          </div>
+          <div class="quick-item reveal">
+            <div class="quick-value">02</div>
+            <div class="quick-label">把渠道字段翻译成可操作的投放状态</div>
+          </div>
+          <div class="quick-item reveal">
+            <div class="quick-value">03</div>
+            <div class="quick-label">从异常波动直接推导调控建议</div>
+          </div>
+          <div class="quick-item reveal">
+            <div class="quick-value">04</div>
+            <div class="quick-label">沉淀复盘、素材结论和团队协作记录</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="product">
+        <div class="section-inner">
+          <div class="section-header reveal">
+            <div>
+              <div class="eyebrow">Product view</div>
+              <h2>把投放现场变成清晰、可追踪、能执行的系统。</h2>
+            </div>
+            <p>
+              Aniforce 不只同步报表，而是把渠道 API、素材资产、状态变化和团队动作串起来，
+              让增长团队少在表格里找原因，多在系统里完成判断。
+            </p>
+          </div>
+
+          <div class="product-frame reveal" aria-label="产品界面示意">
+            <div class="product-toolbar">
+              <div class="segmented" role="tablist" aria-label="看板模式">
+                <button class="tab-button active" type="button" data-mode="delivery" role="tab">
+                  投放状态
+                </button>
+                <button class="tab-button" type="button" data-mode="creative" role="tab">
+                  素材诊断
+                </button>
+                <button class="tab-button" type="button" data-mode="budget" role="tab">
+                  预算调控
+                </button>
+              </div>
+              <div class="toolbar-note">Last synced 2 min ago</div>
+            </div>
+
+            <div class="product-grid">
+              <aside class="product-sidebar" aria-label="渠道筛选">
+                <div class="side-label">Connected channels</div>
+                <div class="channel-list">
+                  <div class="channel">
+                    <div class="channel-icon">M</div>
+                    <div>
+                      <div class="channel-title">Meta Ads</div>
+                      <div class="channel-meta">126 adsets active</div>
+                    </div>
+                  </div>
+                  <div class="channel">
+                    <div class="channel-icon">T</div>
+                    <div>
+                      <div class="channel-title">TikTok Ads</div>
+                      <div class="channel-meta">74 campaigns active</div>
+                    </div>
+                  </div>
+                  <div class="channel">
+                    <div class="channel-icon">G</div>
+                    <div>
+                      <div class="channel-title">Google Ads</div>
+                      <div class="channel-meta">42 campaigns active</div>
+                    </div>
+                  </div>
+                  <div class="channel">
+                    <div class="channel-icon">A</div>
+                    <div>
+                      <div class="channel-title">ASA</div>
+                      <div class="channel-meta">18 groups active</div>
+                    </div>
+                  </div>
+                </div>
+                <div class="health-meter">
+                  <div class="side-label">Account health</div>
+                  <div class="meter-line" aria-hidden="true"></div>
+                  <div class="meter-copy">78% 稳定投放，14% 学习期，8% 需要处理。</div>
+                </div>
+              </aside>
+
+              <section class="product-main" aria-label="投放状态主看板">
+                <div class="main-heading">
+                  <h3 id="modeTitle">投放状态雷达</h3>
+                  <span class="date-chip">UTC+8 / 今日</span>
+                </div>
+                <div class="metric-row">
+                  <div class="metric">
+                    <span>有效投放计划</span>
+                    <strong id="metricOne">318</strong>
+                  </div>
+                  <div class="metric">
+                    <span>Learning</span>
+                    <strong id="metricTwo">46</strong>
+                  </div>
+                  <div class="metric">
+                    <span>需排查</span>
+                    <strong id="metricThree">12</strong>
+                  </div>
+                  <div class="metric">
+                    <span>建议动作</span>
+                    <strong id="metricFour">27</strong>
+                  </div>
+                </div>
+
+                <div class="campaign-table" aria-label="广告计划表格">
+                  <div class="campaign-row">
+                    <div>计划</div>
+                    <div>状态</div>
+                    <div>CPA</div>
+                    <div>预算使用</div>
+                    <div>趋势</div>
+                  </div>
+                  <div class="campaign-row">
+                    <div class="campaign-name">US Purchase Broad</div>
+                    <div><span class="status ready">Active</span></div>
+                    <div>$18.4</div>
+                    <div><div class="bar"><span style="width: 72%"></span></div></div>
+                    <div>+12%</div>
+                  </div>
+                  <div class="campaign-row">
+                    <div class="campaign-name">JP Anime Install</div>
+                    <div><span class="status learning">Learning</span></div>
+                    <div>$2.31</div>
+                    <div><div class="bar warn"><span style="width: 48%"></span></div></div>
+                    <div>+4%</div>
+                  </div>
+                  <div class="campaign-row">
+                    <div class="campaign-name">BR Retention D7</div>
+                    <div><span class="status alert">Issue</span></div>
+                    <div>$26.7</div>
+                    <div><div class="bar hot"><span style="width: 89%"></span></div></div>
+                    <div>-18%</div>
+                  </div>
+                  <div class="campaign-row">
+                    <div class="campaign-name">KR Creator Pack</div>
+                    <div><span class="status ready">Active</span></div>
+                    <div>$9.92</div>
+                    <div><div class="bar"><span style="width: 64%"></span></div></div>
+                    <div>+9%</div>
+                  </div>
+                </div>
+              </section>
+
+              <aside class="product-insights" aria-label="智能建议">
+                <div class="insight-card">
+                  <div class="table-label">Insight</div>
+                  <div class="insight-title" id="insightTitle">Learning 状态可解释</div>
+                  <p class="insight-copy" id="insightCopy">
+                    结合 effective_status、learning_stage_info、预算与转化量，区分主动暂停、父级影响和学习期波动。
+                  </p>
+                  <span class="recommendation" id="insightTag">优先排查 12 个计划</span>
+                </div>
+                <div class="insight-card">
+                  <div class="table-label">Action</div>
+                  <div class="insight-title">把建议落到执行</div>
+                  <p class="insight-copy">
+                    支持按渠道、账户、负责人生成待办，所有调控动作都保留原因和前后指标。
+                  </p>
+                  <span class="recommendation">生成今日调控清单</span>
+                </div>
+                <div class="insight-card">
+                  <div class="table-label">Review</div>
+                  <div class="insight-title">复盘不再靠记忆</div>
+                  <p class="insight-copy">
+                    每次素材放量、预算变更、状态异常都自动进入复盘时间线。
+                  </p>
+                  <span class="recommendation">同步周报素材结论</span>
+                </div>
+              </aside>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="capability">
+        <div class="section-inner">
+          <div class="section-header reveal">
+            <div>
+              <div class="eyebrow">Capabilities</div>
+              <h2>为买量团队重新组织每天最重要的四类信息。</h2>
+            </div>
+            <p>
+              从 API 字段到业务语义，从素材表现到预算动作，Aniforce 让数据先完成整理、
+              归因和提醒，再交给人做关键判断。
+            </p>
+          </div>
+
+          <div class="features-grid">
+            <article class="feature-card reveal">
+              <div class="feature-icon">A1</div>
+              <h3>渠道接入</h3>
+              <p>
+                对接广告账户、campaign、adset、ad、creative 与 insights，
+                保留原始字段，同时提供业务层聚合口径。
+              </p>
+            </article>
+            <article class="feature-card reveal">
+              <div class="feature-icon">S2</div>
+              <h3>状态语义</h3>
+              <p>
+                把 Active、Paused、Learning、Learning Limited、With Issues
+                等状态转成可解释的投放原因。
+              </p>
+            </article>
+            <article class="feature-card reveal">
+              <div class="feature-icon">C3</div>
+              <h3>素材诊断</h3>
+              <p>
+                按素材、文案、版位、地区和受众切分表现，识别疲劳、跑量潜力和复用机会。
+              </p>
+            </article>
+            <article class="feature-card reveal">
+              <div class="feature-icon">R4</div>
+              <h3>调控建议</h3>
+              <p>
+                结合目标 CPA、ROAS、预算节奏和学习期情况，生成加预算、降预算、
+                暂停和扩测建议。
+              </p>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="workflow">
+        <div class="section-inner workflow">
+          <div class="workflow-copy reveal">
+            <div class="eyebrow">Workflow</div>
+            <h2>从发现问题到完成复盘，形成闭环。</h2>
+            <p>
+              Aniforce 的核心不是多一张报表，而是让投放团队每天的判断链路更短：
+              先看状态，再看原因，然后执行动作，最后沉淀结论。
+            </p>
+          </div>
+          <div class="steps">
+            <article class="step reveal">
+              <div class="step-number">1</div>
+              <div>
+                <h3>接入账户与事件</h3>
+                <p>连接广告平台和归因数据，统一账号、项目、地区、素材和转化事件口径。</p>
+              </div>
+            </article>
+            <article class="step reveal">
+              <div class="step-number">2</div>
+              <div>
+                <h3>识别状态与异常</h3>
+                <p>把渠道 API 返回的状态、学习期、审核、排期、预算和父级影响拆开解释。</p>
+              </div>
+            </article>
+            <article class="step reveal">
+              <div class="step-number">3</div>
+              <div>
+                <h3>生成调控建议</h3>
+                <p>基于目标、节奏和历史表现给出可执行建议，并标注建议的依据。</p>
+              </div>
+            </article>
+            <article class="step reveal">
+              <div class="step-number">4</div>
+              <div>
+                <h3>同步团队动作</h3>
+                <p>把加预算、暂停、复制扩测、素材替换等动作沉淀成团队共享的操作记录。</p>
+              </div>
+            </article>
+            <article class="step reveal">
+              <div class="step-number">5</div>
+              <div>
+                <h3>复盘增长资产</h3>
+                <p>自动汇总素材结论、计划变化和指标结果，为下一轮投放提供依据。</p>
+              </div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section alt" id="team">
+        <div class="section-inner">
+          <div class="section-header reveal">
+            <div>
+              <div class="eyebrow">For teams</div>
+              <h2>不同角色看到同一套事实，各自完成自己的动作。</h2>
+            </div>
+            <p>
+              官网转化页需要讲清楚价值对象。新版将 Aniforce 的价值拆给负责人、
+              优化师和数据运营三类角色，便于访客快速对号入座。
+            </p>
+          </div>
+
+          <div class="audience-grid">
+            <article class="audience-card reveal">
+              <h3>增长负责人</h3>
+              <ul class="audience-list">
+                <li>跨渠道观察预算消耗、效率和风险</li>
+                <li>看清每个项目的增长瓶颈和机会</li>
+                <li>用周报复盘沉淀投放策略</li>
+              </ul>
+            </article>
+            <article class="audience-card reveal">
+              <h3>投放优化师</h3>
+              <ul class="audience-list">
+                <li>每天获得按优先级排序的调控清单</li>
+                <li>快速区分学习期、审核、预算和素材问题</li>
+                <li>记录每次动作背后的判断理由</li>
+              </ul>
+            </article>
+            <article class="audience-card reveal">
+              <h3>数据运营</h3>
+              <ul class="audience-list">
+                <li>统一字段口径和渠道 API 数据结构</li>
+                <li>降低重复取数、清洗和核对成本</li>
+                <li>为 BI、日报和经营分析提供稳定底座</li>
+              </ul>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="section" id="brand-system">
+        <div class="section-inner">
+          <div class="section-header reveal">
+            <div>
+              <div class="eyebrow">Brand system</div>
+              <h2>基于黑色单色方向，优化成更稳的 Aniforce 标识。</h2>
+            </div>
+            <p>
+              新版保留右下角参考里的深色、极简、科技感方向，弱化高饱和渐变，
+              让标识在官网导航、应用图标、深色背景和商务物料里都更耐看。
+            </p>
+          </div>
+
+          <div class="logo-showcase">
+            <article class="logo-panel reveal">
+              <img src="assets/aniforce-logo-transparent.svg" alt="Aniforce 横版标识" />
+              <div class="logo-caption">横版主标：适合官网导航、页眉、PPT 封面和品牌页。</div>
+            </article>
+            <article class="logo-panel dark reveal">
+              <img src="assets/aniforce-logo-transparent.svg" alt="Aniforce 透明背景标识" />
+              <div class="logo-caption">透明背景版：适合浅色首屏、PPT 封面和品牌展示页。</div>
+            </article>
+            <article class="logo-panel reveal">
+              <img src="assets/aniforce-logo-transparent.svg" alt="Aniforce 透明背景横版标识" />
+              <div class="logo-caption">纯矢量路径：不依赖字体，不包含滤镜和阴影。</div>
+            </article>
+            <article class="logo-panel dark reveal">
+              <img src="assets/aniforce-logo-transparent.svg" alt="Aniforce 透明背景应用" />
+              <div class="logo-caption">统一使用新透明背景版，避免旧图标和旧反白版本混入页面。</div>
+            </article>
+          </div>
+        </div>
+      </section>
+
+      <section class="contact" id="contact">
+        <div class="contact-inner">
+          <div class="reveal">
+            <div class="eyebrow">Book a demo</div>
+            <h2>让你的投放团队先少开 5 个后台。</h2>
+            <p>
+              留下联系方式，我们可以基于你们现在的广告渠道、项目结构和团队流程，
+              帮你把 Aniforce 的官网内容、产品演示和销售话术继续打磨成真实可上线版本。
+            </p>
+            <div class="contact-marks" aria-label="演示内容">
+              <div class="contact-mark">
+                <strong>30 min</strong>
+                <span>快速梳理投放流程</span>
+              </div>
+              <div class="contact-mark">
+                <strong>API</strong>
+                <span>确认渠道字段与权限</span>
+              </div>
+              <div class="contact-mark">
+                <strong>Demo</strong>
+                <span>按团队角色演示闭环</span>
+              </div>
+            </div>
+          </div>
+
+          <form class="contact-form reveal" id="demoForm">
+            <div class="field">
+              <label for="name">姓名</label>
+              <input id="name" name="name" autocomplete="name" placeholder="你的称呼" />
+            </div>
+            <div class="field">
+              <label for="company">公司 / 团队</label>
+              <input id="company" name="company" autocomplete="organization" placeholder="增长团队名称" />
+            </div>
+            <div class="field">
+              <label for="contactWay">联系方式</label>
+              <input id="contactWay" name="contactWay" autocomplete="email" placeholder="邮箱或微信" />
+            </div>
+            <div class="field">
+              <label for="message">当前关注点</label>
+              <textarea id="message" name="message" placeholder="例如：Meta 状态同步、素材诊断、多渠道预算管理"></textarea>
+            </div>
+            <button class="button" type="submit" id="submitButton">提交演示需求</button>
+          </form>
+        </div>
+      </section>
+    </main>
+
+    <footer class="site-footer">
+      <div class="footer-inner">
+        <div>Aniforce 智能增长投放中台</div>
+        <div class="footer-links" aria-label="页脚链接">
+          <a href="#product">产品</a>
+          <a href="#capability">能力</a>
+          <a href="#contact">联系</a>
+        </div>
+      </div>
+    </footer>
+
+    <script>
+      const canvas = document.getElementById("signalCanvas");
+      const ctx = canvas.getContext("2d");
+      const colors = ["#0f766e", "#e15a3f", "#c9912f", "#466c78"];
+      let width = 0;
+      let height = 0;
+      let dpr = 1;
+      let paths = [];
+
+      function resizeCanvas() {
+        dpr = Math.min(window.devicePixelRatio || 1, 2);
+        width = canvas.clientWidth;
+        height = canvas.clientHeight;
+        canvas.width = Math.floor(width * dpr);
+        canvas.height = Math.floor(height * dpr);
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        buildPaths();
+      }
+
+      function buildPaths() {
+        const rows = Math.max(6, Math.floor(height / 92));
+        paths = Array.from({ length: rows }, (_, index) => {
+          const y = 82 + index * 86 + (index % 2) * 16;
+          return {
+            y,
+            speed: 0.002 + (index % 4) * 0.00045,
+            offset: Math.random(),
+            color: colors[index % colors.length],
+            amplitude: 22 + (index % 3) * 12,
+          };
+        });
+      }
+
+      function drawSignal(time) {
+        ctx.clearRect(0, 0, width, height);
+
+        ctx.lineWidth = 1;
+        ctx.strokeStyle = "rgba(21, 26, 23, 0.08)";
+        for (let x = 0; x < width; x += 56) {
+          ctx.beginPath();
+          ctx.moveTo(x, 0);
+          ctx.lineTo(x, height);
+          ctx.stroke();
+        }
+        for (let y = 0; y < height; y += 56) {
+          ctx.beginPath();
+          ctx.moveTo(0, y);
+          ctx.lineTo(width, y);
+          ctx.stroke();
+        }
+
+        paths.forEach((path, pathIndex) => {
+          const baseY = path.y;
+          ctx.strokeStyle = "rgba(21, 26, 23, 0.12)";
+          ctx.lineWidth = 1.4;
+          ctx.beginPath();
+          for (let x = -40; x <= width + 40; x += 18) {
+            const wave = Math.sin(x * 0.012 + time * 0.0012 + pathIndex) * path.amplitude;
+            const y = baseY + wave;
+            if (x === -40) {
+              ctx.moveTo(x, y);
+            } else {
+              ctx.lineTo(x, y);
+            }
+          }
+          ctx.stroke();
+
+          const progress = (time * path.speed + path.offset) % 1;
+          const x = progress * (width + 160) - 80;
+          const y = baseY + Math.sin(x * 0.012 + time * 0.0012 + pathIndex) * path.amplitude;
+          ctx.fillStyle = path.color;
+          ctx.globalAlpha = 0.86;
+          ctx.fillRect(x - 5, y - 5, 10, 10);
+          ctx.globalAlpha = 0.18;
+          ctx.fillRect(x - 16, y - 16, 32, 32);
+          ctx.globalAlpha = 1;
+
+          for (let dot = 0; dot < 4; dot += 1) {
+            const nodeX = (width / 5) * (dot + 1) + (pathIndex % 2) * 28;
+            const nodeY = baseY + Math.sin(nodeX * 0.012 + pathIndex) * path.amplitude;
+            ctx.fillStyle = "rgba(255, 254, 250, 0.86)";
+            ctx.strokeStyle = "rgba(21, 26, 23, 0.16)";
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.roundRect(nodeX - 18, nodeY - 13, 36, 26, 6);
+            ctx.fill();
+            ctx.stroke();
+            ctx.fillStyle = colors[(dot + pathIndex) % colors.length];
+            ctx.fillRect(nodeX - 7, nodeY - 3, 14, 6);
+          }
+        });
+
+        requestAnimationFrame(drawSignal);
+      }
+
+      if (ctx.roundRect) {
+        resizeCanvas();
+        window.addEventListener("resize", resizeCanvas, { passive: true });
+        requestAnimationFrame(drawSignal);
+      }
+
+      const modeData = {
+        delivery: {
+          title: "投放状态雷达",
+          metrics: ["318", "46", "12", "27"],
+          insightTitle: "Learning 状态可解释",
+          insightCopy:
+            "结合 effective_status、learning_stage_info、预算与转化量，区分主动暂停、父级影响和学习期波动。",
+          tag: "优先排查 12 个计划",
+        },
+        creative: {
+          title: "素材表现诊断",
+          metrics: ["1.8k", "126", "38", "19"],
+          insightTitle: "素材疲劳提前预警",
+          insightCopy:
+            "按首日 CTR、留存、消耗爬坡和重复曝光识别素材疲劳，把可复用素材和需下线素材分开。",
+          tag: "推荐扩测 19 个素材",
+        },
+        budget: {
+          title: "预算节奏控制",
+          metrics: ["$84.6k", "73%", "9", "14"],
+          insightTitle: "预算动作可追踪",
+          insightCopy:
+            "按目标 CPA、ROAS 和今日消耗节奏，标记加预算、降预算、复制扩测和暂停观察动作。",
+          tag: "生成 14 条预算建议",
+        },
+      };
+
+      const modeTitle = document.getElementById("modeTitle");
+      const metricEls = [
+        document.getElementById("metricOne"),
+        document.getElementById("metricTwo"),
+        document.getElementById("metricThree"),
+        document.getElementById("metricFour"),
+      ];
+      const insightTitle = document.getElementById("insightTitle");
+      const insightCopy = document.getElementById("insightCopy");
+      const insightTag = document.getElementById("insightTag");
+
+      document.querySelectorAll(".tab-button").forEach((button) => {
+        button.addEventListener("click", () => {
+          const mode = button.dataset.mode;
+          const data = modeData[mode];
+          document.querySelectorAll(".tab-button").forEach((item) => {
+            item.classList.toggle("active", item === button);
+            item.setAttribute("aria-selected", item === button ? "true" : "false");
+          });
+          modeTitle.textContent = data.title;
+          data.metrics.forEach((value, index) => {
+            metricEls[index].textContent = value;
+          });
+          insightTitle.textContent = data.insightTitle;
+          insightCopy.textContent = data.insightCopy;
+          insightTag.textContent = data.tag;
+        });
+      });
+
+      const revealObserver = new IntersectionObserver(
+        (entries) => {
+          entries.forEach((entry) => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add("visible");
+              revealObserver.unobserve(entry.target);
+            }
+          });
+        },
+        { threshold: 0.12 },
+      );
+
+      document.querySelectorAll(".reveal").forEach((element) => {
+        if (!element.classList.contains("visible")) {
+          revealObserver.observe(element);
+        }
+      });
+
+      document.getElementById("demoForm").addEventListener("submit", (event) => {
+        event.preventDefault();
+        const button = document.getElementById("submitButton");
+        button.textContent = "已收到，稍后联系";
+        button.disabled = true;
+      });
+    </script>
+  </body>
+</html>
