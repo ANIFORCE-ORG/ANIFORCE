@@ -104,7 +104,7 @@ function handleRegister() {
               <span class="material-symbols-outlined text-5xl text-primary">rocket_launch</span>
             </div>
           </div>
-          <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">ANIMAGUS</h1>
+          <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">ANIFORCE</h1>
           <p class="text-sm text-slate-500 dark:text-slate-400">30 秒内开始您的第一次分析</p>
         </div>
 
@@ -229,7 +229,7 @@ function handleRegister() {
 
           <!-- 服务条款 -->
           <p class="mt-6 text-xs text-center text-slate-500 dark:text-slate-400">
-            继续操作即表示您同意 ANIMAGUS 的
+            继续操作即表示您同意 ANIFORCE 的
             <a href="#" class="text-primary hover:underline">服务条款</a>
             和
             <a href="#" class="text-primary hover:underline">隐私政策</a>

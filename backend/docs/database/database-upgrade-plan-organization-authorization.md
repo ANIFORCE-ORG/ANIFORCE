@@ -60,7 +60,7 @@ CREATE TABLE organization_members (
     organization_id VARCHAR(36) NOT NULL,
     user_id VARCHAR(36) NOT NULL,
     role VARCHAR(20) NOT NULL,  -- 'admin', 'member'
-    status VARCHAR(20) DEFAULT 'active',  -- 'active', 'inactive', 'invited'
+    status VARCHAR(20) DEFAULT 'active',  -- 'active', 'invited'
     invited_by VARCHAR(36),  -- 邀请人
     joined_at DATETIME,
     created_at DATETIME NOT NULL,

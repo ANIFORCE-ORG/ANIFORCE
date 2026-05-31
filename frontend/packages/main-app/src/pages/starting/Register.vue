@@ -85,7 +85,7 @@ function goToLogin() {
             </div>
           </div>
           <h1 class="text-xl font-bold text-slate-900 dark:text-white mb-1">创建账号</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400">加入 ANIMAGUS，开启您的营销之旅</p>
+          <p class="text-sm text-slate-500 dark:text-slate-400">加入 ANIFORCE 开启您的营销之旅</p>
         </div>
 
         <!-- 注册表单区域 -->
@@ -166,7 +166,7 @@ function goToLogin() {
 
           <!-- 服务条款 -->
           <p class="mt-6 text-xs text-center text-slate-500 dark:text-slate-400">
-            注册即表示您同意 ANIMAGUS 的
+            注册即表示您同意 ANIFORCE 的
             <a href="#" class="text-primary hover:underline">服务条款</a>
             和
             <a href="#" class="text-primary hover:underline">隐私政策</a>

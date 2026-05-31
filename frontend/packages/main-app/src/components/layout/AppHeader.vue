@@ -2,30 +2,12 @@
 import { ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import logoSvg from '@/assets/aniforce-logo-transparent.svg'
 
-const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 
 const showUserMenu = ref(false)
-
-const navItems = [
-  //{ label: 'GetStart', path: '/get-start', icon: 'rocket_launch' },
-  //{ label: '数据概览', path: '/dashboard', icon: 'pie_chart' },
-  //{ label: '市场分析', path: '/market-analysis', icon: 'trending_up' },
-  //{ label: '素材生产', path: '/material', icon: 'auto_awesome' },
-  //{ label: '投放计划', path: '/campaign', icon: 'campaign' },
-  //{ label: '投放数据分析', path: '/monitor', icon: 'analytics' },
-]
-
-const isActive = (path: string) => {
-  if (path === '/') return route.path === '/'
-  return route.path.startsWith(path)
-}
-
-const navigateTo = (path: string) => {
-  router.push(path)
-}
 
 const handleLogoClick = () => {
   if (auth.isLoggedIn) {
@@ -54,27 +36,8 @@ const handleLogout = () => {
   <header class="flex items-center justify-between px-6 py-3 md:px-12 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md sticky top-0 z-50">
     <!-- Logo -->
     <div class="flex items-center gap-3 cursor-pointer shrink-0" @click="handleLogoClick">
-      <div class="flex h-9 w-9 items-center justify-center rounded-xl bg-primary text-white">
-        <span class="material-symbols-outlined text-xl">rocket_launch</span>
-      </div>
-      <h2 class="text-lg font-bold tracking-tight">ANIFORCE</h2>
+      <img :src="logoSvg" alt="ANIFORCE" class="h-12 w-auto max-w-[220px] object-contain logo-blue" />
     </div>
-
-    <!-- Navigation -->
-    <nav class="hidden md:flex items-center gap-1">
-      <button
-        v-for="item in navItems"
-        :key="item.path"
-        class="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200"
-        :class="isActive(item.path)
-          ? 'bg-primary/10 text-primary font-semibold shadow-sm'
-          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-primary'"
-        @click="navigateTo(item.path)"
-      >
-        <span class="material-symbols-outlined text-[18px]">{{ item.icon }}</span>
-        {{ item.label }}
-      </button>
-    </nav>
 
     <!-- Right Actions -->
     <div class="flex items-center gap-3 shrink-0">
@@ -91,7 +54,7 @@ const handleLogout = () => {
             </div>
             <div class="flex flex-col items-start">
               <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ auth.user?.name }}</div>
-              <div class="text-xs text-slate-500 dark:text-slate-400">投放经理 · FunGame Studio</div>
+              <div class="text-xs text-slate-500 dark:text-slate-400">{{ auth.user?.email }}</div>
             </div>
           </button>
 
@@ -152,5 +115,10 @@ const handleLogout = () => {
 .fade-leave-to {
   opacity: 0;
   transform: translateY(-4px);
+}
+.logo-blue {
+  /* 仅当 SVG 中 fill="currentColor" 时生效 */
+  color: #1E88F0;
+  filter: brightness(0) saturate(100%) sepia(1) hue-rotate(195deg) saturate(5) brightness(1.05);
 }
 </style>
