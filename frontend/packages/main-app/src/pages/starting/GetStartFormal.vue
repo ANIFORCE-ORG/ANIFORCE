@@ -219,7 +219,7 @@ const handleSubmitContact = () => {
 
           <!-- Right: Dashboard Mockup -->
           <div class="relative">
-            <div class="overflow-hidden rounded-lg border border-slate-200 bg-white shadow-2xl shadow-blue-100/80">
+            <div class="overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xl shadow-blue-100/80">
               <!-- Window Chrome -->
               <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
                 <div class="flex items-center gap-2">
@@ -232,16 +232,16 @@ const handleSubmitContact = () => {
 
               <!-- Dashboard Content -->
               <div class="bg-[#eef6ff] p-3">
-                <div class="grid min-h-[390px] overflow-hidden rounded-md border border-blue-100 bg-white shadow-sm lg:grid-cols-[156px_minmax(0,1fr)_258px]">
+                <div class="grid min-h-[390px] overflow-hidden rounded-md border border-blue-100 bg-white shadow-sm lg:grid-cols-[120px_minmax(0,1fr)_258px]">
                   <!-- Sidebar -->
-                  <aside class="hidden min-w-[156px] border-r border-blue-100 bg-primary p-3 text-white lg:block">
-                    <p class="whitespace-nowrap text-sm font-black">aniforce</p>
-                    <div class="mt-7 space-y-2 text-xs">
+                  <aside class="hidden min-w-[120px] border-r border-blue-100 bg-primary p-2.5 text-white lg:block">
+                    <p class="whitespace-nowrap text-xs font-black">Aniforce</p>
+                    <div class="mt-6 space-y-1.5 text-[11px]">
                       <div
                         v-for="(menu, idx) in sidebarMenus"
                         :key="menu"
                         :class="[
-                          'whitespace-nowrap rounded-md px-3 py-2 text-blue-100',
+                          'whitespace-nowrap rounded-md px-2.5 py-1.5 text-blue-100',
                           idx === sidebarMenus.length - 1 ? 'bg-white/20 font-bold' : ''
                         ]"
                       >
@@ -260,8 +260,8 @@ const handleSubmitContact = () => {
                         class="rounded-md border border-blue-100 bg-white p-3"
                       >
                         <p class="text-[11px] font-semibold text-slate-500">{{ stat.label }}</p>
-                        <p class="mt-1 whitespace-nowrap font-black text-slate-950 text-lg">{{ stat.value }}</p>
-                        <p :class="['mt-1 text-[11px] font-bold', stat.hintColor]">{{ stat.hint }}</p>
+                        <p class="mt-1 whitespace-nowrap font-black text-slate-950 text-xs">{{ stat.value }}</p>
+                        <p :class="['mt-1 text-[9px] font-bold', stat.hintColor]">{{ stat.hint }}</p>
                       </div>
                     </div>
 
