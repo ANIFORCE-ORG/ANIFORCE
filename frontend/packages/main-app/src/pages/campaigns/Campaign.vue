@@ -30,7 +30,7 @@ const sessions = ref([
 const messages = ref([
   {
     role: 'ai',
-    author: 'ANIMAGUS助手',
+    author: 'ANIFORCE助手',
     time: '刚刚',
     content: '您好！我可以帮您创建广告计划、优化投放策略或分析广告数据。请问需要什么帮助？'
   }

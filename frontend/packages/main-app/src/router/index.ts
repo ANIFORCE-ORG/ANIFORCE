@@ -6,6 +6,11 @@ const router = createRouter({
   routes: [
     {
       path: '/',
+      name: 'get-start-formal',
+      component: () => import('@/pages/starting/GetStartFormal.vue'),
+    },
+    {
+      path: '/getstart',
       name: 'get-start',
       component: () => import('@/pages/starting/GetStart.vue'),
     },
