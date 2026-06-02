@@ -216,17 +216,6 @@ function handleRegister() {
               </button>
             </div>
 
-            <!-- Demo 模式登录 -->
-            <!--
-            <button
-              @click="handleDemoLogin"
-              class="w-full mt-4 py-3 px-4 bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 font-medium rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-all flex items-center justify-center gap-2"
-            >
-              <span class="material-symbols-outlined text-lg">science</span>
-              <span>Demo 模式登录</span>
-            </button>
-            -->
-
           <!-- 服务条款 -->
           <p class="mt-6 text-xs text-center text-slate-500 dark:text-slate-400">
             继续操作即表示您同意 ANIFORCE 的
