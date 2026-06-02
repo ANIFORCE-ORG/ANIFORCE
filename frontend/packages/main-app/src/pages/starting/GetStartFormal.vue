@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
+import { submitContact } from '@/api/contact'
 
 // --- Hero Section ---
 const heroTags = ['实时素材创作', '7x24盯盘', 'AI复盘归因', '可持续优化']
@@ -150,9 +151,48 @@ const contactForm = ref({
   contact: ''
 })
 
-const handleSubmitContact = () => {
-  // TODO: Implement form submission
-  console.log('Contact form submitted:', contactForm.value)
+const submitting = ref(false)
+const submitSuccess = ref(false)
+const submitError = ref('')
+
+const handleSubmitContact = async () => {
+  // 验证表单
+  if (!contactForm.value.name || !contactForm.value.company || !contactForm.value.contact) {
+    submitError.value = '请填写所有必填字段'
+    return
+  }
+
+  submitting.value = true
+  submitError.value = ''
+  submitSuccess.value = false
+
+  try {
+    await submitContact({
+      name: contactForm.value.name,
+      company: contactForm.value.company,
+      contact: contactForm.value.contact
+    })
+
+    // 提交成功
+    submitSuccess.value = true
+    
+    // 重置表单
+    contactForm.value = {
+      name: '',
+      company: '',
+      contact: ''
+    }
+
+    // 3秒后隐藏成功消息
+    setTimeout(() => {
+      submitSuccess.value = false
+    }, 3000)
+  } catch (err: any) {
+    console.error('提交联系信息失败:', err)
+    submitError.value = err.message || '提交失败，请稍后重试'
+  } finally {
+    submitting.value = false
+  }
 }
 </script>
 
@@ -502,11 +542,23 @@ const handleSubmitContact = () => {
                 placeholder="手机号或微信"
               >
             </label>
+
+            <!-- 成功消息 -->
+            <div v-if="submitSuccess" class="mb-4 rounded-md bg-emerald-500/20 border border-emerald-500/30 px-4 py-3 text-sm text-emerald-300">
+              ✓ 提交成功！我们会尽快与您联系。
+            </div>
+
+            <!-- 错误消息 -->
+            <div v-if="submitError" class="mb-4 rounded-md bg-red-500/20 border border-red-500/30 px-4 py-3 text-sm text-red-300">
+              {{ submitError }}
+            </div>
+
             <button
-              class="w-full rounded-md bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-[6px_6px_0_rgba(19,127,236,0.9)] transition-all hover:-translate-y-0.5"
+              :disabled="submitting"
+              class="w-full rounded-md bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-[6px_6px_0_rgba(19,127,236,0.9)] transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
               type="submit"
             >
-              提交体验需求
+              {{ submitting ? '提交中...' : '提交体验需求' }}
             </button>
           </form>
         </div>

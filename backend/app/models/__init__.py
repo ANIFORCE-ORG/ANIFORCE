@@ -8,6 +8,7 @@ from app.models.platform_connection import PlatformConnection
 from app.models.sub_account_binding import SubAccountBinding
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
+from app.models.contact_info import ContactInfo
 
 __all__ = [
     "User",
@@ -22,4 +23,5 @@ __all__ = [
     "SubAccountBinding",
     "Organization",
     "OrganizationMember",
+    "ContactInfo",
 ]
