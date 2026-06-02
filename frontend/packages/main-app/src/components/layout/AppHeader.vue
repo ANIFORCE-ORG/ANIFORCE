@@ -1,13 +1,29 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
+import { useLanguage } from '@/store/language'
 import logoSvg from '@/assets/aniforce-logo-transparent.svg'
 
 const router = useRouter()
 const auth = useAuthStore()
+const { language, toggleLanguage } = useLanguage()
 
 const showUserMenu = ref(false)
+
+// Bilingual copy
+const copy = {
+  cn: {
+    getStartButton: '开始使用',
+    logout: '退出登录'
+  },
+  en: {
+    getStartButton: 'Get Start',
+    logout: 'Logout'
+  }
+}
+
+const t = computed(() => copy[language.value])
 
 const handleLogoClick = () => {
   if (auth.isLoggedIn) {
@@ -73,7 +89,7 @@ const handleLogout = () => {
                 @click="handleLogout"
               >
                 <span class="material-symbols-outlined text-[18px]">logout</span>
-                退出登录
+                {{ t.logout }}
               </button>
             </div>
           </Transition>
@@ -90,9 +106,36 @@ const handleLogout = () => {
           class="px-4 py-2 text-sm bg-slate-900 dark:bg-white text-white dark:text-slate-900 rounded-lg hover:bg-slate-800 dark:hover:bg-slate-100 transition-colors font-medium"
           @click="handleUserClick"
         >
-          开始使用
+          {{ t.getStartButton }}
         </button>
       </template>
+
+      <!-- Language Segmented Control -->
+      <div class="flex items-center gap-1 rounded-lg bg-slate-100 dark:bg-slate-800 p-1">
+        <button
+          @click="() => language === 'en' && toggleLanguage()"
+          :class="[
+            'px-3 py-1.5 text-xs font-semibold rounded-md transition-all',
+            language === 'cn'
+              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          ]"
+        >
+          中文
+        </button>
+        <button
+          @click="() => language === 'cn' && toggleLanguage()"
+          :class="[
+            'px-3 py-1.5 text-xs font-semibold rounded-md transition-all',
+            language === 'en'
+              ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+          ]"
+        >
+          EN
+        </button>
+      </div>
+
     </div>
   </header>
 

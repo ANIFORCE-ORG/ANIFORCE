@@ -1,9 +1,188 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { submitContact } from '@/api/contact'
+import { useLanguage } from '@/store/language'
+
+const { language } = useLanguage()
+
+// --- Bilingual Copy ---
+const copy = {
+  cn: {
+    hero: {
+      eyebrow: '新一代 RTC 广告 AI 引擎',
+      title: '智能营销，自动增长',
+      description: 'ANIFORCE 利用 AI 技术自动规划、执行和优化广告投放策略。从策略制定到创意生成，从预算分配到效果监控，让增长变得简单高效。',
+      tags: ['实时素材创作', '7x24盯盘', 'AI复盘归因', '可持续优化'],
+      primaryCta: '免费体验',
+      secondaryCta: '查看功能',
+      previewTitle: '广告工作台',
+      live: '实时运行'
+    },
+    features: {
+      title: '强大的功能特性',
+      subtitle: 'AI驱动的全流程营销自动化，覆盖分析、投放与监控复盘',
+      items: [
+        { icon: 'auto_awesome', title: 'AI智能优化', description: '自动分析投放数据，实时优化广告策略，帮助团队提升预算使用效率和整体 ROI。' },
+        { icon: 'trending_up', title: '数据驱动增长', description: '深度洞察市场趋势，精准定位目标用户，加速业务增长并降低试错成本。' },
+        { icon: 'psychology', title: '创意生成', description: 'AI辅助创意素材生成，快速产出高质量广告内容，并根据表现进行持续迭代。' },
+        { icon: 'speed', title: '自动化投放', description: '一键启动广告投放，自动调整预算和出价策略，让执行链路更轻、更稳。' }
+      ]
+    },
+    automation: {
+      eyebrow: '为什么需要新的广告 AI 引擎',
+      title: ['从搭建一个增长团队，', '到一套可持续优化的工作流'],
+      cards: [
+        { title: 'Real-time Creative', description: '实时生成、拆解和迭代广告素材，让创意测试跟上投放节奏。', tags: ['视频拆解', '脚本生成', '多语言适配'] },
+        { title: 'Campaign Intelligence', description: '统一项目、账户、素材、计划和报表上下文，辅助判断预算、素材疲劳和转化异常。', tags: ['账户上下文', '素材疲劳', '转化异常'] },
+        { title: 'Performance Loop', description: '把每一次投放结果沉淀为可复用的素材特征、渠道经验和复盘结论。', tags: ['指标回流', '复盘结论', '经验沉淀'] }
+      ]
+    },
+    workflow: {
+      eyebrow: '跨平台广告引擎',
+      title: '智能投放策略保障广告生意效果',
+      subtitle: '你把生意做好，其他事情交给aniforce',
+      steps: [
+        { title: 'Campaign Brief', description: '明确产品目标、受众、预算和区域。' },
+        { title: 'Creative Production', description: '实时自动生成创意、管理和复用广告素材。' },
+        { title: 'Media Execution', description: '统一管理跨平台账户，组织计划、素材、预算和状态。', platforms: ['Meta', 'Google', 'TikTok'] },
+        { title: 'Monitor & Performance Review', description: '聚合监控各项广告指标，提出下一步优化动作，并完成工作复盘。' }
+      ]
+    },
+    contact: {
+      eyebrow: '免费体验',
+      title: '让你的投放团队先少开 5 个后台。',
+      description: '留下联系方式，ANIFORCE将为你升级现有的广告投放流程。',
+      cards: [
+        { value: '30 min', label: '快速梳理投放流程' },
+        { value: 'API', label: '确认渠道字段与权限' },
+        { value: 'Demo', label: '按团队角色演示闭环' }
+      ],
+      form: {
+        name: '姓名',
+        namePlaceholder: '你的姓名',
+        company: '公司 / 团队',
+        companyPlaceholder: '公司或团队名称',
+        contact: '联系方式',
+        contactPlaceholder: '手机号或微信',
+        submit: '提交体验需求',
+        submitting: '提交中...',
+        success: '✓ 提交成功！我们会尽快与您联系。',
+        errorRequired: '请填写所有必填字段',
+        errorDefault: '提交失败，请稍后重试'
+      }
+    },
+    dashboard: {
+      sidebar: ['新任务', '项目管理', '广告投放', '创意素材', '数据概览'],
+      stats: [
+        { label: '消耗', value: '$28.4K', hint: '节奏正常', hintColor: 'text-emerald-600' },
+        { label: 'CPA', value: '-18%', hint: '持续改善', hintColor: 'text-emerald-600' },
+        { label: '素材', value: '2 条预警', hint: '需要复盘', hintColor: 'text-amber-600' }
+      ],
+      performanceTitle: '跨平台投放表现',
+      period: '近 7 天',
+      agentTitle: 'ANIFORCE Agent',
+      agentSubtitle: '7x24 盯盘',
+      agentMessages: [
+        { role: 'agent', text: 'Meta 两条素材出现疲劳，建议替换前三秒 Hook。' },
+        { role: 'agent', text: '是否生成 3 个新素材方向，并同步到测试计划？' }
+      ],
+      agentInsights: ['预算消耗正常', '2 条素材疲劳预警', '转化成本下降 18%'],
+      agentPlaceholder: '询问 agent...',
+      aiOptimization: 'AI 优化建议',
+      aiSuggestions: ['转移预算至高转化素材', '降低冷启动计划出价', '新增相似用户包']
+    }
+  },
+  en: {
+    hero: {
+      eyebrow: 'The next-generation RTC advertising AI engine',
+      title: 'Intelligent marketing, automatic growth',
+      description: 'ANIFORCE uses AI to plan, execute, and optimize advertising strategies. From strategy and creative generation to budget allocation and performance monitoring, growth becomes simpler and more efficient.',
+      tags: ['Real-time creative', '24/7 monitoring', 'AI review attribution', 'Continuous optimization'],
+      primaryCta: 'Free trial',
+      secondaryCta: 'View features',
+      previewTitle: 'Advertising workspace',
+      live: 'Live'
+    },
+    features: {
+      title: 'Powerful product features',
+      subtitle: 'AI-driven marketing automation across analysis, delivery, and monitoring',
+      items: [
+        { icon: 'auto_awesome', title: 'AI optimization', description: 'Analyze delivery data and improve advertising strategies in real time to increase budget efficiency and ROI.' },
+        { icon: 'trending_up', title: 'Data-driven growth', description: 'Identify market trends and target audiences more precisely to accelerate growth and reduce testing costs.' },
+        { icon: 'psychology', title: 'Creative generation', description: 'Produce quality advertising assets quickly with AI and continuously iterate based on performance.' },
+        { icon: 'speed', title: 'Automated delivery', description: 'Launch campaigns quickly and continuously adjust budgets and bid strategies with less manual work.' }
+      ]
+    },
+    automation: {
+      eyebrow: 'Why a new advertising AI engine',
+      title: ['From building a growth team,', 'to a continuously improving workflow'],
+      cards: [
+        { title: 'Real-time Creative', description: 'Generate, deconstruct, and iterate ad creatives in real time so creative testing can keep pace with media buying.', tags: ['Creative parsing', 'Asset variants', 'Reusable ideas'] },
+        { title: 'Campaign Intelligence', description: 'Unify project, account, creative, campaign, and reporting context to support budget decisions, creative fatigue checks, and conversion anomaly detection.', tags: ['Account context', 'Budget signals', 'Fatigue checks'] },
+        { title: 'Performance Loop', description: 'Turn every campaign result into reusable creative signals, channel experience, and review conclusions.', tags: ['Metric feedback', 'Review notes', 'Channel memory'] }
+      ]
+    },
+    workflow: {
+      eyebrow: 'Cross-platform advertising engine',
+      title: 'Intelligent media strategy for advertising outcomes',
+      subtitle: 'You focus on the business. aniforce handles the rest.',
+      steps: [
+        { title: 'Campaign Brief', description: 'Define product goals, audience, budget, and regions.' },
+        { title: 'Creative Production', description: 'Generate creatives in real time, manage assets, and reuse proven materials.' },
+        { title: 'Media Execution', description: 'Manage cross-platform accounts, campaigns, creatives, budgets, and status in one place.', platforms: ['Meta', 'Google', 'TikTok'] },
+        { title: 'Monitor & Performance Review', description: 'Monitor advertising metrics, suggest the next optimization actions, and complete campaign reviews.' }
+      ]
+    },
+    contact: {
+      eyebrow: 'Free trial',
+      title: 'Let your media team open 5 fewer dashboards.',
+      description: 'Leave your contact information. ANIFORCE will upgrade your existing advertising workflow.',
+      cards: [
+        { value: '30 min', label: 'Map your media workflow' },
+        { value: 'API', label: 'Review channel fields and access' },
+        { value: 'Demo', label: 'Demo by team role' }
+      ],
+      form: {
+        name: 'Name',
+        namePlaceholder: 'Your name',
+        company: 'Company / Team',
+        companyPlaceholder: 'Company or team name',
+        contact: 'Contact',
+        contactPlaceholder: 'Phone or WeChat',
+        submit: 'Submit request',
+        submitting: 'Submitting...',
+        success: '✓ Submitted successfully! We will contact you soon.',
+        errorRequired: 'Please fill in all required fields',
+        errorDefault: 'Submission failed, please try again later'
+      }
+    },
+    dashboard: {
+      sidebar: ['New task', 'Projects', 'Campaigns', 'Creatives', 'Overview'],
+      stats: [
+        { label: 'Spend', value: '$28.4K', hint: 'On pace', hintColor: 'text-emerald-600' },
+        { label: 'CPA', value: '-18%', hint: 'Improving', hintColor: 'text-emerald-600' },
+        { label: 'Creative', value: '2 alerts', hint: 'Needs review', hintColor: 'text-amber-600' }
+      ],
+      performanceTitle: 'Cross-platform performance',
+      period: 'Last 7 days',
+      agentTitle: 'ANIFORCE Agent',
+      agentSubtitle: '24/7 monitoring',
+      agentMessages: [
+        { role: 'agent', text: 'Two Meta creatives show fatigue. Replace the first-three-second hook.' },
+        { role: 'agent', text: 'Generate 3 new creative directions and sync them to the test campaign?' }
+      ],
+      agentInsights: ['Budget pacing on track', '2 creative fatigue alerts', 'CPA down 18%'],
+      agentPlaceholder: 'Ask agent...',
+      aiOptimization: 'AI optimization',
+      aiSuggestions: ['Move budget to high-converting creatives', 'Lower bids for cold-start campaigns', 'Add lookalike audiences']
+    }
+  }
+}
+
+const t = computed(() => copy[language.value])
 
 // --- Hero Section ---
-const heroTags = ['实时素材创作', '7x24盯盘', 'AI复盘归因', '可持续优化']
+const heroTags = computed(() => t.value.hero.tags)
 
 // --- Signal Dots (28 fixed positions) ---
 const signalDots = [
@@ -38,11 +217,7 @@ const signalDots = [
 ]
 
 // --- Dashboard Mock Data ---
-const dashboardStats = [
-  { label: '消耗', value: '$28.4K', hint: '节奏正常', hintColor: 'text-emerald-600' },
-  { label: 'CPA', value: '-18%', hint: '持续改善', hintColor: 'text-emerald-600' },
-  { label: '素材', value: '2 条预警', hint: '需要复盘', hintColor: 'text-amber-600' }
-]
+const dashboardStats = computed(() => t.value.dashboard.stats)
 
 const platformBars = [
   { name: 'Meta', width: '78%', color: 'bg-blue-600', percent: '78%' },
@@ -56,94 +231,22 @@ const bottomMetrics = [
   { label: 'ROAS', value: '1.7x' }
 ]
 
-const sidebarMenus = ['新任务', '项目管理', '广告投放', '创意素材', '数据概览']
-
-const agentMessages = [
-  { role: 'agent', text: 'Meta 两条素材出现疲劳，建议替换前三秒 Hook。' },
-  { role: 'agent', text: '是否生成 3 个新素材方向，并同步到测试计划？' }
-]
-
-const agentInsights = ['预算消耗正常', '2 条素材疲劳预警', '转化成本下降 18%']
-
-const aiSuggestions = ['转移预算至高转化素材', '降低冷启动计划出价', '新增相似用户包']
+const sidebarMenus = computed(() => t.value.dashboard.sidebar)
+const agentMessages = computed(() => t.value.dashboard.agentMessages)
+const agentInsights = computed(() => t.value.dashboard.agentInsights)
+const aiSuggestions = computed(() => t.value.dashboard.aiSuggestions)
 
 // --- Features Section ---
-const features = [
-  {
-    icon: 'auto_awesome',
-    title: 'AI智能优化',
-    description: '自动分析投放数据，实时优化广告策略，帮助团队提升预算使用效率和整体 ROI。'
-  },
-  {
-    icon: 'trending_up',
-    title: '数据驱动增长',
-    description: '深度洞察市场趋势，精准定位目标用户，加速业务增长并降低试错成本。'
-  },
-  {
-    icon: 'psychology',
-    title: '创意生成',
-    description: 'AI辅助创意素材生成，快速产出高质量广告内容，并根据表现进行持续迭代。'
-  },
-  {
-    icon: 'speed',
-    title: '自动化投放',
-    description: '一键启动广告投放，自动调整预算和出价策略，让执行链路更轻、更稳。'
-  }
-]
+const features = computed(() => t.value.features.items)
 
 // --- Automation Section ---
-const automationCards = [
-  {
-    title: 'Real-time Creative',
-    description: '实时生成、拆解和迭代广告素材，让创意测试跟上投放节奏。',
-    tags: ['视频拆解', '脚本生成', '多语言适配']
-  },
-  {
-    title: 'Campaign Intelligence',
-    description: '统一项目、账户、素材、计划和报表上下文，辅助判断预算、素材疲劳和转化异常。',
-    tags: ['账户上下文', '素材疲劳', '转化异常']
-  },
-  {
-    title: 'Performance Loop',
-    description: '把每一次投放结果沉淀为可复用的素材特征、渠道经验和复盘结论。',
-    tags: ['指标回流', '复盘结论', '经验沉淀']
-  }
-]
+const automationCards = computed(() => t.value.automation.cards)
 
 // --- Workflow Section ---
-const workflowSteps = [
-  {
-    step: '01',
-    title: 'Campaign Brief',
-    description: '明确产品目标、受众、预算和区域。',
-    platforms: [] as string[]
-  },
-  {
-    step: '02',
-    title: 'Creative Production',
-    description: '实时自动生成创意、管理和复用广告素材。',
-    platforms: [] as string[]
-  },
-  {
-    step: '03',
-    title: 'Media Execution',
-    description: '统一管理跨平台账户，组织计划、素材、预算和状态。',
-    platforms: ['Meta', 'Google', 'TikTok']
-  },
-  {
-    step: '04',
-    title: 'Monitor & Performance Review',
-    description: '聚合监控各项广告指标，提出下一步优化动作，并完成工作复盘。',
-    platforms: [] as string[]
-  }
-]
+const workflowSteps = computed(() => t.value.workflow.steps)
 
 // --- CTA Section ---
-const ctaCards = [
-  { value: '30 min', label: '快速梳理投放流程' },
-  { value: 'API', label: '确认渠道字段与权限' },
-  { value: 'Demo', label: '按团队角色演示闭环' }
-]
+const ctaCards = computed(() => t.value.contact.cards)
 
 const contactForm = ref({
   name: '',
@@ -158,7 +261,7 @@ const submitError = ref('')
 const handleSubmitContact = async () => {
   // 验证表单
   if (!contactForm.value.name || !contactForm.value.company || !contactForm.value.contact) {
-    submitError.value = '请填写所有必填字段'
+    submitError.value = t.value.contact.form.errorRequired
     return
   }
 
@@ -189,7 +292,7 @@ const handleSubmitContact = async () => {
     }, 3000)
   } catch (err: any) {
     console.error('提交联系信息失败:', err)
-    submitError.value = err.message || '提交失败，请稍后重试'
+    submitError.value = err.message || t.value.contact.form.errorDefault
   } finally {
     submitting.value = false
   }
@@ -219,13 +322,13 @@ const handleSubmitContact = async () => {
           <!-- Left Content -->
           <div>
             <p class="inline-flex rounded-md bg-primary/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
-              新一代 RTC 广告 AI 引擎
+              {{ t.hero.eyebrow }}
             </p>
             <h1 class="mt-5 max-w-3xl text-4xl font-bold leading-tight tracking-tight md:text-5xl lg:text-[56px]">
-              智能营销，自动增长
+              {{ t.hero.title }}
             </h1>
             <p class="mt-5 max-w-2xl text-base leading-8 text-slate-600">
-              ANIFORCE 利用 AI 技术自动规划、执行和优化广告投放策略。从策略制定到创意生成，从预算分配到效果监控，让增长变得简单高效。
+              {{ t.hero.description }}
             </p>
 
             <!-- Hero Tags -->
@@ -246,13 +349,13 @@ const handleSubmitContact = async () => {
                 href="#contact"
                 class="inline-flex items-center justify-center rounded-md bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800"
               >
-                免费体验
+                {{ t.hero.primaryCta }}
               </a>
               <a
                 href="#features"
                 class="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary"
               >
-                查看功能
+                {{ t.hero.secondaryCta }}
               </a>
             </div>
           </div>
@@ -267,7 +370,7 @@ const handleSubmitContact = async () => {
                   <span class="h-2.5 w-2.5 rounded-full bg-amber-400" />
                   <span class="h-2.5 w-2.5 rounded-full bg-emerald-500" />
                 </div>
-                <p class="text-xs font-semibold text-slate-500">广告工作台 · 实时运行</p>
+                <p class="text-xs font-semibold text-slate-500">{{ t.hero.previewTitle }} · {{ t.hero.live }}</p>
               </div>
 
               <!-- Dashboard Content -->
@@ -308,8 +411,8 @@ const handleSubmitContact = async () => {
                     <!-- Platform Performance Bars -->
                     <div class="mt-4 rounded-md border border-blue-100 bg-white p-4">
                       <div class="flex items-center justify-between">
-                        <p class="text-xs font-black text-slate-950">跨平台投放表现</p>
-                        <p class="text-[11px] font-bold text-blue-600">近 7 天</p>
+                        <p class="text-xs font-black text-slate-950">{{ t.dashboard.performanceTitle }}</p>
+                        <p class="text-[11px] font-bold text-blue-600">{{ t.dashboard.period }}</p>
                       </div>
                       <div class="mt-4 space-y-3">
                         <div
@@ -346,8 +449,8 @@ const handleSubmitContact = async () => {
                   <aside class="border-t border-blue-100 bg-white p-3 lg:border-l lg:border-t-0">
                     <div class="flex h-full flex-col rounded-md border border-blue-100 bg-[#f8fbff]">
                       <div class="border-b border-blue-100 p-3">
-                        <p class="text-xs font-black text-slate-950">ANIFORCE Agent</p>
-                        <p class="mt-1 text-[11px] text-slate-500">7x24 盯盘</p>
+                        <p class="text-xs font-black text-slate-950">{{ t.dashboard.agentTitle }}</p>
+                        <p class="mt-1 text-[11px] text-slate-500">{{ t.dashboard.agentSubtitle }}</p>
                       </div>
                       <div class="flex-1 space-y-3 overflow-y-auto p-3">
                         <div
@@ -372,7 +475,7 @@ const handleSubmitContact = async () => {
                       <div class="border-t border-blue-100 p-2">
                         <div class="flex items-center gap-2 rounded-md bg-white px-2.5 py-2 text-[11px] text-slate-400">
                           <span class="material-symbols-outlined text-sm">chat</span>
-                          询问 agent...
+                          {{ t.dashboard.agentPlaceholder }}
                         </div>
                       </div>
                     </div>
@@ -385,7 +488,7 @@ const handleSubmitContact = async () => {
             <div class="ai-float-card">
               <h3>
                 <span class="material-symbols-outlined">psychology</span>
-                AI 优化建议
+                {{ t.dashboard.aiOptimization }}
               </h3>
               <div class="space-y-1">
                 <div
@@ -407,8 +510,8 @@ const handleSubmitContact = async () => {
       <section id="features" class="border-b border-slate-200 bg-white px-5 py-16 sm:px-6 lg:px-10">
         <div class="mx-auto max-w-7xl">
           <div class="max-w-4xl">
-            <h2 class="text-3xl font-bold leading-snug tracking-tight md:text-4xl">强大的功能特性</h2>
-            <p class="mt-4 text-base leading-8 text-slate-600">AI驱动的全流程营销自动化，覆盖分析、投放与监控复盘</p>
+            <h2 class="text-3xl font-bold leading-snug tracking-tight md:text-4xl">{{ t.features.title }}</h2>
+            <p class="mt-4 text-base leading-8 text-slate-600">{{ t.features.subtitle }}</p>
           </div>
 
           <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
@@ -429,9 +532,9 @@ const handleSubmitContact = async () => {
       <section id="automation" class="border-b border-slate-200 bg-background-light px-5 py-16 sm:px-6 lg:px-10">
         <div class="mx-auto max-w-7xl">
           <div class="max-w-4xl">
-            <p class="text-sm font-semibold uppercase text-primary">为什么需要新的广告 AI 引擎</p>
+            <p class="text-sm font-semibold uppercase text-primary">{{ t.automation.eyebrow }}</p>
             <h2 class="mt-4 text-3xl font-bold leading-snug tracking-tight md:text-4xl">
-              从搭建一个增长团队，<br>到一套可持续优化的工作流
+              <span v-for="(line, idx) in t.automation.title" :key="idx">{{ line }}<br v-if="idx < t.automation.title.length - 1"></span>
             </h2>
           </div>
 
@@ -461,24 +564,24 @@ const handleSubmitContact = async () => {
       <section id="performance" class="bg-white px-5 py-16 sm:px-6 lg:px-10">
         <div class="mx-auto max-w-7xl">
           <div class="max-w-4xl">
-            <p class="text-sm font-semibold uppercase text-primary">跨平台广告引擎</p>
-            <h2 class="mt-4 text-3xl font-bold leading-snug tracking-tight md:text-4xl">智能投放策略保障广告生意效果</h2>
-            <p class="mt-5 text-base leading-8 text-slate-600">你把生意做好，其他事情交给aniforce</p>
+            <p class="text-sm font-semibold uppercase text-primary">{{ t.workflow.eyebrow }}</p>
+            <h2 class="mt-4 text-3xl font-bold leading-snug tracking-tight md:text-4xl">{{ t.workflow.title }}</h2>
+            <p class="mt-5 text-base leading-8 text-slate-600">{{ t.workflow.subtitle }}</p>
           </div>
 
           <div class="mt-10 grid gap-3 lg:grid-cols-4">
             <article
-              v-for="step in workflowSteps"
-              :key="step.step"
+              v-for="(step, index) in workflowSteps"
+              :key="step.title"
               class="rounded-md border border-slate-200 bg-slate-50 p-5"
             >
               <div class="flex items-center justify-between gap-3">
-                <p class="text-xs font-bold text-slate-400">{{ step.step }}</p>
+                <p class="text-xs font-bold text-slate-400">0{{ index + 1 }}</p>
                 <span class="h-1.5 w-10 rounded-full bg-primary" />
               </div>
               <h3 class="mt-4 text-base font-semibold">{{ step.title }}</h3>
               <p class="mt-3 text-sm leading-7 text-slate-600">{{ step.description }}</p>
-              <div v-if="step.platforms.length" class="mt-4 flex flex-wrap gap-2">
+              <div v-if="step.platforms && step.platforms.length" class="mt-4 flex flex-wrap gap-2">
                 <span
                   v-for="platform in step.platforms"
                   :key="platform"
@@ -497,12 +600,12 @@ const handleSubmitContact = async () => {
         <div class="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.75fr)]">
           <!-- Left: CTA Content -->
           <div>
-            <p class="text-sm font-semibold uppercase text-blue-200">免费体验</p>
+            <p class="text-sm font-semibold uppercase text-blue-200">{{ t.contact.eyebrow }}</p>
             <h2 class="mt-4 max-w-3xl text-3xl font-bold leading-snug md:text-4xl">
-              让你的投放团队先少开 5 个后台。
+              {{ t.contact.title }}
             </h2>
             <p class="mt-5 max-w-2xl text-base leading-8 text-slate-300">
-              留下联系方式，ANIFORCE将为你升级现有的广告投放流程。
+              {{ t.contact.description }}
             </p>
             <div class="mt-8 grid gap-3 sm:grid-cols-3">
               <div
@@ -519,33 +622,33 @@ const handleSubmitContact = async () => {
           <!-- Right: Contact Form -->
           <form class="rounded-md border border-white/15 bg-white/10 p-5" @submit.prevent="handleSubmitContact">
             <label class="mb-4 block">
-              <span class="mb-2 block text-sm text-slate-300">姓名</span>
+              <span class="mb-2 block text-sm text-slate-300">{{ t.contact.form.name }}</span>
               <input
                 v-model="contactForm.name"
                 class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
-                placeholder="你的姓名"
+                :placeholder="t.contact.form.namePlaceholder"
               >
             </label>
             <label class="mb-4 block">
-              <span class="mb-2 block text-sm text-slate-300">公司 / 团队</span>
+              <span class="mb-2 block text-sm text-slate-300">{{ t.contact.form.company }}</span>
               <input
                 v-model="contactForm.company"
                 class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
-                placeholder="公司或团队名称"
+                :placeholder="t.contact.form.companyPlaceholder"
               >
             </label>
             <label class="mb-4 block">
-              <span class="mb-2 block text-sm text-slate-300">联系方式</span>
+              <span class="mb-2 block text-sm text-slate-300">{{ t.contact.form.contact }}</span>
               <input
                 v-model="contactForm.contact"
                 class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
-                placeholder="手机号或微信"
+                :placeholder="t.contact.form.contactPlaceholder"
               >
             </label>
 
             <!-- 成功消息 -->
             <div v-if="submitSuccess" class="mb-4 rounded-md bg-emerald-500/20 border border-emerald-500/30 px-4 py-3 text-sm text-emerald-300">
-              ✓ 提交成功！我们会尽快与您联系。
+              {{ t.contact.form.success }}
             </div>
 
             <!-- 错误消息 -->
@@ -558,7 +661,7 @@ const handleSubmitContact = async () => {
               class="w-full rounded-md bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-[6px_6px_0_rgba(19,127,236,0.9)] transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
               type="submit"
             >
-              {{ submitting ? '提交中...' : '提交体验需求' }}
+              {{ submitting ? t.contact.form.submitting : t.contact.form.submit }}
             </button>
           </form>
         </div>
