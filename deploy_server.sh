@@ -24,6 +24,10 @@ FRONTEND_PORT=3010
 BACKEND_PORT=8010
 DEMO_MODE=false
 
+# ---------- 日志配置 ----------
+LOG_DIR="./logs"
+LOG_DIR_EXPLICIT=0
+
 # ---------- 参数解析 ----------
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -34,6 +38,7 @@ while [[ $# -gt 0 ]]; do
     --only) ONLY="$2"; shift 2 ;;
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
+    --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
     -h|--help)
       echo "用法: $0 [选项]"
       echo ""
@@ -45,6 +50,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --only           仅启动: all(默认) / backend / frontend / nginx"
       echo "  --skip-install   跳过依赖安装"
       echo "  --demo           启用 Demo 模式"
+      echo "  --log-dir        日志目录 (默认: ./logs)"
       echo ""
       echo "示例:"
       echo "  # 本地开发模式（完整部署）"
@@ -75,6 +81,32 @@ info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PO
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
+
+# ---------- 日志目录设置 ----------
+# 转换为绝对路径
+if [[ "$LOG_DIR" != /* ]]; then
+  LOG_DIR="$ROOT_DIR/$LOG_DIR"
+fi
+
+# 创建日志目录
+mkdir -p "$LOG_DIR"
+
+# 生成日期标识
+LOG_DATE=$(date +%Y%m%d)
+
+# 日志文件路径
+BACKEND_APP_LOG="$LOG_DIR/backend_logs_{time:YYYYMMDD}.log"
+BACKEND_UVICORN_LOG="$LOG_DIR/uvicorn_logs_${LOG_DATE}.log"
+FRONTEND_LOG="$LOG_DIR/frontend_logs_${LOG_DATE}.log"
+NGINX_ACCESS_LOG="$LOG_DIR/nginx_access_${LOG_DATE}.log"
+NGINX_ERROR_LOG="$LOG_DIR/nginx_error_${LOG_DATE}.log"
+
+info "日志配置: 目录=$LOG_DIR"
+info "后端应用日志: $BACKEND_APP_LOG"
+info "后端 Uvicorn 日志: $BACKEND_UVICORN_LOG"
+info "前端日志: $FRONTEND_LOG"
+info "Nginx访问日志: $NGINX_ACCESS_LOG"
+info "Nginx错误日志: $NGINX_ERROR_LOG"
 
 # ---------- 配置文件 ----------
 DEPLOY_CONFIG="$ROOT_DIR/.deploy_config"
@@ -129,7 +161,7 @@ else
   fi
   
   # 调用原有的 run_server.sh 启动后端
-  BACKEND_ARGS="--mode $MODE --backend-port $BACKEND_PORT --only backend"
+  BACKEND_ARGS="--mode $MODE --backend-port $BACKEND_PORT --only backend --log-dir $LOG_DIR"
   if [ "$SKIP_INSTALL" -eq 1 ]; then
     BACKEND_ARGS="$BACKEND_ARGS --skip-install"
   fi
@@ -170,7 +202,7 @@ else
   fi
   
   # 调用原有的 run_server.sh 启动前端
-  FRONTEND_ARGS="--mode $MODE --frontend-port $FRONTEND_PORT --only frontend"
+  FRONTEND_ARGS="--mode $MODE --frontend-port $FRONTEND_PORT --only frontend --log-dir $LOG_DIR"
   if [ "$SKIP_INSTALL" -eq 1 ]; then
     FRONTEND_ARGS="$FRONTEND_ARGS --skip-install"
   fi
@@ -218,11 +250,13 @@ else
     MIME_TYPES_PATH="/etc/nginx/mime.types"
   fi
   
-  # 替换端口配置和 mime.types 路径
+  # 替换端口配置、mime.types 路径和日志路径
   sed "s/listen 80;/listen $NGINX_PORT;/g" "$NGINX_CONF" | \
   sed "s/127.0.0.1:8010/127.0.0.1:$BACKEND_PORT/g" | \
   sed "s/127.0.0.1:3010/127.0.0.1:$FRONTEND_PORT/g" | \
-  sed "s|include /opt/homebrew/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" > "$NGINX_RUNTIME_CONF"
+  sed "s|include /opt/homebrew/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" | \
+  sed "s|/tmp/aniforce_access.log|$NGINX_ACCESS_LOG|g" | \
+  sed "s|/tmp/aniforce_error.log|$NGINX_ERROR_LOG|g" > "$NGINX_RUNTIME_CONF"
   
   ok "Nginx 配置已生成: $NGINX_RUNTIME_CONF"
   

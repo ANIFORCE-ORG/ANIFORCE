@@ -63,8 +63,12 @@ backend/data/sqlite/
 
 # ==== 日志/临时文件 =====
 log/
+logs/
+*.log
 .server_pids
 .server_ports
+.deploy_config
+.nginx_runtime.conf
 
 # ===== 其他 =====
 *.bak

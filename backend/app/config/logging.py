@@ -51,16 +51,32 @@ def setup_logging(log_level: str = "INFO", log_file: str = None):
         log_path = Path(log_file)
         log_path.parent.mkdir(parents=True, exist_ok=True)
         
-        logger.add(
-            log_file,
-            format=LOG_FORMAT,
-            level=log_level,
-            rotation="100 MB",  # 日志文件达到 100MB 时轮转
-            retention="30 days",  # 保留 30 天的日志
-            compression="zip",  # 压缩旧日志
-            backtrace=True,
-            diagnose=True,
-        )
+        # 如果日志文件名包含日期占位符，使用按日期轮转
+        # 例如：backend_logs_{time:YYYYMMDD}.log
+        if "{time" in log_file:
+            # 使用 loguru 的时间占位符，自动按日期轮转
+            logger.add(
+                log_file,
+                format=LOG_FORMAT,
+                level=log_level,
+                rotation="00:00",  # 每天午夜轮转
+                retention="30 days",  # 保留 30 天的日志
+                compression="zip",  # 压缩旧日志
+                backtrace=True,
+                diagnose=True,
+            )
+        else:
+            # 传统方式：按文件大小轮转
+            logger.add(
+                log_file,
+                format=LOG_FORMAT,
+                level=log_level,
+                rotation="100 MB",  # 日志文件达到 100MB 时轮转
+                retention="30 days",  # 保留 30 天的日志
+                compression="zip",  # 压缩旧日志
+                backtrace=True,
+                diagnose=True,
+            )
     
     # 配置标准 logging 模块，将其输出重定向到 loguru
     class InterceptHandler(logging.Handler):

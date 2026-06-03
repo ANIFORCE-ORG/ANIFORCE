@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     
     # 日志配置
     LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = ""  # 日志文件路径，为空则不写入文件
 
     class Config:
         env_file = ".env"
