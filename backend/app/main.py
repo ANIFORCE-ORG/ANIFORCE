@@ -12,9 +12,10 @@ from app.schemas.base import ErrorResponse, ErrorDetail
 settings = get_settings()
 
 # 初始化日志系统
+log_file = settings.LOG_FILE if settings.LOG_FILE else None
 setup_logging(
     log_level=settings.LOG_LEVEL if hasattr(settings, 'LOG_LEVEL') else "INFO",
-    log_file="logs/app.log"
+    log_file=log_file
 )
 
 allow_origins = [

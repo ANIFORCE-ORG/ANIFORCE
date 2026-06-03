@@ -14,6 +14,66 @@ ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
 
+# ---------- 跨平台端口检查函数 ----------
+check_port_in_use() {
+  local port=$1
+  
+  # 方法1: 尝试使用 lsof（macOS 和部分 Linux）
+  if command -v lsof &>/dev/null; then
+    lsof -i :$port -sTCP:LISTEN &>/dev/null && return 0
+  fi
+  
+  # 方法2: 尝试使用 ss（现代 Linux）
+  if command -v ss &>/dev/null; then
+    ss -ltn | grep -q ":$port " && return 0
+  fi
+  
+  # 方法3: 尝试使用 netstat（传统 Linux/Unix）
+  if command -v netstat &>/dev/null; then
+    netstat -ltn 2>/dev/null | grep -q ":$port " && return 0
+  fi
+  
+  # 方法4: 尝试连接端口（最后的手段）
+  if command -v nc &>/dev/null; then
+    nc -z localhost $port &>/dev/null && return 0
+  fi
+  
+  # 如果所有方法都不可用，返回失败（假设端口未占用）
+  return 1
+}
+
+# ---------- 跨平台杀死端口进程函数 ----------
+kill_port_process() {
+  local port=$1
+  
+  # 方法1: 使用 lsof（macOS 和部分 Linux）
+  if command -v lsof &>/dev/null; then
+    local pids=$(lsof -ti :$port 2>/dev/null)
+    if [ -n "$pids" ]; then
+      echo "$pids" | xargs kill -9 2>/dev/null || true
+      return 0
+    fi
+  fi
+  
+  # 方法2: 使用 fuser（Linux）
+  if command -v fuser &>/dev/null; then
+    fuser -k $port/tcp 2>/dev/null || true
+    return 0
+  fi
+  
+  # 方法3: 使用 ss + grep + awk（现代 Linux）
+  if command -v ss &>/dev/null; then
+    local pids=$(ss -lptn 2>/dev/null | grep ":$port " | awk '{print $6}' | grep -oP 'pid=\K[0-9]+' | sort -u)
+    if [ -n "$pids" ]; then
+      echo "$pids" | xargs kill -9 2>/dev/null || true
+      return 0
+    fi
+  fi
+  
+  warn "无法自动清理端口 $port，请手动检查"
+  return 1
+}
+
 # ---------- 默认参数 ----------
 MODE=local
 ONLY=all
@@ -28,6 +88,10 @@ BACKEND_PORT_EXPLICIT=0
 FRONTEND_PORT=3010
 BACKEND_PORT=8010
 
+# ---------- 日志配置 ----------
+LOG_DIR="./logs"
+LOG_DIR_EXPLICIT=0
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) MODE="$2"; shift 2 ;;
@@ -37,8 +101,9 @@ while [[ $# -gt 0 ]]; do
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
     --host) HOST="$2"; shift 2 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
+    --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
     -h|--help)
-      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--only all|backend|frontend] [--skip-install] [--host HOST] [--demo]"
+      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--only all|backend|frontend] [--skip-install] [--host HOST] [--demo] [--log-dir DIR]"
       echo ""
       echo "参数说明:"
       echo "  --mode           启动模式: local(默认) / cloud"
@@ -48,6 +113,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --demo           启用 Demo 模式（设置 DEMO_MODE=true，默认: false 生产模式）"
       echo "  --frontend-port  前端端口 (默认: 3010；cloud 模式若存在环境变量 PORT 且未显式指定，将使用 PORT)"
       echo "  --backend-port   后端端口 (默认: 8010)"
+      echo "  --log-dir        日志目录 (默认: ./logs)"
       echo ""
       echo "环境变量:"
       echo "  CLOUD_IP         云端模式的 IP 地址（默认: 8.148.151.36）"
@@ -89,6 +155,31 @@ info "端口配置: 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT"
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
 FRONTEND_DIR="$ROOT_DIR/frontend"
+
+# ---------- 日志目录设置 ----------
+# 转换为绝对路径
+if [[ "$LOG_DIR" != /* ]]; then
+  LOG_DIR="$ROOT_DIR/$LOG_DIR"
+fi
+
+# 创建日志目录
+mkdir -p "$LOG_DIR"
+
+# 生成日期标识
+LOG_DATE=$(date +%Y%m%d)
+
+# 日志文件路径
+# 后端应用日志：使用 loguru 的时间占位符，支持自动按日期轮转
+BACKEND_APP_LOG="$LOG_DIR/backend_logs_{time:YYYYMMDD}.log"
+# 后端 uvicorn 日志：使用启动时的日期
+BACKEND_UVICORN_LOG="$LOG_DIR/uvicorn_logs_${LOG_DATE}.log"
+# 前端日志：使用启动时的日期（Vite 不支持自动轮转）
+FRONTEND_LOG="$LOG_DIR/frontend_logs_${LOG_DATE}.log"
+
+info "日志配置: 目录=$LOG_DIR"
+info "后端应用日志: $BACKEND_APP_LOG"
+info "后端 Uvicorn 日志: $BACKEND_UVICORN_LOG"
+info "前端日志: $FRONTEND_LOG"
 
 # ---------- PID & 端口信息文件（用于清理） ----------
 PID_FILE="$ROOT_DIR/.server_pids"
@@ -301,9 +392,9 @@ else
   fi
 
   # 检查后端端口
-if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
+if check_port_in_use $BACKEND_PORT; then
   warn "端口 $BACKEND_PORT 已被占用，尝试终止..."
-  lsof -ti :$BACKEND_PORT | xargs kill -9 2>/dev/null || true
+  kill_port_process $BACKEND_PORT
   sleep 1
 fi
 
@@ -315,7 +406,10 @@ fi
     UVICORN_WORKERS_FLAG="--workers 2"
   fi
 
-  $PY -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" $UVICORN_WORKERS_FLAG $UVICORN_RELOAD_FLAG &
+  # 启动后端并重定向日志
+  # LOG_FILE: 应用日志（loguru 自动轮转）
+  # >> redirect: uvicorn 服务器日志（shell 重定向）
+  LOG_FILE="$BACKEND_APP_LOG" $PY -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" $UVICORN_WORKERS_FLAG $UVICORN_RELOAD_FLAG >> "$BACKEND_UVICORN_LOG" 2>&1 &
   BACKEND_PID=$!
   echo "$BACKEND_PID" >> "$PID_FILE"
   sleep 2
@@ -338,18 +432,18 @@ else
 cd "$FRONTEND_DIR"
 
 # 检查前端端口
-if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
+if check_port_in_use $FRONTEND_PORT; then
   warn "端口 $FRONTEND_PORT 已被占用，尝试终止..."
-  lsof -ti :$FRONTEND_PORT | xargs kill -9 2>/dev/null || true
+  kill_port_process $FRONTEND_PORT
   sleep 1
 fi
 
   info "启动 Vite 前端 (http://localhost:$FRONTEND_PORT)..."
   # 云端模式下使用 --host 0.0.0.0 以允许外部访问
   if [ "$MODE" = "cloud" ]; then
-    VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-0.0.0.0} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev --host 0.0.0.0 --port $FRONTEND_PORT &
+    VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-0.0.0.0} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev --host 0.0.0.0 --port $FRONTEND_PORT >> "$FRONTEND_LOG" 2>&1 &
   else
-    VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-127.0.0.1} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev &
+    VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-127.0.0.1} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev >> "$FRONTEND_LOG" 2>&1 &
   fi
   FRONTEND_PID=$!
   echo "$FRONTEND_PID" >> "$PID_FILE"
