@@ -14,6 +14,66 @@ ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
 warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
 
+# ---------- 跨平台端口检查函数 ----------
+check_port_in_use() {
+  local port=$1
+  
+  # 方法1: 尝试使用 lsof（macOS 和部分 Linux）
+  if command -v lsof &>/dev/null; then
+    lsof -i :$port -sTCP:LISTEN &>/dev/null && return 0
+  fi
+  
+  # 方法2: 尝试使用 ss（现代 Linux）
+  if command -v ss &>/dev/null; then
+    ss -ltn | grep -q ":$port " && return 0
+  fi
+  
+  # 方法3: 尝试使用 netstat（传统 Linux/Unix）
+  if command -v netstat &>/dev/null; then
+    netstat -ltn 2>/dev/null | grep -q ":$port " && return 0
+  fi
+  
+  # 方法4: 尝试连接端口（最后的手段）
+  if command -v nc &>/dev/null; then
+    nc -z localhost $port &>/dev/null && return 0
+  fi
+  
+  # 如果所有方法都不可用，返回失败（假设端口未占用）
+  return 1
+}
+
+# ---------- 跨平台杀死端口进程函数 ----------
+kill_port_process() {
+  local port=$1
+  
+  # 方法1: 使用 lsof（macOS 和部分 Linux）
+  if command -v lsof &>/dev/null; then
+    local pids=$(lsof -ti :$port 2>/dev/null)
+    if [ -n "$pids" ]; then
+      echo "$pids" | xargs kill -9 2>/dev/null || true
+      return 0
+    fi
+  fi
+  
+  # 方法2: 使用 fuser（Linux）
+  if command -v fuser &>/dev/null; then
+    fuser -k $port/tcp 2>/dev/null || true
+    return 0
+  fi
+  
+  # 方法3: 使用 ss + grep + awk（现代 Linux）
+  if command -v ss &>/dev/null; then
+    local pids=$(ss -lptn 2>/dev/null | grep ":$port " | awk '{print $6}' | grep -oP 'pid=\K[0-9]+' | sort -u)
+    if [ -n "$pids" ]; then
+      echo "$pids" | xargs kill -9 2>/dev/null || true
+      return 0
+    fi
+  fi
+  
+  warn "无法自动清理端口 $port，请手动检查"
+  return 1
+}
+
 # ---------- 默认参数 ----------
 MODE=local
 ONLY=all
@@ -332,9 +392,9 @@ else
   fi
 
   # 检查后端端口
-if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
+if check_port_in_use $BACKEND_PORT; then
   warn "端口 $BACKEND_PORT 已被占用，尝试终止..."
-  lsof -ti :$BACKEND_PORT | xargs kill -9 2>/dev/null || true
+  kill_port_process $BACKEND_PORT
   sleep 1
 fi
 
@@ -372,9 +432,9 @@ else
 cd "$FRONTEND_DIR"
 
 # 检查前端端口
-if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
+if check_port_in_use $FRONTEND_PORT; then
   warn "端口 $FRONTEND_PORT 已被占用，尝试终止..."
-  lsof -ti :$FRONTEND_PORT | xargs kill -9 2>/dev/null || true
+  kill_port_process $FRONTEND_PORT
   sleep 1
 fi
 
