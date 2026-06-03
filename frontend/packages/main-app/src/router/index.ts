@@ -94,6 +94,21 @@ const router = createRouter({
       name: 'platform-connections',
       component: () => import('@/pages/settings/PlatformConnections.vue'),
     },
+    {
+      path: '/privacy',
+      name: 'privacy-policy',
+      component: () => import('@/pages/legal/PrivacyPolicy.vue'),
+    },
+    {
+      path: '/terms',
+      name: 'terms-of-service',
+      component: () => import('@/pages/legal/TermsOfService.vue'),
+    },
+    {
+      path: '/contact',
+      name: 'contact',
+      component: () => import('@/pages/legal/Contact.vue'),
+    },
   ],
 })
 
