@@ -34,6 +34,10 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:3010"
     BACKEND_BASE_URL: str = "http://localhost:8010"
     
+    # OAuth 回调地址配置（用于第三方平台 OAuth 重定向）
+    # 默认使用生产域名，本地开发时可设置为 http://localhost:8010
+    OAUTH_REDIRECT_BASE_URL: str = "http://www.aniforce.cc"
+    
     # 日志配置
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = ""  # 日志文件路径，为空则不写入文件

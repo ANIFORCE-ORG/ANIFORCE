@@ -30,7 +30,7 @@ const showSecret = ref(false)
 const isEditingSecret = ref(false)
 const isEditMode = ref(false)
 
-const REDIRECT_URI = 'https://8.148.151.36:8010/api/v1/platform-auth/meta/auth_callback'
+const REDIRECT_URI = 'https://www.aniforce.cc/api/v1/platform-auth/meta/auth_callback'
 
 const form = ref({
   account_name: '',
