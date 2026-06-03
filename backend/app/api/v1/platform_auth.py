@@ -495,7 +495,7 @@ async def get_google_authorize_url(
         scope_str = " ".join(scopes)
         
         # 构建 Google OAuth 授权 URL
-        redirect_uri = f"{settings.BACKEND_BASE_URL}/api/v1/platform-auth/google/auth_callback"
+        redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
         authorize_url = (
             f"https://accounts.google.com/o/oauth2/v2/auth"
             f"?response_type=code"
@@ -653,7 +653,7 @@ async def meta_auth_callback(
                     params={
                         "client_id": connection.account_id,
                         "client_secret": connection.account_secret,
-                        "redirect_uri": f"{settings.BACKEND_BASE_URL}/api/v1/platform-auth/meta/auth_callback",
+                        "redirect_uri": f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback",
                         "code": code
                     }
                 )
@@ -776,7 +776,7 @@ async def get_meta_authorize_url(
         auth_url = (
             f"https://www.facebook.com/v25.0/dialog/oauth?"
             f"client_id={connection.account_id}&"
-            f"redirect_uri={settings.BACKEND_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
+            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
             f"scope={scopes}&"
             f"response_type=code&"
             f"state={connection_id}"
