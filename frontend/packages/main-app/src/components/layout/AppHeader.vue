@@ -51,7 +51,7 @@ const handleLogout = () => {
 <template>
   <header class="flex items-center justify-between px-6 py-3 md:px-12 border-b border-slate-200 dark:border-slate-800 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md sticky top-0 z-50">
     <!-- Logo -->
-    <div class="flex items-center gap-3 cursor-pointer shrink-0">
+    <div class="flex items-center gap-3 cursor-pointer shrink-0" @click="handleLogoClick">
         <img :src="logoSvg" alt="ANIFORCE" class="h-12 w-auto max-w-[220px] object-contain logo-blue" />
       </div>
 
