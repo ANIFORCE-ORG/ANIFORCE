@@ -234,13 +234,13 @@ else
   BACKEND_SCRIPT_PID=$!
   
   # 等待后端启动
-  sleep 5
+  sleep 10
   
   # 检查后端是否启动成功
   if check_port_in_use $BACKEND_PORT; then
     ok "后端服务已启动 (端口: $BACKEND_PORT)"
   else
-    fail "后端服务启动失败"
+    fail "后端服务启动失败 (端口: $BACKEND_PORT)"
   fi
 fi
 
