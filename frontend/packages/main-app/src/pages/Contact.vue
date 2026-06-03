@@ -47,6 +47,15 @@ const copy = {
     },
     submit: '提交体验申请',
     success: '已收到你的信息，我们会尽快联系你。',
+    companyInfo: {
+      eyebrow: '公司信息',
+      title: 'ANIFORCE 品牌归属',
+      ownership: 'ANIFORCE 是由 aniforce 拥有并运营的产品和品牌。',
+      legalName: '法定注册公司名称：aniforce',
+      website: '官网：https://www.aniforce.cc',
+      email: '联系邮箱：support@aniforce.cc',
+      apiNote: '业务、产品、隐私或 Google Ads API 相关问题，请通过 support@aniforce.cc 联系我们。',
+    },
   },
   en: {
     eyebrow: 'Start now',
@@ -67,6 +76,15 @@ const copy = {
     },
     submit: 'Submit request',
     success: 'We have received your information and will contact you soon.',
+    companyInfo: {
+      eyebrow: 'Company Information',
+      title: 'ANIFORCE Brand Ownership',
+      ownership: 'ANIFORCE is a product and brand owned and operated by aniforce.',
+      legalName: 'Legal Company Name: aniforce',
+      website: 'Website: https://www.aniforce.cc',
+      email: 'Contact Email: support@aniforce.cc',
+      apiNote: 'For business, product, privacy, or Google Ads API related inquiries, please contact support@aniforce.cc.',
+    },
   },
 }
 
@@ -81,6 +99,19 @@ const pageCopy = computed(() => copy[language.value])
         <h1 class="mt-4 text-3xl font-black leading-snug md:text-4xl">
           <span v-for="line in pageCopy.titleLines" :key="line" class="block">{{ line }}</span>
         </h1>
+        <div class="mt-8 rounded-xl border border-slate-200 bg-white p-5 shadow-sm">
+          <p class="text-xs font-semibold uppercase tracking-[0.2em] text-primary">{{ pageCopy.companyInfo.eyebrow }}</p>
+          <h2 class="mt-3 text-xl font-bold text-slate-950">{{ pageCopy.companyInfo.title }}</h2>
+          <p class="mt-3 text-sm leading-7 text-slate-600">{{ pageCopy.companyInfo.ownership }}</p>
+          <dl class="mt-4 space-y-2 text-sm text-slate-700">
+            <div>{{ pageCopy.companyInfo.legalName }}</div>
+            <div>{{ pageCopy.companyInfo.website }}</div>
+            <div>
+              {{ pageCopy.companyInfo.email }}
+            </div>
+          </dl>
+          <p class="mt-4 text-sm leading-7 text-slate-600">{{ pageCopy.companyInfo.apiNote }}</p>
+        </div>
       </section>
 
       <section class="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">

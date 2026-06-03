@@ -36,7 +36,7 @@ const publicCopy = {
   },
 }
 
-const isPublicPage = () => route.path === '/' || route.path === '/contact' || route.path === '/login' || route.path === '/register'
+const isPublicPage = () => ['/', '/contact', '/privacy', '/terms', '/login', '/register'].includes(route.path)
 
 const handleLogoClick = () => {
   if (auth.isLoggedIn) {
