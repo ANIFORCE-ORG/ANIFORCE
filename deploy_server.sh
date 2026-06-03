@@ -121,6 +121,13 @@ elif [ "$ONLY" = "frontend" ]; then
 else
   info "========== 启动后端服务 =========="
   
+  # 清理后端端口占用
+  if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
+    warn "端口 $BACKEND_PORT 已被占用，正在清理..."
+    lsof -ti :$BACKEND_PORT | xargs kill -9 2>/dev/null || true
+    sleep 1
+  fi
+  
   # 调用原有的 run_server.sh 启动后端
   BACKEND_ARGS="--mode $MODE --backend-port $BACKEND_PORT --only backend"
   if [ "$SKIP_INSTALL" -eq 1 ]; then
@@ -154,6 +161,13 @@ elif [ "$ONLY" = "backend" ]; then
   warn "--only=backend：跳过前端启动"
 else
   info "========== 启动前端服务 =========="
+  
+  # 清理前端端口占用
+  if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
+    warn "端口 $FRONTEND_PORT 已被占用，正在清理..."
+    lsof -ti :$FRONTEND_PORT | xargs kill -9 2>/dev/null || true
+    sleep 1
+  fi
   
   # 调用原有的 run_server.sh 启动前端
   FRONTEND_ARGS="--mode $MODE --frontend-port $FRONTEND_PORT --only frontend"
@@ -190,10 +204,25 @@ else
   NGINX_CONF="$ROOT_DIR/nginx.conf"
   NGINX_RUNTIME_CONF="$ROOT_DIR/.nginx_runtime.conf"
   
-  # 替换端口配置
+  # 检测 mime.types 路径
+  MIME_TYPES_PATH=""
+  for path in /opt/homebrew/etc/nginx/mime.types /etc/nginx/mime.types /usr/local/etc/nginx/mime.types; do
+    if [ -f "$path" ]; then
+      MIME_TYPES_PATH="$path"
+      break
+    fi
+  done
+  
+  if [ -z "$MIME_TYPES_PATH" ]; then
+    warn "未找到 mime.types 文件，使用默认路径"
+    MIME_TYPES_PATH="/etc/nginx/mime.types"
+  fi
+  
+  # 替换端口配置和 mime.types 路径
   sed "s/listen 80;/listen $NGINX_PORT;/g" "$NGINX_CONF" | \
   sed "s/127.0.0.1:8010/127.0.0.1:$BACKEND_PORT/g" | \
-  sed "s/127.0.0.1:3010/127.0.0.1:$FRONTEND_PORT/g" > "$NGINX_RUNTIME_CONF"
+  sed "s/127.0.0.1:3010/127.0.0.1:$FRONTEND_PORT/g" | \
+  sed "s|include /opt/homebrew/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" > "$NGINX_RUNTIME_CONF"
   
   ok "Nginx 配置已生成: $NGINX_RUNTIME_CONF"
   
