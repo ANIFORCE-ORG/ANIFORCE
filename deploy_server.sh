@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+# ============================================================
+#  ANIFORCE 统一部署脚本（通过 Nginx 反向代理）
+#  用法:
+#    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80] 
+#                       [--frontend-port 3010] [--backend-port 8010]
+#                       [--only all|backend|frontend|nginx] [--skip-install]
+# ============================================================
+set -euo pipefail
+
+# ---------- 颜色 ----------
+RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'; CYAN='\033[0;36m'; NC='\033[0m'
+info()  { echo -e "${CYAN}[INFO]${NC}  $*"; }
+ok()    { echo -e "${GREEN}[OK]${NC}    $*"; }
+warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
+fail()  { echo -e "${RED}[FAIL]${NC}  $*"; exit 1; }
+
+# ---------- 默认参数 ----------
+MODE=local
+ONLY=all
+SKIP_INSTALL=0
+NGINX_PORT=80
+FRONTEND_PORT=3010
+BACKEND_PORT=8010
+DEMO_MODE=false
+
+# ---------- 参数解析 ----------
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --mode) MODE="$2"; shift 2 ;;
+    --nginx-port) NGINX_PORT="$2"; shift 2 ;;
+    --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
+    --backend-port) BACKEND_PORT="$2"; shift 2 ;;
+    --only) ONLY="$2"; shift 2 ;;
+    --skip-install) SKIP_INSTALL=1; shift 1 ;;
+    --demo) DEMO_MODE=true; shift 1 ;;
+    -h|--help)
+      echo "用法: $0 [选项]"
+      echo ""
+      echo "选项:"
+      echo "  --mode           启动模式: local(默认) / cloud"
+      echo "  --nginx-port     Nginx 端口 (默认: 80)"
+      echo "  --frontend-port  前端端口 (默认: 3010)"
+      echo "  --backend-port   后端端口 (默认: 8010)"
+      echo "  --only           仅启动: all(默认) / backend / frontend / nginx"
+      echo "  --skip-install   跳过依赖安装"
+      echo "  --demo           启用 Demo 模式"
+      echo ""
+      echo "示例:"
+      echo "  # 本地开发模式（完整部署）"
+      echo "  $0 --mode local"
+      echo ""
+      echo "  # 仅启动 Nginx"
+      echo "  $0 --only nginx"
+      echo ""
+      echo "  # 云端生产模式"
+      echo "  $0 --mode cloud --skip-install"
+      exit 0 ;;
+    *) fail "未知参数: $1  (使用 --help 查看帮助)" ;;
+  esac
+done
+
+# ---------- 参数验证 ----------
+if [ "$MODE" != "local" ] && [ "$MODE" != "cloud" ]; then
+  fail "--mode 仅支持 local 或 cloud"
+fi
+if [ "$ONLY" != "all" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "nginx" ]; then
+  fail "--only 仅支持 all/backend/frontend/nginx"
+fi
+
+info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE"
+info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT"
+
+# ---------- 项目根目录 ----------
+ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
+BACKEND_DIR="$ROOT_DIR/backend"
+FRONTEND_DIR="$ROOT_DIR/frontend"
+
+# ---------- 配置文件 ----------
+DEPLOY_CONFIG="$ROOT_DIR/.deploy_config"
+: > "$DEPLOY_CONFIG"
+echo "NGINX_PORT=$NGINX_PORT" >> "$DEPLOY_CONFIG"
+echo "FRONTEND_PORT=$FRONTEND_PORT" >> "$DEPLOY_CONFIG"
+echo "BACKEND_PORT=$BACKEND_PORT" >> "$DEPLOY_CONFIG"
+echo "MODE=$MODE" >> "$DEPLOY_CONFIG"
+echo "ONLY=$ONLY" >> "$DEPLOY_CONFIG"
+
+# ============================================================
+#  1. 检查 Nginx
+# ============================================================
+if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+  info "========== 检查 Nginx =========="
+  
+  if ! command -v nginx &>/dev/null; then
+    warn "未检测到 Nginx，正在尝试安装..."
+    if command -v brew &>/dev/null; then
+      brew install nginx || fail "Nginx 安装失败"
+      ok "Nginx 已通过 Homebrew 安装"
+    elif command -v apt-get &>/dev/null; then
+      sudo apt-get update && sudo apt-get install -y nginx || fail "Nginx 安装失败"
+      ok "Nginx 已通过 apt-get 安装"
+    elif command -v yum &>/dev/null; then
+      sudo yum install -y nginx || fail "Nginx 安装失败"
+      ok "Nginx 已通过 yum 安装"
+    else
+      fail "无法自动安装 Nginx，请手动安装后重试"
+    fi
+  else
+    NGINX_VER=$(nginx -v 2>&1 | awk -F'/' '{print $2}')
+    ok "Nginx $NGINX_VER"
+  fi
+fi
+
+# ============================================================
+#  2. 启动后端服务
+# ============================================================
+if [ "$ONLY" = "nginx" ]; then
+  warn "--only=nginx：跳过后端启动"
+elif [ "$ONLY" = "frontend" ]; then
+  warn "--only=frontend：跳过后端启动"
+else
+  info "========== 启动后端服务 =========="
+  
+  # 调用原有的 run_server.sh 启动后端
+  BACKEND_ARGS="--mode $MODE --backend-port $BACKEND_PORT --only backend"
+  if [ "$SKIP_INSTALL" -eq 1 ]; then
+    BACKEND_ARGS="$BACKEND_ARGS --skip-install"
+  fi
+  if [ "$DEMO_MODE" = "true" ]; then
+    BACKEND_ARGS="$BACKEND_ARGS --demo"
+  fi
+  
+  info "执行: ./run_server.sh $BACKEND_ARGS"
+  bash "$ROOT_DIR/run_server.sh" $BACKEND_ARGS &
+  BACKEND_SCRIPT_PID=$!
+  
+  # 等待后端启动
+  sleep 5
+  
+  # 检查后端是否启动成功
+  if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
+    ok "后端服务已启动 (端口: $BACKEND_PORT)"
+  else
+    fail "后端服务启动失败"
+  fi
+fi
+
+# ============================================================
+#  3. 启动前端服务
+# ============================================================
+if [ "$ONLY" = "nginx" ]; then
+  warn "--only=nginx：跳过前端启动"
+elif [ "$ONLY" = "backend" ]; then
+  warn "--only=backend：跳过前端启动"
+else
+  info "========== 启动前端服务 =========="
+  
+  # 调用原有的 run_server.sh 启动前端
+  FRONTEND_ARGS="--mode $MODE --frontend-port $FRONTEND_PORT --only frontend"
+  if [ "$SKIP_INSTALL" -eq 1 ]; then
+    FRONTEND_ARGS="$FRONTEND_ARGS --skip-install"
+  fi
+  
+  info "执行: ./run_server.sh $FRONTEND_ARGS"
+  bash "$ROOT_DIR/run_server.sh" $FRONTEND_ARGS &
+  FRONTEND_SCRIPT_PID=$!
+  
+  # 等待前端启动
+  sleep 8
+  
+  # 检查前端是否启动成功
+  if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
+    ok "前端服务已启动 (端口: $FRONTEND_PORT)"
+  else
+    fail "前端服务启动失败"
+  fi
+fi
+
+# ============================================================
+#  4. 配置并启动 Nginx
+# ============================================================
+if [ "$ONLY" = "backend" ]; then
+  warn "--only=backend：跳过 Nginx 启动"
+elif [ "$ONLY" = "frontend" ]; then
+  warn "--only=frontend：跳过 Nginx 启动"
+else
+  info "========== 配置 Nginx =========="
+  
+  # 生成动态 Nginx 配置
+  NGINX_CONF="$ROOT_DIR/nginx.conf"
+  NGINX_RUNTIME_CONF="$ROOT_DIR/.nginx_runtime.conf"
+  
+  # 替换端口配置
+  sed "s/listen 80;/listen $NGINX_PORT;/g" "$NGINX_CONF" | \
+  sed "s/127.0.0.1:8010/127.0.0.1:$BACKEND_PORT/g" | \
+  sed "s/127.0.0.1:3010/127.0.0.1:$FRONTEND_PORT/g" > "$NGINX_RUNTIME_CONF"
+  
+  ok "Nginx 配置已生成: $NGINX_RUNTIME_CONF"
+  
+  # 测试配置
+  info "测试 Nginx 配置..."
+  nginx -t -c "$NGINX_RUNTIME_CONF" || fail "Nginx 配置测试失败"
+  ok "Nginx 配置测试通过"
+  
+  # 检查端口占用
+  if lsof -i :$NGINX_PORT -sTCP:LISTEN &>/dev/null; then
+    warn "端口 $NGINX_PORT 已被占用，尝试停止现有 Nginx..."
+    nginx -s stop 2>/dev/null || sudo nginx -s stop 2>/dev/null || true
+    sleep 2
+  fi
+  
+  # 启动 Nginx
+  info "启动 Nginx (端口: $NGINX_PORT)..."
+  nginx -c "$NGINX_RUNTIME_CONF" || sudo nginx -c "$NGINX_RUNTIME_CONF" || fail "Nginx 启动失败"
+  sleep 2
+  
+  if lsof -i :$NGINX_PORT -sTCP:LISTEN &>/dev/null; then
+    ok "Nginx 已启动 (端口: $NGINX_PORT)"
+  else
+    fail "Nginx 启动失败"
+  fi
+fi
+
+# ============================================================
+#  5. 完成
+# ============================================================
+echo ""
+echo -e "${GREEN}============================================${NC}"
+echo -e "${GREEN}  ANIFORCE 服务部署完成！${NC}"
+echo -e "${GREEN}============================================${NC}"
+echo ""
+
+if [ "$ONLY" = "all" ] || [ "$ONLY" = "nginx" ]; then
+  echo -e "  访问地址:      ${CYAN}http://localhost:$NGINX_PORT${NC}"
+  echo -e "  API 文档:      ${CYAN}http://localhost:$NGINX_PORT/docs${NC}"
+  echo -e "  健康检查:      ${CYAN}http://localhost:$NGINX_PORT/health${NC}"
+  echo ""
+fi
+
+if [ "$ONLY" != "nginx" ]; then
+  echo -e "  后端直连:      ${CYAN}http://localhost:$BACKEND_PORT${NC}"
+  echo -e "  前端直连:      ${CYAN}http://localhost:$FRONTEND_PORT${NC}"
+  echo ""
+fi
+
+echo -e "  使用 ${YELLOW}./undeploy_server.sh${NC} 停止所有服务"
+echo ""
+
+# 自动打开浏览器（仅本地模式）
+if [ "$MODE" = "local" ] && [ "$ONLY" = "all" ]; then
+  if command -v open &>/dev/null; then
+    open "http://localhost:$NGINX_PORT"
+  elif command -v xdg-open &>/dev/null; then
+    xdg-open "http://localhost:$NGINX_PORT"
+  fi
+fi
+
+ok "部署完成"
