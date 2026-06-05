@@ -20,16 +20,19 @@ NGINX_PORT=80
 FRONTEND_PORT=3010
 BACKEND_PORT=8010
 ONLY=all
+USE_SSL=false
 
 # 从配置文件读取
 if [ -f "$DEPLOY_CONFIG" ]; then
   source "$DEPLOY_CONFIG"
+  info "从配置文件读取: USE_SSL=$USE_SSL"
 fi
 
 # 命令行参数可覆盖
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --only) ONLY="$2"; shift 2 ;;
+    --ssl) USE_SSL=true; shift 1 ;;
     --nginx-port) NGINX_PORT="$2"; shift 2 ;;
     --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
     --backend-port) BACKEND_PORT="$2"; shift 2 ;;
@@ -38,6 +41,7 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "选项:"
       echo "  --only           仅停止: all(默认) / backend / frontend / nginx"
+      echo "  --ssl            停止 HTTPS 模式的 Nginx"
       echo "  --nginx-port     Nginx 端口 (默认: 80)"
       echo "  --frontend-port  前端端口 (默认: 3010)"
       echo "  --backend-port   后端端口 (默认: 8010)"
@@ -48,6 +52,9 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "  # 仅停止 Nginx"
       echo "  $0 --only nginx"
+      echo ""
+      echo "  # 停止 HTTPS 模式"
+      echo "  $0 --ssl"
       exit 0 ;;
     *) fail "未知参数: $1  (使用 --help 查看帮助)" ;;
   esac
@@ -56,7 +63,7 @@ done
 STOPPED=0
 
 echo ""
-info "========== 停止 ANIFORCE 服务 (ONLY=$ONLY) =========="
+info "========== 停止 ANIFORCE 服务 (ONLY=$ONLY, USE_SSL=$USE_SSL) =========="
 
 # ============================================================
 #  1. 停止 Nginx
@@ -68,32 +75,51 @@ else
   
   # 尝试优雅停止
   if command -v nginx &>/dev/null; then
-    if nginx -s quit 2>/dev/null; then
-      ok "Nginx 已优雅停止"
-      STOPPED=$((STOPPED + 1))
-    elif sudo nginx -s quit 2>/dev/null; then
-      ok "Nginx 已优雅停止 (sudo)"
-      STOPPED=$((STOPPED + 1))
+    if [ "$USE_SSL" = "true" ]; then
+      info "HTTPS 模式，使用 sudo 停止 Nginx..."
+      if sudo nginx -s quit 2>/dev/null; then
+        ok "Nginx 已优雅停止 (HTTPS 模式)"
+        STOPPED=$((STOPPED + 1))
+      else
+        warn "无法优雅停止 Nginx，尝试强制停止..."
+        sudo nginx -s stop 2>/dev/null || true
+      fi
     else
-      warn "无法优雅停止 Nginx，尝试强制停止..."
-      nginx -s stop 2>/dev/null || sudo nginx -s stop 2>/dev/null || true
+      if nginx -s quit 2>/dev/null; then
+        ok "Nginx 已优雅停止"
+        STOPPED=$((STOPPED + 1))
+      elif sudo nginx -s quit 2>/dev/null; then
+        ok "Nginx 已优雅停止 (sudo)"
+        STOPPED=$((STOPPED + 1))
+      else
+        warn "无法优雅停止 Nginx，尝试强制停止..."
+        nginx -s stop 2>/dev/null || sudo nginx -s stop 2>/dev/null || true
+      fi
     fi
   fi
   
   # 检查端口并强制清理
-  if lsof -i :$NGINX_PORT -sTCP:LISTEN &>/dev/null; then
-    info "检测到端口 $NGINX_PORT 上的进程，正在终止..."
-    lsof -ti :$NGINX_PORT | while read -r pid; do
-      kill "$pid" 2>/dev/null && ok "已停止 Nginx 进程 PID $pid" && STOPPED=$((STOPPED + 1)) || true
-    done
-    sleep 1
-    
-    # 二次检查
-    if lsof -i :$NGINX_PORT -sTCP:LISTEN &>/dev/null; then
-      warn "端口 $NGINX_PORT 仍被占用，强制终止..."
-      lsof -ti :$NGINX_PORT | xargs kill -9 2>/dev/null || sudo lsof -ti :$NGINX_PORT | xargs sudo kill -9 2>/dev/null || true
-    fi
+  # 如果是 HTTPS 模式，需要检查 80 和 443 端口
+  PORTS_TO_CHECK="$NGINX_PORT"
+  if [ "$USE_SSL" = "true" ]; then
+    PORTS_TO_CHECK="80 443"
   fi
+  
+  for port in $PORTS_TO_CHECK; do
+    if lsof -i :$port -sTCP:LISTEN &>/dev/null; then
+      info "检测到端口 $port 上的进程，正在终止..."
+      lsof -ti :$port | while read -r pid; do
+        kill "$pid" 2>/dev/null && ok "已停止 Nginx 进程 PID $pid" && STOPPED=$((STOPPED + 1)) || true
+      done
+      sleep 1
+      
+      # 二次检查
+      if lsof -i :$port -sTCP:LISTEN &>/dev/null; then
+        warn "端口 $port 仍被占用，强制终止..."
+        lsof -ti :$port | xargs kill -9 2>/dev/null || sudo lsof -ti :$port | xargs sudo kill -9 2>/dev/null || true
+      fi
+    fi
+  done
   
   # 清理 Nginx 进程（兜底）
   if pgrep nginx &>/dev/null; then

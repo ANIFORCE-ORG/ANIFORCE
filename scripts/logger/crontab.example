@@ -17,28 +17,28 @@
 # ============================================================
 # 每天午夜 00:00 运行日志轮转（基本模式）
 # ============================================================
-0 0 * * * /path/to/aniforce/scripts/rotate_logs.sh --log-dir /path/to/aniforce/logs
+0 0 * * * /path/to/aniforce/scripts/logger/rotate_logs.sh --log-dir /path/to/aniforce/logs
 
 # ============================================================
 # 每天午夜 00:00 运行日志轮转（压缩模式，保留 30 天）
 # ============================================================
-0 0 * * * /path/to/aniforce/scripts/rotate_logs.sh --log-dir /path/to/aniforce/logs --compress --retention 30
+0 0 * * * /path/to/aniforce/scripts/logger/rotate_logs.sh --log-dir /path/to/aniforce/logs --compress --retention 30
 
 # ============================================================
 # 每天凌晨 2:00 运行日志轮转（压缩模式，保留 7 天）
 # ============================================================
-0 2 * * * /path/to/aniforce/scripts/rotate_logs.sh --log-dir /path/to/aniforce/logs --compress --retention 7
+0 2 * * * /path/to/aniforce/scripts/logger/rotate_logs.sh --log-dir /path/to/aniforce/logs --compress --retention 7
 
 # ============================================================
 # 每周日凌晨 3:00 运行日志轮转（压缩模式，保留 90 天）
 # ============================================================
-0 3 * * 0 /path/to/aniforce/scripts/rotate_logs.sh --log-dir /path/to/aniforce/logs --compress --retention 90
+0 3 * * 0 /path/to/aniforce/scripts/logger/rotate_logs.sh --log-dir /path/to/aniforce/logs --compress --retention 90
 
 # ============================================================
 # 示例：完整的 cron 配置（带日志输出）
 # ============================================================
 # 每天午夜运行，将输出记录到 cron 日志
-0 0 * * * /path/to/aniforce/scripts/rotate_logs.sh --log-dir /path/to/aniforce/logs --compress >> /var/log/aniforce_cron.log 2>&1
+0 0 * * * /path/to/aniforce/scripts/logger/rotate_logs.sh --log-dir /path/to/aniforce/logs --compress >> /var/log/aniforce_cron.log 2>&1
 
 # ============================================================
 # 验证 cron 是否正常工作
@@ -52,13 +52,13 @@
 #    tail -f /var/log/syslog | grep CRON
 #
 # 3. 测试 cron 任务（每分钟运行一次，用于测试）:
-#    * * * * * /path/to/aniforce/scripts/rotate_logs.sh --log-dir /path/to/aniforce/logs
+#    * * * * * /path/to/aniforce/scripts/logger/rotate_logs.sh --log-dir /path/to/aniforce/logs
 #    测试完成后记得删除此行！
 
 # ============================================================
 # 注意事项
 # ============================================================
-# 1. 确保脚本有执行权限: chmod +x /path/to/aniforce/scripts/rotate_logs.sh
+# 1. 确保脚本有执行权限: chmod +x /path/to/aniforce/scripts/logger/rotate_logs.sh
 # 2. 使用绝对路径，避免相对路径问题
 # 3. cron 环境变量可能与 shell 不同，必要时在脚本中设置 PATH
 # 4. 建议先用 * * * * * 测试，确认正常后再改为每天运行
