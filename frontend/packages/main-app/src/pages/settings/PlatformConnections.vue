@@ -401,7 +401,7 @@ onMounted(() => {
             </div>
 
             <!-- 开发中提示（仅 Google 和 TikTok 显示）-->
-            <div v-if="activePlatform !== 'meta'" class="p-4 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-4">
+            <div v-if="activePlatform == 'tiktok'" class="p-4 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-4">
               <div class="flex items-start gap-3">
                 <span class="material-symbols-outlined text-amber-600 dark:text-amber-400 text-xl">construction</span>
                 <div>
