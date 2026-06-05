@@ -105,12 +105,10 @@ trap cleanup EXIT
 # 测试 HTTP 配置
 info "1. 测试 HTTP 配置 (nginx.conf)"
 if [ -f "$ROOT_DIR/nginx.conf" ]; then
-    # 生成临时配置文件，替换 mime.types 路径
-    if [ "$ENV_TYPE" = "mac" ]; then
-        sed "s|include /opt/homebrew/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" "$ROOT_DIR/nginx.conf" > "$TEMP_HTTP_CONF"
-    else
-        sed "s|include /etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" "$ROOT_DIR/nginx.conf" > "$TEMP_HTTP_CONF"
-    fi
+    # 生成临时配置文件，替换所有可能的 mime.types 路径
+    sed "s|include /opt/homebrew/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" "$ROOT_DIR/nginx.conf" | \
+    sed "s|include /usr/local/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" | \
+    sed "s|include /etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" > "$TEMP_HTTP_CONF"
     
     if nginx -t -c "$TEMP_HTTP_CONF" 2>&1 | grep -q "successful"; then
         ok "nginx.conf 配置有效"
@@ -127,8 +125,10 @@ echo ""
 # 测试 HTTPS 配置
 info "2. 测试 HTTPS 配置 (nginx-https.conf)"
 if [ -f "$ROOT_DIR/nginx-https.conf" ]; then
-    # 生成临时配置文件，替换 mime.types 路径
-    sed "s|include /etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" "$ROOT_DIR/nginx-https.conf" > "$TEMP_HTTPS_CONF"
+    # 生成临时配置文件，替换所有可能的 mime.types 路径
+    sed "s|include /opt/homebrew/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" "$ROOT_DIR/nginx-https.conf" | \
+    sed "s|include /usr/local/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" | \
+    sed "s|include /etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" > "$TEMP_HTTPS_CONF"
     
     # 检查 SSL 证书是否存在
     if [ ! -f "/etc/letsencrypt/live/www.aniforce.cc/fullchain.pem" ]; then
