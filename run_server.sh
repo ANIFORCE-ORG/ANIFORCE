@@ -116,18 +116,23 @@ while [[ $# -gt 0 ]]; do
       echo "  --log-dir        日志目录 (默认: ./logs)"
       echo ""
       echo "环境变量:"
-      echo "  CLOUD_IP         云端模式的 IP 地址（默认: 8.148.151.36）"
-      echo "                   用于自动配置 .env 中的 FRONTEND_BASE_URL 和 BACKEND_BASE_URL"
+      echo "  CLOUD_DOMAIN     云端模式的域名（默认: https://www.aniforce.cc）"
+      echo "                   用于自动配置 .env 中的 FRONTEND_BASE_URL、BACKEND_BASE_URL 和 OAUTH_REDIRECT_BASE_URL"
+      echo ""
+      echo "使用场景:"
+      echo "  • 本脚本用于开发调试，直接启动前后端服务（无 Nginx）"
+      echo "  • 生产部署建议使用 deploy_server.sh（支持 Nginx + HTTPS）"
+      echo "  • HTTPS 部署请使用: ./deploy_server.sh --mode cloud --ssl"
       echo ""
       echo "示例:"
       echo "  # 本地开发模式"
       echo "  $0 --mode local"
       echo ""
-      echo "  # 云端生产模式（使用默认 IP）"
+      echo "  # 云端生产模式（使用默认域名）"
       echo "  $0 --mode cloud --skip-install"
       echo ""
-      echo "  # 云端模式（自定义 IP）"
-      echo "  CLOUD_IP=your-server-ip $0 --mode cloud"
+      echo "  # 云端模式（自定义域名）"
+      echo "  CLOUD_DOMAIN=https://your-domain.com $0 --mode cloud"
       exit 0 ;;
     *) fail "未知参数: $1  (使用 --help 查看帮助)" ;;
   esac
@@ -313,24 +318,31 @@ fi
 # 根据 MODE 自动配置服务地址
 if [ "$MODE" = "cloud" ]; then
   info "配置 Cloud 模式服务地址"
-  # 获取云端 IP（可通过环境变量 CLOUD_IP 指定，否则使用默认值）
-  CLOUD_IP=${CLOUD_IP:-8.148.151.36}
+  # 使用生产域名（可通过环境变量 CLOUD_DOMAIN 指定，否则使用默认域名）
+  CLOUD_DOMAIN=${CLOUD_DOMAIN:-https://www.aniforce.cc}
   
-  # 更新 FRONTEND_BASE_URL
+  # 更新 FRONTEND_BASE_URL（使用域名，不带端口）
   if grep -q "^FRONTEND_BASE_URL=" .env; then
-    sed -i.bak "s|^FRONTEND_BASE_URL=.*|FRONTEND_BASE_URL=http://$CLOUD_IP:$FRONTEND_PORT|" .env && rm -f .env.bak
+    sed -i.bak "s|^FRONTEND_BASE_URL=.*|FRONTEND_BASE_URL=$CLOUD_DOMAIN|" .env && rm -f .env.bak
   else
-    echo "FRONTEND_BASE_URL=http://$CLOUD_IP:$FRONTEND_PORT" >> .env
+    echo "FRONTEND_BASE_URL=$CLOUD_DOMAIN" >> .env
   fi
   
-  # 更新 BACKEND_BASE_URL
+  # 更新 BACKEND_BASE_URL（使用域名，不带端口）
   if grep -q "^BACKEND_BASE_URL=" .env; then
-    sed -i.bak "s|^BACKEND_BASE_URL=.*|BACKEND_BASE_URL=https://$CLOUD_IP:$BACKEND_PORT|" .env && rm -f .env.bak
+    sed -i.bak "s|^BACKEND_BASE_URL=.*|BACKEND_BASE_URL=$CLOUD_DOMAIN|" .env && rm -f .env.bak
   else
-    echo "BACKEND_BASE_URL=https://$CLOUD_IP:$BACKEND_PORT" >> .env
+    echo "BACKEND_BASE_URL=$CLOUD_DOMAIN" >> .env
   fi
   
-  ok "Cloud 模式服务地址: 前端=http://$CLOUD_IP:$FRONTEND_PORT, 后端=https://$CLOUD_IP:$BACKEND_PORT"
+  # 更新 OAUTH_REDIRECT_BASE_URL（使用域名，用于 OAuth 回调）
+  if grep -q "^OAUTH_REDIRECT_BASE_URL=" .env; then
+    sed -i.bak "s|^OAUTH_REDIRECT_BASE_URL=.*|OAUTH_REDIRECT_BASE_URL=$CLOUD_DOMAIN|" .env && rm -f .env.bak
+  else
+    echo "OAUTH_REDIRECT_BASE_URL=$CLOUD_DOMAIN" >> .env
+  fi
+  
+  ok "Cloud 模式服务地址: 前端=$CLOUD_DOMAIN, 后端=$CLOUD_DOMAIN, OAuth回调=$CLOUD_DOMAIN"
 else
   info "配置 Local 模式服务地址"
   
@@ -348,7 +360,14 @@ else
     echo "BACKEND_BASE_URL=http://localhost:$BACKEND_PORT" >> .env
   fi
   
-  ok "Local 模式服务地址: 前端=http://localhost:$FRONTEND_PORT, 后端=http://localhost:$BACKEND_PORT"
+  # 更新 OAUTH_REDIRECT_BASE_URL（本地开发时使用 localhost）
+  if grep -q "^OAUTH_REDIRECT_BASE_URL=" .env; then
+    sed -i.bak "s|^OAUTH_REDIRECT_BASE_URL=.*|OAUTH_REDIRECT_BASE_URL=http://localhost:$BACKEND_PORT|" .env && rm -f .env.bak
+  else
+    echo "OAUTH_REDIRECT_BASE_URL=http://localhost:$BACKEND_PORT" >> .env
+  fi
+  
+  ok "Local 模式服务地址: 前端=http://localhost:$FRONTEND_PORT, 后端=http://localhost:$BACKEND_PORT, OAuth回调=http://localhost:$BACKEND_PORT"
 fi
 
 # ============================================================
