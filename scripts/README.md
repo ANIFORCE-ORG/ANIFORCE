@@ -77,12 +77,27 @@ Nginx 配置文件测试脚本。
 - 测试 HTTPS 配置文件（nginx-https.conf）
 - 验证配置文件语法正确性
 - 快速诊断配置问题
+- 支持 macOS 和 Linux 环境
+- 自动检测操作系统类型
 
 **使用方法**：
 ```bash
 cd scripts/ssl
+
+# 自动检测环境
 ./test_nginx_config.sh
+
+# 指定 macOS 环境
+./test_nginx_config.sh --env mac
+
+# 指定 Linux 环境
+./test_nginx_config.sh --env linux
 ```
+
+**参数说明**：
+- `--env mac` - 使用 macOS 的 mime.types 路径（/opt/homebrew/etc/nginx/mime.types）
+- `--env linux` - 使用 Linux 的 mime.types 路径（/etc/nginx/mime.types）
+- 不指定参数时自动检测操作系统
 
 ### 📊 logger/ - 日志管理
 
