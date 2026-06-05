@@ -336,8 +336,11 @@ else
     # HTTPS 配置：替换端口和日志路径
     sed "s/localhost:3010/localhost:$FRONTEND_PORT/g" "$NGINX_CONF" | \
     sed "s/localhost:8010/localhost:$BACKEND_PORT/g" | \
+    sed "s|include /etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" | \
     sed "s|/var/log/nginx/aniforce_access.log|$NGINX_ACCESS_LOG|g" | \
-    sed "s|/var/log/nginx/aniforce_error.log|$NGINX_ERROR_LOG|g" > "$NGINX_RUNTIME_CONF"
+    sed "s|/var/log/nginx/aniforce_error.log|$NGINX_ERROR_LOG|g" | \
+    sed "s|error_log /var/log/nginx/aniforce_error.log;|error_log $NGINX_ERROR_LOG;|g" | \
+    sed "s|access_log /var/log/nginx/aniforce_access.log main;|access_log $NGINX_ACCESS_LOG main;|g" > "$NGINX_RUNTIME_CONF"
   else
     # HTTP 配置：替换端口配置、mime.types 路径和日志路径
     sed "s/listen 80;/listen $NGINX_PORT;/g" "$NGINX_CONF" | \

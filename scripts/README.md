@@ -6,14 +6,15 @@
 
 ```
 scripts/
-├── ssl/              # SSL 证书管理脚本
-│   ├── setup_ssl.sh
-│   ├── renew_ssl.sh
-│   └── check_ssl.sh
-├── logger/           # 日志管理脚本
-│   └── rotate_logs.sh
-├── crontab.example   # Crontab 配置示例
-└── README.md         # 本说明文件
+├── ssl/                    # SSL 证书管理脚本
+│   ├── setup_ssl.sh       # SSL 自动配置
+│   ├── renew_ssl.sh       # SSL 证书续期
+│   ├── check_ssl.sh       # SSL 状态检查
+│   └── test_nginx_config.sh  # Nginx 配置测试
+├── logger/                 # 日志管理脚本
+│   └── rotate_logs.sh     # 日志轮转
+├── crontab.example         # Crontab 配置示例
+└── README.md               # 本说明文件
 ```
 
 ## 📂 子目录说明
@@ -66,6 +67,21 @@ SSL 证书状态检查脚本。
 ```bash
 cd scripts/ssl
 sudo ./check_ssl.sh
+```
+
+#### `ssl/test_nginx_config.sh`
+Nginx 配置文件测试脚本。
+
+**功能**：
+- 测试 HTTP 配置文件（nginx.conf）
+- 测试 HTTPS 配置文件（nginx-https.conf）
+- 验证配置文件语法正确性
+- 快速诊断配置问题
+
+**使用方法**：
+```bash
+cd scripts/ssl
+./test_nginx_config.sh
 ```
 
 ### 📊 logger/ - 日志管理
