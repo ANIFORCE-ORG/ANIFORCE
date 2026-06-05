@@ -782,7 +782,7 @@ async def get_meta_authorize_url(
             f"state={connection_id}"
         )
 
-        logger.info(f"Generated Google authorize URL for connection: {connection_id}, authroize_url: {auth_url}")
+        logger.info(f"Generated Meta authorize URL for connection: {connection_id}, authroize_url: {auth_url}")
         
         return {"authorize_url": auth_url}
         
@@ -791,6 +791,148 @@ async def get_meta_authorize_url(
     except Exception as e:
         logger.error(f"Failed to get authorize URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/google/auth_callback")
+async def google_auth_callback(
+    code: Optional[str] = Query(None, description="OAuth 授权码"),
+    state: Optional[str] = Query(None, description="状态参数"),
+    error: Optional[str] = Query(None, description="错误信息"),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Google OAuth 授权回调接口
+    
+    Args:
+        code: OAuth 授权码
+        state: 状态参数（包含 connection_id）
+        error: 错误信息（用户拒绝授权时返回）
+        db: 数据库会话
+    
+    Returns:
+        重定向到前端页面
+    """
+    logger.info(f"Google auth callback received: code={code[:10] if code else 'None'}, state={state}, error={error}")
+    
+    # 检查用户是否拒绝授权
+    if error:
+        logger.warning(f"User denied authorization: {error}")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=user_denied"
+        )
+    
+    # 验证必需参数
+    if not code:
+        logger.error("Missing required parameter: code")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=missing_code"
+        )
+    
+    if not state:
+        logger.error("Missing required parameter: state")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=missing_state"
+        )
+    
+    try:
+        connection_id = state
+        logger.info(f"Received Google OAuth callback for connection: {connection_id}, code: {code[:10]}...")
+        
+        # 查询连接信息
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            logger.error(f"Connection not found: {connection_id}")
+            return RedirectResponse(
+                url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=connection_not_found"
+            )
+        
+        # 使用 code 换取 access_token
+        redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
+        
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+            try:
+                logger.info(f"Requesting access token from Google API for connection: {connection_id}")
+                token_response = await client.post(
+                    "https://oauth2.googleapis.com/token",
+                    data={
+                        "code": code,
+                        "client_id": connection.account_id,
+                        "client_secret": connection.account_secret,
+                        "redirect_uri": redirect_uri,
+                        "grant_type": "authorization_code"
+                    },
+                    headers={
+                        "Content-Type": "application/x-www-form-urlencoded"
+                    }
+                )
+                
+                if token_response.status_code != 200:
+                    logger.error(f"Failed to get access token: status={token_response.status_code}, response={token_response.text}")
+                    return RedirectResponse(
+                        url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=token_exchange_failed"
+                    )
+                
+                token_data = token_response.json()
+                access_token = token_data.get("access_token")
+                refresh_token = token_data.get("refresh_token")
+                expires_in = token_data.get("expires_in")
+                
+                logger.info(f"Got access token for connection: {connection_id}, token: {access_token[:20] if access_token else 'None'}, expires_in: {expires_in} seconds")
+                
+                if refresh_token:
+                    logger.info(f"Got refresh token for connection: {connection_id}, refresh_token: {refresh_token[:20]}...")
+                
+            except httpx.TimeoutException as e:
+                logger.error(f"Timeout while getting access token: {e}")
+                return RedirectResponse(
+                    url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=token_timeout"
+                )
+            except httpx.ConnectError as e:
+                logger.error(f"Connection error while getting access token: {e}")
+                return RedirectResponse(
+                    url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=connection_error"
+                )
+            except Exception as e:
+                logger.error(f"Unexpected error while getting access token: {e}", exc_info=True)
+                return RedirectResponse(
+                    url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=token_exchange_failed"
+                )
+        
+        # 更新连接信息
+        connection.access_token = access_token
+        connection.refresh_token = refresh_token
+        connection.token_type = token_data.get("token_type", "Bearer")
+        
+        # 计算过期时间
+        if expires_in:
+            connection.token_expires_at = datetime.utcnow() + timedelta(seconds=int(expires_in))
+            logger.info(f"Token will expire at: {connection.token_expires_at} UTC")
+        
+        # 更新状态和同步时间
+        connection.status = "active"
+        connection.last_sync_at = datetime.utcnow()
+        connection.updated_at = datetime.utcnow()
+        
+        await db.commit()
+        logger.info(f"Updated connection with access token: {connection_id}")
+        
+        # 重定向到前端页面
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?success=authorized"
+        )
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Google OAuth callback failed: {e}", exc_info=True)
+        logger.error(f"Exception type: {type(e).__name__}, Exception details: {str(e)}")
+        return RedirectResponse(
+            url=f"{settings.FRONTEND_BASE_URL}/platform-connections?error=callback_failed"
+        )
 
 
 # ==================== 子账号管理 API（使用独立表） ====================
