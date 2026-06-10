@@ -9,66 +9,66 @@
         <Transition name="scale">
           <div
             v-if="show"
-            class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-4xl mx-4 h-[900px] overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col"
+            class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-[750px] mx-4 h-[702px] overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col"
             @click.stop
           >
             <!-- 头部 -->
-            <div class="flex items-center justify-between px-5 py-3 border-b border-slate-200 dark:border-slate-700">
-              <h2 class="text-lg font-semibold text-slate-900 dark:text-white">团队详情</h2>
+            <div class="flex items-center justify-between px-[16px] py-[9px] border-b border-slate-200 dark:border-slate-700">
+              <h2 class="text-[15px] font-semibold text-slate-900 dark:text-white">团队详情</h2>
               <button
                 @click="handleClose"
-                class="p-1.5 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                class="p-[5px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               >
-                <span class="material-symbols-outlined text-slate-500 dark:text-slate-400 text-xl">close</span>
+                <span class="material-symbols-outlined text-slate-500 dark:text-slate-400 text-[17px]">close</span>
               </button>
             </div>
 
             <!-- 内容区域 -->
-            <div class="flex-1 overflow-y-auto p-5 space-y-4">
+            <div class="flex-1 overflow-y-auto p-[16px] space-y-[12px]">
               <!-- 团队详情模块 -->
-              <div class="bg-slate-50 dark:bg-slate-900/30 rounded-md p-4">
-                <h3 class="text-sm font-semibold text-slate-900 dark:text-white mb-3">团队信息</h3>
+              <div class="bg-slate-50 dark:bg-slate-900/30 rounded-md p-[12px]">
+                <h3 class="text-[11px] font-semibold text-slate-900 dark:text-white mb-[9px]">团队信息</h3>
                 
-                <div class="grid grid-cols-3 gap-x-4 gap-y-2 text-sm">
+                <div class="grid grid-cols-3 gap-x-[12px] gap-y-[6px] text-[11px]">
                   <div>
-                    <label class="text-xs text-slate-500 dark:text-slate-400">团队名称</label>
-                    <p class="font-medium text-slate-900 dark:text-white mt-0.5">{{ organization?.name }}</p>
+                    <label class="text-[10px] text-slate-500 dark:text-slate-400">团队名称</label>
+                    <p class="font-medium text-slate-900 dark:text-white mt-[2px]">{{ organization?.name }}</p>
                   </div>
                   
                   <div>
-                    <label class="text-xs text-slate-500 dark:text-slate-400">团队代码</label>
-                    <p class="font-medium text-slate-900 dark:text-white mt-0.5">{{ organization?.org_code }}</p>
+                    <label class="text-[10px] text-slate-500 dark:text-slate-400">团队代码</label>
+                    <p class="font-medium text-slate-900 dark:text-white mt-[2px]">{{ organization?.org_code }}</p>
                   </div>
                   
                   <div>
-                    <label class="text-xs text-slate-500 dark:text-slate-400">成员数量</label>
-                    <p class="font-medium text-slate-900 dark:text-white mt-0.5">{{ organization?.member_count }} 人</p>
+                    <label class="text-[10px] text-slate-500 dark:text-slate-400">成员数量</label>
+                    <p class="font-medium text-slate-900 dark:text-white mt-[2px]">{{ organization?.member_count }} 人</p>
                   </div>
                   
                   <div class="col-span-2">
-                    <label class="text-xs text-slate-500 dark:text-slate-400">团队描述</label>
-                    <p class="text-slate-700 dark:text-slate-300 mt-0.5">
+                    <label class="text-[10px] text-slate-500 dark:text-slate-400">团队描述</label>
+                    <p class="text-slate-700 dark:text-slate-300 mt-[2px]">
                       {{ organization?.description || '暂无描述' }}
                     </p>
                   </div>
                   
                   <div>
-                    <label class="text-xs text-slate-500 dark:text-slate-400">创建时间</label>
-                    <p class="font-medium text-slate-900 dark:text-white mt-0.5">
+                    <label class="text-[10px] text-slate-500 dark:text-slate-400">创建时间</label>
+                    <p class="font-medium text-slate-900 dark:text-white mt-[2px]">
                       {{ formatDate(organization?.created_at) }}
                     </p>
                   </div>
                   
-                  <div v-if="isAdmin" class="col-span-3 mt-1">
-                    <label class="text-xs text-slate-500 dark:text-slate-400">邀请码</label>
-                    <div class="flex items-center gap-2 mt-0.5">
-                      <code class="flex-1 px-2 py-1.5 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-xs font-mono text-slate-900 dark:text-white">
+                  <div v-if="isAdmin" class="col-span-3 mt-[4px]">
+                    <label class="text-[10px] text-slate-500 dark:text-slate-400">邀请码</label>
+                    <div class="flex items-center gap-[8px] mt-[2px]">
+                      <code class="flex-1 px-[8px] py-[6px] bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md text-[10px] font-mono text-slate-900 dark:text-white">
                         {{ inviteCode || '加载中...' }}
                       </code>
                       <button
                         v-if="inviteCode"
                         @click="copyInviteCode"
-                        class="px-3 py-1.5 rounded-md text-xs font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+                        class="px-[9px] py-[6px] rounded-md text-[10px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                       >
                         复制
                       </button>
@@ -78,30 +78,30 @@
               </div>
 
               <!-- 团队成员模块 -->
-              <div class="bg-slate-50 dark:bg-slate-900/30 rounded-md p-4 flex-1 flex flex-col min-h-0">
-                <div class="flex items-center justify-between mb-3">
-                  <div class="flex items-center gap-3">
-                    <h3 class="text-sm font-semibold text-slate-900 dark:text-white">团队成员</h3>
+              <div class="bg-slate-50 dark:bg-slate-900/30 rounded-md p-[12px] flex-1 flex flex-col min-h-0">
+                <div class="flex items-center justify-between mb-[9px]">
+                  <div class="flex items-center gap-[9px]">
+                    <h3 class="text-[11px] font-semibold text-slate-900 dark:text-white">团队成员</h3>
                     <button
                       v-if="isAdmin"
                       @click="showAddMemberDialog = true"
-                      class="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+                      class="flex items-center gap-[4px] px-[6px] py-[4px] rounded-md text-[10px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                     >
-                      <span class="material-symbols-outlined text-base">add</span>
+                      <span class="material-symbols-outlined text-[13px]">add</span>
                       添加成员
                     </button>
                   </div>
                   
                   <!-- 搜索框 -->
-                  <div class="relative w-48">
+                  <div class="relative w-[150px]">
                     <input
                       v-model="searchQuery"
                       type="text"
                       placeholder="搜索成员..."
-                      class="w-full px-3 py-1.5 pl-8 rounded-md text-sm border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-primary"
+                      class="w-full px-[9px] py-[6px] pl-[25px] rounded-md text-[11px] border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-1 focus:ring-primary"
                       @input="handleSearch"
                     >
-                    <span class="material-symbols-outlined absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 text-lg">
+                    <span class="material-symbols-outlined absolute left-[6px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">
                       search
                     </span>
                   </div>
@@ -110,27 +110,27 @@
                 <!-- 成员表格 -->
                 <div v-if="loading" class="flex-1 flex items-center justify-center">
                   <div class="text-center">
-                    <div class="inline-block animate-spin rounded-full h-6 w-6 border-2 border-primary border-t-transparent"></div>
-                    <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">加载中...</p>
+                    <div class="inline-block animate-spin rounded-full h-[19px] w-[19px] border-2 border-primary border-t-transparent"></div>
+                    <p class="text-slate-500 dark:text-slate-400 text-[11px] mt-[6px]">加载中...</p>
                   </div>
                 </div>
 
                 <div v-else-if="members.length === 0" class="flex-1 flex items-center justify-center">
                   <div class="text-center">
-                    <span class="material-symbols-outlined text-slate-300 dark:text-slate-600 text-4xl">group_off</span>
-                    <p class="text-slate-500 dark:text-slate-400 text-sm mt-2">暂无成员</p>
+                    <span class="material-symbols-outlined text-slate-300 dark:text-slate-600 text-[31px]">group_off</span>
+                    <p class="text-slate-500 dark:text-slate-400 text-[11px] mt-[6px]">暂无成员</p>
                   </div>
                 </div>
 
                 <div v-else class="flex-1 overflow-auto">
-                  <table class="w-full text-sm">
+                  <table class="w-full text-[11px]">
                     <thead class="bg-white dark:bg-slate-800 sticky top-0">
                       <tr class="border-b border-slate-200 dark:border-slate-700">
-                        <th class="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">成员</th>
-                        <th class="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">邮箱</th>
-                        <th class="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">角色</th>
-                        <th class="text-left py-2 px-3 font-medium text-slate-700 dark:text-slate-300">加入时间</th>
-                        <th v-if="isAdmin" class="text-right py-2 px-3 font-medium text-slate-700 dark:text-slate-300">操作</th>
+                        <th class="text-left py-[6px] px-[9px] font-medium text-slate-700 dark:text-slate-300">成员</th>
+                        <th class="text-left py-[6px] px-[9px] font-medium text-slate-700 dark:text-slate-300">邮箱</th>
+                        <th class="text-left py-[6px] px-[9px] font-medium text-slate-700 dark:text-slate-300">角色</th>
+                        <th class="text-left py-[6px] px-[9px] font-medium text-slate-700 dark:text-slate-300">加入时间</th>
+                        <th v-if="isAdmin" class="text-right py-[6px] px-[9px] font-medium text-slate-700 dark:text-slate-300">操作</th>
                       </tr>
                     </thead>
                     <tbody class="bg-white dark:bg-slate-800">
@@ -139,19 +139,19 @@
                         :key="member.id"
                         class="border-b border-slate-100 dark:border-slate-700/50 hover:bg-slate-50 dark:hover:bg-slate-700/30 transition-colors"
                       >
-                        <td class="py-2 px-3">
-                          <div class="flex items-center gap-2">
-                            <div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
-                              <span class="material-symbols-outlined text-primary text-base">person</span>
+                        <td class="py-[6px] px-[9px]">
+                          <div class="flex items-center gap-[6px]">
+                            <div class="w-[22px] h-[22px] rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0">
+                              <span class="material-symbols-outlined text-primary text-[13px]">person</span>
                             </div>
                             <span class="font-medium text-slate-900 dark:text-white">{{ member.user_name }}</span>
                           </div>
                         </td>
-                        <td class="py-2 px-3 text-slate-600 dark:text-slate-400">{{ member.user_email }}</td>
-                        <td class="py-2 px-3">
+                        <td class="py-[6px] px-[9px] text-slate-600 dark:text-slate-400">{{ member.user_email }}</td>
+                        <td class="py-[6px] px-[9px]">
                           <span
                             :class="[
-                              'px-2 py-0.5 rounded-md text-xs font-medium',
+                              'px-[6px] py-[2px] rounded-md text-[10px] font-medium',
                               member.role === 'admin' 
                                 ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300'
                                 : 'bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300'
@@ -160,15 +160,15 @@
                             {{ member.role === 'admin' ? '管理员' : '成员' }}
                           </span>
                         </td>
-                        <td class="py-2 px-3 text-slate-600 dark:text-slate-400">{{ formatDate(member.joined_at) }}</td>
-                        <td v-if="isAdmin" class="py-2 px-3 text-right">
+                        <td class="py-[6px] px-[9px] text-slate-600 dark:text-slate-400">{{ formatDate(member.joined_at) }}</td>
+                        <td v-if="isAdmin" class="py-[6px] px-[9px] text-right">
                           <button
                             v-if="member.role !== 'admin'"
                             @click="handleRemoveMember(member)"
-                            class="p-1 rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
+                            class="p-[4px] rounded-md hover:bg-red-50 dark:hover:bg-red-900/20 text-red-600 dark:text-red-400 transition-colors"
                             title="移除成员"
                           >
-                            <span class="material-symbols-outlined text-lg">person_remove</span>
+                            <span class="material-symbols-outlined text-[15px]">person_remove</span>
                           </button>
                         </td>
                       </tr>
@@ -177,25 +177,25 @@
                 </div>
 
                 <!-- 分页 -->
-                <div v-if="totalPages > 1" class="flex items-center justify-center gap-2 mt-3 pt-3 border-t border-slate-200 dark:border-slate-700">
+                <div v-if="totalPages > 1" class="flex items-center justify-center gap-[6px] mt-[9px] pt-[9px] border-t border-slate-200 dark:border-slate-700">
                   <button
                     @click="handlePrevPage"
                     :disabled="currentPage === 1"
-                    class="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    class="px-[6px] py-[4px] rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    <span class="material-symbols-outlined text-lg">chevron_left</span>
+                    <span class="material-symbols-outlined text-[15px]">chevron_left</span>
                   </button>
                   
-                  <span class="text-xs text-slate-600 dark:text-slate-400">
+                  <span class="text-[10px] text-slate-600 dark:text-slate-400">
                     第 {{ currentPage }} / {{ totalPages }} 页
                   </span>
                   
                   <button
                     @click="handleNextPage"
                     :disabled="currentPage === totalPages"
-                    class="px-2 py-1 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                    class="px-[6px] py-[4px] rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                   >
-                    <span class="material-symbols-outlined text-lg">chevron_right</span>
+                    <span class="material-symbols-outlined text-[15px]">chevron_right</span>
                   </button>
                 </div>
               </div>
@@ -215,36 +215,36 @@
         <Transition name="scale">
           <div
             v-if="showAddMemberDialog"
-            class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-md mx-4 p-5 border border-slate-200 dark:border-slate-700"
+            class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-[344px] mx-4 p-[16px] border border-slate-200 dark:border-slate-700"
             @click.stop
           >
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white mb-4">添加成员</h3>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white mb-[12px]">添加成员</h3>
             
-            <div class="space-y-4">
+            <div class="space-y-[12px]">
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">
                   成员邮箱
                 </label>
                 <input
                   v-model="addMemberEmail"
                   type="email"
                   placeholder="请输入成员邮箱地址"
-                  class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary"
+                  class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary text-[11px]"
                   @keyup.enter="handleAddMember"
                 />
-                <p v-if="addMemberError" class="text-red-500 text-sm mt-1">{{ addMemberError }}</p>
+                <p v-if="addMemberError" class="text-red-500 text-[11px] mt-[4px]">{{ addMemberError }}</p>
               </div>
               
-              <div class="flex justify-end gap-2">
+              <div class="flex justify-end gap-[6px]">
                 <button
                   @click="showAddMemberDialog = false"
-                  class="px-4 py-2 rounded-md text-sm font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  class="px-[12px] py-[6px] rounded-md text-[11px] font-medium border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
                 >
                   取消
                 </button>
                 <button
                   @click="handleAddMember"
-                  class="px-4 py-2 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+                  class="px-[12px] py-[6px] rounded-md text-[11px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                 >
                   添加
                 </button>

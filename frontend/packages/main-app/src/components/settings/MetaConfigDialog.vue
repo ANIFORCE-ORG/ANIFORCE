@@ -201,48 +201,48 @@ const openMetaDeveloperPlatform = () => {
     class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
     @click.self="handleClose"
   >
-    <div class="bg-white dark:bg-slate-800 rounded-md shadow-lg max-w-4xl w-full">
+    <div class="bg-white dark:bg-slate-800 rounded-md shadow-lg max-w-[750px] w-full">
       <!-- 弹窗头部 -->
-      <div class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-6 py-4 flex items-center justify-between rounded-t-xl">
-        <h2 class="text-lg font-bold text-slate-900 dark:text-white">Meta App 配置</h2>
+      <div class="bg-white dark:bg-slate-800 border-b border-slate-200 dark:border-slate-700 px-[19px] py-[12px] flex items-center justify-between rounded-t-xl">
+        <h2 class="text-[15px] font-bold text-slate-900 dark:text-white">Meta App 配置</h2>
         <button
-          class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+          class="p-[6px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
           @click="handleClose"
         >
-          <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">close</span>
+          <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[17px]">close</span>
         </button>
       </div>
 
       <!-- 弹窗内容 -->
-      <div class="p-6 space-y-6">
+      <div class="p-[19px] space-y-[19px]">
         <!-- Meta App 配置部分 -->
         <section>
-          <div class="space-y-4">
+          <div class="space-y-[12px]">
             <label class="block">
-              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">Account Name</span>
+              <span class="text-[10px] font-medium text-slate-600 dark:text-slate-400">Account Name</span>
               <input
                 v-model="form.account_name"
-                class="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                class="mt-1 w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-[11px] focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Meta Account Name"
               />
             </label>
             <label class="block">
-              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">App ID</span>
+              <span class="text-[10px] font-medium text-slate-600 dark:text-slate-400">App ID</span>
               <input
                 v-model="form.app_id"
-                class="mt-1 w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-sm focus:outline-none focus:ring-2 focus:ring-primary"
+                class="mt-1 w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white text-[11px] focus:outline-none focus:ring-2 focus:ring-primary"
                 placeholder="Meta App ID"
               />
             </label>
             <label class="block">
-              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">App Secret</span>
+              <span class="text-[10px] font-medium text-slate-600 dark:text-slate-400">App Secret</span>
               <div class="relative mt-1">
                 <input
                   v-model="form.app_secret"
                   :type="showSecret ? 'text' : 'password'"
                   :readonly="isEditMode && !isEditingSecret"
                   :class="[
-                    'w-full px-3 py-2 pr-10 rounded-md border text-sm focus:outline-none focus:ring-2 focus:ring-primary',
+                    'w-full px-[9px] py-[6px] pr-[31px] rounded-md border text-[11px] focus:outline-none focus:ring-2 focus:ring-primary',
                     isEditMode && !isEditingSecret
                       ? 'border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 cursor-default'
                       : 'border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-slate-900 dark:text-white'
@@ -253,11 +253,11 @@ const openMetaDeveloperPlatform = () => {
                 <button
                   v-if="isEditMode && !isEditingSecret"
                   type="button"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  class="absolute right-[6px] top-1/2 -translate-y-1/2 p-[5px] rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                   @click="startEditingSecret"
                   title="点击修改 App Secret"
                 >
-                  <span class="material-symbols-outlined text-lg text-slate-600 dark:text-slate-400">
+                  <span class="material-symbols-outlined text-[15px] text-slate-600 dark:text-slate-400">
                     edit
                   </span>
                 </button>
@@ -265,82 +265,82 @@ const openMetaDeveloperPlatform = () => {
                 <button
                   v-else
                   type="button"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  class="absolute right-[6px] top-1/2 -translate-y-1/2 p-[5px] rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                   @click="showSecret = !showSecret"
                   :title="showSecret ? '隐藏密码' : '显示密码'"
                 >
-                  <span class="material-symbols-outlined text-lg text-slate-600 dark:text-slate-400">
+                  <span class="material-symbols-outlined text-[15px] text-slate-600 dark:text-slate-400">
                     {{ showSecret ? 'visibility_off' : 'visibility' }}
                   </span>
                 </button>
               </div>
-              <span v-if="isEditMode && !isEditingSecret" class="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+              <span v-if="isEditMode && !isEditingSecret" class="mt-1 block text-[10px] text-slate-500 dark:text-slate-400">
                 已加密保存，点击笔图标可修改
               </span>
             </label>
             <label class="block">
-              <span class="text-xs font-medium text-slate-600 dark:text-slate-400">OAuth Redirect URI</span>
+              <span class="text-[10px] font-medium text-slate-600 dark:text-slate-400">OAuth Redirect URI</span>
               <div class="relative mt-1">
                 <input
                   :value="REDIRECT_URI"
                   readonly
-                  class="w-full px-3 py-2 pr-10 rounded-md border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 text-sm cursor-default"
+                  class="w-full px-[9px] py-[6px] pr-[31px] rounded-md border border-slate-200 dark:border-slate-600 bg-slate-50 dark:bg-slate-700/50 text-slate-500 dark:text-slate-400 text-[11px] cursor-default"
                 />
                 <button
                   type="button"
-                  class="absolute right-2 top-1/2 -translate-y-1/2 p-1.5 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                  class="absolute right-[6px] top-1/2 -translate-y-1/2 p-[5px] rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                   @click="copyRedirectUri"
                   :title="copied ? '已复制' : '复制到剪贴板'"
                 >
                   <span 
-                    class="material-symbols-outlined text-lg"
+                    class="material-symbols-outlined text-[15px]"
                     :class="copied ? 'text-green-600 dark:text-green-400' : 'text-slate-600 dark:text-slate-400'"
                   >
                     {{ copied ? 'check' : 'content_copy' }}
                   </span>
                 </button>
               </div>
-              <span class="mt-1 block text-xs text-slate-500 dark:text-slate-400">
+              <span class="mt-1 block text-[10px] text-slate-500 dark:text-slate-400">
                 需要在 Meta App 后台 Valid OAuth Redirect URIs 填入同一个地址。
               </span>
             </label>
             <div>
-              <div class="text-xs font-medium text-slate-600 dark:text-slate-400 mb-3">授权权限</div>
-              <div class="grid grid-cols-3 gap-3">
+              <div class="text-[10px] font-medium text-slate-600 dark:text-slate-400 mb-[9px]">授权权限</div>
+              <div class="grid grid-cols-3 gap-[9px]">
                 <label
                   v-for="scope in availableScopes"
                   :key="scope.value"
-                  class="flex flex-col gap-2 p-3 rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
+                  class="flex flex-col gap-[6px] p-[9px] rounded-lg border border-slate-200 dark:border-slate-700 hover:bg-slate-50 dark:hover:bg-slate-700/50 cursor-pointer transition-colors"
                 >
-                  <div class="flex items-center gap-2">
+                  <div class="flex items-center gap-[6px]">
                     <input
                       type="checkbox"
                       :value="scope.value"
                       :checked="form.scopes.includes(scope.value)"
-                      class="w-4 h-4 text-primary border-slate-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-primary cursor-pointer flex-shrink-0"
+                      class="w-[12px] h-[12px] text-primary border-slate-300 dark:border-slate-600 rounded focus:ring-2 focus:ring-primary cursor-pointer flex-shrink-0"
                       @change="toggleScope(scope.value)"
                     />
-                    <span class="text-sm font-medium text-slate-900 dark:text-white">{{ scope.label }}</span>
+                    <span class="text-[11px] font-medium text-slate-900 dark:text-white">{{ scope.label }}</span>
                   </div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400 pl-2">{{ scope.description }}</div>
+                  <div class="text-[10px] text-slate-500 dark:text-slate-400 pl-[6px]">{{ scope.description }}</div>
                 </label>
               </div>
-              <div class="mt-2 text-xs text-slate-500 dark:text-slate-400">
+              <div class="mt-[6px] text-[10px] text-slate-500 dark:text-slate-400">
                 已选择 {{ form.scopes.length }} 个权限
               </div>
             </div>
           </div>
 
-          <div class="mt-5 flex items-center gap-2">
+          <div class="mt-[16px] flex items-center gap-[6px]">
             <button
-              class="px-4 py-2 rounded-md bg-primary text-white text-sm disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
+              class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-primary/90 transition-colors"
               :disabled="saving || !isFormValid"
               @click="handleSaveConfig"
             >
               {{ saving ? '保存中...' : '保存配置' }}
             </button>
             <button
-              class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-sm hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              class="px-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 text-[11px] hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               @click="openMetaDeveloperPlatform"
             >
               前往 Meta 开发者平台

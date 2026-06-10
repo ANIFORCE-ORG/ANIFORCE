@@ -329,38 +329,38 @@ onMounted(() => {
     />
 
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-      <div class="border-b border-slate-200 dark:border-slate-800 px-6 py-4">
-        <div class="flex items-center gap-3">
+      <div class="border-b border-slate-200 dark:border-slate-800 px-[19px] py-[12px]">
+        <div class="flex items-center gap-[12px]">
           <button
-            class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            class="p-[6px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
             @click="router.back()"
           >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back</span>
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[17px]">arrow_back</span>
           </button>
           <div>
-            <h1 class="text-xl font-bold text-slate-900 dark:text-white">平台连接</h1>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">配置 Meta、Google、TikTok 的平台授权和广告账户同步</p>
+            <h1 class="text-[15px] font-bold text-slate-900 dark:text-white">平台连接</h1>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">配置 Meta、Google、TikTok 的平台授权和广告账户同步</p>
           </div>
         </div>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-6">
-        <div class="space-y-6">
+      <div class="flex-1 overflow-y-auto p-[19px]">
+        <div class="space-y-[19px]">
           <!-- 平台选择卡片 -->
-          <div class="grid grid-cols-3 gap-3">
+          <div class="grid grid-cols-3 gap-[12px]">
             <button
               v-for="platform in platforms"
               :key="platform.id"
-              class="rounded-md border p-4 text-left transition-colors hover:border-primary/50"
+              class="rounded-md border p-[12px] text-left transition-colors hover:border-primary/50"
               :class="activePlatform === platform.id 
                 ? 'border-primary bg-primary/5' 
                 : 'border-slate-200 dark:border-slate-700'"
               @click="activePlatform = platform.id"
             >
               <div class="flex items-center justify-between">
-                <div class="font-semibold text-slate-900 dark:text-white">{{ platform.label }}</div>
+                <div class="font-semibold text-[13px] text-slate-900 dark:text-white">{{ platform.label }}</div>
                 <span 
-                  class="rounded px-2 py-1 text-xs font-medium"
+                  class="rounded px-[6px] py-[4px] text-[10px] font-medium"
                   :class="isPlatformConnected(platform.id)
                     ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400'
                     : 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400'"
@@ -368,47 +368,47 @@ onMounted(() => {
                   {{ isPlatformConnected(platform.id) ? '已接入' : '待接入' }}
                 </span>
               </div>
-              <p class="mt-2 text-xs text-slate-500 dark:text-slate-400">{{ platform.description }}</p>
+              <p class="mt-[6px] text-[10px] text-slate-500 dark:text-slate-400">{{ platform.description }}</p>
             </button>
           </div>
 
           <!-- 平台详细配置 -->
-          <section class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-5">
-            <div class="flex items-center gap-2 mb-4">
-              <span class="material-symbols-outlined text-primary">hub</span>
-              <h2 class="text-sm font-semibold text-slate-900 dark:text-white">
+          <section class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 p-[16px]">
+            <div class="flex items-center gap-[6px] mb-[12px]">
+              <span class="material-symbols-outlined text-primary text-[17px]">hub</span>
+              <h2 class="text-[11px] font-semibold text-slate-900 dark:text-white">
                 {{ platforms.find(p => p.id === activePlatform)?.title }}
               </h2>
             </div>
-            <p class="text-sm text-slate-500 dark:text-slate-400 mb-4">
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-[12px]">
               {{ platforms.find(p => p.id === activePlatform)?.description }}
             </p>
 
             <!-- 连接流程 -->
-            <div class="grid gap-2 text-xs text-slate-600 dark:text-slate-400 md:grid-cols-4 mb-6">
-              <div class="rounded bg-slate-50 dark:bg-slate-700 p-3 border border-slate-200 dark:border-slate-600">
+            <div class="grid gap-[6px] text-[10px] text-slate-600 dark:text-slate-400 md:grid-cols-4 mb-[19px]">
+              <div class="rounded bg-slate-50 dark:bg-slate-700 p-[9px] border border-slate-200 dark:border-slate-600">
                 1. 配置应用信息
               </div>
-              <div class="rounded bg-slate-50 dark:bg-slate-700 p-3 border border-slate-200 dark:border-slate-600">
+              <div class="rounded bg-slate-50 dark:bg-slate-700 p-[9px] border border-slate-200 dark:border-slate-600">
                 2. 发起 OAuth 授权
               </div>
-              <div class="rounded bg-slate-50 dark:bg-slate-700 p-3 border border-slate-200 dark:border-slate-600">
+              <div class="rounded bg-slate-50 dark:bg-slate-700 p-[9px] border border-slate-200 dark:border-slate-600">
                 3. 平台确认权限
               </div>
-              <div class="rounded bg-slate-50 dark:bg-slate-700 p-3 border border-slate-200 dark:border-slate-600">
+              <div class="rounded bg-slate-50 dark:bg-slate-700 p-[9px] border border-slate-200 dark:border-slate-600">
                 4. 同步广告账户
               </div>
             </div>
 
             <!-- 开发中提示（仅 Google 和 TikTok 显示）-->
-            <div v-if="activePlatform == 'tiktok'" class="p-4 rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-4">
-              <div class="flex items-start gap-3">
-                <span class="material-symbols-outlined text-amber-600 dark:text-amber-400 text-xl">construction</span>
+            <div v-if="activePlatform == 'tiktok'" class="p-[12px] rounded-md bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 mb-[12px]">
+              <div class="flex items-start gap-[9px]">
+                <span class="material-symbols-outlined text-amber-600 dark:text-amber-400 text-[17px]">construction</span>
                 <div>
-                  <div class="text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">
+                  <div class="text-[11px] font-medium text-amber-900 dark:text-amber-200 mb-[4px]">
                     {{ platforms.find(p => p.id === activePlatform)?.label }} 平台连接功能开发中
                   </div>
-                  <p class="text-xs text-amber-700 dark:text-amber-300">
+                  <p class="text-[10px] text-amber-700 dark:text-amber-300">
                     当前版本正在完善平台连接功能，包括应用配置、OAuth 授权、账户同步、Campaign 创建等核心能力，敬请期待。
                   </p>
                 </div>
@@ -417,9 +417,9 @@ onMounted(() => {
 
             <!-- Meta 平台特殊功能 -->
             <div v-if="activePlatform === 'meta'" class="flex items-center justify-between">
-              <p class="text-sm text-slate-600 dark:text-slate-400">配置 Meta 广告账户连接</p>
+              <p class="text-[11px] text-slate-600 dark:text-slate-400">配置 Meta 广告账户连接</p>
               <button
-                class="px-4 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+                class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors"
                 @click="openConfigDialog"
               >
                 添加广告账户
@@ -428,9 +428,9 @@ onMounted(() => {
             
             <!-- Google 平台特殊功能 -->
             <div v-if="activePlatform === 'google'" class="flex items-center justify-between">
-              <p class="text-sm text-slate-600 dark:text-slate-400">配置 Google 广告账户连接</p>
+              <p class="text-[11px] text-slate-600 dark:text-slate-400">配置 Google 广告账户连接</p>
               <button
-                class="px-4 py-2 rounded-md bg-primary text-white text-sm font-medium hover:bg-primary/90 transition-colors"
+                class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors"
                 @click="openConfigDialog"
               >
                 添加广告账户
@@ -440,32 +440,32 @@ onMounted(() => {
 
           <!-- 平台连接列表 -->
           <section class="rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 overflow-hidden">
-            <div class="px-5 py-4 border-b border-slate-200 dark:border-slate-700">
-              <h2 class="text-sm font-semibold text-slate-900 dark:text-white">已连接的平台账户</h2>
+            <div class="px-[16px] py-[12px] border-b border-slate-200 dark:border-slate-700">
+              <h2 class="text-[11px] font-semibold text-slate-900 dark:text-white">已连接的平台账户</h2>
             </div>
             
-            <div v-if="loading" class="p-8 text-center text-slate-500 dark:text-slate-400">
-              <span class="material-symbols-outlined animate-spin text-3xl">progress_activity</span>
-              <p class="mt-2 text-sm">加载中...</p>
+            <div v-if="loading" class="p-[25px] text-center text-slate-500 dark:text-slate-400">
+              <span class="material-symbols-outlined animate-spin text-[23px]">progress_activity</span>
+              <p class="mt-[6px] text-[11px]">加载中...</p>
             </div>
             
-            <div v-else-if="filteredConnections.length === 0" class="p-8 text-center text-slate-500 dark:text-slate-400">
-              <span class="material-symbols-outlined text-5xl mb-2">cloud_off</span>
-              <p class="text-sm">暂无 {{ platforms.find(p => p.id === activePlatform)?.label }} 平台连接</p>
-              <p v-if="activePlatform === 'meta'" class="text-xs mt-1">点击上方「添加广告账户」按钮开始配置</p>
+            <div v-else-if="filteredConnections.length === 0" class="p-[25px] text-center text-slate-500 dark:text-slate-400">
+              <span class="material-symbols-outlined text-[39px] mb-[6px]">cloud_off</span>
+              <p class="text-[11px]">暂无 {{ platforms.find(p => p.id === activePlatform)?.label }} 平台连接</p>
+              <p v-if="activePlatform === 'meta'" class="text-[10px] mt-[4px]">点击上方「添加广告账户」按钮开始配置</p>
             </div>
             
             <div v-else class="overflow-x-auto">
               <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-700/50">
                   <tr>
-                    <th v-if="activePlatform === 'google'" class="px-3 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400 w-12"></th>
-                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">账户名称</th>
-                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">APP ID</th>
-                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">授权范围</th>
-                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">状态</th>
-                    <th class="px-5 py-3 text-left text-xs font-medium text-slate-600 dark:text-slate-400">更新时间</th>
-                    <th class="px-5 py-3 text-right text-xs font-medium text-slate-600 dark:text-slate-400">操作</th>
+                    <th v-if="activePlatform === 'google'" class="px-[9px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400 w-[37px]"></th>
+                    <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">账户名称</th>
+                    <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">APP ID</th>
+                    <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">授权范围</th>
+                    <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">状态</th>
+                    <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">更新时间</th>
+                    <th class="px-[16px] py-[9px] text-right text-[10px] font-medium text-slate-600 dark:text-slate-400">操作</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-200 dark:divide-slate-700">
@@ -473,53 +473,53 @@ onMounted(() => {
                     <!-- 主账号行 -->
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
                       <!-- Google 平台展开按钮 -->
-                      <td v-if="activePlatform === 'google'" class="px-3 py-4 text-center">
+                      <td v-if="activePlatform === 'google'" class="px-[9px] py-[12px] text-center">
                         <button
                           @click="toggleSubAccounts(connection.id)"
-                          class="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                          class="p-[4px] rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                           :class="{ 'text-primary': isExpanded(connection.id) }"
                         >
-                          <span class="material-symbols-outlined text-lg transition-transform" :class="{ 'rotate-90': isExpanded(connection.id) }">
+                          <span class="material-symbols-outlined text-[15px] transition-transform" :class="{ 'rotate-90': isExpanded(connection.id) }">
                             chevron_right
                           </span>
                         </button>
                       </td>
-                      <td class="px-5 py-4 text-sm text-slate-900 dark:text-white">
+                      <td class="px-[16px] py-[12px] text-[11px] text-slate-900 dark:text-white">
                         {{ connection.account_name || '-' }}
                       </td>
-                    <td class="px-5 py-4 text-sm text-slate-600 dark:text-slate-400 font-mono">
+                    <td class="px-[16px] py-[12px] text-[11px] text-slate-600 dark:text-slate-400 font-mono">
                       {{ connection.account_id }}
                     </td>
-                    <td class="px-5 py-4 text-xs">
-                      <div class="flex flex-wrap gap-1">
+                    <td class="px-[16px] py-[12px] text-[10px]">
+                      <div class="flex flex-wrap gap-[4px]">
                         <span
                           v-for="scope in connection.scopes"
                           :key="scope"
-                          class="px-2 py-1 rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                          class="px-[6px] py-[4px] rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
                         >
                           {{ scope }}
                         </span>
                         <span v-if="!connection.scopes || connection.scopes.length === 0" class="text-slate-400">-</span>
                       </div>
                     </td>
-                    <td class="px-5 py-4 text-xs">
-                      <span class="px-2 py-1 rounded font-medium" :class="getStatusClass(connection.status)">
+                    <td class="px-[16px] py-[12px] text-[10px]">
+                      <span class="px-[6px] py-[4px] rounded font-medium" :class="getStatusClass(connection.status)">
                         {{ getStatusText(connection.status) }}
                       </span>
                     </td>
-                    <td class="px-5 py-4 text-xs text-slate-600 dark:text-slate-400">
+                    <td class="px-[16px] py-[12px] text-[10px] text-slate-600 dark:text-slate-400">
                       {{ formatDate(connection.updated_at) }}
                     </td>
-                    <td class="px-5 py-4 text-right">
-                      <div class="flex items-center justify-end gap-2">
+                    <td class="px-[16px] py-[12px] text-right">
+                      <div class="flex items-center justify-end gap-[6px]">
                         <button
-                          class="px-3 py-1.5 rounded text-xs font-medium border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+                          class="px-[9px] py-[6px] rounded text-[10px] font-medium border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
                           @click="handleEdit(connection)"
                         >
                           编辑
                         </button>
                         <button
-                          class="px-3 py-1.5 rounded text-xs font-medium border transition-colors"
+                          class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
                           :class="connection.status === 'active' 
                             ? 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'
                             : 'border-primary text-primary hover:bg-primary/5'"
@@ -529,7 +529,7 @@ onMounted(() => {
                           授权
                         </button>
                         <button
-                          class="px-3 py-1.5 rounded text-xs font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                          class="px-[9px] py-[6px] rounded text-[10px] font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                           @click="handleDelete(connection)"
                         >
                           删除
@@ -541,53 +541,53 @@ onMounted(() => {
                     <!-- 子账号展开行（仅 Google 平台） -->
                     <tr v-if="activePlatform === 'google' && isExpanded(connection.id)" class="bg-slate-50/50 dark:bg-slate-700/20">
                       <td :colspan="activePlatform === 'google' ? 7 : 6" class="px-0 py-0">
-                        <div class="px-8 py-4">
+                        <div class="px-[25px] py-[12px]">
                           <!-- 加载中 -->
-                          <div v-if="loadingSubAccounts.has(connection.id)" class="text-center py-4">
-                            <span class="material-symbols-outlined animate-spin text-2xl text-slate-400">progress_activity</span>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2">加载子账号中...</p>
+                          <div v-if="loadingSubAccounts.has(connection.id)" class="text-center py-[12px]">
+                            <span class="material-symbols-outlined animate-spin text-[19px] text-slate-400">progress_activity</span>
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-[6px]">加载子账号中...</p>
                           </div>
                           
                           <!-- 子账号列表 -->
                           <div v-else-if="subAccounts[connection.id] && subAccounts[connection.id].length > 0">
-                            <div class="flex items-center justify-between mb-3">
-                              <h4 class="text-xs font-semibold text-slate-700 dark:text-slate-300">子账号列表</h4>
-                              <div class="flex items-center gap-3">
-                                <span class="text-xs text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].length }} 个子账号</span>
+                            <div class="flex items-center justify-between mb-[9px]">
+                              <h4 class="text-[10px] font-semibold text-slate-700 dark:text-slate-300">子账号列表</h4>
+                              <div class="flex items-center gap-[9px]">
+                                <span class="text-[10px] text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].length }} 个子账号</span>
                                 <button
                                   @click="openAddSubAccountDialog(connection.id)"
-                                  class="px-3 py-1.5 rounded text-xs font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+                                  class="px-[9px] py-[6px] rounded text-[10px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                                 >
                                   + 添加子账号
                                 </button>
                               </div>
                             </div>
-                            <div class="space-y-2">
+                            <div class="space-y-[6px]">
                               <div
                                 v-for="subAccount in subAccounts[connection.id]"
                                 :key="subAccount.id"
-                                class="flex items-center justify-between p-3 rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600"
+                                class="flex items-center justify-between p-[9px] rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600"
                               >
                                 <div class="flex-1">
-                                  <div class="flex items-center gap-2">
-                                    <span class="text-sm font-medium text-slate-900 dark:text-white">{{ subAccount.name }}</span>
-                                    <span class="px-2 py-0.5 rounded text-xs font-medium" :class="getStatusClass(subAccount.status)">
+                                  <div class="flex items-center gap-[6px]">
+                                    <span class="text-[11px] font-medium text-slate-900 dark:text-white">{{ subAccount.name }}</span>
+                                    <span class="px-[6px] py-[2px] rounded text-[10px] font-medium" :class="getStatusClass(subAccount.status)">
                                       {{ getStatusText(subAccount.status) }}
                                     </span>
                                   </div>
-                                  <div class="flex items-center gap-4 mt-1">
-                                    <span class="text-xs text-slate-600 dark:text-slate-400">
+                                  <div class="flex items-center gap-[12px] mt-[4px]">
+                                    <span class="text-[10px] text-slate-600 dark:text-slate-400">
                                       <span class="font-medium">Customer ID:</span> {{ subAccount.customer_id }}
                                     </span>
-                                    <span class="text-xs text-slate-500 dark:text-slate-400">
+                                    <span class="text-[10px] text-slate-500 dark:text-slate-400">
                                       更新时间: {{ formatDate(subAccount.updated_at) }}
                                     </span>
                                   </div>
                                 </div>
-                                <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-[6px]">
                                   <button
                                     @click="handleDeleteSubAccount(connection.id, subAccount.id)"
-                                    class="px-3 py-1.5 rounded text-xs font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
+                                    class="px-[9px] py-[6px] rounded text-[10px] font-medium border border-red-200 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors"
                                   >
                                     删除
                                   </button>
@@ -597,12 +597,12 @@ onMounted(() => {
                           </div>
                           
                           <!-- 无子账号 -->
-                          <div v-else class="text-center py-4">
-                            <span class="material-symbols-outlined text-3xl text-slate-300 dark:text-slate-600">folder_open</span>
-                            <p class="text-xs text-slate-500 dark:text-slate-400 mt-2 mb-3">暂无子账号</p>
+                          <div v-else class="text-center py-[12px]">
+                            <span class="material-symbols-outlined text-[23px] text-slate-300 dark:text-slate-600">folder_open</span>
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-[6px] mb-[9px]">暂无子账号</p>
                             <button
                               @click="openAddSubAccountDialog(connection.id)"
-                              class="px-4 py-2 rounded text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+                              class="px-[12px] py-[6px] rounded text-[11px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                             >
                               + 添加子账号
                             </button>
@@ -621,50 +621,50 @@ onMounted(() => {
 
     <!-- 添加子账号弹窗 -->
     <div v-if="showAddSubAccountDialog" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-      <div class="bg-white dark:bg-slate-800 rounded-md shadow-xl w-full max-w-md mx-4">
-        <div class="px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-          <h3 class="text-lg font-semibold text-slate-900 dark:text-white">添加子账号</h3>
+      <div class="bg-white dark:bg-slate-800 rounded-md shadow-xl w-full max-w-[344px] mx-4">
+        <div class="px-[19px] py-[12px] border-b border-slate-200 dark:border-slate-700">
+          <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">添加子账号</h3>
         </div>
         
-        <div class="px-6 py-4 space-y-4">
+        <div class="px-[19px] py-[12px] space-y-[12px]">
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">
               子账号名称 <span class="text-red-500">*</span>
             </label>
             <input
               v-model="newSubAccountName"
               type="text"
               placeholder="请输入子账号名称"
-              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              class="w-full px-[9px] py-[6px] border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-[11px]"
             />
           </div>
           
           <div>
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+            <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">
               Customer ID <span class="text-red-500">*</span>
             </label>
             <input
               v-model="newSubAccountCustomerId"
               type="text"
               placeholder="请输入 Google Customer ID"
-              class="w-full px-3 py-2 border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent"
+              class="w-full px-[9px] py-[6px] border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-[11px]"
             />
-            <p class="mt-1 text-xs text-slate-500 dark:text-slate-400">
+            <p class="mt-[4px] text-[10px] text-slate-500 dark:text-slate-400">
               格式：123-456-7890
             </p>
           </div>
         </div>
         
-        <div class="px-6 py-4 border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-3">
+        <div class="px-[19px] py-[12px] border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-[9px]">
           <button
             @click="closeAddSubAccountDialog"
-            class="px-4 py-2 rounded-md text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+            class="px-[12px] py-[6px] rounded-md text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
           >
             取消
           </button>
           <button
             @click="handleAddSubAccount"
-            class="px-4 py-2 rounded-md text-sm font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
+            class="px-[12px] py-[6px] rounded-md text-[11px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
             :disabled="!newSubAccountName || !newSubAccountCustomerId"
             :class="{ 'opacity-50 cursor-not-allowed': !newSubAccountName || !newSubAccountCustomerId }"
           >
