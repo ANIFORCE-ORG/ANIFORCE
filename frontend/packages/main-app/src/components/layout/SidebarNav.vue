@@ -86,37 +86,37 @@ const handleSessionClick = (session: Session) => {
           class="mb-[6px]"
           :class="isCollapsed ? '' : 'flex items-center justify-between px-[6px]'"
         >
-          <span v-if="!isCollapsed" class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
+          <span v-if="!isCollapsed" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
           <button
             class="rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
             :class="isCollapsed ? 'w-full py-[10px]' : 'p-[6px]'"
             @click="toggleCollapse"
           >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[16px]">
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[15px]">
               {{ isCollapsed ? 'menu' : 'menu_open' }}
             </span>
           </button>
         </div>
-        <ul class="space-y-[8px]">
+        <ul class="space-y-[12px]">
           <li
             v-for="item in navItems"
             :key="item.id"
             class="flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
-              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[12px] px-[10px] py-[6px]',
+              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel(item.id)
                 ? 'bg-primary/10 text-primary font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             ]"
             @click="handleNavClick(item)"
           >
-            <span class="material-symbols-outlined text-[16px]">{{ item.icon }}</span>
-            <span v-if="!isCollapsed" class="text-[12px]">{{ item.label }}</span>
+            <span class="material-symbols-outlined text-[15px]">{{ item.icon }}</span>
+            <span v-if="!isCollapsed" class="text-[11px]">{{ item.label }}</span>
             
             <!-- Tooltip for collapsed state -->
             <div
               v-if="isCollapsed"
-              class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[12px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
+              class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
             >
               {{ item.label }}
             </div>
@@ -137,8 +137,8 @@ const handleSessionClick = (session: Session) => {
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
             @click="handleSessionClick(session)"
           >
-            <span class="material-symbols-outlined text-[12px]">chat</span>
-            <span class="text-[12px] flex-1 truncate">{{ session.name }}</span>
+            <span class="material-symbols-outlined text-[11px]">chat</span>
+            <span class="text-[11px] flex-1 truncate">{{ session.name }}</span>
             <div class="opacity-0 group-hover:opacity-100 flex items-center gap-[4px]">
               <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
                 <span class="material-symbols-outlined text-[10px]">edit</span>

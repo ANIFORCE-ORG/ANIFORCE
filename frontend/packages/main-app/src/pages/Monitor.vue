@@ -73,20 +73,20 @@ const handleHintClick = (hint: string) => {
     <!-- 中间核心工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center px-6">
-        <div class="flex items-center gap-3">
-          <span class="material-symbols-outlined text-primary text-2xl">analytics</span>
-          <h1 class="text-xl font-bold text-slate-900 dark:text-white">投放数据分析</h1>
+      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center px-[19px]">
+        <div class="flex items-center gap-[9px]">
+          <span class="material-symbols-outlined text-primary text-[19px]">analytics</span>
+          <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">投放数据分析</h1>
         </div>
       </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto p-6">
+      <div class="flex-1 overflow-y-auto p-[19px]">
         <div class="max-w-5xl mx-auto">
-          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-12 text-center">
-            <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-600 mb-4">construction</span>
-            <p class="text-lg text-slate-500 dark:text-slate-400">投放数据分析功能开发中...</p>
-            <p class="text-sm text-slate-400 dark:text-slate-500 mt-2">实时监控投放效果与 AI 优化建议</p>
+          <div class="rounded-2xl border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-[37px] text-center">
+            <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-600 mb-[12px]">construction</span>
+            <p class="text-[15px] text-slate-500 dark:text-slate-400">投放数据分析功能开发中...</p>
+            <p class="text-[11px] text-slate-400 dark:text-slate-500 mt-[6px]">实时监控投放效果与 AI 优化建议</p>
           </div>
         </div>
       </div>
