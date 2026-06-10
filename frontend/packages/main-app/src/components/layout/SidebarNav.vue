@@ -76,47 +76,47 @@ const handleSessionClick = (session: Session) => {
 <template>
   <aside 
     class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
-    :class="isCollapsed ? 'w-14' : 'w-52'"
+    :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
   >
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto pb-0 p-3 pt-5 space-y-5 overflow-x-hidden">
+    <nav class="flex-1 overflow-y-auto pb-0 p-[12px] pt-[20px] space-y-[20px] overflow-x-hidden">
       <!-- 功能导航 -->
       <div>
         <div 
-          class="mb-1.5"
-          :class="isCollapsed ? '' : 'flex items-center justify-between px-1.5'"
+          class="mb-[6px]"
+          :class="isCollapsed ? '' : 'flex items-center justify-between px-[6px]'"
         >
           <span v-if="!isCollapsed" class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
           <button
             class="rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
-            :class="isCollapsed ? 'w-full py-2.5' : 'p-1.5'"
+            :class="isCollapsed ? 'w-full py-[10px]' : 'p-[6px]'"
             @click="toggleCollapse"
           >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-base">
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[16px]">
               {{ isCollapsed ? 'menu' : 'menu_open' }}
             </span>
           </button>
         </div>
-        <ul class="space-y-1">
+        <ul class="space-y-[8px]">
           <li
             v-for="item in navItems"
             :key="item.id"
             class="flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
-              isCollapsed ? 'justify-center px-1.5 py-2.5' : 'gap-2.5 px-2.5 py-1.5',
+              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[12px] px-[10px] py-[6px]',
               isActivePanel(item.id)
                 ? 'bg-primary/10 text-primary font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             ]"
             @click="handleNavClick(item)"
           >
-            <span class="material-symbols-outlined text-base">{{ item.icon }}</span>
-            <span v-if="!isCollapsed" class="text-xs">{{ item.label }}</span>
+            <span class="material-symbols-outlined text-[16px]">{{ item.icon }}</span>
+            <span v-if="!isCollapsed" class="text-[12px]">{{ item.label }}</span>
             
             <!-- Tooltip for collapsed state -->
             <div
               v-if="isCollapsed"
-              class="absolute left-full ml-1.5 px-2.5 py-1.5 bg-slate-900 dark:bg-slate-700 text-white text-xs rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
+              class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[12px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
             >
               {{ item.label }}
             </div>
@@ -126,24 +126,24 @@ const handleSessionClick = (session: Session) => {
 
       <!-- 历史会话 -->
       <div v-if="sessions.length > 0 && !isCollapsed">
-        <div class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-1.5 px-1.5">历史会话</div>
-        <ul class="space-y-1">
+        <div class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-[6px] px-[6px]">历史会话</div>
+        <ul class="space-y-[4px]">
           <li
             v-for="session in sessions"
             :key="session.id"
-            class="group flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg cursor-pointer transition-all"
+            class="group flex items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
             :class="session.active
               ? 'bg-primary/10 text-primary font-semibold'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
             @click="handleSessionClick(session)"
           >
-            <span class="material-symbols-outlined text-xs">chat</span>
-            <span class="text-xs flex-1 truncate">{{ session.name }}</span>
-            <div class="opacity-0 group-hover:opacity-100 flex items-center gap-1">
-              <button class="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
+            <span class="material-symbols-outlined text-[12px]">chat</span>
+            <span class="text-[12px] flex-1 truncate">{{ session.name }}</span>
+            <div class="opacity-0 group-hover:opacity-100 flex items-center gap-[4px]">
+              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
                 <span class="material-symbols-outlined text-[10px]">edit</span>
               </button>
-              <button class="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
+              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
                 <span class="material-symbols-outlined text-[10px]">delete</span>
               </button>
             </div>
@@ -161,7 +161,7 @@ nav::-webkit-scrollbar {
 }
 nav::-webkit-scrollbar-thumb {
   background-color: rgb(203 213 225);
-  border-radius: 1.5px;
+  border-radius: 1px;
 }
 nav::-webkit-scrollbar-thumb:hover {
   background-color: rgb(148 163 184);

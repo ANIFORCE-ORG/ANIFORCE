@@ -165,28 +165,28 @@ if (props.sessionId) {
   <!-- 右侧对话区 -->
   <aside 
     class="bg-slate-50 dark:bg-slate-900/50 border-l border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 relative"
-    :class="isCollapsed ? 'w-16' : 'w-96'"
+    :class="isCollapsed ? 'w-[50px]' : 'w-[300px]'"
   >
     <!-- Collapsed State - Vertical Expand Button -->
     <div v-if="isCollapsed" class="flex-1 flex items-center justify-center">
       <button
-        class="writing-mode-vertical-rl p-4 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors rounded-lg flex items-center gap-2"
+        class="writing-mode-vertical-rl p-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors rounded-lg flex items-center gap-[6px]"
         @click="toggleCollapse"
       >
-        <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 rotate-180">chevron_left</span>
-        <span class="text-sm font-medium text-slate-600 dark:text-slate-400">AI助手</span>
+        <span class="material-symbols-outlined text-[17px] text-slate-600 dark:text-slate-400 rotate-180">chevron_left</span>
+        <span class="text-[11px] font-medium text-slate-600 dark:text-slate-400">AI助手</span>
       </button>
     </div>
 
     <!-- Expanded State -->
     <template v-else>
       <!-- Chat Header -->
-      <div class="h-16 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-primary">chat</span>
-          <span class="font-semibold text-slate-900 dark:text-white">AI智能助手</span>
+      <div class="h-[50px] bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+        <div class="flex items-center gap-[6px]">
+          <span class="material-symbols-outlined text-[17px] text-primary">chat</span>
+          <span class="font-semibold text-[13px] text-slate-900 dark:text-white">AI智能助手</span>
         </div>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-[6px]">
           <!-- 创建新对话按钮暂时屏蔽
           <button 
             class="h-9 w-9 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
@@ -196,81 +196,81 @@ if (props.sessionId) {
           </button>
           -->
           <button 
-            class="h-9 w-9 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
+            class="h-[28px] w-[28px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
             @click="toggleCollapse"
           >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">chevron_right</span>
+            <span class="material-symbols-outlined text-[17px] text-slate-600 dark:text-slate-400">chevron_right</span>
           </button>
         </div>
       </div>
 
       <!-- Chat Messages -->
-      <div ref="messagesContainer" class="flex-1 overflow-y-auto p-6">
+      <div ref="messagesContainer" class="flex-1 overflow-y-auto p-[19px]">
         <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full text-center">
-          <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">chat</span>
-          <p class="text-sm text-slate-500 dark:text-slate-400">开始对话,我会帮助您解决问题</p>
+          <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">chat</span>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">开始对话,我会帮助您解决问题</p>
         </div>
         <div
           v-for="(message, index) in messages"
           :key="index"
-          class="mb-6 flex gap-4"
+          class="mb-[19px] flex gap-[12px]"
         >
           <!-- Avatar -->
           <div 
-            class="h-10 w-10 rounded-md flex items-center justify-center flex-shrink-0"
+            class="h-[31px] w-[31px] rounded-md flex items-center justify-center flex-shrink-0"
             :class="message.role === 'user' ? 'bg-blue-100 dark:bg-blue-900/30' : 'bg-primary/10'"
           >
-            <span class="material-symbols-outlined text-sm" :class="message.role === 'user' ? 'text-blue-600 dark:text-blue-400' : 'text-primary'">
+            <span class="material-symbols-outlined text-[11px]" :class="message.role === 'user' ? 'text-blue-600 dark:text-blue-400' : 'text-primary'">
               {{ message.role === 'user' ? 'person' : 'auto_awesome' }}
             </span>
           </div>
           <!-- Message Content -->
           <div class="flex-1">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="text-sm font-semibold text-slate-900 dark:text-white">{{ message.author }}</span>
-              <span class="text-xs text-slate-500 dark:text-slate-400">{{ message.time }}</span>
-              <span v-if="message.isStreaming" class="text-xs text-primary flex items-center gap-1">
-                <span class="inline-block h-1 w-1 rounded-full bg-primary animate-pulse"></span>
+            <div class="flex items-center gap-[6px] mb-[6px]">
+              <span class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ message.author }}</span>
+              <span class="text-[10px] text-slate-500 dark:text-slate-400">{{ message.time }}</span>
+              <span v-if="message.isStreaming" class="text-[10px] text-primary flex items-center gap-[4px]">
+                <span class="inline-block h-[3px] w-[3px] rounded-full bg-primary animate-pulse"></span>
                 生成中...
               </span>
             </div>
-            <div class="text-sm text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
+            <div class="text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
               {{ message.content }}
-              <span v-if="message.isStreaming" class="inline-block w-1 h-4 bg-primary animate-pulse ml-1"></span>
+              <span v-if="message.isStreaming" class="inline-block w-[3px] h-[12px] bg-primary animate-pulse ml-[4px]"></span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Chat Input Area -->
-      <div class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-4">
-        <div class="space-y-3">
+      <div class="bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 p-[12px]">
+        <div class="space-y-[9px]">
           <!-- Input Wrapper -->
-          <div class="flex items-end gap-3">
+          <div class="flex items-end gap-[9px]">
             <textarea
               v-model="localChatInput"
-              class="flex-1 resize-none rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-4 py-3 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="flex-1 resize-none rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 px-[12px] py-[9px] text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 disabled:opacity-50 disabled:cursor-not-allowed"
               placeholder="输入您的问题或需求..."
               rows="1"
               :disabled="isLoading"
               @keydown.enter.prevent="handleSendMessage"
             ></textarea>
             <button
-              class="h-10 w-10 rounded-md bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="h-[31px] w-[31px] rounded-md bg-primary text-white flex items-center justify-center hover:bg-primary/90 transition-colors flex-shrink-0 disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="isLoading"
               @click="handleSendMessage"
             >
-              <span v-if="isLoading" class="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              <span v-else class="material-symbols-outlined text-xl">send</span>
+              <span v-if="isLoading" class="h-[16px] w-[16px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span v-else class="material-symbols-outlined text-[17px]">send</span>
             </button>
           </div>
           <!-- Quick Hints -->
-          <div v-if="quickHints.length > 0" class="flex items-center gap-2 flex-wrap">
-            <span class="text-xs text-slate-500 dark:text-slate-400">试试：</span>
+          <div v-if="quickHints.length > 0" class="flex items-center gap-[6px] flex-wrap">
+            <span class="text-[10px] text-slate-500 dark:text-slate-400">试试：</span>
             <button
               v-for="hint in quickHints"
               :key="hint"
-              class="text-xs px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+              class="text-[10px] px-[9px] py-[4px] rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
               @click="handleHintClick(hint)"
             >
               {{ hint }}
@@ -285,7 +285,7 @@ if (props.sessionId) {
 <style scoped>
 /* 自定义滚动条 */
 .overflow-y-auto::-webkit-scrollbar {
-  width: 4px;
+  width: 3px;
 }
 .overflow-y-auto::-webkit-scrollbar-thumb {
   background-color: rgb(203 213 225);

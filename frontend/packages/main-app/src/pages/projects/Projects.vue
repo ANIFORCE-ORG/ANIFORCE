@@ -162,60 +162,60 @@ const handleSubmitProject = async (data: any) => {
     <!-- 中间项目展示区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
-        <h3 class="font-bold text-slate-900 dark:text-white">项目管理</h3>
-        <div class="flex items-center gap-3">
+      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+        <h3 class="font-bold text-[13px] text-slate-900 dark:text-white">项目管理</h3>
+        <div class="flex items-center gap-[9px]">
           <!-- View Toggle -->
-          <div class="flex items-center gap-1 p-1 rounded-md bg-slate-100 dark:bg-slate-800">
+          <div class="flex items-center gap-[4px] p-[4px] rounded-md bg-slate-100 dark:bg-slate-800">
             <button
               :class="[
-                'px-3 py-1.5 rounded text-xs font-medium transition-colors',
+                'px-[9px] py-[6px] rounded text-[10px] font-medium transition-colors',
                 cardViewType === 'compact' 
                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               ]"
               @click="cardViewType = 'compact'"
             >
-              <span class="material-symbols-outlined text-sm">grid_view</span>
+              <span class="material-symbols-outlined text-[11px]">grid_view</span>
             </button>
             <button
               :class="[
-                'px-3 py-1.5 rounded text-xs font-medium transition-colors',
+                'px-[9px] py-[6px] rounded text-[10px] font-medium transition-colors',
                 cardViewType === 'detailed' 
                   ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               ]"
               @click="cardViewType = 'detailed'"
             >
-              <span class="material-symbols-outlined text-sm">view_list</span>
+              <span class="material-symbols-outlined text-[11px]">view_list</span>
             </button>
           </div>
           <button
-            class="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
+            class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
             @click="handleCreateProject"
           >
-            <span class="material-symbols-outlined text-lg">add</span>
-            <span class="text-sm font-medium">创建项目</span>
+            <span class="material-symbols-outlined text-[15px]">add</span>
+            <span class="text-[11px] font-medium">创建项目</span>
           </button>
         </div>
       </div>
 
       <!-- Search & Filter Bar -->
-      <div class="border-b border-slate-200 dark:border-slate-800 p-4">
-        <div class="flex items-center gap-3">
+      <div class="border-b border-slate-200 dark:border-slate-800 p-[12px]">
+        <div class="flex items-center gap-[9px]">
           <div class="flex-1 relative">
-            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+            <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">search</span>
             <input
               v-model="searchQuery"
               type="text"
               placeholder="搜索项目名称或标签..."
-              class="w-full pl-10 pr-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              class="w-full pl-[31px] pr-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
               @input="handleSearch"
             />
           </div>
           <select
             v-model="filterStatus"
-            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            class="px-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
             @change="handleSearch"
           >
             <option v-for="filter in statusFilters" :key="filter.value" :value="filter.value">
@@ -226,9 +226,9 @@ const handleSubmitProject = async (data: any) => {
       </div>
 
       <!-- Projects List -->
-      <div class="flex-1 overflow-y-auto p-6">
+      <div class="flex-1 overflow-y-auto p-[19px]">
         <!-- Compact View -->
-        <div v-if="cardViewType === 'compact'" class="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div v-if="cardViewType === 'compact'" class="grid gap-[12px] md:grid-cols-2 lg:grid-cols-3">
           <ProjectCardCompact
             v-for="project in filteredProjects"
             :key="project.id"
@@ -241,7 +241,7 @@ const handleSubmitProject = async (data: any) => {
         </div>
 
         <!-- Detailed View -->
-        <div v-else class="grid gap-4">
+        <div v-else class="grid gap-[12px]">
           <ProjectCardDetailed
             v-for="project in filteredProjects"
             :key="project.id"
@@ -251,9 +251,9 @@ const handleSubmitProject = async (data: any) => {
         </div>
 
         <!-- Empty State -->
-        <div v-if="filteredProjects.length === 0" class="flex flex-col items-center justify-center py-16">
-          <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">folder_off</span>
-          <p class="text-sm text-slate-500 dark:text-slate-400">未找到匹配的项目</p>
+        <div v-if="filteredProjects.length === 0" class="flex flex-col items-center justify-center py-[50px]">
+          <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">folder_off</span>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">未找到匹配的项目</p>
         </div>
       </div>
     </main>

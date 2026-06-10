@@ -87,16 +87,16 @@ const getImageSrc = (material: Material): string => {
 <template>
   <div class="material-gallery">
     <!-- Loading State -->
-    <div v-if="loading" class="flex items-center justify-center py-16">
-      <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+    <div v-if="loading" class="flex items-center justify-center py-[50px]">
+      <div class="animate-spin rounded-full h-[37px] w-[37px] border-b-2 border-primary"></div>
     </div>
 
     <!-- Error State -->
-    <div v-else-if="error" class="flex flex-col items-center justify-center py-16">
-      <span class="material-symbols-outlined text-6xl text-red-400 mb-4">error</span>
-      <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+    <div v-else-if="error" class="flex flex-col items-center justify-center py-[50px]">
+      <span class="material-symbols-outlined text-[47px] text-red-400 mb-[12px]">error</span>
+      <p class="text-[11px] text-red-600 dark:text-red-400">{{ error }}</p>
       <button
-        class="mt-4 px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
+        class="mt-[12px] px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] hover:bg-primary/90 transition-colors"
         @click="loadMaterials"
       >
         重试
@@ -104,7 +104,7 @@ const getImageSrc = (material: Material): string => {
     </div>
 
     <!-- Gallery Grid -->
-    <div v-else-if="materials.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+    <div v-else-if="materials.length > 0" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-[12px]">
       <div
         v-for="material in materials"
         :key="material.id"
@@ -127,17 +127,17 @@ const getImageSrc = (material: Material): string => {
           
           <!-- Overlay on hover -->
           <div class="absolute inset-0 bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-            <span class="material-symbols-outlined text-white text-4xl">visibility</span>
+            <span class="material-symbols-outlined text-white text-[31px]">visibility</span>
           </div>
         </div>
 
         <!-- Info -->
-        <div class="p-3 bg-white dark:bg-slate-900">
-          <h4 class="text-sm font-semibold text-slate-900 dark:text-white truncate mb-1">
+        <div class="p-[9px] bg-white dark:bg-slate-900">
+          <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white truncate mb-[4px]">
             {{ material.name }}
           </h4>
-          <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
-            <span class="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-800">
+          <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400">
+            <span class="px-[6px] py-[2px] rounded-full bg-slate-100 dark:bg-slate-800">
               {{ material.type }}
             </span>
             <span v-if="material.ctr_estimate" class="font-medium text-emerald-600">
@@ -146,11 +146,11 @@ const getImageSrc = (material: Material): string => {
           </div>
           
           <!-- Tags -->
-          <div v-if="material.tags.length > 0" class="flex gap-1 mt-2 flex-wrap">
+          <div v-if="material.tags.length > 0" class="flex gap-[4px] mt-[6px] flex-wrap">
             <span
               v-for="tag in material.tags.slice(0, 3)"
               :key="tag"
-              class="text-xs px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
+              class="text-[10px] px-[5px] py-[2px] rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
             >
               {{ tag }}
             </span>
@@ -160,9 +160,9 @@ const getImageSrc = (material: Material): string => {
     </div>
 
     <!-- Empty State -->
-    <div v-else class="flex flex-col items-center justify-center py-16">
-      <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">image</span>
-      <p class="text-sm text-slate-500 dark:text-slate-400">暂无素材</p>
+    <div v-else class="flex flex-col items-center justify-center py-[50px]">
+      <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">image</span>
+      <p class="text-[11px] text-slate-500 dark:text-slate-400">暂无素材</p>
     </div>
   </div>
 </template>
