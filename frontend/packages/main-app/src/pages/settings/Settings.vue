@@ -90,7 +90,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <SidebarNav 
       :nav-items="navItems"
       :sessions="sessions"
@@ -100,26 +100,26 @@ onMounted(() => {
     />
 
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-      <div class="border-b border-slate-200 dark:border-slate-800 px-6 py-4">
-        <h1 class="text-xl font-bold text-slate-900 dark:text-white">设置</h1>
-        <p class="text-sm text-slate-500 dark:text-slate-400 mt-1">管理 Agent 系统账号、系统配置和广告平台连接</p>
+      <div class="border-b border-slate-200 dark:border-slate-800 px-[19px] py-[12px]">
+        <h1 class="text-[15px] font-bold text-slate-900 dark:text-white">设置</h1>
+        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">管理 Agent 系统账号、系统配置和广告平台连接</p>
       </div>
 
-      <div class="flex-1 overflow-y-auto p-6">
+      <div class="flex-1 overflow-y-auto p-[19px]">
         <!-- 卡片式设置入口 -->
-        <div v-if="!showSystemPanel" class="grid gap-4 md:grid-cols-3">
+        <div v-if="!showSystemPanel" class="grid gap-[12px] md:grid-cols-3">
           <section
             v-for="card in settingCards"
             :key="card.id"
-            class="rounded-md border border-slate-200 dark:border-slate-700 p-5 bg-white dark:bg-slate-800 hover:border-primary/50 transition-all"
+            class="rounded-md border border-slate-200 dark:border-slate-700 p-[16px] bg-white dark:bg-slate-800 hover:border-primary/50 transition-all"
           >
-            <div class="flex items-center gap-3">
-              <span class="material-symbols-outlined text-primary text-2xl">{{ card.icon }}</span>
-              <h2 class="font-semibold text-slate-900 dark:text-white">{{ card.title }}</h2>
+            <div class="flex items-center gap-[8px]">
+              <span class="material-symbols-outlined text-primary text-[17px]">{{ card.icon }}</span>
+              <h2 class="font-semibold text-[13px] text-slate-900 dark:text-white">{{ card.title }}</h2>
             </div>
-            <p class="mt-3 text-sm text-slate-500 dark:text-slate-400 min-h-10">{{ card.description }}</p>
+            <p class="mt-[8px] text-[11px] text-slate-500 dark:text-slate-400 min-h-[31px]">{{ card.description }}</p>
             <button
-              class="mt-5 px-4 py-2 rounded-md text-sm font-medium transition-colors"
+              class="mt-[15px] px-[12px] py-[6px] rounded-md text-[11px] font-medium transition-colors"
               :class="card.enabled 
                 ? 'bg-primary text-white hover:bg-primary/90' 
                 : 'border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'"
@@ -132,19 +132,19 @@ onMounted(() => {
         </div>
 
         <!-- 系统设置详细面板 -->
-        <div v-if="showSystemPanel" class="max-w-4xl mx-auto">
-          <div class="flex items-center gap-3 mb-6">
+        <div v-if="showSystemPanel" class="max-w-[750px] mx-auto">
+          <div class="flex items-center gap-[8px] mb-[19px]">
             <button
-              class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              class="p-[6px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               @click="showSystemPanel = false"
             >
-              <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back</span>
+              <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[17px]">arrow_back</span>
             </button>
-            <h2 class="text-lg font-bold text-slate-900 dark:text-white">系统设置</h2>
+            <h2 class="text-[15px] font-bold text-slate-900 dark:text-white">系统设置</h2>
           </div>
-          <div class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-8 text-center">
-            <span class="material-symbols-outlined text-slate-400 text-5xl mb-3">construction</span>
-            <p class="text-slate-500 dark:text-slate-400">系统设置功能开发中...</p>
+          <div class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-[23px] text-center">
+            <span class="material-symbols-outlined text-slate-400 text-[37px] mb-[8px]">construction</span>
+            <p class="text-[13px] text-slate-500 dark:text-slate-400">系统设置功能开发中...</p>
           </div>
         </div>
       </div>

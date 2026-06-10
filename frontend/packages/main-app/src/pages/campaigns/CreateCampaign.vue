@@ -255,7 +255,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧导航栏 -->
     <SidebarNav
       :nav-items="navItems"
@@ -267,22 +267,22 @@ onMounted(async () => {
     <div class="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
       <!-- Header -->
       <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-7xl mx-auto px-6 py-4">
-        <div class="flex items-center gap-4">
+      <div class="max-w-7xl mx-auto px-[19px] py-[12px]">
+        <div class="flex items-center gap-[12px]">
           <button
             @click="handleBack"
-            class="p-2 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            class="p-[6px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400">arrow_back</span>
+            <span class="material-symbols-outlined text-[17px] text-slate-600 dark:text-slate-400">arrow_back</span>
           </button>
-          <h1 class="text-xl font-bold text-slate-900 dark:text-white">新建计划</h1>
+          <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">新建计划</h1>
           </div>
         </div>
       </div>
 
       <!-- Steps Navigation -->
     <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-7xl mx-auto px-6 py-6">
+      <div class="max-w-7xl mx-auto px-[19px] py-[19px]">
         <div class="flex items-center justify-between">
           <div
             v-for="(step, index) in steps"
@@ -292,16 +292,16 @@ onMounted(async () => {
             <!-- Step Circle -->
             <div class="flex flex-col items-center">
               <div
-                class="w-12 h-12 rounded-full flex items-center justify-center transition-all"
+                class="w-[37px] h-[37px] rounded-full flex items-center justify-center transition-all"
                 :class="currentStep >= step.id 
                   ? 'bg-primary text-white' 
                   : 'bg-slate-200 dark:bg-slate-700 text-slate-400'"
               >
-                <span class="material-symbols-outlined">{{ step.icon }}</span>
+                <span class="material-symbols-outlined text-[17px]">{{ step.icon }}</span>
               </div>
-              <div class="mt-2 text-center">
+              <div class="mt-[6px] text-center">
                 <div
-                  class="text-sm font-medium"
+                  class="text-[11px] font-medium"
                   :class="currentStep >= step.id 
                     ? 'text-primary' 
                     : 'text-slate-400'"
@@ -314,7 +314,7 @@ onMounted(async () => {
             <!-- Connector Line -->
             <div
               v-if="index < steps.length - 1"
-              class="flex-1 h-0.5 mx-4 transition-all"
+              class="flex-1 h-[2px] mx-[12px] transition-all"
               :class="currentStep > step.id 
                 ? 'bg-primary' 
                 : 'bg-slate-200 dark:bg-slate-700'"
@@ -326,55 +326,55 @@ onMounted(async () => {
 
       <!-- Content -->
       <div class="flex-1 overflow-y-auto">
-        <div class="mx-auto px-6 py-8">
+        <div class="mx-auto px-[19px] py-[25px]">
       <!-- Step 1: 准备 -->
-      <div v-if="currentStep === 1" class="space-y-6">
+      <div v-if="currentStep === 1" class="space-y-[19px]">
         <!-- 选择所属分组 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">folder</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">选择所属项目</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">folder</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">选择所属项目</h3>
           </div>
           <button
-            class="w-full px-4 py-3 rounded-md border-2 border-dashed transition-colors text-left"
+            class="w-full px-[12px] py-[9px] rounded-md border-2 border-dashed transition-colors text-left"
             :class="selectedGroup 
               ? 'border-primary bg-primary/5 text-slate-900 dark:text-white' 
               : 'border-primary/30 text-primary hover:bg-primary/5'"
             @click="handleOpenGroupModal"
           >
             <div v-if="selectedGroup">
-              <div class="font-semibold">{{ selectedGroup.name }}</div>
-              <div class="text-sm text-slate-500 dark:text-slate-400 mt-1">{{ selectedGroup.game_type }}</div>
+              <div class="font-semibold text-[13px]">{{ selectedGroup.name }}</div>
+              <div class="text-[11px] text-slate-500 dark:text-slate-400 mt-[4px]">{{ selectedGroup.game_type }}</div>
             </div>
-            <div v-else class="text-center text-primary">
+            <div v-else class="text-center text-[13px] text-primary">
               请选择分组
             </div>
           </button>
         </div>
 
         <!-- 投放平台 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">ads_click</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">投放平台</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">ads_click</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">投放平台</h3>
           </div>
-          <div class="grid gap-4">
+          <div class="grid gap-[12px]">
             <div
               v-for="platform in platforms"
               :key="platform.id"
-              class="p-4 rounded-lg border-2 transition-all cursor-pointer"
+              class="p-[12px] rounded-md border-2 transition-all cursor-pointer"
               :class="selectedPlatform === platform.id 
                 ? 'border-primary bg-primary/5' 
                 : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'"
               @click="selectedPlatform = platform.id"
             >
-              <div class="flex items-center gap-4">
-                <div class="w-12 h-12 rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-xl font-bold">
+              <div class="flex items-center gap-[12px]">
+                <div class="w-[37px] h-[37px] rounded-lg bg-slate-100 dark:bg-slate-800 flex items-center justify-center text-[17px] font-bold">
                   {{ platform.icon }}
                 </div>
                 <div class="flex-1">
-                  <div class="font-semibold text-slate-900 dark:text-white">{{ platform.name }}</div>
-                  <div class="text-sm text-slate-500 dark:text-slate-400">{{ platform.description }}</div>
+                  <div class="font-semibold text-[13px] text-slate-900 dark:text-white">{{ platform.name }}</div>
+                  <div class="text-[11px] text-slate-500 dark:text-slate-400">{{ platform.description }}</div>
                 </div>
               </div>
             </div>
@@ -382,12 +382,12 @@ onMounted(async () => {
         </div>
 
         <!-- 账户环境检查 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">verified</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">账户环境检查</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">verified</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">账户环境检查</h3>
           </div>
-          <div class="space-y-3">
+          <div class="space-y-[9px]">
             <div
               v-for="check in accountChecks"
               :key="check.id"
@@ -399,60 +399,60 @@ onMounted(async () => {
               >
                 {{ check.checked ? 'check_circle' : 'radio_button_unchecked' }}
               </span>
-              <span class="text-sm text-slate-700 dark:text-slate-300">{{ check.label }}</span>
+              <span class="text-[11px] text-slate-700 dark:text-slate-300">{{ check.label }}</span>
             </div>
           </div>
         </div>
       </div>
 
       <!-- Step 2: 创建 -->
-      <div v-if="currentStep === 2" class="space-y-6">
+      <div v-if="currentStep === 2" class="space-y-[19px]">
         <!-- 推广目标 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">flag</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">推广目标</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">flag</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">推广目标</h3>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-2 gap-[12px]">
             <div
               v-for="objective in objectives"
               :key="objective.id"
-              class="p-4 rounded-lg border-2 transition-all cursor-pointer"
+              class="p-[12px] rounded-lg border-2 transition-all cursor-pointer"
               :class="campaignObjective === objective.id 
                 ? 'border-primary bg-primary/5' 
                 : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'"
               @click="campaignObjective = objective.id"
             >
-              <div class="flex flex-col items-center text-center gap-2">
-                <span class="material-symbols-outlined text-3xl" :class="campaignObjective === objective.id ? 'text-primary' : 'text-slate-400'">
+              <div class="flex flex-col items-center text-center gap-[6px]">
+                <span class="material-symbols-outlined text-[23px]" :class="campaignObjective === objective.id ? 'text-primary' : 'text-slate-400'">
                   {{ objective.icon }}
                 </span>
-                <div class="font-semibold text-slate-900 dark:text-white">{{ objective.name }}</div>
-                <div class="text-xs text-slate-500 dark:text-slate-400">{{ objective.description }}</div>
+                <div class="font-semibold text-[13px] text-slate-900 dark:text-white">{{ objective.name }}</div>
+                <div class="text-[10px] text-slate-500 dark:text-slate-400">{{ objective.description }}</div>
               </div>
             </div>
           </div>
         </div>
 
         <!-- 预算设置 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">account_balance_wallet</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">预算设置</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">account_balance_wallet</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">预算设置</h3>
           </div>
-          <div class="space-y-4">
+          <div class="space-y-[12px]">
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">预算类型</label>
+              <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">预算类型</label>
               <select
                 v-model="budgetType"
-                class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white"
               >
                 <option value="daily">日预算</option>
                 <option value="total">总预算</option>
               </select>
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">
+              <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">
                 {{ budgetType === 'daily' ? '日预算金额 ($)' : '总预算金额 ($)' }}
               </label>
               <input
@@ -461,66 +461,66 @@ onMounted(async () => {
                 min="0"
                 step="100"
                 placeholder="例如: 10000"
-                class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white"
               />
             </div>
           </div>
         </div>
 
         <!-- 出价策略 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">trending_up</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">出价策略</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">trending_up</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">出价策略</h3>
           </div>
-          <div class="grid grid-cols-2 gap-4 mb-4">
+          <div class="grid grid-cols-2 gap-[12px] mb-[12px]">
             <div
               v-for="strategy in biddingStrategies"
               :key="strategy.id"
-              class="p-4 rounded-lg border-2 transition-all cursor-pointer"
+              class="p-[12px] rounded-lg border-2 transition-all cursor-pointer"
               :class="biddingStrategy === strategy.id 
                 ? 'border-primary bg-primary/5' 
                 : 'border-slate-200 dark:border-slate-700 hover:border-primary/50'"
               @click="biddingStrategy = strategy.id"
             >
-              <div class="font-semibold text-slate-900 dark:text-white mb-1">{{ strategy.name }}</div>
-              <div class="text-xs text-slate-500 dark:text-slate-400">{{ strategy.description }}</div>
+              <div class="font-semibold text-[13px] text-slate-900 dark:text-white mb-[4px]">{{ strategy.name }}</div>
+              <div class="text-[10px] text-slate-500 dark:text-slate-400">{{ strategy.description }}</div>
             </div>
           </div>
           <div v-if="biddingStrategy === 'target_cpa'">
-            <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">目标CPA ($)</label>
+            <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">目标CPA ($)</label>
             <input
               v-model.number="targetCPA"
               type="number"
               min="0"
               step="0.1"
               placeholder="例如: 8.0"
-              class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+              class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white"
             />
           </div>
         </div>
 
         <!-- 投放时间 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">schedule</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">投放时间</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">schedule</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">投放时间</h3>
           </div>
-          <div class="grid grid-cols-2 gap-4">
+          <div class="grid grid-cols-2 gap-[12px]">
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">开始日期</label>
+              <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">开始日期</label>
               <input
                 v-model="startDate"
                 type="date"
-                class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white"
               />
             </div>
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">结束日期</label>
+              <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">结束日期</label>
               <input
                 v-model="endDate"
                 type="date"
-                class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white"
               />
             </div>
           </div>
@@ -528,37 +528,37 @@ onMounted(async () => {
       </div>
 
       <!-- Step 3: 执行 -->
-      <div v-if="currentStep === 3" class="space-y-6">
+      <div v-if="currentStep === 3" class="space-y-[19px]">
         <!-- 选择素材 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">video_library</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">选择素材</h3>
-            <span class="text-sm text-slate-500 dark:text-slate-400">选择需要投放的创意素材，可多选</span>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">video_library</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">选择素材</h3>
+            <span class="text-[11px] text-slate-500 dark:text-slate-400">选择需要投放的创意素材，可多选</span>
           </div>
           
           <!-- 已选择的素材列表 -->
-          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-2 gap-4 mb-4">
+          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-2 gap-[12px] mb-[12px]">
             <div
               v-for="material in selectedMaterials"
               :key="material.id"
-              class="p-4 rounded-lg border-2 border-primary bg-primary/5 relative"
+              class="p-[12px] rounded-lg border-2 border-primary bg-primary/5 relative"
             >
-              <div class="flex items-center gap-3">
-                <div class="w-16 h-16 rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
+              <div class="flex items-center gap-[9px]">
+                <div class="w-[50px] h-[50px] rounded-md bg-slate-100 dark:bg-slate-800 flex items-center justify-center overflow-hidden">
                   <img
                     v-if="materialThumbnails[material.id]"
                     :src="materialThumbnails[material.id]"
                     :alt="material.name"
                     class="w-full h-full object-cover"
                   />
-                  <span v-else class="material-symbols-outlined text-2xl text-slate-400">
+                  <span v-else class="material-symbols-outlined text-[17px] text-slate-400">
                     {{ material.type === 'video' ? 'videocam' : 'image' }}
                   </span>
                 </div>
                 <div class="flex-1">
-                  <div class="font-medium text-slate-900 dark:text-white text-sm mb-1">{{ material.name }}</div>
-                  <div class="text-xs text-slate-500 dark:text-slate-400">
+                  <div class="font-medium text-slate-900 dark:text-white text-[11px] mb-[4px]">{{ material.name }}</div>
+                  <div class="text-[10px] text-slate-500 dark:text-slate-400">
                     {{ material.type === 'video' ? '视频' : '图片' }} · CTR {{ material.ctr_estimate || 0 }}%
                   </div>
                 </div>
@@ -566,9 +566,9 @@ onMounted(async () => {
               <!-- 移除按钮 -->
               <button
                 @click="removeMaterial(material.id)"
-                class="absolute top-2 right-2 w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"
+                class="absolute top-[6px] right-[6px] w-[19px] h-[19px] rounded-full bg-slate-200 dark:bg-slate-700 hover:bg-red-500 hover:text-white transition-colors flex items-center justify-center"
               >
-                <span class="material-symbols-outlined text-sm">close</span>
+                <span class="material-symbols-outlined text-[11px]">close</span>
               </button>
             </div>
           </div>
@@ -576,24 +576,24 @@ onMounted(async () => {
           <!-- 添加素材按钮 -->
           <button
             @click="handleOpenMaterialModal"
-            class="w-full px-4 py-3 rounded-md border-2 border-dashed border-primary/30 text-primary hover:bg-primary/5 transition-colors flex items-center justify-center gap-2"
+            class="w-full px-[12px] py-[9px] rounded-md border-2 border-dashed border-primary/30 text-primary text-[13px] hover:bg-primary/5 transition-colors flex items-center justify-center gap-[6px]"
           >
-            <span class="material-symbols-outlined">add_circle</span>
+            <span class="material-symbols-outlined text-[17px]">add_circle</span>
             <span>添加素材</span>
           </button>
         </div>
 
         <!-- 定向配置 - 投放地区 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">public</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">定向配置 — 投放地区</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">public</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">定向配置 — 投放地区</h3>
           </div>
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-[6px]">
             <button
               v-for="region in regions"
               :key="region"
-              class="px-4 py-2 rounded-full text-sm transition-all"
+              class="px-[12px] py-[6px] rounded-full text-[11px] transition-all"
               :class="targetRegions.includes(region) 
                 ? 'bg-primary text-white' 
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
@@ -605,42 +605,42 @@ onMounted(async () => {
         </div>
 
         <!-- 定向配置 - 受众人群 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">group</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">定向配置 — 受众人群</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">group</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">定向配置 — 受众人群</h3>
           </div>
-          <div class="space-y-4">
+          <div class="space-y-[12px]">
             <div>
-              <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">性别</label>
+              <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">性别</label>
               <select
                 v-model="gender"
-                class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white"
               >
                 <option value="all">不限</option>
                 <option value="male">男性</option>
                 <option value="female">女性</option>
               </select>
             </div>
-            <div class="grid grid-cols-2 gap-4">
+            <div class="grid grid-cols-2 gap-[12px]">
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">最小年龄</label>
+                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">最小年龄</label>
                 <input
                   v-model.number="ageRange.min"
                   type="number"
                   min="13"
                   max="100"
-                  class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white"
                 />
               </div>
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-2">最大年龄</label>
+                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">最大年龄</label>
                 <input
                   v-model.number="ageRange.max"
                   type="number"
                   min="13"
                   max="100"
-                  class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-900 dark:text-white"
+                  class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white"
                 />
               </div>
             </div>
@@ -648,16 +648,16 @@ onMounted(async () => {
         </div>
 
         <!-- 定向配置 - 兴趣标签 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">label</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">定向配置 — 兴趣标签</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">label</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">定向配置 — 兴趣标签</h3>
           </div>
-          <div class="flex flex-wrap gap-2">
+          <div class="flex flex-wrap gap-[6px]">
             <button
               v-for="interest in interests"
               :key="interest"
-              class="px-4 py-2 rounded-full text-sm transition-all"
+              class="px-[12px] py-[6px] rounded-full text-[11px] transition-all"
               :class="targetInterests.includes(interest) 
                 ? 'bg-primary text-white' 
                 : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700'"
@@ -670,28 +670,28 @@ onMounted(async () => {
       </div>
 
       <!-- Step 4: 确认 -->
-      <div v-if="currentStep === 4" class="space-y-6">
+      <div v-if="currentStep === 4" class="space-y-[19px]">
         <!-- 准备阶段 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">settings</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">准备阶段</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">settings</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">准备阶段</h3>
           </div>
-          <div class="grid grid-cols-3 gap-4 text-sm">
+          <div class="grid grid-cols-3 gap-[12px] text-[11px]">
             <div>
-              <div class="text-slate-500 dark:text-slate-400 mb-1">所属分组</div>
+              <div class="text-slate-500 dark:text-slate-400 mb-[4px]">所属分组</div>
               <div class="font-medium text-slate-900 dark:text-white">{{ selectedGroup?.name || '-' }}</div>
             </div>
             <div>
-              <div class="text-slate-500 dark:text-slate-400 mb-1">投放平台</div>
+              <div class="text-slate-500 dark:text-slate-400 mb-[4px]">投放平台</div>
               <div class="font-medium text-slate-900 dark:text-white">
                 {{ platforms.find(p => p.id === selectedPlatform)?.name || '-' }}
               </div>
             </div>
             <div>
-              <div class="text-slate-500 dark:text-slate-400 mb-1">账户状态</div>
-              <div class="flex items-center gap-1 text-emerald-600">
-                <span class="material-symbols-outlined text-sm">check_circle</span>
+              <div class="text-slate-500 dark:text-slate-400 mb-[4px]">账户状态</div>
+              <div class="flex items-center gap-[4px] text-emerald-600">
+                <span class="material-symbols-outlined text-[11px]">check_circle</span>
                 <span class="font-medium">全部就绪</span>
               </div>
             </div>
@@ -699,12 +699,12 @@ onMounted(async () => {
         </div>
 
         <!-- 创建阶段 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">edit</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">创建阶段</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">edit</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">创建阶段</h3>
           </div>
-          <div class="space-y-3 text-sm">
+          <div class="space-y-[9px] text-[11px]">
             <div class="flex justify-between">
               <span class="text-slate-500 dark:text-slate-400">推广目标</span>
               <span class="font-medium text-slate-900 dark:text-white">
@@ -733,32 +733,32 @@ onMounted(async () => {
         </div>
 
         <!-- 执行阶段 -->
-        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-6">
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">rocket_launch</span>
-            <h3 class="text-lg font-semibold text-slate-900 dark:text-white">执行阶段</h3>
+        <div class="bg-white dark:bg-slate-900 rounded-lg border border-slate-200 dark:border-slate-800 p-[19px]">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">rocket_launch</span>
+            <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">执行阶段</h3>
           </div>
-          <div class="space-y-3 text-sm">
+          <div class="space-y-[9px] text-[11px]">
             <div>
-              <div class="text-slate-500 dark:text-slate-400 mb-2">选择素材</div>
+              <div class="text-slate-500 dark:text-slate-400 mb-[6px]">选择素材</div>
               <div class="font-medium text-slate-900 dark:text-white">
                 {{ selectedMaterials.length }} 个素材
               </div>
             </div>
             <div>
-              <div class="text-slate-500 dark:text-slate-400 mb-2">投放地区</div>
+              <div class="text-slate-500 dark:text-slate-400 mb-[6px]">投放地区</div>
               <div class="font-medium text-slate-900 dark:text-white">
                 {{ targetRegions.length > 0 ? targetRegions.join('、') : '不限' }}
               </div>
             </div>
             <div>
-              <div class="text-slate-500 dark:text-slate-400 mb-2">受众范围</div>
+              <div class="text-slate-500 dark:text-slate-400 mb-[6px]">受众范围</div>
               <div class="font-medium text-slate-900 dark:text-white">
                 {{ ageRange.min }} - {{ ageRange.max }} 岁 · {{ gender === 'all' ? '不限' : gender === 'male' ? '男性' : '女性' }}
               </div>
             </div>
             <div>
-              <div class="text-slate-500 dark:text-slate-400 mb-2">兴趣标签</div>
+              <div class="text-slate-500 dark:text-slate-400 mb-[6px]">兴趣标签</div>
               <div class="font-medium text-slate-900 dark:text-white">
                 {{ targetInterests.length > 0 ? targetInterests.join('、') : '不限' }}
               </div>
@@ -768,13 +768,13 @@ onMounted(async () => {
       </div>
 
         <!-- Navigation Buttons -->
-        <div class="flex items-center justify-between pt-6">
+        <div class="flex items-center justify-between pt-[19px]">
         <button
           v-if="currentStep > 1"
           @click="prevStep"
-          class="flex items-center gap-2 px-6 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
+          class="flex items-center gap-[6px] px-[19px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors"
         >
-          <span class="material-symbols-outlined text-sm">arrow_back</span>
+          <span class="material-symbols-outlined text-[11px]">arrow_back</span>
           <span>上一步</span>
         </button>
         <div v-else></div>
@@ -783,25 +783,25 @@ onMounted(async () => {
           v-if="currentStep < totalSteps"
           @click="nextStep"
           :disabled="!canProceed"
-          class="flex items-center gap-2 px-6 py-2 rounded-md transition-colors ml-auto"
+          class="flex items-center gap-[6px] px-[19px] py-[6px] rounded-md text-[11px] transition-colors ml-auto"
           :class="canProceed 
             ? 'bg-primary text-white hover:bg-primary/90 cursor-pointer' 
             : 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'"
         >
           <span>下一步</span>
-          <span class="material-symbols-outlined text-sm">arrow_forward</span>
+          <span class="material-symbols-outlined text-[11px]">arrow_forward</span>
         </button>
         <button
           v-else
           @click="handleSubmit"
           :disabled="submitting"
-          class="flex items-center gap-2 px-6 py-2 rounded-md transition-colors ml-auto"
+          class="flex items-center gap-[6px] px-[19px] py-[6px] rounded-md text-[11px] transition-colors ml-auto"
           :class="submitting 
             ? 'bg-slate-200 dark:bg-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed' 
             : 'bg-primary text-white hover:bg-primary/90 cursor-pointer'"
         >
-          <span v-if="submitting" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
-          <span v-else class="material-symbols-outlined text-sm">check</span>
+          <span v-if="submitting" class="material-symbols-outlined text-[11px] animate-spin">progress_activity</span>
+          <span v-else class="material-symbols-outlined text-[11px]">check</span>
           <span>{{ submitting ? '创建中...' : '提交创建' }}</span>
           </button>
         </div>

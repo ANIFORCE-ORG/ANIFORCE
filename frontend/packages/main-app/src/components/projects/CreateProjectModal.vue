@@ -162,60 +162,60 @@ defineExpose({
       <Transition name="scale">
         <div
           v-if="show"
-          class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+          class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-[585px] max-h-[90vh] overflow-hidden flex flex-col"
         >
           <!-- 弹窗头部 -->
-          <div class="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-700">
-            <h3 class="text-lg font-bold text-slate-900 dark:text-white">创建新项目</h3>
+          <div class="flex items-center justify-between px-[19px] py-[12px] border-b border-slate-200 dark:border-slate-700">
+            <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">创建新项目</h3>
             <button
-              class="p-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              class="p-[4px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               @click="handleClose"
               :disabled="submitting"
             >
-              <span class="material-symbols-outlined text-slate-500">close</span>
+              <span class="material-symbols-outlined text-[17px] text-slate-500">close</span>
             </button>
           </div>
 
           <!-- 弹窗内容 -->
-          <div class="flex-1 overflow-y-auto px-6 py-4">
-            <form @submit.prevent="handleSubmit" class="space-y-4">
+          <div class="flex-1 overflow-y-auto px-[19px] py-[12px]">
+            <form @submit.prevent="handleSubmit" class="space-y-[12px]">
               <!-- 项目名称 -->
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                   项目名称 <span class="text-red-500">*</span>
                 </label>
                 <input
                   v-model="formData.name"
                   type="text"
                   placeholder="例如：Candy Blast 美国市场推广"
-                  class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
                   :class="{ 'border-red-500': errors.name }"
                 />
-                <p v-if="errors.name" class="mt-1 text-xs text-red-500">{{ errors.name }}</p>
+                <p v-if="errors.name" class="mt-[4px] text-[10px] text-red-500">{{ errors.name }}</p>
               </div>
 
               <!-- 项目描述 -->
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                   项目描述
                 </label>
                 <textarea
                   v-model="formData.description"
                   rows="3"
                   placeholder="简要描述项目目标和策略..."
-                  class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
+                  class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20 resize-none"
                 ></textarea>
               </div>
 
               <!-- 产品类型和目标地区 -->
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-2 gap-[12px]">
                 <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                     产品类型 <span class="text-red-500">*</span>
                   </label>
                   <select
                     v-model="formData.game_type"
-                    class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
                     :class="{ 'border-red-500': errors.game_type }"
                   >
                     <option value="">请选择</option>
@@ -223,16 +223,16 @@ defineExpose({
                       {{ type.label }}
                     </option>
                   </select>
-                  <p v-if="errors.game_type" class="mt-1 text-xs text-red-500">{{ errors.game_type }}</p>
+                  <p v-if="errors.game_type" class="mt-[4px] text-[10px] text-red-500">{{ errors.game_type }}</p>
                 </div>
 
                 <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                     目标地区 <span class="text-red-500">*</span>
                   </label>
                   <select
                     v-model="formData.target_market"
-                    class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
                     :class="{ 'border-red-500': errors.target_market }"
                   >
                     <option value="">请选择</option>
@@ -240,96 +240,96 @@ defineExpose({
                       {{ market.label }}
                     </option>
                   </select>
-                  <p v-if="errors.target_market" class="mt-1 text-xs text-red-500">{{ errors.target_market }}</p>
+                  <p v-if="errors.target_market" class="mt-[4px] text-[10px] text-red-500">{{ errors.target_market }}</p>
                 </div>
               </div>
 
               <!-- 总预算 -->
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                   总预算金额 (USD) <span class="text-red-500">*</span>
                 </label>
                 <div class="relative">
-                  <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-500">$</span>
+                  <span class="absolute left-[9px] top-1/2 -translate-y-1/2 text-[11px] text-slate-500">$</span>
                   <input
                     v-model.number="formData.total_budget"
                     type="number"
                     min="0"
                     step="100"
                     placeholder="0"
-                    class="w-full pl-8 pr-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    class="w-full pl-[25px] pr-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     :class="{ 'border-red-500': errors.total_budget }"
                   />
                 </div>
-                <p v-if="errors.total_budget" class="mt-1 text-xs text-red-500">{{ errors.total_budget }}</p>
+                <p v-if="errors.total_budget" class="mt-[4px] text-[10px] text-red-500">{{ errors.total_budget }}</p>
               </div>
 
               <!-- 项目负责人 -->
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                   项目负责人
                 </label>
                 <input
                   v-model="formData.manager"
                   type="text"
                   placeholder="例如：张三"
-                  class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                  class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
                 />
               </div>
 
               <!-- 项目周期 -->
-              <div class="grid grid-cols-2 gap-4">
+              <div class="grid grid-cols-2 gap-[12px]">
                 <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                     开始日期
                   </label>
                   <input
                     v-model="formData.start_date"
                     type="date"
-                    class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
                   />
                 </div>
 
                 <div>
-                  <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                  <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                     结束日期
                   </label>
                   <input
                     v-model="formData.end_date"
                     type="date"
-                    class="w-full px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    class="w-full px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-primary/20"
                     :class="{ 'border-red-500': errors.end_date }"
                   />
-                  <p v-if="errors.end_date" class="mt-1 text-xs text-red-500">{{ errors.end_date }}</p>
+                  <p v-if="errors.end_date" class="mt-[4px] text-[10px] text-red-500">{{ errors.end_date }}</p>
                 </div>
               </div>
 
               <!-- 标签 -->
               <div>
-                <label class="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">
+                <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[4px]">
                   项目标签
                 </label>
-                <div class="flex gap-2 mb-2">
+                <div class="flex gap-[6px] mb-[6px]">
                   <input
                     v-model="tagInput"
                     type="text"
                     placeholder="输入标签后按回车添加"
-                    class="flex-1 px-3 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
+                    class="flex-1 px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
                     @keydown.enter.prevent="addTag"
                   />
                   <button
                     type="button"
-                    class="px-4 py-2 rounded-md bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                    class="px-[12px] py-[6px] rounded-md bg-slate-100 dark:bg-slate-700 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                     @click="addTag"
                   >
                     添加
                   </button>
                 </div>
-                <div v-if="formData.tags.length > 0" class="flex flex-wrap gap-2">
+                <div v-if="formData.tags.length > 0" class="flex flex-wrap gap-[6px]">
                   <span
                     v-for="(tag, index) in formData.tags"
                     :key="index"
-                    class="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-primary/10 text-primary text-xs"
+                    class="inline-flex items-center gap-[4px] px-[6px] py-[4px] rounded-full bg-primary/10 text-primary text-[10px]"
                   >
                     {{ tag }}
                     <button
@@ -337,7 +337,7 @@ defineExpose({
                       class="hover:text-primary/70"
                       @click="removeTag(index)"
                     >
-                      <span class="material-symbols-outlined text-xs">close</span>
+                      <span class="material-symbols-outlined text-[10px]">close</span>
                     </button>
                   </span>
                 </div>
@@ -346,10 +346,10 @@ defineExpose({
           </div>
 
           <!-- 弹窗底部 -->
-          <div class="flex items-center justify-end gap-3 px-6 py-4 border-t border-slate-200 dark:border-slate-700">
+          <div class="flex items-center justify-end gap-[9px] px-[19px] py-[12px] border-t border-slate-200 dark:border-slate-700">
             <button
               type="button"
-              class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+              class="px-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
               @click="handleClose"
               :disabled="submitting"
             >
@@ -357,11 +357,11 @@ defineExpose({
             </button>
             <button
               type="button"
-              class="px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+              class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-[6px]"
               @click="handleSubmit"
               :disabled="submitting"
             >
-              <span v-if="submitting" class="material-symbols-outlined animate-spin text-sm">progress_activity</span>
+              <span v-if="submitting" class="material-symbols-outlined animate-spin text-[11px]">progress_activity</span>
               <span>{{ submitting ? '创建中...' : '创建项目' }}</span>
             </button>
           </div>

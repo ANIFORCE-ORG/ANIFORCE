@@ -76,47 +76,47 @@ const handleSessionClick = (session: Session) => {
 <template>
   <aside 
     class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
-    :class="isCollapsed ? 'w-16' : 'w-64'"
+    :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
   >
     <!-- Navigation -->
-    <nav class="flex-1 overflow-y-auto pb-0 p-4 pt-6 space-y-6 overflow-x-hidden">
+    <nav class="flex-1 overflow-y-auto pb-0 p-[12px] pt-[20px] space-y-[20px] overflow-x-hidden">
       <!-- 功能导航 -->
       <div>
         <div 
-          class="mb-2"
-          :class="isCollapsed ? '' : 'flex items-center justify-between px-2'"
+          class="mb-[6px]"
+          :class="isCollapsed ? '' : 'flex items-center justify-between px-[6px]'"
         >
-          <span v-if="!isCollapsed" class="text-xs font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
+          <span v-if="!isCollapsed" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
           <button
             class="rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
-            :class="isCollapsed ? 'w-full py-3' : 'p-1.5'"
+            :class="isCollapsed ? 'w-full py-[10px]' : 'p-[6px]'"
             @click="toggleCollapse"
           >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-lg">
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[15px]">
               {{ isCollapsed ? 'menu' : 'menu_open' }}
             </span>
           </button>
         </div>
-        <ul class="space-y-1">
+        <ul class="space-y-[12px]">
           <li
             v-for="item in navItems"
             :key="item.id"
             class="flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
-              isCollapsed ? 'justify-center px-2 py-3' : 'gap-3 px-3 py-2',
+              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel(item.id)
                 ? 'bg-primary/10 text-primary font-semibold'
                 : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
             ]"
             @click="handleNavClick(item)"
           >
-            <span class="material-symbols-outlined text-lg">{{ item.icon }}</span>
-            <span v-if="!isCollapsed" class="text-sm">{{ item.label }}</span>
+            <span class="material-symbols-outlined text-[15px]">{{ item.icon }}</span>
+            <span v-if="!isCollapsed" class="text-[11px]">{{ item.label }}</span>
             
             <!-- Tooltip for collapsed state -->
             <div
               v-if="isCollapsed"
-              class="absolute left-full ml-2 px-3 py-2 bg-slate-900 dark:bg-slate-700 text-white text-sm rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
+              class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
             >
               {{ item.label }}
             </div>
@@ -126,25 +126,25 @@ const handleSessionClick = (session: Session) => {
 
       <!-- 历史会话 -->
       <div v-if="sessions.length > 0 && !isCollapsed">
-        <div class="text-xs font-semibold text-slate-500 dark:text-slate-400 mb-2 px-2">历史会话</div>
-        <ul class="space-y-1">
+        <div class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-[6px] px-[6px]">历史会话</div>
+        <ul class="space-y-[4px]">
           <li
             v-for="session in sessions"
             :key="session.id"
-            class="group flex items-center gap-2 px-3 py-2 rounded-lg cursor-pointer transition-all"
+            class="group flex items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
             :class="session.active
               ? 'bg-primary/10 text-primary font-semibold'
               : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
             @click="handleSessionClick(session)"
           >
-            <span class="material-symbols-outlined text-sm">chat</span>
-            <span class="text-sm flex-1 truncate">{{ session.name }}</span>
-            <div class="opacity-0 group-hover:opacity-100 flex items-center gap-1">
-              <button class="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
-                <span class="material-symbols-outlined text-xs">edit</span>
+            <span class="material-symbols-outlined text-[11px]">chat</span>
+            <span class="text-[11px] flex-1 truncate">{{ session.name }}</span>
+            <div class="opacity-0 group-hover:opacity-100 flex items-center gap-[4px]">
+              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
+                <span class="material-symbols-outlined text-[10px]">edit</span>
               </button>
-              <button class="p-1 hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
-                <span class="material-symbols-outlined text-xs">delete</span>
+              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" @click.stop>
+                <span class="material-symbols-outlined text-[10px]">delete</span>
               </button>
             </div>
           </li>
@@ -157,11 +157,11 @@ const handleSessionClick = (session: Session) => {
 <style scoped>
 /* 自定义滚动条 */
 nav::-webkit-scrollbar {
-  width: 4px;
+  width: 3px;
 }
 nav::-webkit-scrollbar-thumb {
   background-color: rgb(203 213 225);
-  border-radius: 2px;
+  border-radius: 1px;
 }
 nav::-webkit-scrollbar-thumb:hover {
   background-color: rgb(148 163 184);

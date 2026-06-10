@@ -306,7 +306,7 @@ const handleSubmitContact = async () => {
       <!-- Hero Section -->
       <section
         id="top"
-        class="relative isolate overflow-hidden border-b border-slate-200 bg-white px-5 pb-14 pt-12 sm:px-6 lg:px-10 lg:pb-18 lg:pt-16"
+        class="relative isolate overflow-hidden border-b border-slate-200 bg-white px-[18px] pb-[50px] pt-[43px] sm:px-[22px] lg:px-[36px] lg:pb-[65px] lg:pt-[58px]"
       >
         <!-- Signal Field Background -->
         <div class="signal-field" aria-hidden="true">
@@ -321,39 +321,39 @@ const handleSubmitContact = async () => {
         <div class="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <!-- Left Content -->
           <div>
-            <p class="inline-flex rounded-md bg-primary/10 px-3 py-1.5 text-xs font-semibold uppercase tracking-wide text-primary">
+            <p class="inline-flex rounded-md bg-primary/10 px-[11px] py-[5px] text-[11px] font-semibold uppercase tracking-wide text-primary">
               {{ t.hero.eyebrow }}
             </p>
-            <h1 class="mt-5 max-w-3xl text-4xl font-bold leading-tight tracking-tight md:text-5xl lg:text-[56px]">
+            <h1 class="mt-[18px] max-w-3xl text-[32px] font-bold leading-tight tracking-tight md:text-[40px] lg:text-[50px]">
               {{ t.hero.title }}
             </h1>
-            <p class="mt-5 max-w-2xl text-base leading-8 text-slate-600">
+            <p class="mt-[18px] max-w-2xl text-[14px] leading-[29px] text-slate-600">
               {{ t.hero.description }}
             </p>
 
             <!-- Hero Tags -->
-            <div class="mt-6 flex max-w-3xl flex-wrap gap-2.5">
+            <div class="mt-[22px] flex max-w-3xl flex-wrap gap-[9px]">
               <span
                 v-for="tag in heroTags"
                 :key="tag"
-                class="inline-flex items-center gap-2 rounded-md border border-slate-200 bg-slate-50 px-3.5 py-2 text-sm font-semibold text-slate-700"
+                class="inline-flex items-center gap-[7px] rounded-md border border-slate-200 bg-slate-50 px-[13px] py-[7px] text-[13px] font-semibold text-slate-700"
               >
-                <span class="h-2 w-2 rounded-full bg-primary" />
+                <span class="h-[7px] w-[7px] rounded-full bg-primary" />
                 {{ tag }}
               </span>
             </div>
 
             <!-- CTA Buttons -->
-            <div class="mt-8 flex flex-wrap gap-3">
+            <div class="mt-[29px] flex flex-wrap gap-[11px]">
               <a
                 href="#contact"
-                class="inline-flex items-center justify-center rounded-md bg-slate-950 px-6 py-3 text-sm font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800"
+                class="inline-flex items-center justify-center rounded-md bg-slate-950 px-[22px] py-[11px] text-[13px] font-semibold text-white shadow-sm transition-all hover:-translate-y-0.5 hover:bg-slate-800"
               >
                 {{ t.hero.primaryCta }}
               </a>
               <a
                 href="#features"
-                class="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-6 py-3 text-sm font-semibold text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary"
+                class="inline-flex items-center justify-center rounded-md border border-slate-200 bg-white px-[22px] py-[11px] text-[13px] font-semibold text-slate-800 shadow-sm transition-all hover:-translate-y-0.5 hover:border-primary/40 hover:text-primary"
               >
                 {{ t.hero.secondaryCta }}
               </a>
@@ -364,27 +364,27 @@ const handleSubmitContact = async () => {
           <div class="relative">
             <div class="overflow-hidden rounded-md border border-slate-200 bg-white shadow-2xl shadow-blue-100/80">
               <!-- Window Chrome -->
-              <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-4 py-3">
-                <div class="flex items-center gap-2">
-                  <span class="h-2.5 w-2.5 rounded-full bg-red-400" />
-                  <span class="h-2.5 w-2.5 rounded-full bg-amber-400" />
-                  <span class="h-2.5 w-2.5 rounded-full bg-emerald-500" />
+              <div class="flex items-center justify-between border-b border-slate-200 bg-slate-50 px-[14px] py-[11px]">
+                <div class="flex items-center gap-[7px]">
+                  <span class="h-[9px] w-[9px] rounded-full bg-red-400" />
+                  <span class="h-[9px] w-[9px] rounded-full bg-amber-400" />
+                  <span class="h-[9px] w-[9px] rounded-full bg-emerald-500" />
                 </div>
-                <p class="text-xs font-semibold text-slate-500">{{ t.hero.previewTitle }} · {{ t.hero.live }}</p>
+                <p class="text-[11px] font-semibold text-slate-500">{{ t.hero.previewTitle }} · {{ t.hero.live }}</p>
               </div>
 
               <!-- Dashboard Content -->
-              <div class="bg-[#eef6ff] p-3">
-                <div class="grid min-h-[390px] overflow-hidden rounded-md border border-blue-100 bg-white shadow-sm lg:grid-cols-[120px_minmax(0,1fr)_258px]">
+              <div class="bg-[#eef6ff] p-[11px]">
+                <div class="grid min-h-[351px] overflow-hidden rounded-md border border-blue-100 bg-white shadow-sm lg:grid-cols-[108px_minmax(0,1fr)_232px]">
                   <!-- Sidebar -->
-                  <aside class="hidden min-w-[120px] border-r border-blue-100 bg-primary p-2.5 text-white lg:block">
-                    <p class="whitespace-nowrap text-xs font-black">Aniforce</p>
-                    <div class="mt-6 space-y-1.5 text-[11px]">
+                  <aside class="hidden min-w-[108px] border-r border-blue-100 bg-primary p-[9px] text-white lg:block">
+                    <p class="whitespace-nowrap text-[11px] font-black">Aniforce</p>
+                    <div class="mt-[22px] space-y-[5px] text-[10px]">
                       <div
                         v-for="(menu, idx) in sidebarMenus"
                         :key="menu"
                         :class="[
-                          'whitespace-nowrap rounded-md px-2.5 py-1.5 text-blue-100',
+                          'whitespace-nowrap rounded-md px-[9px] py-[5px] text-blue-100',
                           idx === sidebarMenus.length - 1 ? 'bg-white/20 font-bold' : ''
                         ]"
                       >
@@ -394,87 +394,87 @@ const handleSubmitContact = async () => {
                   </aside>
 
                   <!-- Center Content -->
-                  <div class="bg-[#f8fbff] p-4">
+                  <div class="bg-[#f8fbff] p-[14px]">
                     <!-- Stats Row -->
-                    <div class="grid gap-2 sm:grid-cols-3">
+                    <div class="grid gap-[7px] sm:grid-cols-3">
                       <div
                         v-for="stat in dashboardStats"
                         :key="stat.label"
-                        class="rounded-md border border-blue-100 bg-white p-3"
+                        class="rounded-md border border-blue-100 bg-white p-[11px]"
                       >
-                        <p class="text-[11px] font-semibold text-slate-500">{{ stat.label }}</p>
-                        <p class="mt-1 whitespace-nowrap font-black text-slate-950 text-xs">{{ stat.value }}</p>
-                        <p :class="['mt-1 text-[9px] font-bold', stat.hintColor]">{{ stat.hint }}</p>
+                        <p class="text-[10px] font-semibold text-slate-500">{{ stat.label }}</p>
+                        <p class="mt-[4px] whitespace-nowrap font-black text-slate-950 text-[11px]">{{ stat.value }}</p>
+                        <p :class="['mt-[4px] text-[8px] font-bold', stat.hintColor]">{{ stat.hint }}</p>
                       </div>
                     </div>
 
                     <!-- Platform Performance Bars -->
-                    <div class="mt-4 rounded-md border border-blue-100 bg-white p-4">
+                    <div class="mt-[14px] rounded-md border border-blue-100 bg-white p-[14px]">
                       <div class="flex items-center justify-between">
-                        <p class="text-xs font-black text-slate-950">{{ t.dashboard.performanceTitle }}</p>
-                        <p class="text-[11px] font-bold text-blue-600">{{ t.dashboard.period }}</p>
+                        <p class="text-[11px] font-black text-slate-950">{{ t.dashboard.performanceTitle }}</p>
+                        <p class="text-[10px] font-bold text-blue-600">{{ t.dashboard.period }}</p>
                       </div>
-                      <div class="mt-4 space-y-3">
+                      <div class="mt-[14px] space-y-[11px]">
                         <div
                           v-for="bar in platformBars"
                           :key="bar.name"
-                          class="grid grid-cols-[58px_1fr_42px] items-center gap-3"
+                          class="grid grid-cols-[52px_1fr_38px] items-center gap-[11px]"
                         >
-                          <span class="text-xs font-bold text-slate-700">{{ bar.name }}</span>
-                          <span class="h-2 rounded-full bg-blue-100">
+                          <span class="text-[11px] font-bold text-slate-700">{{ bar.name }}</span>
+                          <span class="h-[7px] rounded-full bg-blue-100">
                             <span
-                              :class="['block h-2 rounded-full', bar.color]"
+                              :class="['block h-[7px] rounded-full', bar.color]"
                               :style="{ width: bar.width }"
                             />
                           </span>
-                          <span class="text-right text-xs font-bold text-slate-700">{{ bar.percent }}</span>
+                          <span class="text-right text-[11px] font-bold text-slate-700">{{ bar.percent }}</span>
                         </div>
                       </div>
                     </div>
 
                     <!-- Bottom Metrics -->
-                    <div class="mt-4 grid gap-2 sm:grid-cols-3">
+                    <div class="mt-[14px] grid gap-[7px] sm:grid-cols-3">
                       <div
                         v-for="metric in bottomMetrics"
                         :key="metric.label"
-                        class="rounded-md bg-primary p-3 text-white"
+                        class="rounded-md bg-primary p-[11px] text-white"
                       >
-                        <p class="text-[11px] font-semibold text-slate-300">{{ metric.label }}</p>
-                        <p class="mt-1 whitespace-nowrap text-lg font-black">{{ metric.value }}</p>
+                        <p class="text-[10px] font-semibold text-slate-300">{{ metric.label }}</p>
+                        <p class="mt-[4px] whitespace-nowrap text-[16px] font-black">{{ metric.value }}</p>
                       </div>
                     </div>
                   </div>
 
                   <!-- Right: Agent Chat -->
-                  <aside class="border-t border-blue-100 bg-white p-3 lg:border-l lg:border-t-0">
+                  <aside class="border-t border-blue-100 bg-white p-[11px] lg:border-l lg:border-t-0">
                     <div class="flex h-full flex-col rounded-md border border-blue-100 bg-[#f8fbff]">
-                      <div class="border-b border-blue-100 p-3">
-                        <p class="text-xs font-black text-slate-950">{{ t.dashboard.agentTitle }}</p>
-                        <p class="mt-1 text-[11px] text-slate-500">{{ t.dashboard.agentSubtitle }}</p>
+                      <div class="border-b border-blue-100 p-[11px]">
+                        <p class="text-[11px] font-black text-slate-950">{{ t.dashboard.agentTitle }}</p>
+                        <p class="mt-[4px] text-[10px] text-slate-500">{{ t.dashboard.agentSubtitle }}</p>
                       </div>
-                      <div class="flex-1 space-y-3 overflow-y-auto p-3">
+                      <div class="flex-1 space-y-[11px] overflow-y-auto p-[11px]">
                         <div
                           v-for="(msg, idx) in agentMessages"
                           :key="idx"
-                          class="rounded-md bg-white p-2.5 text-[11px] leading-5 text-slate-700 shadow-sm"
+                          class="rounded-md bg-white p-[9px] text-[10px] leading-[18px] text-slate-700 shadow-sm"
                         >
                           {{ msg.text }}
                         </div>
                         <!-- Insights -->
-                        <div class="space-y-1.5 pt-2">
+                        <div class="space-y-[5px] pt-[7px]">
                           <div
                             v-for="insight in agentInsights"
                             :key="insight"
-                            class="flex items-center gap-2 text-[11px]"
+                            class="flex items-center gap-[7px] text-[10px]"
                           >
-                            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500" />
+                            <span class="h-[5px] w-[5px] rounded-full bg-emerald-500" />
                             <span class="text-slate-600">{{ insight }}</span>
                           </div>
                         </div>
                       </div>
-                      <div class="border-t border-blue-100 p-2">
-                        <div class="flex items-center gap-2 rounded-md bg-white px-2.5 py-2 text-[11px] text-slate-400">
-                          <span class="material-symbols-outlined text-sm">chat</span>
+                      <div class="border-t border-blue-100 p-[7px]">
+                        <div class="flex items-center gap-[7px] rounded-md bg-white px-[9px] py-[7px] text-[10px] text-slate-400">
+                          <span class="material-symbols-outlined text-[13px]">chat</span>
                           {{ t.dashboard.agentPlaceholder }}
                         </div>
                       </div>
@@ -490,67 +490,67 @@ const handleSubmitContact = async () => {
                 <span class="material-symbols-outlined">psychology</span>
                 {{ t.dashboard.aiOptimization }}
               </h3>
-              <div class="space-y-1">
+              <div class="space-y-[4px]">
                 <div
                   v-for="suggestion in aiSuggestions"
                   :key="suggestion"
                   class="optimization-row"
                 >
-                  <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 shrink-0" />
+                  <span class="h-[5px] w-[5px] rounded-full bg-emerald-500 shrink-0" />
                   <span>{{ suggestion }}</span>
                 </div>
               </div>
-              <p class="mt-3 text-right text-[11px] font-bold text-primary">Ready</p>
+              <p class="mt-[11px] text-right text-[10px] font-bold text-primary">Ready</p>
             </div>
           </div>
         </div>
       </section>
 
       <!-- Features Section -->
-      <section id="features" class="border-b border-slate-200 bg-white px-5 py-16 sm:px-6 lg:px-10">
+      <section id="features" class="border-b border-slate-200 bg-white px-[18px] py-[58px] sm:px-[22px] lg:px-[36px]">
         <div class="mx-auto max-w-7xl">
           <div class="max-w-4xl">
-            <h2 class="text-3xl font-bold leading-snug tracking-tight md:text-4xl">{{ t.features.title }}</h2>
-            <p class="mt-4 text-base leading-8 text-slate-600">{{ t.features.subtitle }}</p>
+            <h2 class="text-[27px] font-bold leading-snug tracking-tight md:text-[32px]">{{ t.features.title }}</h2>
+            <p class="mt-[14px] text-[14px] leading-[29px] text-slate-600">{{ t.features.subtitle }}</p>
           </div>
 
-          <div class="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+          <div class="mt-[43px] grid gap-[22px] sm:grid-cols-2 lg:grid-cols-4">
             <article
               v-for="feature in features"
               :key="feature.title"
-              class="rounded-md border border-slate-200 bg-slate-50 p-6 transition-all hover:border-primary/40 hover:shadow-lg"
+              class="rounded-md border border-slate-200 bg-slate-50 p-[22px] transition-all hover:border-primary/40 hover:shadow-lg"
             >
-              <span class="material-symbols-outlined text-3xl text-primary">{{ feature.icon }}</span>
-              <h3 class="mt-4 text-base font-semibold">{{ feature.title }}</h3>
-              <p class="mt-3 text-sm leading-7 text-slate-600">{{ feature.description }}</p>
+              <span class="material-symbols-outlined text-[27px] text-primary">{{ feature.icon }}</span>
+              <h3 class="mt-[14px] text-[14px] font-semibold">{{ feature.title }}</h3>
+              <p class="mt-[11px] text-[13px] leading-[25px] text-slate-600">{{ feature.description }}</p>
             </article>
           </div>
         </div>
       </section>
 
       <!-- Automation Section -->
-      <section id="automation" class="border-b border-slate-200 bg-background-light px-5 py-16 sm:px-6 lg:px-10">
+      <section id="automation" class="border-b border-slate-200 bg-background-light px-[18px] py-[58px] sm:px-[22px] lg:px-[36px]">
         <div class="mx-auto max-w-7xl">
           <div class="max-w-4xl">
-            <p class="text-sm font-semibold uppercase text-primary">{{ t.automation.eyebrow }}</p>
-            <h2 class="mt-4 text-3xl font-bold leading-snug tracking-tight md:text-4xl">
+            <p class="text-[13px] font-semibold uppercase text-primary">{{ t.automation.eyebrow }}</p>
+            <h2 class="mt-[14px] text-[27px] font-bold leading-snug tracking-tight md:text-[32px]">
               <span v-for="(line, idx) in t.automation.title" :key="idx">{{ line }}<br v-if="idx < t.automation.title.length - 1"></span>
             </h2>
           </div>
 
-          <div class="mt-12 grid gap-6 lg:grid-cols-3">
+          <div class="mt-[43px] grid gap-[22px] lg:grid-cols-3">
             <article
               v-for="card in automationCards"
               :key="card.title"
-              class="rounded-md border border-slate-200 bg-white p-6 shadow-sm"
+              class="rounded-md border border-slate-200 bg-white p-[22px] shadow-sm"
             >
-              <h3 class="text-xl font-semibold leading-snug">{{ card.title }}</h3>
-              <p class="mt-3 text-sm leading-7 text-slate-600">{{ card.description }}</p>
-              <div class="mt-5 flex flex-wrap gap-2">
+              <h3 class="text-[18px] font-semibold leading-snug">{{ card.title }}</h3>
+              <p class="mt-[11px] text-[13px] leading-[25px] text-slate-600">{{ card.description }}</p>
+              <div class="mt-[18px] flex flex-wrap gap-[7px]">
                 <span
                   v-for="tag in card.tags"
                   :key="tag"
-                  class="rounded-md border border-blue-100 bg-blue-50 px-3 py-1.5 text-xs font-semibold text-primary"
+                  class="rounded-md border border-blue-100 bg-blue-50 px-[11px] py-[5px] text-[11px] font-semibold text-primary"
                 >
                   {{ tag }}
                 </span>
@@ -561,31 +561,31 @@ const handleSubmitContact = async () => {
       </section>
 
       <!-- Performance / Workflow Section -->
-      <section id="performance" class="bg-white px-5 py-16 sm:px-6 lg:px-10">
+      <section id="performance" class="bg-white px-[18px] py-[58px] sm:px-[22px] lg:px-[36px]">
         <div class="mx-auto max-w-7xl">
           <div class="max-w-4xl">
-            <p class="text-sm font-semibold uppercase text-primary">{{ t.workflow.eyebrow }}</p>
-            <h2 class="mt-4 text-3xl font-bold leading-snug tracking-tight md:text-4xl">{{ t.workflow.title }}</h2>
-            <p class="mt-5 text-base leading-8 text-slate-600">{{ t.workflow.subtitle }}</p>
+            <p class="text-[13px] font-semibold uppercase text-primary">{{ t.workflow.eyebrow }}</p>
+            <h2 class="mt-[14px] text-[27px] font-bold leading-snug tracking-tight md:text-[32px]">{{ t.workflow.title }}</h2>
+            <p class="mt-[18px] text-[14px] leading-[29px] text-slate-600">{{ t.workflow.subtitle }}</p>
           </div>
 
-          <div class="mt-10 grid gap-3 lg:grid-cols-4">
+          <div class="mt-[36px] grid gap-[11px] lg:grid-cols-4">
             <article
               v-for="(step, index) in workflowSteps"
               :key="step.title"
-              class="rounded-md border border-slate-200 bg-slate-50 p-5"
+              class="rounded-md border border-slate-200 bg-slate-50 p-[18px]"
             >
-              <div class="flex items-center justify-between gap-3">
-                <p class="text-xs font-bold text-slate-400">0{{ index + 1 }}</p>
-                <span class="h-1.5 w-10 rounded-full bg-primary" />
+              <div class="flex items-center justify-between gap-[11px]">
+                <p class="text-[11px] font-bold text-slate-400">0{{ index + 1 }}</p>
+                <span class="h-[5px] w-[36px] rounded-full bg-primary" />
               </div>
-              <h3 class="mt-4 text-base font-semibold">{{ step.title }}</h3>
-              <p class="mt-3 text-sm leading-7 text-slate-600">{{ step.description }}</p>
-              <div v-if="step.platforms && step.platforms.length" class="mt-4 flex flex-wrap gap-2">
+              <h3 class="mt-[14px] text-[14px] font-semibold">{{ step.title }}</h3>
+              <p class="mt-[11px] text-[13px] leading-[25px] text-slate-600">{{ step.description }}</p>
+              <div v-if="step.platforms && step.platforms.length" class="mt-[14px] flex flex-wrap gap-[7px]">
                 <span
                   v-for="platform in step.platforms"
                   :key="platform"
-                  class="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-bold text-slate-700"
+                  class="rounded-md bg-slate-100 px-[9px] py-[4px] text-[11px] font-bold text-slate-700"
                 >
                   {{ platform }}
                 </span>
@@ -596,69 +596,69 @@ const handleSubmitContact = async () => {
       </section>
 
       <!-- CTA / Contact Section -->
-      <section id="contact" class="bg-slate-950 px-5 py-20 text-white sm:px-6 lg:px-10">
-        <div class="mx-auto grid max-w-7xl gap-12 lg:grid-cols-[minmax(0,0.95fr)_minmax(320px,0.75fr)]">
+      <section id="contact" class="bg-slate-950 px-[18px] py-[72px] text-white sm:px-[22px] lg:px-[36px]">
+        <div class="mx-auto grid max-w-7xl gap-[43px] lg:grid-cols-[minmax(0,0.95fr)_minmax(288px,0.75fr)]">
           <!-- Left: CTA Content -->
           <div>
-            <p class="text-sm font-semibold uppercase text-blue-200">{{ t.contact.eyebrow }}</p>
-            <h2 class="mt-4 max-w-3xl text-3xl font-bold leading-snug md:text-4xl">
+            <p class="text-[13px] font-semibold uppercase text-blue-200">{{ t.contact.eyebrow }}</p>
+            <h2 class="mt-[14px] max-w-3xl text-[27px] font-bold leading-snug md:text-[32px]">
               {{ t.contact.title }}
             </h2>
-            <p class="mt-5 max-w-2xl text-base leading-8 text-slate-300">
+            <p class="mt-[18px] max-w-2xl text-[14px] leading-[29px] text-slate-300">
               {{ t.contact.description }}
             </p>
-            <div class="mt-8 grid gap-3 sm:grid-cols-3">
+            <div class="mt-[29px] grid gap-[11px] sm:grid-cols-3">
               <div
                 v-for="card in ctaCards"
                 :key="card.value"
-                class="rounded-md border border-white/15 bg-white/10 p-4"
+                class="rounded-md border border-white/15 bg-white/10 p-[14px]"
               >
-                <strong class="block text-2xl">{{ card.value }}</strong>
-                <span class="mt-2 block text-xs text-slate-300">{{ card.label }}</span>
+                <strong class="block text-[22px]">{{ card.value }}</strong>
+                <span class="mt-[7px] block text-[11px] text-slate-300">{{ card.label }}</span>
               </div>
             </div>
           </div>
 
           <!-- Right: Contact Form -->
-          <form class="rounded-md border border-white/15 bg-white/10 p-5" @submit.prevent="handleSubmitContact">
-            <label class="mb-4 block">
-              <span class="mb-2 block text-sm text-slate-300">{{ t.contact.form.name }}</span>
+          <form class="rounded-md border border-white/15 bg-white/10 p-[18px]" @submit.prevent="handleSubmitContact">
+            <label class="mb-[14px] block">
+              <span class="mb-[7px] block text-[13px] text-slate-300">{{ t.contact.form.name }}</span>
               <input
                 v-model="contactForm.name"
-                class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
+                class="h-[40px] w-full rounded-md border border-white/15 bg-white/10 px-[11px] text-[13px] text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
                 :placeholder="t.contact.form.namePlaceholder"
               >
             </label>
-            <label class="mb-4 block">
-              <span class="mb-2 block text-sm text-slate-300">{{ t.contact.form.company }}</span>
+            <label class="mb-[14px] block">
+              <span class="mb-[7px] block text-[13px] text-slate-300">{{ t.contact.form.company }}</span>
               <input
                 v-model="contactForm.company"
-                class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
+                class="h-[40px] w-full rounded-md border border-white/15 bg-white/10 px-[11px] text-[13px] text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
                 :placeholder="t.contact.form.companyPlaceholder"
               >
             </label>
-            <label class="mb-4 block">
-              <span class="mb-2 block text-sm text-slate-300">{{ t.contact.form.contact }}</span>
+            <label class="mb-[14px] block">
+              <span class="mb-[7px] block text-[13px] text-slate-300">{{ t.contact.form.contact }}</span>
               <input
                 v-model="contactForm.contact"
-                class="h-11 w-full rounded-md border border-white/15 bg-white/10 px-3 text-sm text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
+                class="h-[40px] w-full rounded-md border border-white/15 bg-white/10 px-[11px] text-[13px] text-white outline-none transition-colors placeholder:text-slate-500 focus:border-blue-300"
                 :placeholder="t.contact.form.contactPlaceholder"
               >
             </label>
 
             <!-- 成功消息 -->
-            <div v-if="submitSuccess" class="mb-4 rounded-md bg-emerald-500/20 border border-emerald-500/30 px-4 py-3 text-sm text-emerald-300">
+            <div v-if="submitSuccess" class="mb-[14px] rounded-md bg-emerald-500/20 border border-emerald-500/30 px-[14px] py-[11px] text-[13px] text-emerald-300">
               {{ t.contact.form.success }}
             </div>
 
             <!-- 错误消息 -->
-            <div v-if="submitError" class="mb-4 rounded-md bg-red-500/20 border border-red-500/30 px-4 py-3 text-sm text-red-300">
+            <div v-if="submitError" class="mb-[14px] rounded-md bg-red-500/20 border border-red-500/30 px-[14px] py-[11px] text-[13px] text-red-300">
               {{ submitError }}
             </div>
 
             <button
               :disabled="submitting"
-              class="w-full rounded-md bg-white px-5 py-3 text-sm font-semibold text-slate-950 shadow-[6px_6px_0_rgba(19,127,236,0.9)] transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
+              class="w-full rounded-md bg-white px-[18px] py-[11px] text-[13px] font-semibold text-slate-950 shadow-[5px_5px_0_rgba(19,127,236,0.9)] transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:cursor-not-allowed"
               type="submit"
             >
               {{ submitting ? t.contact.form.submitting : t.contact.form.submit }}
@@ -675,11 +675,11 @@ const handleSubmitContact = async () => {
 /* === Navigation Link === */
 .public-nav-link {
   position: relative;
-  padding: 8px 0;
+  padding: 7px 0;
   border: 0;
   color: #475569;
   background: transparent;
-  font-size: 20px;
+  font-size: 18px;
   font-weight: 700;
   cursor: pointer;
 }
@@ -717,7 +717,7 @@ const handleSubmitContact = async () => {
   background:
     linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
     linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
-  background-size: 54px 54px;
+  background-size: 49px 49px;
   opacity: 0.9;
 }
 
@@ -750,64 +750,64 @@ const handleSubmitContact = async () => {
 .signal-dot {
   position: absolute;
   z-index: 1;
-  width: 9px;
-  height: 9px;
+  width: 8px;
+  height: 8px;
   border-radius: 2px;
   background: #137fec;
-  box-shadow: 0 0 0 10px rgba(19, 127, 236, 0.12);
+  box-shadow: 0 0 0 9px rgba(19, 127, 236, 0.12);
   animation: signalBlink 2.4s ease-in-out infinite, signalDrift 10s linear infinite;
 }
 
 .signal-dot:nth-child(4n+1) {
   background: #10b981;
-  box-shadow: 0 0 0 10px rgba(16, 185, 129, 0.13);
+  box-shadow: 0 0 0 9px rgba(16, 185, 129, 0.13);
 }
 
 .signal-dot:nth-child(4n+2) {
   background: #f59e0b;
-  box-shadow: 0 0 0 10px rgba(245, 158, 11, 0.13);
+  box-shadow: 0 0 0 9px rgba(245, 158, 11, 0.13);
 }
 
 .signal-dot:nth-child(4n+3) {
   background: #466c78;
-  box-shadow: 0 0 0 10px rgba(70, 108, 120, 0.13);
+  box-shadow: 0 0 0 9px rgba(70, 108, 120, 0.13);
 }
 
 /* === AI Float Card === */
 .ai-float-card {
   position: absolute;
-  right: -22px;
-  bottom: 34px;
-  width: min(260px, 48%);
-  padding: 14px;
+  right: -20px;
+  bottom: 31px;
+  width: min(234px, 48%);
+  padding: 13px;
   border: 1px solid rgba(203, 213, 225, 0.85);
-  border-radius: 8px;
+  border-radius: 7px;
   background: #fffffff2;
-  box-shadow: 0 20px 44px rgba(15, 23, 42, 0.15);
+  box-shadow: 0 18px 40px rgba(15, 23, 42, 0.15);
   animation: hoverFloat 4.5s ease-in-out infinite;
 }
 
 .ai-float-card h3 {
   display: flex;
   align-items: center;
-  gap: 8px;
-  margin: 0 0 12px;
-  font-size: 14px;
+  gap: 7px;
+  margin: 0 0 11px;
+  font-size: 13px;
   font-weight: 800;
 }
 
 .ai-float-card .material-symbols-outlined {
   color: #137fec;
-  font-size: 20px;
+  font-size: 18px;
 }
 
 .optimization-row {
   display: flex;
   align-items: center;
-  gap: 10px;
-  min-height: 26px;
+  gap: 9px;
+  min-height: 23px;
   color: #475569;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 600;
 }
 
@@ -824,15 +824,15 @@ const handleSubmitContact = async () => {
 
 @keyframes signalDrift {
   0% { transform: translate(0, 0); }
-  25% { transform: translate(18px, -12px); }
-  50% { transform: translate(-8px, 16px); }
-  75% { transform: translate(12px, 8px); }
+  25% { transform: translate(16px, -11px); }
+  50% { transform: translate(-7px, 14px); }
+  75% { transform: translate(11px, 7px); }
   100% { transform: translate(0, 0); }
 }
 
 @keyframes hoverFloat {
   0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(-12px); }
+  50% { transform: translateY(-11px); }
 }
 
 /* === Responsive: AI Float Card on mobile === */
@@ -842,7 +842,7 @@ const handleSubmitContact = async () => {
     right: auto;
     bottom: auto;
     width: auto;
-    margin-top: 12px;
+    margin-top: 11px;
   }
 }
 </style>

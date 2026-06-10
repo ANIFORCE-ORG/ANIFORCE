@@ -214,7 +214,7 @@ const getStatusColor = (status: string) => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧导航栏 -->
     <SidebarNav
       :nav-items="navItems"
@@ -225,40 +225,40 @@ const getStatusColor = (status: string) => {
     <!-- 中间广告列表工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
-        <h3 class="font-bold text-slate-900 dark:text-white">广告投放</h3>
+      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+        <h3 class="font-bold text-[13px] text-slate-900 dark:text-white">广告投放</h3>
         <button
-          class="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
+          class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
           @click="handleCreateCampaign"
         >
-          <span class="material-symbols-outlined text-lg">add</span>
-          <span class="text-sm font-medium">新建广告</span>
+          <span class="material-symbols-outlined text-[15px]">add</span>
+          <span class="text-[11px] font-medium">新建广告</span>
         </button>
       </div>
 
       <!-- 错误提示 -->
-      <div v-if="error" class="mx-6 mt-4 p-3 rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-        <div class="flex items-center gap-2">
-          <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-lg">error</span>
-          <span class="text-sm text-red-600 dark:text-red-400">{{ error }}</span>
+      <div v-if="error" class="mx-[19px] mt-[12px] p-[9px] rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+        <div class="flex items-center gap-[6px]">
+          <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[15px]">error</span>
+          <span class="text-[11px] text-red-600 dark:text-red-400">{{ error }}</span>
         </div>
       </div>
 
       <!-- 搜索和筛选栏 -->
-      <div class="border-b border-slate-200 dark:border-slate-800 p-4">
-        <div class="flex items-center gap-3">
+      <div class="border-b border-slate-200 dark:border-slate-800 p-[12px]">
+        <div class="flex items-center gap-[9px]">
           <div class="flex-1 relative">
-            <span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-lg">search</span>
+            <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">search</span>
             <input
               v-model="searchQuery"
               type="text"
               placeholder="搜索广告名称或项目..."
-              class="w-full pl-10 pr-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
+              class="w-full pl-[31px] pr-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
             />
           </div>
           <select
             v-model="projectFilter"
-            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[150px]"
+            class="px-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[117px]"
           >
             <option value="all">所有项目</option>
             <option v-for="project in uniqueProjects" :key="project" :value="project">
@@ -267,7 +267,7 @@ const getStatusColor = (status: string) => {
           </select>
           <select
             v-model="platformFilter"
-            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[120px]"
+            class="px-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[94px]"
           >
             <option value="all">所有平台</option>
             <option v-for="platform in uniquePlatforms" :key="platform" :value="platform">
@@ -276,7 +276,7 @@ const getStatusColor = (status: string) => {
           </select>
           <select
             v-model="statusFilter"
-            class="px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[120px]"
+            class="px-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20 min-w-[94px]"
           >
             <option value="all">全部状态</option>
             <option value="running">投放中</option>
@@ -287,31 +287,31 @@ const getStatusColor = (status: string) => {
       </div>
 
       <!-- 广告列表 -->
-      <div class="flex-1 overflow-y-auto p-6">
-        <div class="space-y-3">
+      <div class="flex-1 overflow-y-auto p-[19px]">
+        <div class="space-y-[9px]">
           <div
             v-for="campaign in filteredCampaigns"
             :key="campaign.id"
-            class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-4 hover:shadow-md transition-all"
+            class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-[12px] hover:shadow-md transition-all"
           >
             <!-- 广告头部 -->
-            <div class="flex items-start justify-between mb-2">
+            <div class="flex items-start justify-between mb-[6px]">
               <div class="flex-1">
-                <h4 class="text-sm font-bold text-slate-900 dark:text-white mb-1">
+                <h4 class="text-[11px] font-bold text-slate-900 dark:text-white mb-[4px]">
                   {{ campaign.name }}
                 </h4>
-                <div class="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                <div class="flex items-center gap-[6px] text-[10px] text-slate-500 dark:text-slate-400">
                   <span>所属项目: {{ campaign.project_name }}</span>
                 </div>
               </div>
-              <div class="flex items-center gap-2">
+              <div class="flex items-center gap-[6px]">
                 <span
-                  class="text-xs font-medium px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+                  class="text-[10px] font-medium px-[6px] py-[2px] rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
                 >
                   {{ campaign.platform }}
                 </span>
                 <span
-                  class="text-xs font-semibold px-2 py-0.5 rounded"
+                  class="text-[10px] font-semibold px-[6px] py-[2px] rounded"
                   :class="getStatusColor(campaign.status)"
                 >
                   {{ getStatusText(campaign.status) }}
@@ -320,37 +320,37 @@ const getStatusColor = (status: string) => {
             </div>
 
             <!-- 数据指标 -->
-            <div class="grid grid-cols-3 gap-3 mb-3">
+            <div class="grid grid-cols-3 gap-[9px] mb-[9px]">
               <div class="text-center">
-                <div class="text-xl font-bold text-slate-900 dark:text-white">
+                <div class="text-[15px] font-bold text-slate-900 dark:text-white">
                   ${{ campaign.spent?.toLocaleString() || 0 }}
                 </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">消耗</div>
+                <div class="text-[8px] text-slate-400 mt-[2px]">消耗</div>
               </div>
               <div class="text-center">
-                <div class="text-xl font-bold text-slate-900 dark:text-white">
+                <div class="text-[15px] font-bold text-slate-900 dark:text-white">
                   {{ campaign.budget?.toLocaleString() || 0 }}
                 </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">预算</div>
+                <div class="text-[8px] text-slate-400 mt-[2px]">预算</div>
               </div>
               <div class="text-center">
-                <div class="text-xl font-bold text-slate-900 dark:text-white">
+                <div class="text-[15px] font-bold text-slate-900 dark:text-white">
                   {{ campaign.material_ids?.length || 0 }}
                 </div>
-                <div class="text-[10px] text-slate-400 mt-0.5">素材</div>
+                <div class="text-[8px] text-slate-400 mt-[2px]">素材</div>
               </div>
             </div>
 
             <!-- 操作按钮 -->
-            <div class="flex items-center gap-2">
+            <div class="flex items-center gap-[6px]">
               <button
-                class="flex-1 px-3 py-1.5 text-xs font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
+                class="flex-1 px-[9px] py-[6px] text-[10px] font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                 @click="handleViewCampaign(campaign.id)"
               >
                 查看详情
               </button>
               <button
-                class="px-3 py-1.5 text-xs font-semibold rounded border transition-colors flex items-center gap-1"
+                class="px-[9px] py-[6px] text-[10px] font-semibold rounded border transition-colors flex items-center gap-[4px]"
                 :class="[
                   campaign.status === 'running'
                     ? 'bg-orange-50 dark:bg-orange-900/20 text-orange-600 dark:text-orange-400 border-orange-200 dark:border-orange-800 hover:bg-orange-100 dark:hover:bg-orange-900/30'
@@ -360,7 +360,7 @@ const getStatusColor = (status: string) => {
                 :disabled="updatingCampaigns.has(campaign.id)"
                 @click="handleToggleStatus(campaign)"
               >
-                <span v-if="updatingCampaigns.has(campaign.id)" class="material-symbols-outlined text-sm animate-spin">progress_activity</span>
+                <span v-if="updatingCampaigns.has(campaign.id)" class="material-symbols-outlined text-[11px] animate-spin">progress_activity</span>
                 {{ campaign.status === 'running' ? '暂停' : '启动' }}
               </button>
             </div>
@@ -368,11 +368,11 @@ const getStatusColor = (status: string) => {
         </div>
 
         <!-- 空状态 -->
-        <div v-if="filteredCampaigns.length === 0" class="flex flex-col items-center justify-center py-16">
-          <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">
+        <div v-if="filteredCampaigns.length === 0" class="flex flex-col items-center justify-center py-[50px]">
+          <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">
             campaign
           </span>
-          <p class="text-sm text-slate-500 dark:text-slate-400">
+          <p class="text-[11px] text-slate-500 dark:text-slate-400">
             暂无{{ statusFilter !== 'all' ? getStatusText(statusFilter) : '' }}广告计划
           </p>
         </div>

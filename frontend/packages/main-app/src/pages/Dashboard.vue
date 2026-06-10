@@ -132,7 +132,7 @@ const handleAlertAction = (alert: any) => {
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav 
       :nav-items="navItems"
@@ -144,13 +144,13 @@ const handleAlertAction = (alert: any) => {
     <!-- 中间数据展示区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Panel Header -->
-      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-6">
-        <h3 class="font-bold text-slate-900 dark:text-white">数据概览</h3>
-        <div class="flex items-center gap-2">
+      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+        <h3 class="font-bold text-[15px] text-slate-900 dark:text-white">数据概览</h3>
+        <div class="flex items-center gap-[6px]">
           <!-- Time Filter -->
           <select
             v-model="timeFilter"
-            class="text-sm px-3 py-1.5 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
+            class="text-[11px] px-[9px] py-[5px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
           >
             <option v-for="filter in timeFilters" :key="filter.value" :value="filter.value">
               {{ filter.label }}
@@ -158,26 +158,26 @@ const handleAlertAction = (alert: any) => {
           </select>
           <!-- Refresh Button -->
           <button
-            class="h-8 w-8 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
+            class="h-[25px] w-[25px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 flex items-center justify-center transition-colors"
             @click="handleRefresh"
           >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-xl">refresh</span>
+            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[17px]">refresh</span>
           </button>
         </div>
       </div>
 
       <!-- Panel Content -->
-      <div class="flex-1 overflow-y-auto p-6 space-y-6">
+      <div class="flex-1 overflow-y-auto p-[19px] space-y-[19px]">
         <!-- Stats Grid -->
-        <div class="grid grid-cols-2 gap-3">
+        <div class="grid grid-cols-2 gap-[9px]">
           <div
             v-for="(stat, key) in stats"
             :key="key"
-            class="p-4 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50"
+            class="p-[12px] rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50"
           >
-            <div class="flex items-center justify-between mb-2">
+            <div class="flex items-center justify-between mb-[6px]">
               <span
-                class="material-symbols-outlined text-2xl"
+                class="material-symbols-outlined text-[19px]"
                 :class="{
                   'text-blue-600': key === 'spend',
                   'text-emerald-600': key === 'roi',
@@ -188,7 +188,7 @@ const handleAlertAction = (alert: any) => {
                 {{ key === 'spend' ? 'payments' : key === 'roi' ? 'trending_up' : key === 'installs' ? 'download' : 'attach_money' }}
               </span>
               <span
-                class="text-xs font-semibold px-2 py-0.5 rounded-full"
+                class="text-[10px] font-semibold px-[6px] py-[2px] rounded-full"
                 :class="(key === 'cpi' ? stat.trend === 'down' : stat.trend === 'up')
                   ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600'
                   : 'bg-red-50 dark:bg-red-900/30 text-red-600'"
@@ -196,34 +196,34 @@ const handleAlertAction = (alert: any) => {
                 {{ stat.change }}
               </span>
             </div>
-            <div class="text-xl font-bold text-slate-900 dark:text-white mb-1">{{ stat.value }}</div>
-            <div class="text-xs text-slate-500 dark:text-slate-400">{{ stat.label }}</div>
+            <div class="text-[17px] font-bold text-slate-900 dark:text-white mb-[4px]">{{ stat.value }}</div>
+            <div class="text-[10px] text-slate-500 dark:text-slate-400">{{ stat.label }}</div>
           </div>
         </div>
 
         <!-- Alerts Section -->
         <div>
-          <div class="flex items-center gap-2 mb-4">
-            <span class="material-symbols-outlined text-primary">notifications</span>
-            <h4 class="font-semibold text-slate-900 dark:text-white">异常提醒</h4>
-            <span class="text-xs font-semibold px-2 py-0.5 rounded-full bg-red-50 dark:bg-red-900/30 text-red-600">
+          <div class="flex items-center gap-[6px] mb-[12px]">
+            <span class="material-symbols-outlined text-[17px] text-primary">notifications</span>
+            <h4 class="font-semibold text-[13px] text-slate-900 dark:text-white">异常提醒</h4>
+            <span class="text-[10px] font-semibold px-[6px] py-[2px] rounded-full bg-red-50 dark:bg-red-900/30 text-red-600">
               {{ alerts.length }}
             </span>
           </div>
-          <div class="space-y-3">
+          <div class="space-y-[9px]">
             <div
               v-for="alert in alerts"
               :key="alert.id"
-              class="p-3 rounded-md border transition-all"
+              class="p-[9px] rounded-md border transition-all"
               :class="{
                 'border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-900/10': alert.type === 'warning',
                 'border-blue-200 dark:border-blue-800 bg-blue-50/50 dark:bg-blue-900/10': alert.type === 'info',
                 'border-red-200 dark:border-red-800 bg-red-50/50 dark:bg-red-900/10': alert.type === 'critical'
               }"
             >
-              <div class="flex items-start gap-2 mb-2">
+              <div class="flex items-start gap-[6px] mb-[6px]">
                 <span
-                  class="material-symbols-outlined text-lg flex-shrink-0"
+                  class="material-symbols-outlined text-[15px] flex-shrink-0"
                   :class="{
                     'text-yellow-600': alert.type === 'warning',
                     'text-blue-600': alert.type === 'info',
@@ -233,12 +233,12 @@ const handleAlertAction = (alert: any) => {
                   {{ alert.icon }}
                 </span>
                 <div class="flex-1 min-w-0">
-                  <div class="text-sm font-semibold text-slate-900 dark:text-white mb-1">{{ alert.title }}</div>
-                  <div class="text-xs text-slate-600 dark:text-slate-400">{{ alert.desc }}</div>
+                  <div class="text-[11px] font-semibold text-slate-900 dark:text-white mb-[4px]">{{ alert.title }}</div>
+                  <div class="text-[10px] text-slate-600 dark:text-slate-400">{{ alert.desc }}</div>
                 </div>
               </div>
               <button
-                class="text-xs font-medium text-primary hover:underline"
+                class="text-[10px] font-medium text-primary hover:underline"
                 @click="handleAlertAction(alert)"
               >
                 {{ alert.action }}

@@ -114,69 +114,69 @@ function handleForgotPassword() {
 </script>
 
 <template>
-  <main class="flex flex-1 items-center justify-center px-4 py-12 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
+  <main class="flex flex-1 items-center justify-center px-3 py-10 bg-gradient-to-br from-slate-50 via-white to-slate-100 dark:from-slate-950 dark:via-slate-900 dark:to-slate-950">
     <!-- 浮窗容器 -->
-    <div class="relative w-full max-w-2xl">
+    <div class="relative w-full max-w-xl">
       <!-- 主登录浮窗 -->
-      <div class="bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
+      <div class="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 overflow-hidden">
         <!-- 关闭按钮 -->
         <button 
-          class="absolute top-4 right-4 p-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+          class="absolute top-3 right-3 p-1.5 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
           @click="router.push('/')"
         >
-          <span class="material-symbols-outlined text-slate-400">close</span>
+          <span class="material-symbols-outlined text-lg text-slate-400">close</span>
         </button>
 
         <!-- 顶部插图区域 -->
-        <div class="px-8 pt-12 pb-6 text-center">
-          <div class="flex justify-center mb-6">
-            <div class="w-24 h-24 bg-gradient-to-br from-primary/10 to-primary/5 rounded-2xl flex items-center justify-center">
-              <span class="material-symbols-outlined text-5xl text-primary">rocket_launch</span>
+        <div class="px-6 pt-10 pb-5 text-center">
+          <div class="flex justify-center mb-5">
+            <div class="w-20 h-20 bg-gradient-to-br from-primary/10 to-primary/5 rounded-xl flex items-center justify-center">
+              <span class="material-symbols-outlined text-4xl text-primary">rocket_launch</span>
             </div>
           </div>
-          <h1 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">{{ t.title }}</h1>
-          <p class="text-sm text-slate-500 dark:text-slate-400">{{ t.subtitle }}</p>
+          <h1 class="text-xl font-bold text-slate-900 dark:text-white mb-1.5">{{ t.title }}</h1>
+          <p class="text-xs text-slate-500 dark:text-slate-400">{{ t.subtitle }}</p>
         </div>
 
         <!-- 登录方式区域 -->
-        <div class="px-8 pb-8">
+        <div class="px-6 pb-6">
           <!-- 邮箱密码登录表单 -->
           <div>
-            <form class="space-y-5" @submit.prevent="handleLogin">
+            <form class="space-y-4" @submit.prevent="handleLogin">
               <!-- 错误提示 -->
-              <div v-if="error" class="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
-                <p class="text-sm text-red-600 dark:text-red-400">{{ error }}</p>
+              <div v-if="error" class="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <p class="text-xs text-red-600 dark:text-red-400">{{ error }}</p>
               </div>
 
               <!-- 邮箱输入 -->
-              <div class="flex items-start gap-4">
-                <label class="w-24 text-base font-bold text-slate-700 dark:text-slate-300 flex-shrink-0 pt-3">{{ t.emailLabel }}</label>
+              <div class="flex items-start gap-3">
+                <label class="w-20 text-sm font-bold text-slate-700 dark:text-slate-300 flex-shrink-0 pt-2">{{ t.emailLabel }}</label>
                 <input
                   v-model="email"
                   type="email"
-                  class="flex-1 px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                  class="flex-1 px-3 py-2 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
                   :placeholder="t.emailPlaceholder"
                   :disabled="loading"
                 />
               </div>
 
               <!-- 密码输入 -->
-              <div class="flex items-start gap-4">
-                <label class="w-24 text-base font-bold text-slate-700 dark:text-slate-300 flex-shrink-0 pt-3">{{ t.passwordLabel }}</label>
+              <div class="flex items-start gap-3">
+                <label class="w-20 text-sm font-bold text-slate-700 dark:text-slate-300 flex-shrink-0 pt-2">{{ t.passwordLabel }}</label>
                 <div class="flex-1">
                   <input
                     v-model="password"
                     type="password"
-                    class="w-full px-4 py-3 rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all"
+                    class="w-full px-3 py-2 rounded-lg border-2 border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 focus:ring-2 focus:ring-primary/20 focus:border-primary outline-none transition-all text-sm"
                     :placeholder="t.passwordPlaceholder"
                     :disabled="loading"
                   />
                   <!-- 忘记密码链接 -->
-                  <div class="mt-2 text-right">
+                  <div class="mt-1.5 text-right">
                     <button
                       type="button"
                       @click="handleForgotPassword"
-                      class="text-sm text-primary hover:underline"
+                      class="text-xs text-primary hover:underline"
                     >
                       {{ t.forgotPassword }}
                     </button>
@@ -187,17 +187,17 @@ function handleForgotPassword() {
               <!-- 登录按钮 -->
               <button
                 type="submit"
-                class="w-full py-3.5 bg-gradient-to-r from-primary to-primary/80 text-white font-semibold rounded-xl hover:shadow-lg hover:shadow-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                class="w-full py-2.5 bg-gradient-to-r from-primary to-primary/80 text-white font-semibold rounded-lg hover:shadow-lg hover:shadow-primary/30 transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center gap-2 text-sm"
                 :disabled="loading"
               >
-                <span v-if="loading" class="h-5 w-5 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+                <span v-if="loading" class="h-4 w-4 border-2 border-white border-t-transparent rounded-full animate-spin"></span>
                 <span>{{ loading ? t.loggingIn : t.loginButton }}</span>
               </button>
             </form>
           </div>
 
           <!-- 服务条款 -->
-          <p class="mt-6 text-xs text-center text-slate-500 dark:text-slate-400">
+          <p class="mt-5 text-[10px] text-center text-slate-500 dark:text-slate-400">
             {{ t.termsText }}
             <a href="#" class="text-primary hover:underline">{{ t.termsLink }}</a>
             {{ t.and }}
@@ -206,8 +206,8 @@ function handleForgotPassword() {
         </div>
 
         <!-- 底部版权 -->
-        <div class="px-8 py-4 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
-          <p class="text-xs text-center text-slate-400 dark:text-slate-500">© 2026 ANIFORCE</p>
+        <div class="px-6 py-3 bg-slate-50 dark:bg-slate-800/50 border-t border-slate-200 dark:border-slate-700">
+          <p class="text-[10px] text-center text-slate-400 dark:text-slate-500">© 2026 ANIFORCE</p>
         </div>
       </div>
     </div>

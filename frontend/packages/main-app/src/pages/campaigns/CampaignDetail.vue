@@ -130,7 +130,7 @@ const getPlatformColor = (platform: string) => {
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav 
       :nav-items="navItems"
@@ -143,74 +143,74 @@ const getPlatformColor = (platform: string) => {
     <!-- 中间广告详情展示区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-16 border-b border-slate-200 dark:border-slate-800 flex items-center px-6">
-        <div class="flex items-center gap-4">
+      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center px-[19px]">
+        <div class="flex items-center gap-[12px]">
           <button
-            class="flex items-center gap-2 text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
+            class="flex items-center gap-[6px] text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
             @click="handleBack"
           >
-            <span class="material-symbols-outlined text-lg">arrow_back</span>
-            <span class="text-sm font-medium">返回广告列表</span>
+            <span class="material-symbols-outlined text-[15px]">arrow_back</span>
+            <span class="text-[11px] font-medium">返回广告列表</span>
           </button>
-          <div class="h-6 w-px bg-slate-200 dark:bg-slate-800"></div>
-          <h2 class="text-2xl font-bold text-slate-900 dark:text-white mb-2">{{ campaign?.name }}</h2>
+          <div class="h-[19px] w-px bg-slate-200 dark:bg-slate-800"></div>
+          <h2 class="text-[17px] font-bold text-slate-900 dark:text-white mb-[6px]">{{ campaign?.name }}</h2>
         </div>
       </div>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto p-6">
+      <div class="flex-1 overflow-y-auto p-[19px]">
         <!-- 广告配置详情 -->
-        <div class="mb-6 p-5 rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-          <div class="grid grid-cols-2 gap-4">
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">所属项目</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white text-right">{{ campaign?.project_name }}</span>
+        <div class="mb-[19px] p-[16px] rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
+          <div class="grid grid-cols-2 gap-[12px]">
+            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">所属项目</span>
+              <span class="text-[11px] font-medium text-slate-900 dark:text-white text-right">{{ campaign?.project_name }}</span>
             </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">投放平台</span>
-              <span class="text-sm font-medium" :class="getPlatformColor(campaign?.platform || '')">{{ campaign?.platform }}</span>
+            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">投放平台</span>
+              <span class="text-[11px] font-medium" :class="getPlatformColor(campaign?.platform || '')">{{ campaign?.platform }}</span>
             </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">预算</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">${{ campaign?.budget?.toLocaleString() }}</span>
+            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">预算</span>
+              <span class="text-[11px] font-medium text-slate-900 dark:text-white">${{ campaign?.budget?.toLocaleString() }}</span>
             </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">消耗</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">${{ campaign?.spent?.toLocaleString() }}</span>
+            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">消耗</span>
+              <span class="text-[11px] font-medium text-slate-900 dark:text-white">${{ campaign?.spent?.toLocaleString() }}</span>
             </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">进度</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign ? Math.round((campaign.spent / campaign.budget) * 100) : 0 }}%</span>
+            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">进度</span>
+              <span class="text-[11px] font-medium text-slate-900 dark:text-white">{{ campaign ? Math.round((campaign.spent / campaign.budget) * 100) : 0 }}%</span>
             </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">状态</span>
-              <span class="text-sm font-medium text-emerald-600">{{ campaign?.status }}</span>
+            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">状态</span>
+              <span class="text-[11px] font-medium text-emerald-600">{{ campaign?.status }}</span>
             </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">开始日期</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign?.start_date }}</span>
+            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">开始日期</span>
+              <span class="text-[11px] font-medium text-slate-900 dark:text-white">{{ campaign?.start_date }}</span>
             </div>
-            <div class="flex justify-between py-2 border-b border-slate-200 dark:border-slate-700">
-              <span class="text-sm text-slate-500 dark:text-slate-400">结束日期</span>
-              <span class="text-sm font-medium text-slate-900 dark:text-white">{{ campaign?.end_date || '未设置' }}</span>
+            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
+              <span class="text-[11px] text-slate-500 dark:text-slate-400">结束日期</span>
+              <span class="text-[11px] font-medium text-slate-900 dark:text-white">{{ campaign?.end_date || '未设置' }}</span>
             </div>
           </div>
         </div>
 
         <!-- 投放素材列表 -->
         <div>
-          <div class="flex items-center justify-between mb-4">
-            <h4 class="text-sm font-semibold text-slate-900 dark:text-white">投放素材 ({{ materials.length }})</h4>
+          <div class="flex items-center justify-between mb-[12px]">
+            <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white">投放素材 ({{ materials.length }})</h4>
             <button
-              class="flex items-center gap-2 px-3 py-1.5 rounded-md text-sm font-medium text-primary hover:bg-primary/10 transition-colors"
+              class="flex items-center gap-[6px] px-[9px] py-[6px] rounded-md text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
               @click="handleAddCreative"
             >
-              <span class="material-symbols-outlined text-lg">add_photo_alternate</span>
+              <span class="material-symbols-outlined text-[15px]">add_photo_alternate</span>
               添加素材
             </button>
           </div>
           
-          <div class="grid grid-cols-3 gap-4">
+          <div class="grid grid-cols-3 gap-[12px]">
             <div
               v-for="material in materials"
               :key="material.id"
@@ -225,14 +225,14 @@ const getPlatformColor = (platform: string) => {
                   class="w-full h-full object-cover"
                 />
                 <div v-else class="w-full h-full flex items-center justify-center">
-                  <span class="material-symbols-outlined text-6xl text-slate-300">movie</span>
+                  <span class="material-symbols-outlined text-[47px] text-slate-300">movie</span>
                 </div>
               </div>
               <!-- Material Info -->
-              <div class="p-3 bg-white dark:bg-slate-900">
-                <div class="text-sm font-medium text-slate-900 dark:text-white mb-1 truncate">{{ material.name }}</div>
+              <div class="p-[9px] bg-white dark:bg-slate-900">
+                <div class="text-[11px] font-medium text-slate-900 dark:text-white mb-[4px] truncate">{{ material.name }}</div>
                 <div class="flex items-center justify-between">
-                  <span class="text-xs px-2 py-0.5 rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600">
+                  <span class="text-[10px] px-[6px] py-[2px] rounded-full bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600">
                     {{ material.status }}
                   </span>
                 </div>
@@ -241,15 +241,15 @@ const getPlatformColor = (platform: string) => {
           </div>
 
           <!-- Empty State -->
-          <div v-if="materials.length === 0" class="flex flex-col items-center justify-center py-16">
-            <span class="material-symbols-outlined text-6xl text-slate-300 dark:text-slate-700 mb-4">movie</span>
-            <p class="text-sm text-slate-500 dark:text-slate-400">{{ campaign?.project_name }}</p>
+          <div v-if="materials.length === 0" class="flex flex-col items-center justify-center py-[50px]">
+            <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">movie</span>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400">{{ campaign?.project_name }}</p>
             <button
-              class="flex items-center gap-2 px-4 py-2 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
+              class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
               @click="handleAddCreative"
             >
-              <span class="material-symbols-outlined text-lg">add_photo_alternate</span>
-              <span class="text-sm font-medium">添加首个素材</span>
+              <span class="material-symbols-outlined text-[15px]">add_photo_alternate</span>
+              <span class="text-[11px] font-medium">添加首个素材</span>
             </button>
           </div>
         </div>
