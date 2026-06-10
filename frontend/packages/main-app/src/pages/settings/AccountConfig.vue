@@ -384,7 +384,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <SidebarNav 
       :nav-items="navItems"
       :sessions="sessions"
