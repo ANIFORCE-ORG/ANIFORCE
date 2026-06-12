@@ -198,7 +198,8 @@ export function useHomeAgentSession() {
           if (usage) assistant.usage = usage
         }
         if (event.event === 'runtime.error') {
-          throw new Error(String(event.data.message || 'Agent stream error'))
+          const payload = readEventPayload(event.data)
+          throw new Error(String(payload.message || event.data.message || 'Agent stream error'))
         }
       }
       drainTypewriter()
@@ -225,14 +226,21 @@ export function useHomeAgentSession() {
     selectedModel.value = { provider, modelId }
   }
 
+  function readEventPayload(data: Record<string, unknown>): Record<string, unknown> {
+    const payload = data.payload
+    return payload && typeof payload === 'object' ? payload as Record<string, unknown> : data
+  }
+
   function readAssistantEvent(data: Record<string, unknown>): AgentMessage & { delta?: string } {
-    const value = data.assistantMessageEvent
+    const payload = readEventPayload(data)
+    const value = payload.assistantMessageEvent
     if (value && typeof value === 'object') return value as AgentMessage & { delta?: string }
-    return data as AgentMessage & { delta?: string }
+    return payload as AgentMessage & { delta?: string }
   }
 
   function readUsage(data: Record<string, unknown>): AgentMessage['usage'] | undefined {
-    const usage = data.usage
+    const payload = readEventPayload(data)
+    const usage = payload.usage
     if (usage && typeof usage === 'object') return usage as AgentMessage['usage']
     return undefined
   }
