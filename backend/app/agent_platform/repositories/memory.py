@@ -163,6 +163,10 @@ class MemoryAgentTaskRepository(AgentTaskRepository):
         
         return len(user_tasks)
     
+    async def count_task_events(self, task_id: str) -> int:
+        """统计任务事件数量"""
+        return len(self._events.get(task_id, []))
+    
     async def list_timeout_tasks(
         self,
         timeout_ms: int,

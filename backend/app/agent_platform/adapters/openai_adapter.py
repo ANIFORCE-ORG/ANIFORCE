@@ -128,6 +128,7 @@ class OpenAISDKAdapter:
         self,
         result: RunResult,
         task_id: str,
+        start_sequence: int = 0,
     ) -> AsyncIterator[AgentTaskEvent]:
         """
         流式读取 SDK 事件并转换为 AgentTaskEvent
@@ -139,7 +140,7 @@ class OpenAISDKAdapter:
         Yields:
             AgentTaskEvent
         """
-        sequence = 0
+        sequence = start_sequence
         assistant_message_content = ""
         
         try:

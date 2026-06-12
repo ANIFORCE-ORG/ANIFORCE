@@ -78,7 +78,7 @@ class AgentRuntime:
             task_logger.debug(f"[RUNTIME] Status updated: RUNNING")
             
             # 2. 推送 runtime.started 事件
-            sequence = 0
+            sequence = await self.repo.count_task_events(task.task_id)
             started_event = AgentTaskEvent(
                 event_id=f"event_{task.task_id}_{sequence}",
                 task_id=task.task_id,
@@ -123,7 +123,11 @@ class AgentRuntime:
             
             # 6. 流式推送事件
             task_logger.debug(f"[RUNTIME] Streaming events...")
-            async for event in self.adapter.stream_events(result, task.task_id):
+            async for event in self.adapter.stream_events(
+                result,
+                task.task_id,
+                start_sequence=sequence,
+            ):
                 await self.repo.append_event(event)
                 yield event
                 sequence = event.sequence

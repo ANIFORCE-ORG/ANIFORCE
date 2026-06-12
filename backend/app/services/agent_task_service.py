@@ -228,8 +228,4 @@ class AgentTaskService:
     
     async def _get_next_sequence(self, task_id: str) -> int:
         """获取下一个事件序号"""
-        events = await self._repo.list_user_task_events(
-            user_id="system",  # 内部调用，不校验权限
-            task_id=task_id,
-        )
-        return len(events)
+        return await self._repo.count_task_events(task_id)

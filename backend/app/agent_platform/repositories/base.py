@@ -110,6 +110,11 @@ class AgentTaskRepository(ABC):
         pass
     
     @abstractmethod
+    async def count_task_events(self, task_id: str) -> int:
+        """统计任务事件数量（内部追加事件时使用，调用方需先完成权限校验）"""
+        pass
+    
+    @abstractmethod
     async def list_timeout_tasks(
         self,
         timeout_ms: int,
