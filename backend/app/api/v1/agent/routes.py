@@ -17,8 +17,11 @@ from loguru import logger
 from ....api.deps import get_current_user
 from ....services.agent_task_service import AgentTaskService
 from ....agent_platform.repositories.memory import MemoryAgentTaskRepository
+from ....agent_platform.adapters.openai_adapter import OpenAISDKAdapter
+from ....agent_platform.runtime import AgentRuntime
 from ....agent_platform.errors import AppError, get_http_status
 from ....agent_platform.models import AgentTaskStatus
+from ....config.settings import get_settings
 
 from .schemas import (
     CreateTaskRequest,
@@ -34,13 +37,28 @@ from .schemas import (
 
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
-# 全局 Repository 实例（TODO: 改为依赖注入）
+# 全局实例（TODO: 改为依赖注入）
 _repo = MemoryAgentTaskRepository()
+_settings = get_settings()
+
+# 初始化 SDK Adapter
+_adapter = OpenAISDKAdapter(
+    model=getattr(_settings, "OPENAI_AGENTS_MODEL", "gpt-4o-mini"),
+    api_key=_settings.OPENAI_API_KEY,
+    base_url=getattr(_settings, "OPENAI_BASE_URL", None),
+)
+
+# 初始化 Runtime
+_runtime = AgentRuntime(
+    adapter=_adapter,
+    repo=_repo,
+    session_db_path="runtime/agent/sessions.db",
+)
 
 
 def get_agent_task_service() -> AgentTaskService:
     """获取 AgentTaskService 实例"""
-    return AgentTaskService(_repo)
+    return AgentTaskService(_repo, _runtime)
 
 
 # ============ Task API（新版统一接口）============
@@ -256,24 +274,59 @@ async def stream_chat(
     session_id: str,
     user: dict = Depends(get_current_user),
     service: AgentTaskService = Depends(get_agent_task_service),
+    request: Request = None,
 ):
     """
     流式对话（内部运行 Task）
     
-    TODO: Block 3 实现 Runtime 后，调用 Runtime 执行任务
+    实现：
+    1. 从 request body 获取用户消息
+    2. 调用 Runtime 执行任务
+    3. 流式推送事件
     """
-    # 校验 task 归属
-    task = await service.get_task(user["id"], session_id)
+    # 解析请求体
+    body = await request.json()
+    user_input = body.get("message", "")
     
-    # TODO: 调用 Runtime 执行任务
-    # 目前返回占位响应
+    if not user_input:
+        async def error_generator():
+            yield f"event: error\n"
+            yield f"data: {{\"message\": \"Message is required\"}}\n\n"
+        return StreamingResponse(
+            error_generator(),
+            media_type="text/event-stream",
+        )
+    
     async def event_generator():
-        yield f"event: error\n"
-        yield f"data: {json.dumps({'message': 'Runtime not implemented yet (Block 3)'}, ensure_ascii=False)}\n\n"
+        """SSE 事件生成器"""
+        try:
+            # 运行任务
+            async for event in service.run_task(
+                user_id=user["id"],
+                task_id=session_id,
+                user_input=user_input,
+            ):
+                # SSE 格式
+                yield f"id: {event.sequence}\n"
+                yield f"event: {event.event_type}\n"
+                yield f"data: {json.dumps(event.dict(), default=str, ensure_ascii=False)}\n\n"
+        except AppError as e:
+            # 推送错误事件
+            yield f"event: error\n"
+            yield f"data: {json.dumps(e.to_dict(), ensure_ascii=False)}\n\n"
+        except Exception as e:
+            logger.exception(f"Unexpected error in stream_chat: {e}")
+            yield f"event: error\n"
+            yield f"data: {{\"message\": \"An unexpected error occurred\"}}\n\n"
     
     return StreamingResponse(
         event_generator(),
         media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache, no-transform",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
     )
 
 

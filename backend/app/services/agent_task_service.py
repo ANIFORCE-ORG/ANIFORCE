@@ -20,13 +20,15 @@ from loguru import logger
 from ..agent_platform.models import AgentTask, AgentTaskEvent, AgentTaskStatus, EventType
 from ..agent_platform.errors import AppError, AgentErrorCode, ErrorCategory
 from ..agent_platform.repositories.base import AgentTaskRepository
+from ..agent_platform.runtime import AgentRuntime
 
 
 class AgentTaskService:
     """Agent Task Service"""
     
-    def __init__(self, repo: AgentTaskRepository):
+    def __init__(self, repo: AgentTaskRepository, runtime: Optional[AgentRuntime] = None):
         self._repo = repo
+        self._runtime = runtime
     
     async def create_task(
         self,
@@ -165,6 +167,37 @@ class AgentTaskService:
             after_sequence=after_sequence,
         )
     
+    async def run_task(
+        self,
+        user_id: str,
+        task_id: str,
+        user_input: str,
+    ) -> AsyncIterator[AgentTaskEvent]:
+        """
+        运行任务（实时执行）
+        
+        Args:
+            user_id: 用户 ID（从 JWT 获取）
+            task_id: 任务 ID
+            user_input: 用户输入
+            
+        Yields:
+            AgentTaskEvent（实时事件流）
+        """
+        # 校验 task 归属
+        task = await self.get_task(user_id, task_id)
+        
+        if not self._runtime:
+            raise AppError(
+                code=AgentErrorCode.SDK_ERROR,
+                message="Runtime not initialized",
+                category=ErrorCategory.RUNTIME_ERROR,
+            )
+        
+        # 运行 task
+        async for event in self._runtime.run_task(task, user_input):
+            yield event
+    
     async def stream_task_events(
         self,
         user_id: str,
@@ -173,6 +206,8 @@ class AgentTaskService:
     ) -> AsyncIterator[AgentTaskEvent]:
         """
         流式推送任务事件（SSE）
+        
+        用于断点续传：先推送历史事件，再推送实时事件（如果任务在运行中）
         
         Args:
             user_id: 用户 ID（从 JWT 获取）
@@ -188,7 +223,7 @@ class AgentTaskService:
             yield event
         
         # 2. 如果任务未完成，推送实时事件
-        # TODO: Block 3 实现 Runtime 后，从 Runtime 订阅实时事件
+        # TODO: 需要实现 Runtime 的实时事件订阅机制
         # 目前只返回历史事件
     
     async def _get_next_sequence(self, task_id: str) -> int:
