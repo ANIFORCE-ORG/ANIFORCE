@@ -7,6 +7,7 @@ OpenAI Agents SDK 适配器
 - 统一错误处理
 """
 
+import os
 from typing import AsyncIterator, Optional
 from loguru import logger
 
@@ -34,6 +35,12 @@ class OpenAISDKAdapter:
         self.enable_tracing = enable_tracing
         self.tracer = get_tracer() if enable_tracing else None
         
+        # SDK 通过环境变量读取配置，需要设置
+        if api_key:
+            os.environ["OPENAI_API_KEY"] = api_key
+        if base_url:
+            os.environ["OPENAI_BASE_URL"] = base_url
+        
         logger.info(f"OpenAI SDK Adapter initialized: {model} | tracing={enable_tracing}")
     
     def create_agent(
@@ -48,13 +55,10 @@ class OpenAISDKAdapter:
             name: Agent 名称
             instructions: System prompt
         """
-        # 传递 API key 和 base_url 到 Agent
         agent = Agent(
             name=name,
             instructions=instructions,
             model=self.model,
-            api_key=self.api_key,
-            base_url=self.base_url,
         )
         return agent
     
