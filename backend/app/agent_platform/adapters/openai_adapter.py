@@ -11,7 +11,14 @@ import os
 from typing import AsyncIterator, Optional
 from loguru import logger
 
-from agents import Agent, Runner, SQLiteSession
+from agents import (
+    Agent,
+    Runner,
+    SQLiteSession,
+    set_default_openai_api,
+    set_default_openai_key,
+    set_tracing_disabled,
+)
 from agents.run import RunResult
 
 from ..models import AgentTaskEvent, EventType
@@ -35,9 +42,13 @@ class OpenAISDKAdapter:
         self.enable_tracing = enable_tracing
         self.tracer = get_tracer() if enable_tracing else None
         
-        # SDK 通过环境变量读取配置，需要设置
+        # SDK 默认走 Responses API；当前兼容网关只支持 Chat Completions。
+        set_default_openai_api("chat_completions")
+        # 项目使用本地 JSONL tracing，禁用 OpenAI 官方 trace export。
+        set_tracing_disabled(True)
         if api_key:
             os.environ["OPENAI_API_KEY"] = api_key
+            set_default_openai_key(api_key, use_for_tracing=False)
         if base_url:
             os.environ["OPENAI_BASE_URL"] = base_url
         
