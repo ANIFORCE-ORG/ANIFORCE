@@ -27,6 +27,9 @@ class Settings(BaseSettings):
 
     # 外部服务
     OPENAI_API_KEY: str = ""
+    OPENAI_BASE_URL: str = ""
+    OPENAI_AGENTS_MODEL: str = "gpt-4.1-mini"
+    OPENAI_AGENTS_API: str = "chat_completions"
     
     # 服务地址配置（根据运行模式自动切换）
     # Local 模式: http://localhost:3010 / http://localhost:8010

@@ -1,0 +1,392 @@
+{
+  "final_output": "找到 2 个项目：\n\n1. **RPG Global Launch** (proj_demo_001)\n2. **SLG Creative Test** (proj_demo_002)\n\n需要帮忙吗？",
+  "last_agent": "Trace Probe Agent",
+  "new_items": [
+    {
+      "agent": {
+        "name": "Trace Probe Agent",
+        "handoff_description": null,
+        "tools": [
+          {
+            "name": "list_projects",
+            "description": "",
+            "params_json_schema": {
+              "properties": {},
+              "title": "list_projects_args",
+              "type": "object",
+              "additionalProperties": false,
+              "required": []
+            },
+            "on_invoke_tool": {},
+            "strict_json_schema": true,
+            "is_enabled": true,
+            "tool_input_guardrails": null,
+            "tool_output_guardrails": null,
+            "needs_approval": false,
+            "timeout_seconds": null,
+            "timeout_behavior": "error_as_result",
+            "timeout_error_function": null,
+            "defer_loading": false
+          }
+        ],
+        "mcp_servers": [],
+        "mcp_config": {},
+        "instructions": "调用 list_projects 后简短回答。",
+        "prompt": null,
+        "handoffs": [],
+        "model": {
+          "model": "claude-opus-4-6",
+          "should_replay_reasoning_content": null
+        },
+        "model_settings": {
+          "temperature": null,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "tool_choice": null,
+          "parallel_tool_calls": null,
+          "truncation": null,
+          "max_tokens": null,
+          "reasoning": null,
+          "verbosity": null,
+          "metadata": null,
+          "store": null,
+          "prompt_cache_retention": null,
+          "include_usage": null,
+          "response_include": null,
+          "top_logprobs": null,
+          "extra_query": null,
+          "extra_body": null,
+          "extra_headers": null,
+          "extra_args": null,
+          "retry": null,
+          "context_management": null
+        },
+        "input_guardrails": [],
+        "output_guardrails": [],
+        "output_type": null,
+        "hooks": null,
+        "tool_use_behavior": "run_llm_again",
+        "reset_tool_choice": true
+      },
+      "raw_item": {
+        "arguments": "{}",
+        "call_id": "tooluse_UQr8AyhqwUiFrDbazDXO9J",
+        "name": "list_projects",
+        "type": "function_call",
+        "id": "__fake_id__",
+        "namespace": null,
+        "status": null,
+        "provider_data": {
+          "model": "claude-opus-4-6",
+          "response_id": "msg_014PA9jEtRUaAK6JLwNzpv9Y"
+        }
+      },
+      "type": "tool_call_item",
+      "description": "",
+      "title": null,
+      "tool_origin": {
+        "type": "function",
+        "mcp_server_name": null,
+        "agent_name": null,
+        "agent_tool_name": null
+      }
+    },
+    {
+      "agent": {
+        "name": "Trace Probe Agent",
+        "handoff_description": null,
+        "tools": [
+          {
+            "name": "list_projects",
+            "description": "",
+            "params_json_schema": {
+              "properties": {},
+              "title": "list_projects_args",
+              "type": "object",
+              "additionalProperties": false,
+              "required": []
+            },
+            "on_invoke_tool": {},
+            "strict_json_schema": true,
+            "is_enabled": true,
+            "tool_input_guardrails": null,
+            "tool_output_guardrails": null,
+            "needs_approval": false,
+            "timeout_seconds": null,
+            "timeout_behavior": "error_as_result",
+            "timeout_error_function": null,
+            "defer_loading": false
+          }
+        ],
+        "mcp_servers": [],
+        "mcp_config": {},
+        "instructions": "调用 list_projects 后简短回答。",
+        "prompt": null,
+        "handoffs": [],
+        "model": {
+          "model": "claude-opus-4-6",
+          "should_replay_reasoning_content": null
+        },
+        "model_settings": {
+          "temperature": null,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "tool_choice": null,
+          "parallel_tool_calls": null,
+          "truncation": null,
+          "max_tokens": null,
+          "reasoning": null,
+          "verbosity": null,
+          "metadata": null,
+          "store": null,
+          "prompt_cache_retention": null,
+          "include_usage": null,
+          "response_include": null,
+          "top_logprobs": null,
+          "extra_query": null,
+          "extra_body": null,
+          "extra_headers": null,
+          "extra_args": null,
+          "retry": null,
+          "context_management": null
+        },
+        "input_guardrails": [],
+        "output_guardrails": [],
+        "output_type": null,
+        "hooks": null,
+        "tool_use_behavior": "run_llm_again",
+        "reset_tool_choice": true
+      },
+      "raw_item": {
+        "call_id": "tooluse_UQr8AyhqwUiFrDbazDXO9J",
+        "output": "[{'id': 'proj_demo_001', 'name': 'RPG Global Launch'}, {'id': 'proj_demo_002', 'name': 'SLG Creative Test'}]",
+        "type": "function_call_output"
+      },
+      "output": [
+        {
+          "id": "proj_demo_001",
+          "name": "RPG Global Launch"
+        },
+        {
+          "id": "proj_demo_002",
+          "name": "SLG Creative Test"
+        }
+      ],
+      "type": "tool_call_output_item",
+      "tool_origin": {
+        "type": "function",
+        "mcp_server_name": null,
+        "agent_name": null,
+        "agent_tool_name": null
+      }
+    },
+    {
+      "agent": {
+        "name": "Trace Probe Agent",
+        "handoff_description": null,
+        "tools": [
+          {
+            "name": "list_projects",
+            "description": "",
+            "params_json_schema": {
+              "properties": {},
+              "title": "list_projects_args",
+              "type": "object",
+              "additionalProperties": false,
+              "required": []
+            },
+            "on_invoke_tool": {},
+            "strict_json_schema": true,
+            "is_enabled": true,
+            "tool_input_guardrails": null,
+            "tool_output_guardrails": null,
+            "needs_approval": false,
+            "timeout_seconds": null,
+            "timeout_behavior": "error_as_result",
+            "timeout_error_function": null,
+            "defer_loading": false
+          }
+        ],
+        "mcp_servers": [],
+        "mcp_config": {},
+        "instructions": "调用 list_projects 后简短回答。",
+        "prompt": null,
+        "handoffs": [],
+        "model": {
+          "model": "claude-opus-4-6",
+          "should_replay_reasoning_content": null
+        },
+        "model_settings": {
+          "temperature": null,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "tool_choice": null,
+          "parallel_tool_calls": null,
+          "truncation": null,
+          "max_tokens": null,
+          "reasoning": null,
+          "verbosity": null,
+          "metadata": null,
+          "store": null,
+          "prompt_cache_retention": null,
+          "include_usage": null,
+          "response_include": null,
+          "top_logprobs": null,
+          "extra_query": null,
+          "extra_body": null,
+          "extra_headers": null,
+          "extra_args": null,
+          "retry": null,
+          "context_management": null
+        },
+        "input_guardrails": [],
+        "output_guardrails": [],
+        "output_type": null,
+        "hooks": null,
+        "tool_use_behavior": "run_llm_again",
+        "reset_tool_choice": true
+      },
+      "raw_item": {
+        "id": "__fake_id__",
+        "content": [
+          {
+            "annotations": [],
+            "text": "找到 2 个项目：\n\n1. **RPG Global Launch** (proj_demo_001)\n2. **SLG Creative Test** (proj_demo_002)\n\n需要帮忙吗？",
+            "type": "output_text",
+            "logprobs": []
+          }
+        ],
+        "role": "assistant",
+        "status": "completed",
+        "type": "message",
+        "phase": null,
+        "provider_data": {
+          "model": "claude-opus-4-6",
+          "response_id": "msg_01S5XSGpd47yKhw6PtirdqaS"
+        }
+      },
+      "type": "message_output_item"
+    }
+  ],
+  "raw_responses": [
+    {
+      "output": [
+        {
+          "arguments": "{}",
+          "call_id": "tooluse_UQr8AyhqwUiFrDbazDXO9J",
+          "name": "list_projects",
+          "type": "function_call",
+          "id": "__fake_id__",
+          "namespace": null,
+          "status": null,
+          "provider_data": {
+            "model": "claude-opus-4-6",
+            "response_id": "msg_014PA9jEtRUaAK6JLwNzpv9Y"
+          }
+        }
+      ],
+      "usage": {
+        "requests": 1,
+        "input_tokens": 2065,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 32,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2097,
+        "request_usage_entries": []
+      },
+      "response_id": null,
+      "request_id": null
+    },
+    {
+      "output": [
+        {
+          "id": "__fake_id__",
+          "content": [
+            {
+              "annotations": [],
+              "text": "找到 2 个项目：\n\n1. **RPG Global Launch** (proj_demo_001)\n2. **SLG Creative Test** (proj_demo_002)\n\n需要帮忙吗？",
+              "type": "output_text",
+              "logprobs": []
+            }
+          ],
+          "role": "assistant",
+          "status": "completed",
+          "type": "message",
+          "phase": null,
+          "provider_data": {
+            "model": "claude-opus-4-6",
+            "response_id": "msg_01S5XSGpd47yKhw6PtirdqaS"
+          }
+        }
+      ],
+      "usage": {
+        "requests": 1,
+        "input_tokens": 2162,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 56,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2218,
+        "request_usage_entries": []
+      },
+      "response_id": null,
+      "request_id": null
+    }
+  ],
+  "usage_summary": {
+    "input": 4227,
+    "output": 88,
+    "total": 4315
+  },
+  "to_input_list": [
+    {
+      "content": "列出项目。",
+      "role": "user"
+    },
+    {
+      "arguments": "{}",
+      "call_id": "tooluse_UQr8AyhqwUiFrDbazDXO9J",
+      "name": "list_projects",
+      "type": "function_call",
+      "id": "__fake_id__",
+      "provider_data": {
+        "model": "claude-opus-4-6",
+        "response_id": "msg_014PA9jEtRUaAK6JLwNzpv9Y"
+      }
+    },
+    {
+      "call_id": "tooluse_UQr8AyhqwUiFrDbazDXO9J",
+      "output": "[{'id': 'proj_demo_001', 'name': 'RPG Global Launch'}, {'id': 'proj_demo_002', 'name': 'SLG Creative Test'}]",
+      "type": "function_call_output"
+    },
+    {
+      "id": "__fake_id__",
+      "content": [
+        {
+          "annotations": [],
+          "text": "找到 2 个项目：\n\n1. **RPG Global Launch** (proj_demo_001)\n2. **SLG Creative Test** (proj_demo_002)\n\n需要帮忙吗？",
+          "type": "output_text",
+          "logprobs": []
+        }
+      ],
+      "role": "assistant",
+      "status": "completed",
+      "type": "message",
+      "provider_data": {
+        "model": "claude-opus-4-6",
+        "response_id": "msg_01S5XSGpd47yKhw6PtirdqaS"
+      }
+    }
+  ],
+  "to_state_type": "RunState"
+}

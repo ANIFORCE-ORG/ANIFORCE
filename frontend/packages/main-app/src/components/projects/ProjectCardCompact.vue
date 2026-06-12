@@ -34,19 +34,19 @@ const handleCheckboxChange = (event: Event) => {
     <label class="select-check">
       <input 
         type="checkbox" 
-        class="w-[12px] h-[12px] rounded border-slate-300 text-primary focus:ring-primary/20"
+        class="w-4 h-4 rounded border-slate-300 text-primary focus:ring-primary/20"
         @change="handleCheckboxChange"
       />
-      <span class="ml-[6px] text-[10px] text-slate-500 dark:text-slate-400">选择项目</span>
+      <span class="ml-2 text-xs text-slate-500 dark:text-slate-400">选择项目</span>
     </label>
 
     <!-- Project Header -->
     <div class="project-card-head">
       <div class="project-card-title">
-        <h3 class="text-[13px] font-semibold leading-tight text-slate-900 dark:text-white mb-[6px]">
+        <h3 class="text-[17px] font-semibold leading-tight text-slate-900 dark:text-white mb-2">
           {{ project.name }}
         </h3>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+        <p class="text-sm text-slate-500 dark:text-slate-400 leading-relaxed">
           {{ project.game_type }}<br>{{ project.target_market }}
         </p>
       </div>
@@ -63,15 +63,15 @@ const handleCheckboxChange = (event: Event) => {
     <!-- Actions -->
     <div class="project-card-actions">
       <button class="btn-soft" type="button" @click="emit('createTask', project)">
-        <span class="material-symbols-outlined text-[14px]">add_task</span>
+        <span class="material-symbols-outlined text-[18px]">add_task</span>
         创建新任务
       </button>
       <button class="btn-primary" type="button" @click="emit('edit', project)">
-        <span class="material-symbols-outlined text-[14px]">edit</span>
+        <span class="material-symbols-outlined text-[18px]">edit</span>
         编辑项目
       </button>
       <button class="btn-ghost" type="button" @click="emit('viewTasks', project)">
-        <span class="material-symbols-outlined text-[14px]">assignment</span>
+        <span class="material-symbols-outlined text-[18px]">assignment</span>
         查看任务
       </button>
     </div>
@@ -81,19 +81,19 @@ const handleCheckboxChange = (event: Event) => {
 <style scoped>
 /* Project Card */
 .project-card {
-  min-height: 228px;
+  min-height: 292px;
   display: flex;
   flex-direction: column;
   border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  padding: 17px;
+  border-radius: 8px;
+  padding: 22px;
   background: #fff;
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
 }
 
 .project-card:hover {
   border-color: #b9d3f5;
-  box-shadow: 0 11px 25px rgba(15, 23, 42, 0.06);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.06);
   transform: translateY(-1px);
 }
 
@@ -104,7 +104,7 @@ const handleCheckboxChange = (event: Event) => {
 
 .dark .project-card:hover {
   border-color: #475569;
-  box-shadow: 0 11px 25px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.2);
 }
 
 /* Select Checkbox */
@@ -112,7 +112,7 @@ const handleCheckboxChange = (event: Event) => {
   display: flex;
   align-items: center;
   align-self: flex-start;
-  margin-bottom: 9px;
+  margin-bottom: 12px;
   cursor: pointer;
 }
 
@@ -121,8 +121,8 @@ const handleCheckboxChange = (event: Event) => {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 9px;
+  gap: 16px;
+  margin-bottom: 12px;
 }
 
 .project-card-title {
@@ -131,8 +131,8 @@ const handleCheckboxChange = (event: Event) => {
 }
 
 .project-card-title h3 {
-  margin-bottom: 6px;
-  font-size: 13px;
+  margin-bottom: 8px;
+  font-size: 17px;
   line-height: 1.35;
   letter-spacing: 0;
 }
@@ -151,19 +151,19 @@ const handleCheckboxChange = (event: Event) => {
 .scope-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
+  gap: 8px;
+  margin-top: 12px;
   margin-bottom: auto;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 3px;
+  padding: 4px 10px;
+  border-radius: 4px;
   background: #f1f5f9;
   color: #475569;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -178,9 +178,9 @@ const handleCheckboxChange = (event: Event) => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   margin-top: auto;
-  padding-top: 19px;
+  padding-top: 24px;
 }
 
 /* Button Styles */
@@ -190,15 +190,15 @@ const handleCheckboxChange = (event: Event) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
+  gap: 6px;
   width: 100%;
   min-width: 0;
-  padding: 6px 8px;
+  padding: 8px 10px;
   border: 1px solid #e2e8f0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: #fff;
   color: #1e293b;
-  font-size: 9px;
+  font-size: 12px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.16s ease;

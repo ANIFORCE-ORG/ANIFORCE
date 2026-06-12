@@ -1,0 +1,540 @@
+{
+  "final_output": "目前有以下两个项目：\n\n1. **RPG Global Launch** (ID: proj_demo_001)\n2. **SLG Creative Test** (ID: proj_demo_002)\n\n需要查看某个项目的详细信息吗？",
+  "last_agent": "Main Agent",
+  "new_items": [
+    {
+      "agent": {
+        "name": "Main Agent",
+        "handoff_description": null,
+        "tools": [
+          {
+            "name": "project_lookup_agent",
+            "description": "查询和解释项目列表",
+            "params_json_schema": {
+              "description": "Default input schema for agent-as-tool calls.",
+              "properties": {
+                "input": {
+                  "title": "Input",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "input"
+              ],
+              "title": "AgentAsToolInput",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "on_invoke_tool": {},
+            "strict_json_schema": true,
+            "is_enabled": true,
+            "tool_input_guardrails": null,
+            "tool_output_guardrails": null,
+            "needs_approval": false,
+            "timeout_seconds": null,
+            "timeout_behavior": "error_as_result",
+            "timeout_error_function": null,
+            "defer_loading": false
+          }
+        ],
+        "mcp_servers": [],
+        "mcp_config": {},
+        "instructions": "必须把项目问题交给 project_lookup_agent 工具。",
+        "prompt": null,
+        "handoffs": [],
+        "model": {
+          "model": "claude-opus-4-6",
+          "should_replay_reasoning_content": null
+        },
+        "model_settings": {
+          "temperature": null,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "tool_choice": null,
+          "parallel_tool_calls": null,
+          "truncation": null,
+          "max_tokens": null,
+          "reasoning": null,
+          "verbosity": null,
+          "metadata": null,
+          "store": null,
+          "prompt_cache_retention": null,
+          "include_usage": null,
+          "response_include": null,
+          "top_logprobs": null,
+          "extra_query": null,
+          "extra_body": null,
+          "extra_headers": null,
+          "extra_args": null,
+          "retry": null,
+          "context_management": null
+        },
+        "input_guardrails": [],
+        "output_guardrails": [],
+        "output_type": null,
+        "hooks": null,
+        "tool_use_behavior": "run_llm_again",
+        "reset_tool_choice": true
+      },
+      "raw_item": {
+        "id": "__fake_id__",
+        "content": [
+          {
+            "annotations": [],
+            "text": "",
+            "type": "output_text",
+            "logprobs": []
+          }
+        ],
+        "role": "assistant",
+        "status": "completed",
+        "type": "message",
+        "phase": null,
+        "provider_data": {
+          "model": "claude-opus-4-6",
+          "response_id": "msg_01c4tttEPY61XfrC4Lnfscxw"
+        }
+      },
+      "type": "message_output_item"
+    },
+    {
+      "agent": {
+        "name": "Main Agent",
+        "handoff_description": null,
+        "tools": [
+          {
+            "name": "project_lookup_agent",
+            "description": "查询和解释项目列表",
+            "params_json_schema": {
+              "description": "Default input schema for agent-as-tool calls.",
+              "properties": {
+                "input": {
+                  "title": "Input",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "input"
+              ],
+              "title": "AgentAsToolInput",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "on_invoke_tool": {},
+            "strict_json_schema": true,
+            "is_enabled": true,
+            "tool_input_guardrails": null,
+            "tool_output_guardrails": null,
+            "needs_approval": false,
+            "timeout_seconds": null,
+            "timeout_behavior": "error_as_result",
+            "timeout_error_function": null,
+            "defer_loading": false
+          }
+        ],
+        "mcp_servers": [],
+        "mcp_config": {},
+        "instructions": "必须把项目问题交给 project_lookup_agent 工具。",
+        "prompt": null,
+        "handoffs": [],
+        "model": {
+          "model": "claude-opus-4-6",
+          "should_replay_reasoning_content": null
+        },
+        "model_settings": {
+          "temperature": null,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "tool_choice": null,
+          "parallel_tool_calls": null,
+          "truncation": null,
+          "max_tokens": null,
+          "reasoning": null,
+          "verbosity": null,
+          "metadata": null,
+          "store": null,
+          "prompt_cache_retention": null,
+          "include_usage": null,
+          "response_include": null,
+          "top_logprobs": null,
+          "extra_query": null,
+          "extra_body": null,
+          "extra_headers": null,
+          "extra_args": null,
+          "retry": null,
+          "context_management": null
+        },
+        "input_guardrails": [],
+        "output_guardrails": [],
+        "output_type": null,
+        "hooks": null,
+        "tool_use_behavior": "run_llm_again",
+        "reset_tool_choice": true
+      },
+      "raw_item": {
+        "arguments": "{\"input\": \"列出所有项目\"}",
+        "call_id": "tooluse_Fg8oI2CW6OrhaoK15YQAJv",
+        "name": "project_lookup_agent",
+        "type": "function_call",
+        "id": "__fake_id__",
+        "namespace": null,
+        "status": null,
+        "provider_data": {
+          "model": "claude-opus-4-6",
+          "response_id": "msg_01c4tttEPY61XfrC4Lnfscxw"
+        }
+      },
+      "type": "tool_call_item",
+      "description": "查询和解释项目列表",
+      "title": null,
+      "tool_origin": {
+        "type": "agent_as_tool",
+        "mcp_server_name": null,
+        "agent_name": "Project Lookup Agent",
+        "agent_tool_name": "project_lookup_agent"
+      }
+    },
+    {
+      "agent": {
+        "name": "Main Agent",
+        "handoff_description": null,
+        "tools": [
+          {
+            "name": "project_lookup_agent",
+            "description": "查询和解释项目列表",
+            "params_json_schema": {
+              "description": "Default input schema for agent-as-tool calls.",
+              "properties": {
+                "input": {
+                  "title": "Input",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "input"
+              ],
+              "title": "AgentAsToolInput",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "on_invoke_tool": {},
+            "strict_json_schema": true,
+            "is_enabled": true,
+            "tool_input_guardrails": null,
+            "tool_output_guardrails": null,
+            "needs_approval": false,
+            "timeout_seconds": null,
+            "timeout_behavior": "error_as_result",
+            "timeout_error_function": null,
+            "defer_loading": false
+          }
+        ],
+        "mcp_servers": [],
+        "mcp_config": {},
+        "instructions": "必须把项目问题交给 project_lookup_agent 工具。",
+        "prompt": null,
+        "handoffs": [],
+        "model": {
+          "model": "claude-opus-4-6",
+          "should_replay_reasoning_content": null
+        },
+        "model_settings": {
+          "temperature": null,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "tool_choice": null,
+          "parallel_tool_calls": null,
+          "truncation": null,
+          "max_tokens": null,
+          "reasoning": null,
+          "verbosity": null,
+          "metadata": null,
+          "store": null,
+          "prompt_cache_retention": null,
+          "include_usage": null,
+          "response_include": null,
+          "top_logprobs": null,
+          "extra_query": null,
+          "extra_body": null,
+          "extra_headers": null,
+          "extra_args": null,
+          "retry": null,
+          "context_management": null
+        },
+        "input_guardrails": [],
+        "output_guardrails": [],
+        "output_type": null,
+        "hooks": null,
+        "tool_use_behavior": "run_llm_again",
+        "reset_tool_choice": true
+      },
+      "raw_item": {
+        "call_id": "tooluse_Fg8oI2CW6OrhaoK15YQAJv",
+        "output": "找到以下项目：\n\n1. **RPG Global Launch** (ID: proj_demo_001)\n2. **SLG Creative Test** (ID: proj_demo_002)\n\n需要查看某个项目的详细信息吗？",
+        "type": "function_call_output"
+      },
+      "output": "找到以下项目：\n\n1. **RPG Global Launch** (ID: proj_demo_001)\n2. **SLG Creative Test** (ID: proj_demo_002)\n\n需要查看某个项目的详细信息吗？",
+      "type": "tool_call_output_item",
+      "tool_origin": {
+        "type": "agent_as_tool",
+        "mcp_server_name": null,
+        "agent_name": "Project Lookup Agent",
+        "agent_tool_name": "project_lookup_agent"
+      }
+    },
+    {
+      "agent": {
+        "name": "Main Agent",
+        "handoff_description": null,
+        "tools": [
+          {
+            "name": "project_lookup_agent",
+            "description": "查询和解释项目列表",
+            "params_json_schema": {
+              "description": "Default input schema for agent-as-tool calls.",
+              "properties": {
+                "input": {
+                  "title": "Input",
+                  "type": "string"
+                }
+              },
+              "required": [
+                "input"
+              ],
+              "title": "AgentAsToolInput",
+              "type": "object",
+              "additionalProperties": false
+            },
+            "on_invoke_tool": {},
+            "strict_json_schema": true,
+            "is_enabled": true,
+            "tool_input_guardrails": null,
+            "tool_output_guardrails": null,
+            "needs_approval": false,
+            "timeout_seconds": null,
+            "timeout_behavior": "error_as_result",
+            "timeout_error_function": null,
+            "defer_loading": false
+          }
+        ],
+        "mcp_servers": [],
+        "mcp_config": {},
+        "instructions": "必须把项目问题交给 project_lookup_agent 工具。",
+        "prompt": null,
+        "handoffs": [],
+        "model": {
+          "model": "claude-opus-4-6",
+          "should_replay_reasoning_content": null
+        },
+        "model_settings": {
+          "temperature": null,
+          "top_p": null,
+          "frequency_penalty": null,
+          "presence_penalty": null,
+          "tool_choice": null,
+          "parallel_tool_calls": null,
+          "truncation": null,
+          "max_tokens": null,
+          "reasoning": null,
+          "verbosity": null,
+          "metadata": null,
+          "store": null,
+          "prompt_cache_retention": null,
+          "include_usage": null,
+          "response_include": null,
+          "top_logprobs": null,
+          "extra_query": null,
+          "extra_body": null,
+          "extra_headers": null,
+          "extra_args": null,
+          "retry": null,
+          "context_management": null
+        },
+        "input_guardrails": [],
+        "output_guardrails": [],
+        "output_type": null,
+        "hooks": null,
+        "tool_use_behavior": "run_llm_again",
+        "reset_tool_choice": true
+      },
+      "raw_item": {
+        "id": "__fake_id__",
+        "content": [
+          {
+            "annotations": [],
+            "text": "目前有以下两个项目：\n\n1. **RPG Global Launch** (ID: proj_demo_001)\n2. **SLG Creative Test** (ID: proj_demo_002)\n\n需要查看某个项目的详细信息吗？",
+            "type": "output_text",
+            "logprobs": []
+          }
+        ],
+        "role": "assistant",
+        "status": "completed",
+        "type": "message",
+        "phase": null,
+        "provider_data": {
+          "model": "claude-opus-4-6",
+          "response_id": "msg_01154KMkdWU7C4L3vPT4Eb8v"
+        }
+      },
+      "type": "message_output_item"
+    }
+  ],
+  "raw_responses": [
+    {
+      "output": [
+        {
+          "id": "__fake_id__",
+          "content": [
+            {
+              "annotations": [],
+              "text": "",
+              "type": "output_text",
+              "logprobs": []
+            }
+          ],
+          "role": "assistant",
+          "status": "completed",
+          "type": "message",
+          "phase": null,
+          "provider_data": {
+            "model": "claude-opus-4-6",
+            "response_id": "msg_01c4tttEPY61XfrC4Lnfscxw"
+          }
+        },
+        {
+          "arguments": "{\"input\": \"列出所有项目\"}",
+          "call_id": "tooluse_Fg8oI2CW6OrhaoK15YQAJv",
+          "name": "project_lookup_agent",
+          "type": "function_call",
+          "id": "__fake_id__",
+          "namespace": null,
+          "status": null,
+          "provider_data": {
+            "model": "claude-opus-4-6",
+            "response_id": "msg_01c4tttEPY61XfrC4Lnfscxw"
+          }
+        }
+      ],
+      "usage": {
+        "requests": 1,
+        "input_tokens": 2150,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 26,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2176,
+        "request_usage_entries": []
+      },
+      "response_id": "__fake_id__",
+      "request_id": null
+    },
+    {
+      "output": [
+        {
+          "id": "__fake_id__",
+          "content": [
+            {
+              "annotations": [],
+              "text": "目前有以下两个项目：\n\n1. **RPG Global Launch** (ID: proj_demo_001)\n2. **SLG Creative Test** (ID: proj_demo_002)\n\n需要查看某个项目的详细信息吗？",
+              "type": "output_text",
+              "logprobs": []
+            }
+          ],
+          "role": "assistant",
+          "status": "completed",
+          "type": "message",
+          "phase": null,
+          "provider_data": {
+            "model": "claude-opus-4-6",
+            "response_id": "msg_01154KMkdWU7C4L3vPT4Eb8v"
+          }
+        }
+      ],
+      "usage": {
+        "requests": 1,
+        "input_tokens": 2278,
+        "input_tokens_details": {
+          "cached_tokens": 0
+        },
+        "output_tokens": 66,
+        "output_tokens_details": {
+          "reasoning_tokens": 0
+        },
+        "total_tokens": 2344,
+        "request_usage_entries": []
+      },
+      "response_id": "__fake_id__",
+      "request_id": null
+    }
+  ],
+  "usage_summary": {
+    "input": 4428,
+    "output": 92,
+    "total": 4520
+  },
+  "to_input_list": [
+    {
+      "content": "现在有哪些项目？",
+      "role": "user"
+    },
+    {
+      "id": "__fake_id__",
+      "content": [
+        {
+          "annotations": [],
+          "text": "",
+          "type": "output_text",
+          "logprobs": []
+        }
+      ],
+      "role": "assistant",
+      "status": "completed",
+      "type": "message",
+      "provider_data": {
+        "model": "claude-opus-4-6",
+        "response_id": "msg_01c4tttEPY61XfrC4Lnfscxw"
+      }
+    },
+    {
+      "arguments": "{\"input\": \"列出所有项目\"}",
+      "call_id": "tooluse_Fg8oI2CW6OrhaoK15YQAJv",
+      "name": "project_lookup_agent",
+      "type": "function_call",
+      "id": "__fake_id__",
+      "provider_data": {
+        "model": "claude-opus-4-6",
+        "response_id": "msg_01c4tttEPY61XfrC4Lnfscxw"
+      }
+    },
+    {
+      "call_id": "tooluse_Fg8oI2CW6OrhaoK15YQAJv",
+      "output": "找到以下项目：\n\n1. **RPG Global Launch** (ID: proj_demo_001)\n2. **SLG Creative Test** (ID: proj_demo_002)\n\n需要查看某个项目的详细信息吗？",
+      "type": "function_call_output"
+    },
+    {
+      "id": "__fake_id__",
+      "content": [
+        {
+          "annotations": [],
+          "text": "目前有以下两个项目：\n\n1. **RPG Global Launch** (ID: proj_demo_001)\n2. **SLG Creative Test** (ID: proj_demo_002)\n\n需要查看某个项目的详细信息吗？",
+          "type": "output_text",
+          "logprobs": []
+        }
+      ],
+      "role": "assistant",
+      "status": "completed",
+      "type": "message",
+      "provider_data": {
+        "model": "claude-opus-4-6",
+        "response_id": "msg_01154KMkdWU7C4L3vPT4Eb8v"
+      }
+    }
+  ],
+  "to_state_type": "RunState"
+}

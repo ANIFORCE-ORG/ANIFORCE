@@ -1,93 +1,219 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { useRouter } from 'vue-router'
-import { getDAL } from '@animagus/shared'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import ChatPanel from '@/components/layout/ChatPanel.vue'
+import MessageView from '@/components/agent/MessageView.vue'
+import LiveWorkspaceShell from '@/components/agent/workspace/LiveWorkspaceShell.vue'
+import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
+import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
+import type { AgentMessage } from '@/api/agent'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
+const agent = useAgentSession()
 const inputText = ref('')
-const loading = ref(false)
 const hasInteracted = ref(false)
+const modelMenuOpen = ref(false)
+const activeIntentMode = ref<'chat' | 'project'>('chat')
+const workspaceCollapsed = ref(localStorage.getItem('aniforce.workspace.collapsed') === '1')
+const workspaceWidth = ref(Number(localStorage.getItem('aniforce.workspace.width') || 560))
+const workspaceDragging = ref(false)
 
-// 侧边栏相关状态
-const activeSession = ref('sess_h001')
-const chatInput = ref('')
-
-const sessions = ref([
-  { id: 'sess_h001', name: '新投放计划', active: true },
-  { id: 'sess_h002', name: 'RPG游戏分析', active: false },
-  { id: 'sess_h003', name: '素材优化建议', active: false },
-])
-
-const messages = ref([
+const intentModes: Array<{
+  key: 'chat' | 'project'
+  label: string
+  icon: string
+  description: string
+  route: AgentRouteContext & { titlePrefix: string }
+}> = [
   {
-    role: 'assistant',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: '您好！我是ANIFORCE智能助手。\n\n我可以帮您分析市场趋势、生成创意素材、制定投放策略。请告诉我您的投放目标？'
-  }
-])
-
-const quickHints = [
-  '分析RPG游戏市场',
-  '生成广告素材',
-  '制定投放计划',
-  '优化广告效果'
-]
-
-const analysisResult = ref<{
-  session_id: string
-  message: { role: string; content: string }
-  analysis: {
-    trends: Array<{ id: string; name: string; growth: number; description: string }>
-    recommendations: Array<{ id: string; direction: string; ctr_estimate: number; tags: string[]; description: string }>
-  }
-} | null>(null)
-
-const quickTags = [
-  { emoji: '🎮', label: 'RPG游戏' },
-  { emoji: '⚔️', label: '策略游戏' },
-  { emoji: '🧩', label: '休闲游戏' },
-]
-
-const toolCards = [
-  {
-    icon: 'analytics',
-    iconBg: 'bg-blue-50 dark:bg-blue-900/30',
-    iconColor: 'text-primary',
-    title: '市场洞察分析',
-    desc: '分析竞品趋势与全球买量大盘，制定投放策略。',
-    path: '/market-analysis',
+    key: 'chat',
+    label: '日常对话',
+    icon: 'chat',
+    description: '问答、数据查询、轻量分析',
+    route: {
+      titlePrefix: '日常对话',
+      task_type: 'conversation',
+      workspace_type: 'empty',
+      intent: 'casual_chat'
+    }
   },
   {
-    icon: 'auto_awesome',
-    iconBg: 'bg-purple-50 dark:bg-purple-900/30',
-    iconColor: 'text-purple-600 dark:text-purple-400',
-    title: 'AI 素材生成',
-    desc: '快速生成广告脚本、视频素材与高质量创意海报。',
-    path: '/material',
+    key: 'project',
+    label: '项目管理',
+    icon: 'folder_managed',
+    description: '创建项目、整理配置、推进审批',
+    route: {
+      titlePrefix: '项目管理',
+      task_type: 'project_management',
+      workspace_type: 'project_draft',
+      intent: 'project_management'
+    }
+  }
+]
+
+const starterActions = [
+  {
+    icon: 'folder_open',
+    label: '查看现有项目',
+    description: '拉取当前账号下的项目，并在右侧工作台打开项目列表。',
+    prompt: '现在有哪些项目？',
+    mode: 'chat' as const
   },
   {
-    icon: 'campaign',
-    iconBg: 'bg-emerald-50 dark:bg-emerald-900/30',
-    iconColor: 'text-emerald-600 dark:text-emerald-400',
-    title: '快速建站投放',
-    desc: '一键同步至多渠道广告平台，自动化管理您的预算。',
-    path: '/campaign',
+    icon: 'add_task',
+    label: '创建投放项目',
+    description: '进入项目管理模式，先沉淀草稿再确认落库。',
+    prompt: '帮我创建一个新的投放项目，需要先整理项目草稿。',
+    mode: 'project' as const
   },
   {
     icon: 'monitoring',
-    iconBg: 'bg-orange-50 dark:bg-orange-900/30',
-    iconColor: 'text-orange-600 dark:text-orange-400',
-    title: '投放表现追踪',
-    desc: '多维度看板实时监控 ROAS 与玩家 LTV 数据表现。',
-    path: '/monitor',
+    label: '分析投放表现',
+    description: '结合项目、计划、素材和消耗数据做诊断。',
+    prompt: '帮我分析当前投放项目和计划的表现。',
+    mode: 'chat' as const
   },
+  {
+    icon: 'auto_awesome',
+    label: '生成素材 Brief',
+    description: '基于投放目标生成可交给素材流程的 Brief。',
+    prompt: '帮我为一个投放项目生成素材 Brief。',
+    mode: 'chat' as const
+  }
 ]
 
-const hasContent = computed(() => loading.value || analysisResult.value !== null)
+const visibleMessages = computed(() => agent.visibleMessages.value)
+const hasContent = computed(() => agent.loading.value || agent.agentRunning.value || visibleMessages.value.length > 0 || Boolean(agent.streamingMessage.value) || Boolean(agent.error.value))
+const sidebarSessions = computed(() => agent.sessions.value.map(session => ({
+  id: session.id,
+  name: session.title || session.id,
+  active: agent.activeSession.value?.id === session.id
+})))
+const currentSessionTitle = computed(() => agent.activeSession.value?.title || '新 Agent 任务')
+const activeMode = computed(() => intentModes.find(item => item.key === activeIntentMode.value) || intentModes[0])
+const activeRoute = computed(() => {
+  const { titlePrefix: _titlePrefix, ...route } = activeMode.value.route
+  return route
+})
+const currentTask = computed(() => agent.currentTask.value)
+const hasBusinessTask = computed(() => Boolean(currentTask.value?.task_type && currentTask.value.task_type !== 'conversation' && currentTask.value.task_type !== 'data_query'))
+const hasWorkspaceToolResults = computed(() => agent.workspaceToolResults.value.length > 0)
+const taskPanelVisible = computed(() => true)
+const workspaceStyle = computed(() => ({
+  width: workspaceCollapsed.value ? '56px' : `${workspaceWidth.value}px`
+}))
+const taskStatus = computed<TaskPanelStatus>(() => {
+  if (currentTask.value?.status) return normalizeTaskStatus(currentTask.value.status)
+  if (agent.error.value) return 'failed'
+  if (agent.agentRunning.value) return agent.agentPhase.value?.kind === 'running_tools' ? 'running' : 'running'
+  if (visibleMessages.value.length > 1) return 'completed'
+  if (visibleMessages.value.length > 0 || hasInteracted.value) return 'created'
+  return 'created'
+})
+const taskSummary = computed(() => {
+  if (currentTask.value?.summary) return currentTask.value.summary
+  if (currentTask.value?.goal) return currentTask.value.goal
+  if (agent.error.value) return agent.error.value
+  if (agent.agentRunning.value) return phaseLabel(agent.agentPhase.value)
+  if (taskStatus.value === 'completed') return hasWorkspaceToolResults.value ? '业务结果已保留在工作台。' : '本轮回复已完成。'
+  if (hasInteracted.value) return '任务已创建，描述你的投放目标后 Agent 会继续推进。'
+  return '等待输入任务目标。'
+})
+const taskSteps = computed<TaskPanelStep[]>(() => {
+  const definition = currentTask.value?.task_definition
+  if (definition?.phases?.length) {
+    const currentPhase = currentTask.value?.phase
+    let activeSeen = false
+    return definition.phases.map(phase => {
+      if (currentTask.value?.status === 'completed') return { key: phase.key, label: phase.label, status: 'done' }
+      if (currentTask.value?.status === 'failed') return { key: phase.key, label: phase.label, status: phase.key === currentPhase ? 'error' : 'pending' }
+      if (phase.key === currentPhase) {
+        activeSeen = true
+        return { key: phase.key, label: phase.label, status: 'active' }
+      }
+      return { key: phase.key, label: phase.label, status: activeSeen ? 'pending' : 'done' }
+    })
+  }
+  const status = taskStatus.value
+  const active = agent.agentPhase.value?.kind === 'running_tools' ? 'data' : 'goal'
+  const base = [
+    { key: 'goal', label: '目标确认' },
+    { key: 'data', label: '数据查询' },
+    { key: 'analysis', label: '分析生成' },
+    { key: 'approval', label: '等待确认' },
+    { key: 'done', label: '完成' }
+  ]
+  if (status === 'failed') {
+    return base.map((step, index) => ({ ...step, status: index === 0 ? 'error' : 'pending' }))
+  }
+  if (status === 'completed') {
+    return base.map(step => ({ ...step, status: 'done' }))
+  }
+  if (status === 'created') {
+    return base.map((step, index) => ({ ...step, status: index === 0 ? 'active' : 'pending' }))
+  }
+  return base.map(step => {
+    if (active === 'data') {
+      if (step.key === 'goal') return { ...step, status: 'done' }
+      if (step.key === 'data') return { ...step, status: 'active' }
+      return { ...step, status: 'pending' }
+    }
+    if (step.key === 'goal') return { ...step, status: 'active' }
+    return { ...step, status: 'pending' }
+  })
+})
+const taskActions = computed<TaskPanelAction[]>(() => {
+  const pending = currentTask.value?.pending_actions || []
+  if (pending.length) {
+    return pending.flatMap(action => {
+      const options = action.options?.length ? action.options : [{ value: action.action_type, label: action.title }]
+      return options.map(option => ({
+        key: `${action.id}:${option.value || action.action_type}`,
+        label: option.label || action.title,
+        icon: action.action_type === 'approval' ? 'check' : 'tune',
+        tone: action.action_type === 'approval' ? 'primary' : 'neutral'
+      }))
+    })
+  }
+  if (agent.agentRunning.value) return [{ key: 'abort', label: '停止任务', icon: 'stop', tone: 'danger' }]
+  if (agent.error.value) return [{ key: 'retry', label: '重新发送', icon: 'refresh', tone: 'primary' }]
+  if (taskStatus.value === 'completed' && !hasWorkspaceToolResults.value) {
+    return [
+      { key: 'continue', label: '继续追问', icon: 'chat', tone: 'neutral' },
+      { key: 'material', label: '开始创建素材', icon: 'auto_awesome', tone: 'primary' }
+    ]
+  }
+  if (hasWorkspaceToolResults.value) return []
+  return [{ key: 'focus', label: '补充任务目标', icon: 'edit_note', tone: 'primary' }]
+})
+const taskTags = computed(() => {
+  const tags: string[] = []
+  if (currentTask.value?.task_definition?.label) tags.push(currentTask.value.task_definition.label)
+  if (currentTask.value?.phase) tags.push(currentTask.value.phase)
+  if (agent.agentPhase.value?.kind === 'running_tools') tags.push(...agent.agentPhase.value.tools.slice(0, 2).map(tool => tool.name))
+  return Array.from(new Set(tags)).slice(0, 4)
+})
+const currentModel = computed(() => {
+  const selected = agent.selectedModel.value
+  if (!selected) return agent.models.value[0] || null
+  return agent.models.value.find(model => model.provider === selected.provider && model.id === selected.modelId) || null
+})
+const toolResults = computed(() => {
+  const map = new Map<string, AgentMessage>()
+  for (const msg of agent.visibleMessages.value) {
+    if (msg.role === 'toolResult' && typeof msg.toolCallId === 'string') map.set(msg.toolCallId, msg)
+  }
+  return map
+})
+const taskTypeLabel = computed(() => currentTask.value?.task_definition?.label || undefined)
+const taskPhaseLabel = computed(() => {
+  const phase = currentTask.value?.phase
+  const definition = currentTask.value?.task_definition
+  if (!phase || !definition?.phases) return phase || undefined
+  return definition.phases.find(item => item.key === phase)?.label || phase
+})
+const taskArtifacts = computed<TaskPanelArtifact[]>(() => currentTask.value?.artifacts || [])
 
 function scrollToBottom() {
   nextTick(() => {
@@ -95,249 +221,352 @@ function scrollToBottom() {
   })
 }
 
-async function handleSubmit() {
-  if (!inputText.value.trim() || loading.value) return
-  hasInteracted.value = true
-  loading.value = true
-  analysisResult.value = null
-  scrollToBottom()
-  try {
-    const dal = getDAL()
-    const gameType = quickTags.find(t => inputText.value.includes(t.label))?.label || 'RPG'
-    const res = await dal.chat.analyzeGame(inputText.value, gameType)
-    if (res.success && res.data) {
-      analysisResult.value = res.data
-      scrollToBottom()
-    }
-  } catch (e) {
-    console.error('分析失败:', e)
-  } finally {
-    loading.value = false
+function phaseLabel(phase: AgentPhase): string {
+  if (phase?.kind === 'queued') return '任务已入队，等待 Worker 派发...'
+  if (phase?.kind === 'running_tools') {
+    const names = phase.tools.map(t => t.name)
+    if (!names.length) return 'Agent 正在调用工具...'
+    if (names.length === 1) return `Agent 正在调用 ${names[0]}...`
+    return `Agent 正在调用 ${names.slice(0, 2).join(', ')}${names.length > 2 ? ` 等 ${names.length} 个工具` : ''}...`
   }
+  if (phase?.kind === 'waiting_model') return 'Agent 正在思考...'
+  return 'Agent 正在处理...'
 }
 
-function handleTagClick(tag: string) {
-  inputText.value = tag
+function normalizeTaskStatus(status: string): TaskPanelStatus {
+  if (status === 'waiting_approval') return 'waiting_approval'
+  if (status === 'completed') return 'completed'
+  if (status === 'failed') return 'failed'
+  if (status === 'canceled') return 'canceled'
+  if (status === 'created') return 'created'
+  return 'running'
+}
+
+function clampWorkspaceWidth(value: number): number {
+  const viewportMax = Math.max(520, Math.floor(window.innerWidth * 0.76))
+  return Math.min(Math.max(value, 520), viewportMax)
+}
+
+function persistWorkspaceState() {
+  localStorage.setItem('aniforce.workspace.width', String(workspaceWidth.value))
+  localStorage.setItem('aniforce.workspace.collapsed', workspaceCollapsed.value ? '1' : '0')
+}
+
+function toggleWorkspaceCollapsed() {
+  workspaceCollapsed.value = !workspaceCollapsed.value
+  persistWorkspaceState()
+}
+
+function handleWorkspacePointerMove(event: PointerEvent) {
+  if (!workspaceDragging.value) return
+  workspaceWidth.value = clampWorkspaceWidth(window.innerWidth - event.clientX)
+  persistWorkspaceState()
+}
+
+function stopWorkspaceResize() {
+  workspaceDragging.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+}
+
+function startWorkspaceResize(event: PointerEvent) {
+  if (workspaceCollapsed.value) return
+  workspaceDragging.value = true
+  document.body.style.cursor = 'col-resize'
+  document.body.style.userSelect = 'none'
+  event.preventDefault()
+}
+
+async function handleSubmit() {
+  const message = inputText.value.trim()
+  if (!message || agent.loading.value || agent.agentRunning.value) return
+  hasInteracted.value = true
+  inputText.value = ''
+  scrollToBottom()
+  await agent.send(message, undefined, activeRoute.value)
+  scrollToBottom()
+}
+
+async function runStarterAction(action: typeof starterActions[number]) {
+  activeIntentMode.value = action.mode
+  inputText.value = action.prompt
+  await nextTick()
+  await handleSubmit()
 }
 
 function navigateTo(path: string) {
   router.push(path)
 }
 
+async function analyzeProject(project: { id: string; name: string }) {
+  activeIntentMode.value = 'chat'
+  inputText.value = `请基于当前项目「${project.name}」进行投放诊断，先汇总预算、消耗、关联投放计划和素材情况，再给出下一步优化建议。项目ID：${project.id}`
+  await nextTick()
+  await handleSubmit()
+}
+
+function openProject(project: { id: string }) {
+  navigateTo(`/projects/${project.id}`)
+}
+
+function handleTaskAction(action: string) {
+  if (action.includes(':')) {
+    window.requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
+      input?.focus()
+    })
+    return
+  }
+  if (action === 'abort') {
+    void agent.abort()
+    return
+  }
+  if (action === 'material' || action === 'open_material') {
+    navigateTo('/material')
+    return
+  }
+  if (action === 'retry' || action === 'continue' || action === 'focus') {
+    window.requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
+      input?.focus()
+    })
+  }
+  if (action === 'approve_campaign' || action === 'revise_campaign' || action === 'cancel_campaign' || action === 'edit_brief') {
+    window.requestAnimationFrame(() => {
+      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
+      input?.focus()
+    })
+  }
+}
+
 const switchPanel = (item: any) => {
+  if (item.id === 'new-task') {
+    void createChatSession()
+    hasInteracted.value = false
+    inputText.value = ''
+    return
+  }
   if (item.path) {
     router.push(item.path)
   }
 }
 
-const switchSession = (session: any) => {
-  activeSession.value = session.id
-  sessions.value.forEach(s => s.active = s.id === session.id)
-}
-
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  messages.value.push({
-    role: 'user',
-    author: '用户',
-    time: '刚刚',
-    content: message
+async function createSessionForActiveMode() {
+  const mode = activeMode.value
+  await agent.createSession({
+    ...activeRoute.value,
+    title: `${mode.route.titlePrefix} ${agent.sessions.value.length + 1}`
   })
-  chatInput.value = ''
 }
 
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
+async function createChatSession() {
+  activeIntentMode.value = 'chat'
+  const chatMode = intentModes[0]
+  const { titlePrefix: _titlePrefix, ...route } = chatMode.route
+  await agent.createSession({
+    ...route,
+    title: `${chatMode.route.titlePrefix} ${agent.sessions.value.length + 1}`
+  })
 }
+
+const switchSession = (session: any) => {
+  const target = agent.sessions.value.find(item => item.id === session.id)
+  if (target) {
+    hasInteracted.value = true
+    void agent.selectSession(target)
+  }
+}
+
+function selectModel(model: { provider: string; id: string }) {
+  modelMenuOpen.value = false
+  void agent.changeModel(model.provider, model.id)
+}
+
+onMounted(async () => {
+  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
+  window.addEventListener('pointermove', handleWorkspacePointerMove)
+  window.addEventListener('pointerup', stopWorkspaceResize)
+  await Promise.all([agent.refreshModels(), agent.refreshSessions()])
+  if (agent.sessions.value.length > 0) await agent.selectSession(agent.sessions.value[0])
+  else await createSessionForActiveMode()
+})
+
+onBeforeUnmount(() => {
+  window.removeEventListener('pointermove', handleWorkspacePointerMove)
+  window.removeEventListener('pointerup', stopWorkspaceResize)
+})
 </script>
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航 -->
     <SidebarNav 
       :nav-items="navItems"
-      :sessions="sessions"
+      :sessions="sidebarSessions"
       @switch-panel="switchPanel"
       @switch-session="switchSession"
     />
 
     <!-- 中间核心工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+      <div class="h-11 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4">
+        <div class="flex min-w-0 items-center gap-2">
+          <span class="material-symbols-outlined text-base text-slate-400">chat</span>
+          <h3 class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{{ currentSessionTitle }}</h3>
+        </div>
+        <div class="flex items-center gap-1">
+          <button
+            class="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+            :disabled="agent.loading.value"
+            title="新任务"
+            @click="createSessionForActiveMode()"
+          >
+            <span class="material-symbols-outlined text-lg">add</span>
+          </button>
+        </div>
+      </div>
       <div class="flex-1 overflow-y-auto">
-        <div class="flex flex-col items-center px-4 pb-8">
-    <!-- Top spacer: pushes content to center when no output -->
-    <div v-if="!hasContent" class="flex-1 min-h-[94px]"></div>
+        <div class="flex min-h-full flex-col items-center px-4 pb-8">
+    <div v-if="!hasContent" class="flex-1 min-h-[48px]"></div>
 
-    <!-- Greeting -->
-    <div
-      class="max-w-[624px] w-full text-center space-y-[19px] transition-all duration-500"
-      :class="hasContent ? 'pt-[25px] mb-[19px] opacity-50 scale-[0.92]' : 'mb-[37px]'"
+    <section
+      v-if="!hasContent"
+      class="w-full max-w-[760px]"
     >
-      <h1 class="text-slate-900 dark:text-white text-[28px] md:text-[34px] font-poppins font-semibold tracking-tight">
-        又见面啦！有新的投放计划吗？
-      </h1>
-      <p class="text-slate-500 dark:text-slate-400 text-[15px]">
-        利用 AI 驱动的见解和素材生成，快速启动您的下一个全球营销活动。
-      </p>
-    </div>
+      <div class="flex items-center justify-between gap-4">
+        <div class="min-w-0">
+          <h1 class="text-xl font-semibold text-slate-950 dark:text-white">今天要推进什么？</h1>
+        </div>
+        <button
+          class="hidden h-8 items-center gap-2 rounded-md px-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white sm:inline-flex"
+          @click="createSessionForActiveMode()"
+        >
+          <span class="material-symbols-outlined text-base">add</span>
+          新任务
+        </button>
+      </div>
+      <div class="mt-4 divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
+        <button
+          v-for="action in starterActions"
+          :key="action.label"
+          class="group flex min-h-[52px] w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
+          @click="runStarterAction(action)"
+        >
+          <span class="material-symbols-outlined text-lg text-slate-400 group-hover:text-primary">{{ action.icon }}</span>
+          <span class="min-w-0 flex-1">
+            <span class="block text-sm font-medium text-slate-900 dark:text-white">{{ action.label }}</span>
+            <span class="block truncate text-xs text-slate-500 dark:text-slate-400">{{ action.description }}</span>
+          </span>
+          <span class="material-symbols-outlined text-base text-slate-300 group-hover:text-slate-500">arrow_forward</span>
+        </button>
+      </div>
+    </section>
 
-    <!-- Output Content Area (above the input bar, only when has content) -->
-    <div v-if="hasContent" class="max-w-[842px] w-full px-[12px] space-y-[19px] mb-[19px]">
-      <!-- Loading State -->
-      <div v-if="loading" class="flex items-center justify-center gap-[9px] py-[25px]">
-        <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <span class="text-slate-500 text-[11px]">AI 正在分析中，请稍候...</span>
+    <!-- Agent conversation output -->
+    <div v-if="hasContent" class="agent-output max-w-[860px] w-full px-4 space-y-2 mb-6">
+      <div v-if="agent.loading.value" class="flex items-center justify-center gap-3 py-8">
+        <div class="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-slate-500 text-sm">正在加载 Agent 会话...</span>
       </div>
 
-      <!-- Analysis Result -->
-      <template v-if="analysisResult">
-        <!-- AI Message -->
-        <div class="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 p-[19px] shadow-sm">
-          <div class="flex items-start gap-[9px]">
-            <div class="h-[25px] w-[25px] rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
-              <span class="material-symbols-outlined text-primary text-[11px]">smart_toy</span>
-            </div>
-            <p class="text-slate-700 dark:text-slate-300 text-[13px] leading-relaxed">{{ analysisResult.message.content }}</p>
-          </div>
-        </div>
+      <div v-else-if="agent.error.value" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
+        {{ agent.error.value }}
+      </div>
 
-        <!-- Trends -->
-        <div>
-          <h3 class="text-[15px] font-bold mb-[12px] dark:text-white">
-            <span class="material-symbols-outlined text-[17px] text-primary align-middle mr-[4px]">trending_up</span>
-            市场热点趋势
-          </h3>
-          <div class="grid grid-cols-1 sm:grid-cols-3 gap-[12px]">
-            <div
-              v-for="trend in analysisResult.analysis.trends"
-              :key="trend.id"
-              class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-[16px] hover:border-primary/50 transition-all"
-            >
-              <div class="flex items-center justify-between mb-[6px]">
-                <h4 class="font-semibold text-[13px] text-slate-900 dark:text-white">{{ trend.name }}</h4>
-                <span class="text-[10px] font-bold text-emerald-600 bg-emerald-50 dark:bg-emerald-900/30 px-[6px] py-[4px] rounded-full">
-                  +{{ trend.growth }}%
-                </span>
-              </div>
-              <p class="text-[11px] text-slate-500 dark:text-slate-400">{{ trend.description }}</p>
-            </div>
-          </div>
-        </div>
-
-        <!-- Recommendations -->
-        <div>
-          <h3 class="text-[15px] font-bold mb-[12px] dark:text-white">
-            <span class="material-symbols-outlined text-[17px] text-primary align-middle mr-[4px]">lightbulb</span>
-            推荐素材方向
-          </h3>
-          <div class="grid grid-cols-1 sm:grid-cols-2 gap-[12px]">
-            <div
-              v-for="rec in analysisResult.analysis.recommendations"
-              :key="rec.id"
-              class="bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-[16px] hover:border-primary/50 hover:shadow-md transition-all cursor-pointer group"
-            >
-              <div class="flex items-center justify-between mb-[6px]">
-                <h4 class="font-semibold text-[13px] text-slate-900 dark:text-white group-hover:text-primary transition-colors">{{ rec.direction }}</h4>
-                <span class="text-[10px] font-bold text-primary bg-primary/10 px-[6px] py-[4px] rounded-full">
-                  CTR {{ rec.ctr_estimate }}%
-                </span>
-              </div>
-              <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-[9px]">{{ rec.description }}</p>
-              <div class="flex flex-wrap gap-[6px]">
-                <span
-                  v-for="tag in rec.tags"
-                  :key="tag"
-                  class="text-[10px] px-[6px] py-[4px] rounded-full bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-                >
-                  {{ tag }}
-                </span>
-              </div>
-            </div>
-          </div>
+      <template v-else>
+        <template v-for="(message, index) in agent.visibleMessages.value" :key="message.id || `${message.role}-${message.timestamp}-${index}`">
+          <MessageView
+            :message="message"
+            :tool-results="toolResults"
+            :model-names="agent.modelNames.value"
+            :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
+          />
+        </template>
+        <MessageView
+          v-if="agent.streamingMessage.value"
+          :message="agent.streamingMessage.value"
+          is-streaming
+          :tool-results="toolResults"
+          :model-names="agent.modelNames.value"
+        />
+        <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="flex items-center gap-2 py-4 text-sm text-slate-500">
+          <div class="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <span>{{ phaseLabel(agent.agentPhase.value) }}</span>
         </div>
       </template>
     </div>
 
     <!-- Floating Command Bar (always below output content) -->
-    <div class="max-w-[671px] w-full px-[12px] mb-[19px]">
+    <div class="max-w-[860px] w-full px-4 mb-6">
       <div class="relative group">
-        <!-- Glow effect -->
-        <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-blue-400/20 rounded-full blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200"></div>
         <!-- Input bar -->
-        <div class="relative flex items-center bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-200/50 dark:shadow-none p-[6px] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
-          <button class="flex items-center justify-center p-[9px] text-slate-400 hover:text-primary transition-colors">
-            <span class="material-symbols-outlined text-[19px]">attach_file</span>
+        <div class="relative flex items-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm shadow-slate-200/70 transition-all focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:shadow-none dark:focus-within:border-slate-500">
+          <button class="flex items-center justify-center p-3 text-slate-400 hover:text-primary transition-colors" title="上传素材">
+            <span class="material-symbols-outlined">attach_file</span>
           </button>
           <input
             v-model="inputText"
-            class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-[15px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 py-[9px] px-[6px]"
+            data-agent-input="home"
+            class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-base text-slate-800 dark:text-slate-200 placeholder:text-slate-400 py-3 px-2"
             placeholder="描述您的投放目标或上传素材..."
             type="text"
             @keydown.enter="handleSubmit"
           />
-          <div class="flex items-center gap-[6px] pr-[6px]">
-            <button class="flex items-center justify-center p-[9px] text-slate-400 hover:text-primary transition-colors">
-              <span class="material-symbols-outlined text-[19px]">mic</span>
+          <div class="flex items-center gap-2 pr-2">
+            <button
+              v-if="agent.agentRunning.value"
+              class="inline-flex h-10 items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-600 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
+              @click="agent.abort()"
+            >
+              <span class="material-symbols-outlined text-base">stop</span>
+              停止
             </button>
             <button
-              class="bg-primary text-white h-[37px] w-[37px] rounded-full flex items-center justify-center hover:bg-primary/90 transition-all shadow-lg shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="loading || !inputText.trim()"
+              v-else
+              class="bg-primary text-white h-10 px-4 rounded-md flex items-center gap-2 justify-center hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="agent.loading.value || agent.agentRunning.value || !inputText.trim()"
               @click="handleSubmit"
             >
-              <span v-if="loading" class="h-[16px] w-[16px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
-              <span v-else class="material-symbols-outlined text-[19px]">arrow_forward</span>
+              <span class="text-sm font-medium">发送</span>
+              <span class="material-symbols-outlined text-base">arrow_forward</span>
             </button>
           </div>
         </div>
-      </div>
-
-      <!-- Create Material Button (only show after interaction) -->
-      <button
-        v-if="hasInteracted"
-        class="w-full mt-[9px] py-[9px] rounded-full bg-slate-200 dark:bg-slate-700 text-slate-600 dark:text-slate-300 text-[11px] font-medium hover:bg-slate-300 dark:hover:bg-slate-600 hover:text-primary transition-all cursor-pointer"
-        @click="navigateTo('/material')"
-      >
-        开始创建素材
-      </button>
-
-      <!-- Quick Tags (hide after interaction) -->
-      <div v-if="!hasContent" class="flex flex-wrap justify-center gap-[9px] mt-[19px]">
-        <button
-          v-for="tag in quickTags"
-          :key="tag.label"
-          class="flex items-center gap-[6px] px-[16px] py-[6px] rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-primary hover:text-primary transition-all shadow-sm"
-          @click="handleTagClick(tag.label)"
-        >
-          <span class="text-[15px]">{{ tag.emoji }}</span>
-          <span class="text-[11px] font-medium">{{ tag.label }}</span>
-        </button>
-      </div>
-    </div>
-
-    <!-- Tool Cards (only show when no content) -->
-    <div v-if="!hasContent && !hasInteracted" class="w-full max-w-[842px] mt-[25px]">
-      <div class="flex items-center justify-between px-[19px] mb-[19px]">
-        <h3 class="text-[15px] font-bold dark:text-white">推荐工具</h3>
-        <!--  <a class="text-sm font-semibold text-primary hover:underline" href="#">查看全部</a> -->
-      </div>
-      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[19px] px-[12px]">
-        <div
-          v-for="card in toolCards"
-          :key="card.title"
-          class="group bg-white dark:bg-slate-900 p-[19px] rounded-xl border border-slate-200 dark:border-slate-800 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all cursor-pointer"
-          @click="navigateTo(card.path)"
-        >
-          <div
-            class="h-[37px] w-[37px] rounded-lg flex items-center justify-center mb-[12px] group-hover:scale-110 transition-transform"
-            :class="[card.iconBg, card.iconColor]"
-          >
-            <span class="material-symbols-outlined text-[19px]">{{ card.icon }}</span>
+        <div class="mt-2 flex items-center justify-between gap-3 px-1 text-xs text-slate-500 dark:text-slate-400">
+          <div class="relative">
+            <button
+              class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-white"
+              :disabled="agent.agentRunning.value || agent.models.value.length === 0"
+              @click="modelMenuOpen = !modelMenuOpen"
+            >
+              <span class="material-symbols-outlined text-sm">memory</span>
+              <span class="max-w-[180px] truncate">{{ currentModel?.name || '选择模型' }}</span>
+              <span class="material-symbols-outlined text-sm">expand_more</span>
+            </button>
+            <div
+              v-if="modelMenuOpen"
+              class="absolute bottom-full left-0 z-30 mb-2 w-72 overflow-hidden rounded-md border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
+            >
+              <button
+                v-for="model in agent.models.value"
+                :key="`${model.provider}:${model.id}`"
+                class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
+                :class="currentModel?.provider === model.provider && currentModel?.id === model.id ? 'text-primary bg-primary/5' : 'text-slate-700 dark:text-slate-300'"
+                @click="selectModel(model)"
+              >
+                <span class="min-w-0">
+                  <span class="block truncate font-medium">{{ model.name }}</span>
+                  <span class="block truncate text-xs text-slate-500">{{ model.provider }}</span>
+                </span>
+                <span v-if="currentModel?.provider === model.provider && currentModel?.id === model.id" class="material-symbols-outlined text-base">check</span>
+              </button>
+            </div>
           </div>
-          <h4 class="font-bold text-[13px] text-slate-900 dark:text-white mb-[6px]">{{ card.title }}</h4>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{{ card.desc }}</p>
+          <span class="hidden sm:inline">系统会根据目标自动选择合适能力</span>
         </div>
       </div>
+
     </div>
 
     <!-- Bottom spacer: pushes content to center when no output -->
@@ -345,5 +574,172 @@ const handleHintClick = (hint: string) => {
         </div>
       </div>
     </main>
+    <div
+      v-if="taskPanelVisible && !workspaceCollapsed"
+      class="hidden xl:flex w-1 shrink-0 cursor-col-resize items-stretch justify-center bg-slate-100 hover:bg-primary/20 dark:bg-slate-900 dark:hover:bg-primary/20"
+      @pointerdown="startWorkspaceResize"
+    >
+      <div class="my-5 w-px bg-slate-300 dark:bg-slate-700"></div>
+    </div>
+    <LiveWorkspaceShell
+      v-if="taskPanelVisible"
+      :visible="taskPanelVisible"
+      :collapsed="workspaceCollapsed"
+      :session-id="agent.activeSession.value?.id"
+      :style="workspaceStyle"
+      :title="currentSessionTitle"
+      :status="taskStatus"
+      :summary="taskSummary"
+      :tags="taskTags"
+      :steps="taskSteps"
+      :actions="taskActions"
+      :task-type-label="taskTypeLabel"
+      :phase-label="taskPhaseLabel"
+      :artifacts="taskArtifacts"
+      :tool-results="agent.workspaceToolResults.value"
+      @toggle-collapse="toggleWorkspaceCollapsed"
+      @action="handleTaskAction"
+      @analyze-project="analyzeProject"
+      @open-project="openProject"
+    />
   </div>
 </template>
+
+<style scoped>
+.agent-output {
+  --bg: #ffffff;
+  --surface: #ffffff;
+  --surface-container: #f8fafc;
+  --bg-panel: #f1f5f9;
+  --bg-hover: #f1f5f9;
+  --bg-selected: #eaf2ff;
+  --assistant-bg: transparent;
+  --user-bg: #f8fbff;
+  --border: #e2e8f0;
+  --outline: #cbd5e1;
+  --outline-variant: #e2e8f0;
+  --text: #0f172a;
+  --text-muted: #64748b;
+  --text-dim: #94a3b8;
+  --accent: #2563eb;
+  --success: #059669;
+  --warning: #d97706;
+  --error: #dc2626;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+}
+
+.agent-output :deep(.assistant-message) {
+  margin-bottom: 22px;
+  padding: 0 0 0 14px;
+  border-left: 2px solid rgba(37, 99, 235, .16);
+}
+
+.agent-output :deep(.assistant-model-row) {
+  min-height: 18px;
+  margin-bottom: 6px;
+  color: #94a3b8;
+  font-size: 11px;
+}
+
+.agent-output :deep(.stream-stat),
+.agent-output :deep(.tps-badge) {
+  border-radius: 999px;
+  padding: 1px 6px;
+  background: #f1f5f9;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.agent-output :deep(.assistant-block-list) {
+  gap: 10px;
+}
+
+.agent-output :deep(.markdown-body) {
+  color: #334155;
+  font-size: 15px;
+  line-height: 1.75;
+}
+
+.agent-output :deep(.user-bubble) {
+  max-width: min(72%, 620px);
+  border: 1px solid rgba(37, 99, 235, .12);
+  border-radius: 14px 14px 4px 14px;
+  background: #eff6ff;
+  color: #0f172a;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
+}
+
+.agent-output :deep(.thinking-block),
+.agent-output :deep(.tool-call-block) {
+  border-color: #dbeafe;
+  background: #f8fafc;
+  border-radius: 10px;
+}
+
+.agent-output :deep(.thinking-block > button),
+.agent-output :deep(.tool-call-block > button) {
+  padding: 7px 10px;
+}
+
+.agent-output :deep(.tool-name) {
+  color: #2563eb;
+}
+
+.agent-output :deep(.tool-status) {
+  border-radius: 999px;
+  padding: 1px 7px;
+  background: #e0f2fe;
+  color: #0369a1;
+}
+
+.agent-output :deep(.code-block) {
+  border-radius: 10px;
+  border-color: #e2e8f0;
+  background: #f8fafc;
+}
+
+.agent-output :deep(.assistant-footer) {
+  margin-top: 6px;
+  color: #94a3b8;
+}
+
+:global(.dark) .agent-output {
+  --bg: #0f172a;
+  --surface: #0f172a;
+  --surface-container: #111827;
+  --bg-panel: #1e293b;
+  --bg-hover: #1e293b;
+  --bg-selected: rgba(37, 99, 235, .2);
+  --assistant-bg: transparent;
+  --user-bg: rgba(30, 41, 59, .72);
+  --border: #334155;
+  --outline: #475569;
+  --outline-variant: #334155;
+  --text: #f8fafc;
+  --text-muted: #cbd5e1;
+  --text-dim: #94a3b8;
+}
+
+:global(.dark) .agent-output :deep(.markdown-body) {
+  color: #e2e8f0;
+}
+
+:global(.dark) .agent-output :deep(.assistant-message) {
+  border-left-color: rgba(96, 165, 250, .24);
+}
+
+:global(.dark) .agent-output :deep(.user-bubble) {
+  border-color: rgba(96, 165, 250, .24);
+  background: rgba(37, 99, 235, .18);
+  color: #f8fafc;
+}
+
+:global(.dark) .agent-output :deep(.stream-stat),
+:global(.dark) .agent-output :deep(.tps-badge),
+:global(.dark) .agent-output :deep(.thinking-block),
+:global(.dark) .agent-output :deep(.tool-call-block),
+:global(.dark) .agent-output :deep(.code-block) {
+  background: rgba(15, 23, 42, .72);
+  border-color: #334155;
+}
+</style>

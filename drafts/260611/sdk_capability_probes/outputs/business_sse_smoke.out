@@ -1,0 +1,15 @@
+event: runtime.started
+data: {"session_id": "chat_ac0df1eeee994d1989455deda245c7b9", "sequence": 0, "provider": "https://www.codefoxai.top/v1", "model": "claude-opus-4-6"}
+
+event: message.started
+data: {"session_id": "chat_ac0df1eeee994d1989455deda245c7b9", "sequence": 1, "message": {"id": "msg_036ccdbb43f14b87b277c20d3e3ff64e", "role": "user", "content": "只回复 OK", "created_at": "2026-06-11T14:06:27.454047", "provider": null, "model": null, "usage": null}, "assistantMessageEvent": {"id": "msg_cf0538e4ea2e490ca277133d96133df8", "role": "assistant", "content": "", "provider": "https://www.codefoxai.top/v1", "model": "claude-opus-4-6", "created_at": "2026-06-11T14:06:27.454125"}}
+
+event: message.updated
+data: {"session_id": "chat_ac0df1eeee994d1989455deda245c7b9", "sequence": 2, "assistantMessageEvent": {"id": "msg_cf0538e4ea2e490ca277133d96133df8", "role": "assistant", "delta": "OK", "content": "OK", "provider": "https://www.codefoxai.top/v1", "model": "claude-opus-4-6"}}
+
+event: message.completed
+data: {"session_id": "chat_ac0df1eeee994d1989455deda245c7b9", "sequence": 3, "assistantMessageEvent": {"id": "msg_cf0538e4ea2e490ca277133d96133df8", "role": "assistant", "content": "OK", "created_at": "2026-06-11T14:06:30.449061", "provider": "https://www.codefoxai.top/v1", "model": "claude-opus-4-6", "usage": {"input": 1737, "output": 1, "totalTokens": 1738}}, "usage": {"input": 1737, "output": 1, "totalTokens": 1738}}
+
+event: runtime.completed
+data: {"session_id": "chat_ac0df1eeee994d1989455deda245c7b9", "sequence": 4, "usage": {"input": 1737, "output": 1, "totalTokens": 1738}, "provider": "https://www.codefoxai.top/v1", "model": "claude-opus-4-6"}
+

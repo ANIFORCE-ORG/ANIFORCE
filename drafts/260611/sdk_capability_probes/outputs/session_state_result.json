@@ -1,0 +1,311 @@
+{
+  "first": {
+    "final_output": "好的，我记住了你的代号是 ANIFORCE-42。需要帮忙吗？",
+    "last_agent": "Session Probe Agent",
+    "new_items": [
+      {
+        "agent": {
+          "name": "Session Probe Agent",
+          "handoff_description": null,
+          "tools": [],
+          "mcp_servers": [],
+          "mcp_config": {},
+          "instructions": "记住用户说的代号，并在下一轮复述。",
+          "prompt": null,
+          "handoffs": [],
+          "model": {
+            "model": "claude-opus-4-6",
+            "should_replay_reasoning_content": null
+          },
+          "model_settings": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null,
+            "presence_penalty": null,
+            "tool_choice": null,
+            "parallel_tool_calls": null,
+            "truncation": null,
+            "max_tokens": null,
+            "reasoning": null,
+            "verbosity": null,
+            "metadata": null,
+            "store": null,
+            "prompt_cache_retention": null,
+            "include_usage": null,
+            "response_include": null,
+            "top_logprobs": null,
+            "extra_query": null,
+            "extra_body": null,
+            "extra_headers": null,
+            "extra_args": null,
+            "retry": null,
+            "context_management": null
+          },
+          "input_guardrails": [],
+          "output_guardrails": [],
+          "output_type": null,
+          "hooks": null,
+          "tool_use_behavior": "run_llm_again",
+          "reset_tool_choice": true
+        },
+        "raw_item": {
+          "id": "__fake_id__",
+          "content": [
+            {
+              "annotations": [],
+              "text": "好的，我记住了你的代号是 ANIFORCE-42。需要帮忙吗？",
+              "type": "output_text",
+              "logprobs": []
+            }
+          ],
+          "role": "assistant",
+          "status": "completed",
+          "type": "message",
+          "phase": null,
+          "provider_data": {
+            "model": "claude-opus-4-6",
+            "response_id": "msg_019DyFRFZ7KUXtYdY8pyk2Kr"
+          }
+        },
+        "type": "message_output_item"
+      }
+    ],
+    "raw_responses": [
+      {
+        "output": [
+          {
+            "id": "__fake_id__",
+            "content": [
+              {
+                "annotations": [],
+                "text": "好的，我记住了你的代号是 ANIFORCE-42。需要帮忙吗？",
+                "type": "output_text",
+                "logprobs": []
+              }
+            ],
+            "role": "assistant",
+            "status": "completed",
+            "type": "message",
+            "phase": null,
+            "provider_data": {
+              "model": "claude-opus-4-6",
+              "response_id": "msg_019DyFRFZ7KUXtYdY8pyk2Kr"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 1,
+          "input_tokens": 1495,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens": 30,
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "total_tokens": 1525,
+          "request_usage_entries": []
+        },
+        "response_id": null,
+        "request_id": null
+      }
+    ],
+    "usage_summary": {
+      "input": 1495,
+      "output": 30,
+      "total": 1525
+    },
+    "to_input_list": [
+      {
+        "content": "我的代号是 ANIFORCE-42。",
+        "role": "user"
+      },
+      {
+        "id": "__fake_id__",
+        "content": [
+          {
+            "annotations": [],
+            "text": "好的，我记住了你的代号是 ANIFORCE-42。需要帮忙吗？",
+            "type": "output_text",
+            "logprobs": []
+          }
+        ],
+        "role": "assistant",
+        "status": "completed",
+        "type": "message",
+        "provider_data": {
+          "model": "claude-opus-4-6",
+          "response_id": "msg_019DyFRFZ7KUXtYdY8pyk2Kr"
+        }
+      }
+    ],
+    "to_state_type": "RunState"
+  },
+  "second": {
+    "final_output": "你的代号是 ANIFORCE-42。需要帮忙吗？",
+    "last_agent": "Session Probe Agent",
+    "new_items": [
+      {
+        "agent": {
+          "name": "Session Probe Agent",
+          "handoff_description": null,
+          "tools": [],
+          "mcp_servers": [],
+          "mcp_config": {},
+          "instructions": "记住用户说的代号，并在下一轮复述。",
+          "prompt": null,
+          "handoffs": [],
+          "model": {
+            "model": "claude-opus-4-6",
+            "should_replay_reasoning_content": null
+          },
+          "model_settings": {
+            "temperature": null,
+            "top_p": null,
+            "frequency_penalty": null,
+            "presence_penalty": null,
+            "tool_choice": null,
+            "parallel_tool_calls": null,
+            "truncation": null,
+            "max_tokens": null,
+            "reasoning": null,
+            "verbosity": null,
+            "metadata": null,
+            "store": null,
+            "prompt_cache_retention": null,
+            "include_usage": null,
+            "response_include": null,
+            "top_logprobs": null,
+            "extra_query": null,
+            "extra_body": null,
+            "extra_headers": null,
+            "extra_args": null,
+            "retry": null,
+            "context_management": null
+          },
+          "input_guardrails": [],
+          "output_guardrails": [],
+          "output_type": null,
+          "hooks": null,
+          "tool_use_behavior": "run_llm_again",
+          "reset_tool_choice": true
+        },
+        "raw_item": {
+          "id": "__fake_id__",
+          "content": [
+            {
+              "annotations": [],
+              "text": "你的代号是 ANIFORCE-42。需要帮忙吗？",
+              "type": "output_text",
+              "logprobs": []
+            }
+          ],
+          "role": "assistant",
+          "status": "completed",
+          "type": "message",
+          "phase": null,
+          "provider_data": {
+            "model": "claude-opus-4-6",
+            "response_id": "msg_01tQLbX6zHeofQH8SEeBTUGB"
+          }
+        },
+        "type": "message_output_item"
+      }
+    ],
+    "raw_responses": [
+      {
+        "output": [
+          {
+            "id": "__fake_id__",
+            "content": [
+              {
+                "annotations": [],
+                "text": "你的代号是 ANIFORCE-42。需要帮忙吗？",
+                "type": "output_text",
+                "logprobs": []
+              }
+            ],
+            "role": "assistant",
+            "status": "completed",
+            "type": "message",
+            "phase": null,
+            "provider_data": {
+              "model": "claude-opus-4-6",
+              "response_id": "msg_01tQLbX6zHeofQH8SEeBTUGB"
+            }
+          }
+        ],
+        "usage": {
+          "requests": 1,
+          "input_tokens": 1540,
+          "input_tokens_details": {
+            "cached_tokens": 0
+          },
+          "output_tokens": 23,
+          "output_tokens_details": {
+            "reasoning_tokens": 0
+          },
+          "total_tokens": 1563,
+          "request_usage_entries": []
+        },
+        "response_id": null,
+        "request_id": null
+      }
+    ],
+    "usage_summary": {
+      "input": 1540,
+      "output": 23,
+      "total": 1563
+    },
+    "to_input_list": [
+      {
+        "content": "我的代号是 ANIFORCE-42。",
+        "role": "user"
+      },
+      {
+        "id": "__fake_id__",
+        "content": [
+          {
+            "annotations": [],
+            "text": "好的，我记住了你的代号是 ANIFORCE-42。需要帮忙吗？",
+            "type": "output_text",
+            "logprobs": []
+          }
+        ],
+        "role": "assistant",
+        "status": "completed",
+        "type": "message",
+        "provider_data": {
+          "model": "claude-opus-4-6",
+          "response_id": "msg_019DyFRFZ7KUXtYdY8pyk2Kr"
+        }
+      },
+      {
+        "content": "我的代号是什么？",
+        "role": "user"
+      },
+      {
+        "id": "__fake_id__",
+        "content": [
+          {
+            "annotations": [],
+            "text": "你的代号是 ANIFORCE-42。需要帮忙吗？",
+            "type": "output_text",
+            "logprobs": []
+          }
+        ],
+        "role": "assistant",
+        "status": "completed",
+        "type": "message",
+        "provider_data": {
+          "model": "claude-opus-4-6",
+          "response_id": "msg_01tQLbX6zHeofQH8SEeBTUGB"
+        }
+      }
+    ],
+    "to_state_type": "RunState"
+  },
+  "state": {},
+  "state_type": "RunState",
+  "session_db": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260611/sdk_capability_probes/outputs/probe_sqlite_session.db"
+}

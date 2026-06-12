@@ -73,7 +73,7 @@ const loadSessionHistory = async () => {
     messages.value = sessionDetail.messages.map(msg => ({
       role: msg.role,
       author: msg.role === 'user' ? '用户' : 'AI助手',
-      time: msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : getCurrentTime(),
+      time: msg.created_at ? new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : getCurrentTime(),
       content: msg.content
     }))
     scrollToBottom()

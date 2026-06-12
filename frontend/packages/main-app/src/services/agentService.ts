@@ -1,143 +1,159 @@
-/**
- * AD Agent 服务封装
- * 提供与AD Agent后端的交互接口
- */
+export interface AgentChatSession {
+  id: string
+  title: string
+  created_at: string
+  updated_at: string
+}
 
-import axios from 'axios'
-import { getAgentApiUrl } from '@/config/agent'
-
-export interface Message {
-  role: 'system' | 'user' | 'assistant'
+export interface AgentChatMessage {
+  id: string
+  role: 'user' | 'assistant'
   content: string
-  timestamp?: string
-}
-
-export interface ChatRequest {
-  session_id: string
-  message: string
-}
-
-export interface ChatResponse {
-  session_id: string
-  message: string
-  timestamp: string
-}
-
-export interface SessionInfo {
-  session_id: string
-  message_count: number
   created_at: string
-  updated_at: string
 }
 
-export interface SessionDetail {
-  session_id: string
-  messages: Message[]
-  message_count: number
-  created_at: string
-  updated_at: string
+export interface AgentStreamEvent {
+  event: string
+  data: Record<string, any>
+}
+
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1'
+
+function authHeaders(): Record<string, string> {
+  const token = localStorage.getItem('animagus_token')
+  return token ? { Authorization: `Bearer ${token}` } : {}
+}
+
+function apiUrl(path: string): string {
+  return `${API_BASE_URL}${path}`
 }
 
 export class AgentService {
-  /**
-   * 健康检查
-   */
-  async healthCheck(): Promise<{ status: string; timestamp: string }> {
-    const response = await axios.get(getAgentApiUrl('/health'))
-    return response.data
+  generateSessionId(prefix: string = 'chat'): string {
+    const timestamp = Date.now()
+    const random = Math.random().toString(36).slice(2, 9)
+    return `${prefix}_${timestamp}_${random}`
   }
 
-  /**
-   * 非流式对话
-   */
-  async chat(sessionId: string, message: string): Promise<ChatResponse> {
-    const response = await axios.post<ChatResponse>(
-      getAgentApiUrl('/chat'),
-      {
-        session_id: sessionId,
-        message: message
-      }
-    )
-    return response.data
+  async healthCheck(): Promise<{ status: string; provider: string; model: string; streaming: boolean }> {
+    const response = await fetch(apiUrl('/agent/health'), {
+      headers: authHeaders(),
+    })
+    if (!response.ok) throw new Error(`Agent health failed: ${response.status}`)
+    return response.json()
   }
 
-  /**
-   * 流式对话
-   * 使用异步生成器逐步返回内容片段
-   */
-  async *chatStream(sessionId: string, message: string): AsyncGenerator<string, void, unknown> {
-    const response = await fetch(getAgentApiUrl('/chat/stream'), {
+  async createChatSession(title = '新对话'): Promise<AgentChatSession> {
+    const response = await fetch(apiUrl('/agent/chat/sessions'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
+        ...authHeaders(),
       },
-      body: JSON.stringify({
-        session_id: sessionId,
-        message: message
-      })
+      body: JSON.stringify({ title }),
+    })
+    if (!response.ok) throw new Error(`Create chat session failed: ${response.status}`)
+    return response.json()
+  }
+
+  async getChatSession(sessionId: string): Promise<{ session: AgentChatSession; messages: AgentChatMessage[] }> {
+    const response = await fetch(apiUrl(`/agent/chat/sessions/${encodeURIComponent(sessionId)}`), {
+      headers: authHeaders(),
+    })
+    if (!response.ok) throw new Error(`Get chat session failed: ${response.status}`)
+    return response.json()
+  }
+
+  async getSessionDetail(sessionId: string): Promise<{ session_id: string; messages: AgentChatMessage[]; message_count: number; created_at: string; updated_at: string }> {
+    const detail = await this.getChatSession(sessionId)
+    return {
+      session_id: detail.session.id,
+      messages: detail.messages,
+      message_count: detail.messages.length,
+      created_at: detail.session.created_at,
+      updated_at: detail.session.updated_at,
+    }
+  }
+
+  async chat(sessionId: string, message: string): Promise<{ session_id: string; message: string; timestamp: string }> {
+    let text = ''
+    let timestamp = new Date().toISOString()
+    for await (const event of this.streamChat(sessionId, message)) {
+      if (event.event === 'message_delta') text += String(event.data.delta || '')
+      if (event.event === 'message_completed') {
+        text = String(event.data.content || text)
+        timestamp = String(event.data.created_at || timestamp)
+      }
+    }
+    return { session_id: sessionId, message: text, timestamp }
+  }
+
+  async *chatStream(sessionId: string, message: string): AsyncGenerator<string, void, unknown> {
+    for await (const event of this.streamChat(sessionId, message)) {
+      if (event.event === 'message_delta') yield String(event.data.delta || '')
+    }
+  }
+
+  async *streamChat(sessionId: string, message: string): AsyncGenerator<AgentStreamEvent, void, unknown> {
+    const response = await fetch(apiUrl(`/agent/chat/sessions/${encodeURIComponent(sessionId)}/stream`), {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'text/event-stream',
+        ...authHeaders(),
+      },
+      body: JSON.stringify({ message }),
     })
 
     if (!response.ok) {
-      throw new Error(`HTTP error! status: ${response.status}`)
+      const errorText = await response.text().catch(() => '')
+      throw new Error(errorText || `Stream chat failed: ${response.status}`)
     }
 
     const reader = response.body?.getReader()
-    if (!reader) {
-      throw new Error('Response body is not readable')
-    }
+    if (!reader) throw new Error('Stream response body is not readable')
 
     const decoder = new TextDecoder()
+    let buffer = ''
 
     try {
       while (true) {
         const { done, value } = await reader.read()
         if (done) break
+        buffer += decoder.decode(value, { stream: true })
 
-        const chunk = decoder.decode(value, { stream: true })
-        const lines = chunk.split('\n')
-
-        for (const line of lines) {
-          if (line.startsWith('data: ')) {
-            const content = line.slice(6)
-            if (content === '[DONE]') {
-              return
-            }
-            if (content.trim()) {
-              yield content
-            }
-          }
+        let boundaryIndex = buffer.indexOf('\n\n')
+        while (boundaryIndex >= 0) {
+          const rawEvent = buffer.slice(0, boundaryIndex)
+          buffer = buffer.slice(boundaryIndex + 2)
+          const parsed = parseSseEvent(rawEvent)
+          if (parsed) yield parsed
+          boundaryIndex = buffer.indexOf('\n\n')
         }
       }
     } finally {
       reader.releaseLock()
     }
   }
+}
 
-  /**
-   * 获取会话列表
-   */
-  async getSessions(): Promise<{ sessions: SessionInfo[]; count: number }> {
-    const response = await axios.get(getAgentApiUrl('/sessions'))
-    return response.data
+function parseSseEvent(rawEvent: string): AgentStreamEvent | null {
+  const lines = rawEvent.split('\n')
+  let event = 'message'
+  const dataLines: string[] = []
+
+  for (const line of lines) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
   }
 
-  /**
-   * 获取会话详情
-   */
-  async getSessionDetail(sessionId: string): Promise<SessionDetail> {
-    const response = await axios.get(getAgentApiUrl(`/sessions/${sessionId}`))
-    return response.data
-  }
+  if (!dataLines.length) return null
 
-  /**
-   * 生成唯一的会话ID
-   */
-  generateSessionId(prefix: string = 'session'): string {
-    const timestamp = Date.now()
-    const random = Math.random().toString(36).substring(2, 9)
-    return `${prefix}-${timestamp}-${random}`
+  try {
+    return { event, data: JSON.parse(dataLines.join('\n')) }
+  } catch {
+    return { event, data: { text: dataLines.join('\n') } }
   }
 }
 
-// 导出单例
 export const agentService = new AgentService()
