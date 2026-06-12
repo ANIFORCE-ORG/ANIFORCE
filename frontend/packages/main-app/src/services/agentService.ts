@@ -79,9 +79,10 @@ export class AgentService {
     let text = ''
     let timestamp = new Date().toISOString()
     for await (const event of this.streamChat(sessionId, message)) {
-      if (event.event === 'message_delta') text += String(event.data.delta || '')
-      if (event.event === 'message_completed') {
-        text = String(event.data.content || text)
+      const payload = readEventPayload(event.data)
+      if (event.event === 'message_delta' || event.event === 'message.updated') text += String(payload.delta || '')
+      if (event.event === 'message_completed' || event.event === 'message.completed') {
+        text = String(payload.content || text)
         timestamp = String(event.data.created_at || timestamp)
       }
     }
@@ -90,7 +91,11 @@ export class AgentService {
 
   async *chatStream(sessionId: string, message: string): AsyncGenerator<string, void, unknown> {
     for await (const event of this.streamChat(sessionId, message)) {
-      if (event.event === 'message_delta') yield String(event.data.delta || '')
+      const payload = readEventPayload(event.data)
+      if (event.event === 'message_delta' || event.event === 'message.updated') yield String(payload.delta || '')
+      if (event.event === 'runtime.error' || event.event === 'error') {
+        throw new Error(String(payload.message || event.data.message || 'Agent stream error'))
+      }
     }
   }
 
@@ -135,6 +140,11 @@ export class AgentService {
       reader.releaseLock()
     }
   }
+}
+
+function readEventPayload(data: Record<string, any>): Record<string, any> {
+  const payload = data.payload
+  return payload && typeof payload === 'object' ? payload : data
 }
 
 function parseSseEvent(rawEvent: string): AgentStreamEvent | null {

@@ -36,7 +36,7 @@ const emit = defineEmits<{
 const localChatInput = ref('')
 const messages = ref<Message[]>([])
 const isLoading = ref(false)
-const currentSessionId = ref(props.sessionId || agentService.generateSessionId('chat'))
+const currentSessionId = ref(props.sessionId || '')
 const messagesContainer = ref<HTMLElement | null>(null)
 
 // 折叠状态 - 从localStorage读取初始值
@@ -112,6 +112,12 @@ const handleSendMessage = async () => {
   isLoading.value = true
 
   try {
+    if (!currentSessionId.value) {
+      const session = await agentService.createChatSession(userMessage.slice(0, 30) || '新对话')
+      currentSessionId.value = session.id
+      emit('session-change', session.id)
+    }
+
     if (agentConfig.chatMode === 'stream') {
       // 流式对话 - 逐字显示
       for await (const chunk of agentService.chatStream(currentSessionId.value, userMessage)) {
@@ -144,9 +150,9 @@ const handleHintClick = (hint: string) => {
 
 // 创建新对话
 const handleNewChat = () => {
-  currentSessionId.value = agentService.generateSessionId('chat')
+  currentSessionId.value = ''
   messages.value = []
-  emit('session-change', currentSessionId.value)
+  emit('session-change', '')
 }
 
 // 折叠/展开

@@ -63,6 +63,17 @@ def get_agent_task_service() -> AgentTaskService:
     return AgentTaskService(_repo, _runtime)
 
 
+@router.get("/health")
+async def agent_health():
+    """Agent 兼容层健康检查（供前端模型列表使用）"""
+    return {
+        "status": "ok",
+        "provider": "openai-compatible",
+        "model": getattr(_settings, "OPENAI_AGENTS_MODEL", "gpt-4o-mini"),
+        "streaming": True,
+    }
+
+
 # ============ Task API（新版统一接口）============
 
 @router.post("/tasks", response_model=TaskResponse, status_code=201)
