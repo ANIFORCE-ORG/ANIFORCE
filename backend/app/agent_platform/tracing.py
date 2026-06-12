@@ -42,13 +42,14 @@ class LocalTracer:
             with tracer.trace_task(task_id, user_id, task_type):
                 # 执行任务
         """
-        trace_id = f"{task_id}_{int(time.time() * 1000)}"
+        run_id = f"run_{int(time.time() * 1000)}"
+        trace_id = f"{task_id}:{run_id}"
         self._current_trace_id = trace_id
         self._trace_data = []
         
-        # Trace 文件路径
+        # Trace 文件路径：runtime/agent/traces/YYYYMMDD/{task_id}/{run_id}.jsonl
         date_dir = datetime.now().strftime("%Y%m%d")
-        trace_file = self.trace_dir / date_dir / f"{trace_id}.jsonl"
+        trace_file = self.trace_dir / date_dir / task_id / f"{run_id}.jsonl"
         trace_file.parent.mkdir(parents=True, exist_ok=True)
         self._current_trace_file = trace_file
         
@@ -58,6 +59,7 @@ class LocalTracer:
             "event": "trace.start",
             "trace_id": trace_id,
             "task_id": task_id,
+            "run_id": run_id,
             "user_id": user_id,
             "task_type": task_type,
             "timestamp": datetime.now().isoformat(),
