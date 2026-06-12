@@ -78,7 +78,31 @@ export function useHomeAgentSession() {
 
   const visibleMessages = computed(() => messages.value.filter(message => message.role === 'user' || message.role === 'assistant'))
   const modelNames = computed(() => Object.fromEntries(models.value.map(model => [`${model.provider}:${model.id}`, model.name])))
-  const sessionStats = computed<SessionStats | null>(() => null)
+  const sessionStats = computed<SessionStats | null>(() => {
+    const totals = messages.value.reduce(
+      (acc, message) => {
+        const usage = message.usage
+        if (!usage) return acc
+        acc.input += usage.input || 0
+        acc.output += usage.output || 0
+        acc.cacheRead += usage.cacheRead || 0
+        acc.cacheWrite += usage.cacheWrite || 0
+        acc.cost += usage.cost?.total || 0
+        return acc
+      },
+      { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, cost: 0 },
+    )
+    if (!totals.input && !totals.output && !totals.cacheRead && !totals.cacheWrite && !totals.cost) return null
+    return {
+      tokens: {
+        input: totals.input,
+        output: totals.output,
+        cacheRead: totals.cacheRead,
+        cacheWrite: totals.cacheWrite,
+      },
+      cost: totals.cost,
+    }
+  })
 
   async function refreshModels(): Promise<void> {
     const res = await listAgentModels()

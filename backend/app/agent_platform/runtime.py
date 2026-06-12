@@ -142,6 +142,8 @@ class AgentRuntime:
             await self.repo.update_status(task.task_id, AgentTaskStatus.COMPLETED)
             task_logger.info(f"[RUNTIME] Status updated: COMPLETED")
             
+            usage = self.adapter._extract_usage(result)
+
             # 8. 推送 runtime.completed 事件
             sequence += 1
             completed_event = AgentTaskEvent(
@@ -150,6 +152,7 @@ class AgentRuntime:
                 event_type=EventType.RUNTIME_COMPLETED,
                 payload={
                     "final_output": getattr(result, "final_output", None),
+                    "usage": usage,
                 },
                 sequence=sequence,
             )

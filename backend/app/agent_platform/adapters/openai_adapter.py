@@ -179,6 +179,7 @@ class OpenAISDKAdapter:
             
             # 最终输出
             final_output = getattr(result, "final_output", None) or assistant_message_content
+            usage = self._extract_usage(result)
             
             # Trace LLM 响应
             if self.tracer:
@@ -196,6 +197,7 @@ class OpenAISDKAdapter:
                 payload={
                     "role": "assistant",
                     "content": final_output,
+                    "usage": usage,
                 },
                 sequence=sequence,
             )
@@ -224,6 +226,27 @@ class OpenAISDKAdapter:
                 sequence=sequence,
             )
     
+    def _extract_usage(self, result: RunResult) -> dict:
+        """提取并转换 SDK token usage 为前端兼容格式"""
+        context_wrapper = getattr(result, "context_wrapper", None)
+        usage = getattr(context_wrapper, "usage", None)
+        if not usage:
+            return {}
+
+        input_details = getattr(usage, "input_tokens_details", None)
+        cache_read = getattr(input_details, "cached_tokens", 0) or 0
+        input_tokens = getattr(usage, "input_tokens", 0) or 0
+        output_tokens = getattr(usage, "output_tokens", 0) or 0
+        total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
+
+        return {
+            "input": input_tokens,
+            "output": output_tokens,
+            "cacheRead": cache_read,
+            "cacheWrite": 0,
+            "totalTokens": total_tokens,
+        }
+
     def _transform_sdk_event(
         self,
         sdk_event,
