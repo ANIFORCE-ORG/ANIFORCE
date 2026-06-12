@@ -46,13 +46,15 @@ _adapter = OpenAISDKAdapter(
     model=getattr(_settings, "OPENAI_AGENTS_MODEL", "gpt-4o-mini"),
     api_key=_settings.OPENAI_API_KEY,
     base_url=getattr(_settings, "OPENAI_BASE_URL", None),
+    enable_tracing=getattr(_settings, "AGENT_TRACING_ENABLED", True),
 )
 
 # 初始化 Runtime
 _runtime = AgentRuntime(
     adapter=_adapter,
     repo=_repo,
-    session_db_path="runtime/agent/sessions.db",
+    session_db_path=getattr(_settings, "AGENT_SESSION_DB", "runtime/agent/sessions.db"),
+    enable_tracing=getattr(_settings, "AGENT_TRACING_ENABLED", True),
 )
 
 
