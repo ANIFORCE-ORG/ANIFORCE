@@ -231,7 +231,7 @@ VITE_BACKEND_HOST="${HOST}" \
 VITE_BACKEND_PORT="${BACKEND_PORT}" \
 VITE_FRONTEND_PORT="${FRONTEND_PORT}" \
 npm_config_cache="${ROOT_DIR}/npm_cache" \
-npx pnpm --filter main-app dev --host "${HOST}" --port "${FRONTEND_PORT}" \
+npx pnpm --filter main-app dev --host "${HOST}" --port "${FRONTEND_PORT}" --strictPort \
   > "${LOG_DIR}/frontend-dev.log" 2>&1 &
 FRONTEND_PID="$!"
 echo "${FRONTEND_PID}" >> "${PID_FILE}"
@@ -246,6 +246,10 @@ ANIFORCE dev stack is running
 Frontend:       http://${HOST}:${FRONTEND_PORT}
 Backend health: http://${HOST}:${BACKEND_PORT}/health
 API docs:       http://${HOST}:${BACKEND_PORT}/docs
+
+If you open from another machine/browser environment, restart with:
+  ./scripts/start-dev.sh --host 0.0.0.0
+Then open the machine IP/domain with port ${FRONTEND_PORT}.
 
 Logs:
 EOF
