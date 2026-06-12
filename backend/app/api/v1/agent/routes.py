@@ -16,7 +16,7 @@ from loguru import logger
 
 from ....api.deps import get_current_user
 from ....services.agent_task_service import AgentTaskService
-from ....agent_platform.repositories.memory import MemoryAgentTaskRepository
+from ....agent_platform.repositories.sqlite import SQLiteAgentTaskRepository
 from ....agent_platform.adapters.openai_adapter import OpenAISDKAdapter
 from ....agent_platform.runtime import AgentRuntime
 from ....agent_platform.errors import AppError, get_http_status
@@ -38,7 +38,9 @@ from .schemas import (
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
 # 全局实例（TODO: 改为依赖注入）
-_repo = MemoryAgentTaskRepository()
+_repo = SQLiteAgentTaskRepository(
+    db_path=getattr(_settings, "AGENT_TASK_DB", "runtime/agent/tasks.db")
+)
 _settings = get_settings()
 
 # 初始化 SDK Adapter
