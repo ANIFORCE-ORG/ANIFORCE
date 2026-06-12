@@ -38,10 +38,10 @@ from .schemas import (
 router = APIRouter(prefix="/agent", tags=["Agent"])
 
 # 全局实例（TODO: 改为依赖注入）
+_settings = get_settings()
 _repo = SQLiteAgentTaskRepository(
     db_path=getattr(_settings, "AGENT_TASK_DB", "runtime/agent/tasks.db")
 )
-_settings = get_settings()
 
 # 初始化 SDK Adapter
 _adapter = OpenAISDKAdapter(
