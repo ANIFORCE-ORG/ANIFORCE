@@ -48,10 +48,13 @@ class OpenAISDKAdapter:
             name: Agent 名称
             instructions: System prompt
         """
+        # 传递 API key 和 base_url 到 Agent
         agent = Agent(
             name=name,
             instructions=instructions,
             model=self.model,
+            api_key=self.api_key,
+            base_url=self.base_url,
         )
         return agent
     
