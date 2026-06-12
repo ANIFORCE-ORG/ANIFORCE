@@ -54,6 +54,11 @@ done
 mkdir -p "${LOG_DIR}" "${BACKEND_DIR}/uv_cache" "${ROOT_DIR}/npm_cache"
 : > "${PID_FILE}"
 
+DISPLAY_HOST="${HOST}"
+if [[ "${HOST}" == "0.0.0.0" ]]; then
+  DISPLAY_HOST="$(hostname -I | tr ' ' '\n' | grep -E '^[0-9]' | head -1)"
+fi
+
 BACKEND_PID=""
 FRONTEND_PID=""
 
@@ -243,13 +248,12 @@ cat <<EOF
 ========================================
 ANIFORCE dev stack is running
 ========================================
-Frontend:       http://${HOST}:${FRONTEND_PORT}
-Backend health: http://${HOST}:${BACKEND_PORT}/health
-API docs:       http://${HOST}:${BACKEND_PORT}/docs
+Frontend:       http://${DISPLAY_HOST}:${FRONTEND_PORT}
+Backend health: http://${DISPLAY_HOST}:${BACKEND_PORT}/health
+API docs:       http://${DISPLAY_HOST}:${BACKEND_PORT}/docs
 
-If you open from another machine/browser environment, restart with:
-  ./scripts/start-dev.sh --host 0.0.0.0
-Then open the machine IP/domain with port ${FRONTEND_PORT}.
+Bind host:      ${HOST}
+If you open from another machine/browser environment, use the Network URL above.
 
 Logs:
 EOF
