@@ -13,7 +13,7 @@ FRONTEND_PORT="${FRONTEND_PORT:-13003}"
 BACKEND_RELOAD=1
 SKIP_INSTALL=0
 CLEAR_PORTS=1
-LOG_TO_FILE=0  # 新增：默认不写文件，直接输出到控制台
+LOG_TO_FILE=1  # 默认写入文件
 
 usage() {
   cat <<EOF
