@@ -13,6 +13,7 @@ FRONTEND_PORT="${FRONTEND_PORT:-13003}"
 BACKEND_RELOAD=1
 SKIP_INSTALL=0
 CLEAR_PORTS=1
+LOG_TO_FILE=0  # 新增：默认不写文件，直接输出到控制台
 
 usage() {
   cat <<EOF
@@ -26,12 +27,13 @@ Options:
   --no-backend-reload     Disable uvicorn reload
   --skip-install          Skip dependency installation
   --no-clear-ports        Do not clear selected ports
+  --log-to-file           Write logs to files instead of console
   -h, --help              Show help
 
 URLs:
   Frontend:       http://HOST:FRONTEND_PORT
   Backend health: http://HOST:BACKEND_PORT/health
-  API docs:        http://HOST:BACKEND_PORT/docs
+  API docs:       http://HOST:BACKEND_PORT/docs
 EOF
 }
 
@@ -43,6 +45,7 @@ while [[ $# -gt 0 ]]; do
     --no-backend-reload) BACKEND_RELOAD=0; shift 1 ;;
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
     --no-clear-ports) CLEAR_PORTS=0; shift 1 ;;
+    --log-to-file) LOG_TO_FILE=1; shift 1 ;;
     -h|--help) usage; exit 0 ;;
     *) echo "Unknown argument: $1" >&2; usage; exit 1 ;;
   esac
@@ -197,17 +200,33 @@ BACKEND_RELOAD_ARGS=()
 if [[ "${BACKEND_RELOAD}" -eq 1 ]]; then
   BACKEND_RELOAD_ARGS=(--reload)
 fi
-UV_CACHE_DIR=./uv_cache uv run python -m uvicorn app.main:app \
-  --host "${HOST}" \
-  --port "${BACKEND_PORT}" \
-  "${BACKEND_RELOAD_ARGS[@]}" \
-  > "${LOG_DIR}/backend-dev.log" 2>&1 &
-BACKEND_PID="$!"
+
+echo "Starting backend on ${HOST}:${BACKEND_PORT}..."
+if [[ "${LOG_TO_FILE}" -eq 1 ]]; then
+  # 写入文件
+  UV_CACHE_DIR=./uv_cache uv run python -m uvicorn app.main:app \
+    --host "${HOST}" \
+    --port "${BACKEND_PORT}" \
+    "${BACKEND_RELOAD_ARGS[@]}" \
+    > "${LOG_DIR}/backend-dev.log" 2>&1 &
+  BACKEND_PID="$!"
+  echo "Backend logs: ${LOG_DIR}/backend-dev.log"
+else
+  # 直接输出到控制台
+  UV_CACHE_DIR=./uv_cache LOG_LEVEL=DEBUG uv run python -m uvicorn app.main:app \
+    --host "${HOST}" \
+    --port "${BACKEND_PORT}" \
+    "${BACKEND_RELOAD_ARGS[@]}" &
+  BACKEND_PID="$!"
+  echo "Backend logs: console (PID ${BACKEND_PID})"
+fi
 echo "${BACKEND_PID}" >> "${PID_FILE}"
 
 wait_http "http://${HOST}:${BACKEND_PORT}/health" "Backend"
 
 cd "${FRONTEND_DIR}"
+echo "Starting frontend on ${HOST}:${FRONTEND_PORT}..."
+# 前端日志总是写文件（太多了）
 VITE_BACKEND_HOST="${HOST}" \
 VITE_BACKEND_PORT="${BACKEND_PORT}" \
 VITE_FRONTEND_PORT="${FRONTEND_PORT}" \
@@ -221,16 +240,35 @@ wait_http "http://${HOST}:${FRONTEND_PORT}" "Frontend"
 
 cat <<EOF
 
-ANIFORCE dev stack is running.
+========================================
+ANIFORCE dev stack is running
+========================================
 Frontend:       http://${HOST}:${FRONTEND_PORT}
 Backend health: http://${HOST}:${BACKEND_PORT}/health
-API docs:        http://${HOST}:${BACKEND_PORT}/docs
-Logs:
-  ${LOG_DIR}/backend-dev.log
-  ${LOG_DIR}/frontend-dev.log
-PIDs: ${PID_FILE}
+API docs:       http://${HOST}:${BACKEND_PORT}/docs
 
-Press Ctrl+C to stop this stack.
+Logs:
 EOF
+
+if [[ "${LOG_TO_FILE}" -eq 1 ]]; then
+  echo "  Backend:  ${LOG_DIR}/backend-dev.log"
+  echo "  Frontend: ${LOG_DIR}/frontend-dev.log"
+  echo ""
+  echo "To view logs:"
+  echo "  tail -f ${LOG_DIR}/backend-dev.log"
+  echo "  tail -f ${LOG_DIR}/frontend-dev.log"
+else
+  echo "  Backend:  console (below)"
+  echo "  Frontend: ${LOG_DIR}/frontend-dev.log"
+  echo ""
+  echo "Backend logs will appear below."
+  echo "Agent tracing: runtime/agent/traces/YYYYMMDD/*.jsonl"
+fi
+
+echo ""
+echo "PIDs: ${PID_FILE}"
+echo "Press Ctrl+C to stop."
+echo "========================================"
+echo ""
 
 wait

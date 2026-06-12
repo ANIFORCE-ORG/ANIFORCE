@@ -15,6 +15,7 @@ from agents.run import RunResult
 
 from ..models import AgentTaskEvent, EventType
 from ..errors import AppError, AgentErrorCode, ErrorCategory
+from ..tracing import get_tracer
 
 
 class OpenAISDKAdapter:
@@ -25,12 +26,15 @@ class OpenAISDKAdapter:
         model: str = "gpt-4o-mini",
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
+        enable_tracing: bool = True,
     ):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
+        self.enable_tracing = enable_tracing
+        self.tracer = get_tracer() if enable_tracing else None
         
-        logger.info(f"OpenAI SDK Adapter initialized: {model}")
+        logger.info(f"OpenAI SDK Adapter initialized: {model} | tracing={enable_tracing}")
     
     def create_agent(
         self,
@@ -78,6 +82,15 @@ class OpenAISDKAdapter:
         Returns:
             RunResult（可以流式读取事件）
         """
+        # Trace SDK 调用
+        if self.tracer:
+            self.tracer.log_sdk_call(
+                method="run_streamed",
+                agent_name=getattr(agent, "name", "unknown"),
+                input_text=input_text,
+                session_id=getattr(session, "session_id", None) if session else None,
+            )
+        
         try:
             result = Runner.run_streamed(
                 agent,
@@ -113,6 +126,13 @@ class OpenAISDKAdapter:
         
         try:
             async for event in result.stream_events():
+                # Trace SDK 事件
+                if self.tracer:
+                    self.tracer.log_sdk_event(
+                        event_type=getattr(event, "type", "unknown"),
+                        event_data={"raw_event": str(type(event).__name__)},
+                    )
+                
                 # 转换 SDK 事件为 AgentTaskEvent
                 agent_events = self._transform_sdk_event(
                     sdk_event=event,
@@ -123,6 +143,15 @@ class OpenAISDKAdapter:
                 for agent_event in agent_events:
                     sequence += 1
                     agent_event.sequence = sequence
+                    
+                    # Trace 业务事件
+                    if self.tracer:
+                        self.tracer.log_agent_event(
+                            event_type=agent_event.event_type,
+                            payload=agent_event.payload,
+                            sequence=agent_event.sequence,
+                        )
+                    
                     yield agent_event
                     
                     # 累积消息内容
@@ -133,9 +162,16 @@ class OpenAISDKAdapter:
             # 最终输出
             final_output = getattr(result, "final_output", None) or assistant_message_content
             
+            # Trace LLM 响应
+            if self.tracer:
+                self.tracer.log_llm_response(
+                    model=self.model,
+                    response=final_output,
+                )
+            
             # 推送 message.completed
             sequence += 1
-            yield AgentTaskEvent(
+            completed_event = AgentTaskEvent(
                 event_id=f"event_{task_id}_{sequence}",
                 task_id=task_id,
                 event_type=EventType.MESSAGE_COMPLETED,
@@ -145,6 +181,16 @@ class OpenAISDKAdapter:
                 },
                 sequence=sequence,
             )
+            
+            # Trace 业务事件
+            if self.tracer:
+                self.tracer.log_agent_event(
+                    event_type=completed_event.event_type,
+                    payload=completed_event.payload,
+                    sequence=completed_event.sequence,
+                )
+            
+            yield completed_event
             
         except Exception as e:
             logger.exception(f"SDK stream error: {e}")
@@ -205,26 +251,47 @@ class OpenAISDKAdapter:
             
             # tool_called
             if name == "tool_called":
+                tool_name = getattr(item, "name", "unknown")
+                arguments = getattr(item, "arguments", {})
+                
+                # Trace 工具调用
+                if self.tracer:
+                    self.tracer.log_tool_call(
+                        tool_name=tool_name,
+                        arguments=arguments,
+                    )
+                
                 events.append(AgentTaskEvent(
                     event_id=f"event_{task_id}_{sequence}",
                     task_id=task_id,
                     event_type=EventType.TOOL_CALL_STARTED,
                     payload={
-                        "tool_name": getattr(item, "name", "unknown"),
-                        "arguments": getattr(item, "arguments", {}),
+                        "tool_name": tool_name,
+                        "arguments": arguments,
                     },
                     sequence=sequence,
                 ))
             
             # tool_output
             elif name == "tool_output":
+                tool_name = getattr(item, "name", "unknown")
+                result = getattr(item, "content", None)
+                
+                # Trace 工具结果
+                if self.tracer:
+                    self.tracer.log_tool_call(
+                        tool_name=tool_name,
+                        arguments={},
+                        result=result,
+                    )
+                
                 events.append(AgentTaskEvent(
                     event_id=f"event_{task_id}_{sequence}",
                     task_id=task_id,
                     event_type=EventType.TOOL_CALL_COMPLETED,
                     payload={
-                        "tool_name": getattr(item, "name", "unknown"),
-                        "result": getattr(item, "content", None),
+                        "tool_name": tool_name,
+                        "result": result,
                     },
                     sequence=sequence,
                 ))
