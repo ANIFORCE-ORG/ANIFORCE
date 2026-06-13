@@ -2,20 +2,23 @@
 Agent Runtime
 
 负责执行 Agent 任务，管理生命周期，推送事件流
+支持 Plan-Execute 框架
 """
 
 import asyncio
-from typing import AsyncIterator
+from typing import AsyncIterator, Optional
 from uuid import uuid4
 from contextlib import asynccontextmanager
 
 from loguru import logger
 
-from .models import AgentTask, AgentTaskEvent, AgentTaskStatus, EventType
+from .models import AgentTask, AgentTaskEvent, AgentTaskStatus, EventType, ExecutionPlan
 from .repositories.base import AgentTaskRepository
 from .adapters.openai_adapter import OpenAISDKAdapter
 from .errors import AppError, AgentErrorCode, ErrorCategory
 from .tracing import get_tracer
+from .prompts import SystemPromptManager
+from .plan_parser import PlanParser
 
 
 class AgentRuntime:
@@ -33,6 +36,10 @@ class AgentRuntime:
         self.session_db_path = session_db_path
         self.enable_tracing = enable_tracing
         self.tracer = get_tracer() if enable_tracing else None
+        
+        # Plan-Execute 状态管理
+        self.current_plan: Optional[ExecutionPlan] = None
+        
         logger.info(f"AgentRuntime initialized | tracing={enable_tracing}")
     
     @asynccontextmanager
@@ -142,15 +149,52 @@ class AgentRuntime:
                     session=session,
                 )
                 
-                # 7. 流式推送事件
+                # 7. 流式推送事件（增加 Plan 检测）
+                message_buffer = []  # 缓存消息内容用于 Plan 检测
+                
                 async for event in self.adapter.stream_events(result, task.task_id, start_sequence=sequence):
                     await self.repo.append_event(event)
                     yield event
                     sequence = event.sequence
                     
-                    if event.event_type == EventType.TOOL_CALL_STARTED:
+                    # 检测执行计划
+                    if event.event_type == EventType.MESSAGE_UPDATED:
+                        content = event.payload.get("content", "")
+                        if content:
+                            message_buffer.append(content)
+                            
+                            # 尝试提取 Plan（累积到一定长度后）
+                            if len("".join(message_buffer)) > 100:
+                                full_message = "".join(message_buffer)
+                                plan_result = await self._detect_and_extract_plan(
+                                    full_message,
+                                    task.task_id,
+                                    sequence
+                                )
+                                
+                                if plan_result:
+                                    plan, plan_event = plan_result
+                                    await self.repo.append_event(plan_event)
+                                    yield plan_event
+                                    sequence = plan_event.sequence
+                                    message_buffer = []  # 清空缓存
+                    
+                    # 跟踪 Todo 执行
+                    elif event.event_type == EventType.TOOL_CALL_STARTED:
                         tool_name = event.payload.get("tool_name", "unknown")
                         task_logger.info(f"[RUNTIME] Event[{sequence}]: tool_call | tool={tool_name}")
+                        
+                        # 尝试关联到 Todo
+                        todo_event = await self._track_todo_execution(
+                            tool_name,
+                            task.task_id,
+                            sequence
+                        )
+                        
+                        if todo_event:
+                            await self.repo.append_event(todo_event)
+                            yield todo_event
+                            sequence = todo_event.sequence
             
             # 8. 更新状态为 completed
             await self.repo.update_status(task.task_id, AgentTaskStatus.COMPLETED)
@@ -233,11 +277,124 @@ class AgentRuntime:
     
     def _get_system_prompt(self, task_type: str) -> str:
         """根据任务类型返回 system prompt"""
-        if task_type == "conversation":
-            return "你是 ANIFORCE 的 AI 助手。"
-        elif task_type == "campaign_planning":
-            return "你是广告投放专家。"
-        elif task_type == "asset_review":
-            return "你是素材审核专家。"
-        else:
-            return "你是 ANIFORCE 的 AI 助手。"
+        
+        # 获取 MCP Tools 列表（从 adapter 中获取）
+        # TODO: 实现动态获取 MCP Tools
+        available_mcp_tools = [
+            "list_projects",
+            "create_project",
+            "get_project_detail",
+            "update_project",
+            "delete_project",
+            "list_campaigns",
+            "create_campaign",
+            "get_campaign_detail",
+            "update_campaign",
+            "delete_campaign",
+        ]
+        
+        # 使用 Plan-Execute 模式的 System Prompt
+        return SystemPromptManager.get_plan_execute_prompt(
+            skills_dir=self.adapter.skills_dir,
+            available_mcp_tools=available_mcp_tools
+        )
+
+    async def _detect_and_extract_plan(
+        self,
+        message_content: str,
+        task_id: str,
+        current_sequence: int
+    ) -> Optional[tuple[ExecutionPlan, AgentTaskEvent]]:
+        """
+        检测并提取执行计划
+        
+        Args:
+            message_content: Agent 输出的消息内容
+            task_id: 任务 ID
+            current_sequence: 当前事件序号
+            
+        Returns:
+            (ExecutionPlan, Event) 或 None
+        """
+        # 尝试从消息中提取 Plan
+        plan = PlanParser.extract_plan_from_text(message_content, task_id)
+        
+        if plan:
+            # 保存当前 Plan
+            self.current_plan = plan
+            
+            # 创建 PLAN_CREATED 事件
+            plan_event = AgentTaskEvent(
+                event_id=f"event_{task_id}_{current_sequence + 1}",
+                task_id=task_id,
+                event_type=EventType.CUSTOM,
+                payload={
+                    "subtype": EventType.PLAN_CREATED,
+                    "plan_id": plan.plan_id,
+                    "todos": [
+                        {
+                            "id": todo.id,
+                            "title": todo.title,
+                            "description": todo.description,
+                            "status": todo.status.value,
+                        }
+                        for todo in plan.todos
+                    ]
+                },
+                sequence=current_sequence + 1,
+            )
+            
+            logger.info(f"[RUNTIME] Detected Plan with {len(plan.todos)} todos")
+            return (plan, plan_event)
+        
+        return None
+    
+    async def _track_todo_execution(
+        self,
+        tool_name: str,
+        task_id: str,
+        current_sequence: int
+    ) -> Optional[AgentTaskEvent]:
+        """
+        跟踪 Todo 执行（通过 Tool 调用推断）
+        
+        Args:
+            tool_name: 被调用的工具名称
+            task_id: 任务 ID
+            current_sequence: 当前事件序号
+            
+        Returns:
+            TODO_STARTED 事件或 None
+        """
+        if not self.current_plan:
+            return None
+        
+        # 检查是否有待执行的 Todo
+        current_todo = None
+        for todo in self.current_plan.todos:
+            if todo.status.value == "pending":
+                current_todo = todo
+                break
+        
+        if current_todo:
+            # 标记为 running
+            current_todo.status = "running"
+            
+            # 创建 TODO_STARTED 事件
+            todo_event = AgentTaskEvent(
+                event_id=f"event_{task_id}_{current_sequence + 1}",
+                task_id=task_id,
+                event_type=EventType.CUSTOM,
+                payload={
+                    "subtype": EventType.TODO_STARTED,
+                    "todo_id": current_todo.id,
+                    "title": current_todo.title,
+                    "tool_name": tool_name,
+                },
+                sequence=current_sequence + 1,
+            )
+            
+            logger.info(f"[RUNTIME] Todo started: {current_todo.id} - {current_todo.title}")
+            return todo_event
+        
+        return None
