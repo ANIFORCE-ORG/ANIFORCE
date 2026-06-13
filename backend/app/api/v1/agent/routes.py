@@ -49,7 +49,8 @@ _adapter = OpenAISDKAdapter(
     api_key=_settings.OPENAI_API_KEY,
     base_url=getattr(_settings, "OPENAI_BASE_URL", None),
     enable_tracing=getattr(_settings, "AGENT_TRACING_ENABLED", True),
-    skills_dir=_settings.SKILLS_DIR,  # 新增：Skills 目录
+    skills_dir=_settings.SKILLS_DIR,  # Skills 目录
+    sandbox_dir=_settings.SANDBOX_DIR,  # 沙箱目录
 )
 
 # 初始化 Runtime

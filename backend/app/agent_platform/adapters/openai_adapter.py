@@ -21,7 +21,7 @@ from agents import (
     set_tracing_disabled,
 )
 from agents.run import RunResult
-from agents.sandbox import SandboxAgent
+from agents.sandbox import SandboxAgent, Manifest
 from agents.sandbox.capabilities import Capabilities, Skills, LocalDirLazySkillSource
 from agents.sandbox.entries import LocalDir
 
@@ -40,13 +40,18 @@ class OpenAISDKAdapter:
         base_url: Optional[str] = None,
         enable_tracing: bool = True,
         skills_dir: Optional[str] = None,
+        sandbox_dir: Optional[str] = None,
     ):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
         self.enable_tracing = enable_tracing
         self.skills_dir = skills_dir or "backend/runtime/skills"
+        self.sandbox_dir = sandbox_dir or "backend/runtime/agent/sandbox"
         self.tracer = get_tracer() if enable_tracing else None
+        
+        # 创建沙箱目录
+        Path(self.sandbox_dir).mkdir(parents=True, exist_ok=True)
         
         # SDK 默认走 Responses API；当前兼容网关只支持 Chat Completions。
         set_default_openai_api("chat_completions")
@@ -87,6 +92,7 @@ class OpenAISDKAdapter:
                 instructions=instructions,
                 model=self.model,
                 mcp_servers=mcp_servers or [],
+                default_manifest=Manifest(root=self.sandbox_dir),  # 自定义沙箱目录
                 capabilities=Capabilities.default() + [
                     Skills(
                         lazy_from=LocalDirLazySkillSource(
@@ -96,6 +102,7 @@ class OpenAISDKAdapter:
                 ]
             )
             logger.info(f"[SDK] Created SandboxAgent with Skills: {self.skills_dir}")
+            logger.info(f"[SDK] Sandbox directory: {self.sandbox_dir}")
         else:
             # 使用普通 Agent（向后兼容）
             agent = Agent(
