@@ -17,6 +17,7 @@ from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
 from app.config.database import get_db
 from app.models import PlatformConnection
+from app.models.sub_account_binding import SubAccountBinding
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/platform-auth", tags=["platform-auth"])
@@ -1185,4 +1186,120 @@ async def delete_sub_account(
         raise
     except Exception as e:
         logger.error(f"Failed to delete sub account: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/meta/{connection_id}/sync-adaccounts")
+async def sync_meta_ad_accounts(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    同步 Meta 广告账户
+    调用 Meta API 获取 adaccounts 并写入 sub_account_bindings
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 验证连接是否存在且属于当前用户
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        if connection.platform != "Meta":
+            raise HTTPException(status_code=400, detail="只支持 Meta 平台")
+        
+        if connection.status != "active":
+            raise HTTPException(status_code=400, detail="连接未授权，请先完成授权")
+        
+        # 调用 Meta API 获取广告账户
+        access_token = connection.access_token
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+            try:
+                logger.info(f"Fetching ad accounts from Meta API for connection: {connection_id}")
+                ad_accounts_response = await client.get(
+                    "https://graph.facebook.com/v25.0/me/adaccounts",
+                    params={
+                        "fields": "id,name,account_status,currency,business_id,spend_cap,timezone_name",
+                        "access_token": access_token
+                    }
+                )
+                
+                if ad_accounts_response.status_code != 200:
+                    logger.error(f"Failed to fetch ad accounts: status={ad_accounts_response.status_code}, response={ad_accounts_response.text}")
+                    raise HTTPException(status_code=500, detail="获取广告账户失败")
+                
+                ad_accounts_data = ad_accounts_response.json()
+                ad_accounts = ad_accounts_data.get("data", [])
+                
+                logger.info(f"Fetched {len(ad_accounts)} ad accounts from Meta API")
+                
+                # 状态映射
+                status_mapping = {
+                    "1": "active",        # 正常可投放
+                    "2": "disabled",      # 被封/禁用
+                    "3": "pending_review", # 待审核
+                    "7": "payment_required", # 需充值/付款
+                    "9": "suspended"      # 暂停
+                }
+                
+                # 删除现有的子账号绑定（重新同步）
+                stmt = select(SubAccountBinding).where(
+                    SubAccountBinding.parent_connection_id == connection_id
+                )
+                result = await db.execute(stmt)
+                existing_bindings = result.scalars().all()
+                for binding in existing_bindings:
+                    await db.delete(binding)
+                
+                # 创建新的子账号绑定
+                synced_count = 0
+                for ad_account in ad_accounts:
+                    account_id = ad_account.get("id", "")
+                    account_name = ad_account.get("name", "")
+                    account_status = str(ad_account.get("account_status", ""))
+                    
+                    # 映射状态
+                    mapped_status = status_mapping.get(account_status, "unknown")
+                    
+                    # 创建子账号绑定
+                    binding = SubAccountBinding(
+                        parent_connection_id=connection_id,
+                        sub_account_name=account_name,
+                        customer_id=account_id,
+                        status=mapped_status
+                    )
+                    db.add(binding)
+                    synced_count += 1
+                    
+                    logger.info(f"Synced ad account: id={account_id}, name={account_name}, status={mapped_status}")
+                
+                await db.commit()
+                
+                logger.info(f"Successfully synced {synced_count} ad accounts for connection: {connection_id}")
+                
+                return {
+                    "message": f"成功同步 {synced_count} 个广告账户",
+                    "synced_count": synced_count
+                }
+                
+            except httpx.TimeoutException as e:
+                logger.error(f"Timeout while fetching ad accounts: {e}")
+                raise HTTPException(status_code=500, detail="请求超时")
+            except httpx.HTTPError as e:
+                logger.error(f"HTTP error while fetching ad accounts: {e}")
+                raise HTTPException(status_code=500, detail="网络错误")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to sync ad accounts: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

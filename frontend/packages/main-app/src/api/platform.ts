@@ -59,6 +59,9 @@ export const platformApi = {
   startMetaOAuth: () =>
     http.post<{ authorize_url: string; connection_id: string }>('/platform-auth/meta/start_oauth'),
 
+  syncMetaAdAccounts: (connectionId: string) =>
+    http.post(`/platform-auth/meta/${connectionId}/sync-adaccounts`),
+
   saveGoogleConfig: (data: GoogleConfigRequest) =>
     http.post<PlatformConnectionResponse>('/platform-auth/google/config', data),
 

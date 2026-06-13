@@ -84,6 +84,29 @@ const handleAddMetaAccount = async () => {
   }
 }
 
+const handleSyncAdAccounts = async (connection: PlatformConnectionResponse) => {
+  console.log('同步广告账户:', connection)
+  try {
+    // 根据平台类型调用不同的同步接口
+    if (connection.platform === 'Meta') {
+      await platformApi.syncMetaAdAccounts(connection.id)
+      success('Meta 广告账户同步成功')
+    } else if (connection.platform === 'Google') {
+      // Google 平台同步功能待实现
+      showError('Google 平台同步功能开发中')
+      return
+    } else {
+      showError('该平台暂不支持同步功能')
+      return
+    }
+    // 刷新连接列表
+    await loadConnections()
+  } catch (err: any) {
+    console.error('同步广告账户失败:', err)
+    showError('同步广告账户失败，请重试')
+  }
+}
+
 const handleAuthorize = async (connection: PlatformConnectionResponse) => {
   console.log('授权连接:', connection)
   try {
@@ -436,7 +459,7 @@ onMounted(() => {
               <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-700/50">
                   <tr>
-                    <th v-if="activePlatform === 'google'" class="px-[9px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400 w-[37px]"></th>
+                    <th v-if="activePlatform === 'meta' || activePlatform === 'google'" class="px-[9px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400 w-[37px]"></th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">账户名称</th>
                     <th v-if="activePlatform !== 'meta'" class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">APP ID</th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">授权范围</th>
@@ -449,8 +472,8 @@ onMounted(() => {
                   <template v-for="connection in filteredConnections" :key="connection.id">
                     <!-- 主账号行 -->
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                      <!-- Google 平台展开按钮 -->
-                      <td v-if="activePlatform === 'google'" class="px-[9px] py-[12px] text-center">
+                      <!-- Meta 和 Google 平台展开按钮 -->
+                      <td v-if="activePlatform === 'meta' || activePlatform === 'google'" class="px-[9px] py-[12px] text-center">
                         <button
                           @click="toggleSubAccounts(connection.id)"
                           class="p-[4px] rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
@@ -489,6 +512,18 @@ onMounted(() => {
                     </td>
                     <td class="px-[16px] py-[12px] text-right">
                       <div class="flex items-center justify-end gap-[6px]">
+                        <!-- Meta 和 Google 平台显示同步按钮 -->
+                        <button
+                          v-if="(activePlatform === 'meta' || activePlatform === 'google')"
+                          class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
+                          :class="connection.status === 'active'
+                            ? 'border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                            : 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'"
+                          :disabled="connection.status !== 'active'"
+                          @click="handleSyncAdAccounts(connection)"
+                        >
+                          同步广告子账号
+                        </button>
                         <button
                           class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
                           :class="connection.status === 'active' 
@@ -509,9 +544,9 @@ onMounted(() => {
                     </td>
                     </tr>
                     
-                    <!-- 子账号展开行（仅 Google 平台） -->
-                    <tr v-if="activePlatform === 'google' && isExpanded(connection.id)" class="bg-slate-50/50 dark:bg-slate-700/20">
-                      <td :colspan="activePlatform === 'google' ? 7 : 6" class="px-0 py-0">
+                    <!-- 子账号展开行（Meta 和 Google 平台） -->
+                    <tr v-if="(activePlatform === 'meta' || activePlatform === 'google') && isExpanded(connection.id)" class="bg-slate-50/50 dark:bg-slate-700/20">
+                      <td :colspan="activePlatform === 'meta' ? 6 : 7" class="px-0 py-0">
                         <div class="px-[25px] py-[12px]">
                           <!-- 加载中 -->
                           <div v-if="loadingSubAccounts.has(connection.id)" class="text-center py-[12px]">
@@ -525,11 +560,13 @@ onMounted(() => {
                               <h4 class="text-[10px] font-semibold text-slate-700 dark:text-slate-300">子账号列表</h4>
                               <div class="flex items-center gap-[9px]">
                                 <span class="text-[10px] text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].length }} 个子账号</span>
+                                <!-- Google 平台显示手动添加按钮 -->
                                 <button
+                                  v-if="activePlatform === 'google'"
                                   @click="openAddSubAccountDialog(connection.id)"
                                   class="px-[9px] py-[6px] rounded text-[10px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                                 >
-                                  + 添加子账号
+                                  添加子账号
                                 </button>
                               </div>
                             </div>
@@ -570,8 +607,12 @@ onMounted(() => {
                           <!-- 无子账号 -->
                           <div v-else class="text-center py-[12px]">
                             <span class="material-symbols-outlined text-[23px] text-slate-300 dark:text-slate-600">folder_open</span>
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-[6px] mb-[9px]">暂无子账号</p>
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-[6px] mb-[9px]">
+                              {{ activePlatform === 'meta' ? '暂无子账号，请点击上方「同步广告子账号」按钮获取' : '暂无子账号' }}
+                            </p>
+                            <!-- Google 平台显示添加按钮 -->
                             <button
+                              v-if="activePlatform === 'google'"
                               @click="openAddSubAccountDialog(connection.id)"
                               class="px-[12px] py-[6px] rounded text-[11px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                             >
