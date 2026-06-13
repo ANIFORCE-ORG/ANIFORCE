@@ -84,6 +84,20 @@ const handleAddMetaAccount = async () => {
   }
 }
 
+const handleAddGoogleAccount = async () => {
+  try {
+    // 调用新接口：自动创建 connection 并获取授权 URL
+    const response = await platformApi.startGoogleOAuth()
+    // 在新窗口中打开授权页面
+    window.open(response.authorize_url, '_blank', 'width=600,height=700')
+    // 刷新连接列表
+    await loadConnections()
+  } catch (err: any) {
+    console.error('启动 Google OAuth 失败:', err)
+    showError('启动授权失败，请重试')
+  }
+}
+
 const handleSyncAdAccounts = async (connection: PlatformConnectionResponse) => {
   console.log('同步广告账户:', connection)
   try {
@@ -434,7 +448,13 @@ onMounted(() => {
             
             <!-- Google 平台特殊功能 -->
             <div v-if="activePlatform === 'google'" class="flex items-center justify-between">
-              <p class="text-[11px] text-slate-600 dark:text-slate-400">Google 平台连接功能开发中</p>
+              <p class="text-[11px] text-slate-600 dark:text-slate-400">点击添加账户后将直接跳转到 Google OAuth 授权页面</p>
+              <button
+                class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors"
+                @click="handleAddGoogleAccount"
+              >
+                添加广告账户
+              </button>
             </div>
           </section>
 

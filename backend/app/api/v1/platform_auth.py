@@ -490,17 +490,15 @@ async def get_google_authorize_url(
         if not connection:
             raise HTTPException(status_code=404, detail="连接不存在")
         
-        # 构建 scope 字符串（添加 https://www.googleapis.com/auth/ 前缀）
-        scope_prefix = "https://www.googleapis.com/auth/"
-        scopes = [f"{scope_prefix}{scope}" for scope in connection.scopes]
-        scope_str = " ".join(scopes)
+        # 使用 settings 中配置的 scopes
+        scope_str = settings.GOOGLE_SCOPES
         
         # 构建 Google OAuth 授权 URL
         redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
         authorize_url = (
             f"https://accounts.google.com/o/oauth2/v2/auth"
             f"?response_type=code"
-            f"&client_id={connection.account_id}"
+            f"&client_id={settings.GOOGLE_CLIENT_ID}"
             f"&redirect_uri={redirect_uri}"
             f"&scope={scope_str}"
             f"&access_type=offline"
@@ -831,6 +829,69 @@ async def start_meta_oauth(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@router.post("/google/start_oauth")
+async def start_google_oauth(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    直接启动 Google OAuth 流程（自动创建 connection 并返回授权 URL）
+    
+    Args:
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        包含授权 URL 和 connection_id 的字典
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 自动创建一个新的 connection 记录
+        # account_id 和 account_secret 留空，避免在数据库中暴露平台核心信息
+        # 实际使用时从 settings 中获取
+        new_connection = PlatformConnection(
+            user_id=user_id,
+            platform="Google",
+            account_id="",  # 留空，不存储敏感信息
+            account_name="Google 广告账户",  # 默认名称
+            account_secret="",  # 留空，不存储敏感信息
+            access_token="",  # 暂时为空，等待 OAuth 授权
+            scopes=[settings.GOOGLE_SCOPES],  # 从 settings 获取 scopes
+            status="unauthorized"
+        )
+        db.add(new_connection)
+        await db.commit()
+        await db.refresh(new_connection)
+        
+        logger.info(f"Created new Google connection for user: {user_id}, connection_id: {new_connection.id}")
+        
+        # 构建 OAuth 授权 URL
+        redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
+        auth_url = (
+            f"https://accounts.google.com/o/oauth2/v2/auth"
+            f"?response_type=code"
+            f"&client_id={settings.GOOGLE_CLIENT_ID}"
+            f"&redirect_uri={redirect_uri}"
+            f"&scope={settings.GOOGLE_SCOPES}"
+            f"&access_type=offline"
+            f"&prompt=consent"
+            f"&state={new_connection.id}"
+        )
+        
+        logger.info(f"Generated Google authorize URL for new connection: {new_connection.id}, authorize_url: {auth_url}")
+        
+        return {
+            "authorize_url": auth_url,
+            "connection_id": new_connection.id
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to start Google OAuth: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/meta/authorize_url/{connection_id}")
 async def get_meta_authorize_url(
     connection_id: str,
@@ -953,8 +1014,8 @@ async def google_auth_callback(
                     "https://oauth2.googleapis.com/token",
                     data={
                         "code": code,
-                        "client_id": connection.account_id,
-                        "client_secret": connection.account_secret,
+                        "client_id": settings.GOOGLE_CLIENT_ID,
+                        "client_secret": settings.GOOGLE_CLIENT_SECRET,
                         "redirect_uri": redirect_uri,
                         "grant_type": "authorization_code"
                     },
