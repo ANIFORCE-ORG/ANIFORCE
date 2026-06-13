@@ -867,7 +867,7 @@ async def start_google_oauth(
         
         # 构建 OAuth 授权 URL
         # 将逗号分隔的 scopes 转换为空格分隔（Google OAuth 要求）
-        scopes = settings.GOOGLE_SCOPES.replace(",", " ")
+        scopes = settings.GOOGLE_SCOPES.replace(",", "%20")
         redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
         auth_url = (
             f"https://accounts.google.com/o/oauth2/v2/auth"
@@ -926,7 +926,7 @@ async def get_google_authorize_url(
             raise HTTPException(status_code=404, detail="连接不存在")
         
         # 使用 settings 中配置的 scopes
-        scope_str = settings.GOOGLE_SCOPES
+        scopes_str = settings.GOOGLE_SCOPES.replace(",", "%20")
         
         # 构建 Google OAuth 授权 URL
         redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
