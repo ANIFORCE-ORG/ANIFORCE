@@ -19,9 +19,10 @@ from agents import (
     set_default_openai_api,
     set_default_openai_key,
     set_tracing_disabled,
+    RunConfig,  # 添加 RunConfig
 )
 from agents.run import RunResult
-from agents.sandbox import SandboxAgent, Manifest
+from agents.sandbox import SandboxAgent, Manifest, SandboxRuntime  # 添加 SandboxRuntime
 from agents.sandbox.capabilities import Capabilities, Skills, LocalDirLazySkillSource
 from agents.sandbox.entries import LocalDir
 
@@ -153,11 +154,29 @@ class OpenAISDKAdapter:
             )
         
         try:
-            result = Runner.run_streamed(
-                agent,
-                input=input_text,
-                session=session,
-            )
+            # 检查是否是 SandboxAgent
+            is_sandbox_agent = isinstance(agent, SandboxAgent)
+            
+            if is_sandbox_agent:
+                # SandboxAgent 需要 RunConfig
+                sandbox_runtime = SandboxRuntime(
+                    sandbox_dir=self.sandbox_dir,
+                )
+                config = RunConfig(sandbox=sandbox_runtime)
+                result = Runner.run_streamed(
+                    agent,
+                    input=input_text,
+                    session=session,
+                    config=config,
+                )
+            else:
+                # 普通 Agent
+                result = Runner.run_streamed(
+                    agent,
+                    input=input_text,
+                    session=session,
+                )
+            
             return result
         except Exception as e:
             logger.exception(f"SDK run_streamed error: {e}")
