@@ -10,6 +10,7 @@ from app.api.v1.router import api_router
 from app.schemas.base import ErrorResponse, ErrorDetail
 from app.api.exception_handlers import app_error_handler, general_exception_handler
 from app.agent_platform.errors import AppError
+from app.middleware.context import RequestContextMiddleware
 
 settings = get_settings()
 
@@ -36,6 +37,9 @@ app = FastAPI(
     docs_url="/docs" if settings.DEBUG else None,
     redoc_url="/redoc" if settings.DEBUG else None,
 )
+
+# 请求上下文中间件（必须在最外层）
+app.add_middleware(RequestContextMiddleware)
 
 # CORS
 app.add_middleware(

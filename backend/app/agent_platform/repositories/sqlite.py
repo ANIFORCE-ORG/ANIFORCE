@@ -17,6 +17,7 @@ from pathlib import Path
 from contextlib import asynccontextmanager
 import asyncio
 from functools import wraps
+from loguru import logger
 
 from .base import AgentTaskRepository
 from ..models import AgentTask, AgentTaskEvent, AgentTaskStatus
@@ -327,6 +328,13 @@ class SQLiteAgentTaskRepository(AgentTaskRepository):
                 (datetime.utcnow().isoformat(), event.task_id),
             )
             conn.commit()
+        except sqlite3.IntegrityError as e:
+            # 如果是重复 event_id，忽略该错误（幂等性保证）
+            if "UNIQUE constraint failed: events.event_id" in str(e):
+                conn.rollback()
+                logger.debug(f"Event {event.event_id} already exists, skipping")
+            else:
+                raise
         finally:
             conn.close()
     
@@ -421,13 +429,20 @@ class SQLiteAgentTaskRepository(AgentTaskRepository):
     
     @async_to_sync
     def _count_task_events_sync(self, task_id: str) -> int:
-        """统计任务事件数量（同步）"""
+        """统计任务事件数量（同步）
+        
+        返回下一个可用的 sequence 编号
+        使用 MAX(sequence) + 1 而不是 COUNT(*) 以避免并发竞态
+        """
         conn = self._get_conn()
         try:
             cursor = conn.execute(
-                "SELECT COUNT(*) as count FROM events WHERE task_id = ?", (task_id,)
+                "SELECT MAX(sequence) as max_seq FROM events WHERE task_id = ?", (task_id,)
             )
-            return cursor.fetchone()["count"]
+            result = cursor.fetchone()
+            max_seq = result["max_seq"]
+            # 如果还没有任何事件，返回 0
+            return 0 if max_seq is None else max_seq + 1
         finally:
             conn.close()
     

@@ -49,6 +49,7 @@ class AgentTask(BaseModel):
     input: Optional[dict] = Field(None, description="任务输入")
     result: Optional[dict] = Field(None, description="结构化结果")
     error: Optional[dict] = Field(None, description="错误详情")
+    context: Optional[dict] = Field(default_factory=dict, description="任务上下文（如 auth_token）")  # ⭐ 新增
     rating: Optional[int] = Field(None, ge=1, le=5, description="用户评分")
     rating_comment: Optional[str] = Field(None, description="评分评论")
     public_share_token: Optional[str] = Field(None, description="公开分享 token")

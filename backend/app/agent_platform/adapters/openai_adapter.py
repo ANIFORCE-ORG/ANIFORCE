@@ -9,6 +9,7 @@ OpenAI Agents SDK 适配器
 
 import os
 from typing import AsyncIterator, Optional
+from pathlib import Path
 from loguru import logger
 
 from agents import (
@@ -20,6 +21,9 @@ from agents import (
     set_tracing_disabled,
 )
 from agents.run import RunResult
+from agents.sandbox import SandboxAgent
+from agents.sandbox.capabilities import Capabilities, Skills, LocalDirLazySkillSource
+from agents.sandbox.entries import LocalDir
 
 from ..models import AgentTaskEvent, EventType
 from ..errors import AppError, AgentErrorCode, ErrorCategory
@@ -35,11 +39,13 @@ class OpenAISDKAdapter:
         api_key: Optional[str] = None,
         base_url: Optional[str] = None,
         enable_tracing: bool = True,
+        skills_dir: Optional[str] = None,
     ):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
         self.enable_tracing = enable_tracing
+        self.skills_dir = skills_dir or "backend/runtime/skills"
         self.tracer = get_tracer() if enable_tracing else None
         
         # SDK 默认走 Responses API；当前兼容网关只支持 Chat Completions。
@@ -58,19 +64,49 @@ class OpenAISDKAdapter:
         self,
         name: str,
         instructions: str,
+        mcp_servers: list = None,
+        enable_skills: bool = True,
     ) -> Agent:
         """
-        创建 Agent
+        创建 Agent（支持 Skills）
         
         Args:
             name: Agent 名称
             instructions: System prompt
+            mcp_servers: MCP 服务列表（可选）
+            enable_skills: 是否启用 Skills（默认 True）
         """
-        agent = Agent(
-            name=name,
-            instructions=instructions,
-            model=self.model,
-        )
+        # 检查 Skills 目录是否存在
+        skills_path = Path(self.skills_dir)
+        has_skills = enable_skills and skills_path.exists()
+        
+        if has_skills:
+            # 使用 SandboxAgent（支持 Skills）
+            agent = SandboxAgent(
+                name=name,
+                instructions=instructions,
+                model=self.model,
+                mcp_servers=mcp_servers or [],
+                capabilities=Capabilities.default() + [
+                    Skills(
+                        lazy_from=LocalDirLazySkillSource(
+                            source=LocalDir(src=self.skills_dir)
+                        )
+                    )
+                ]
+            )
+            logger.info(f"[SDK] Created SandboxAgent with Skills: {self.skills_dir}")
+        else:
+            # 使用普通 Agent（向后兼容）
+            agent = Agent(
+                name=name,
+                instructions=instructions,
+                model=self.model,
+                mcp_servers=mcp_servers or [],
+            )
+            logger.info(f"[SDK] Created Agent without Skills (skills_dir not found or disabled)")
+        
+        logger.debug(f"[SDK] Agent '{name}' with {len(mcp_servers or [])} MCP servers")
         return agent
     
     def create_session(self, session_id: str, db_path: str = "runtime/agent/sessions.db") -> SQLiteSession:

@@ -172,6 +172,7 @@ class AgentTaskService:
         user_id: str,
         task_id: str,
         user_input: str,
+        context: dict = None,  # ⭐ 新增
     ) -> AsyncIterator[AgentTaskEvent]:
         """
         运行任务（实时执行）
@@ -180,12 +181,17 @@ class AgentTaskService:
             user_id: 用户 ID（从 JWT 获取）
             task_id: 任务 ID
             user_input: 用户输入
+            context: 任务上下文（如 auth_token）
             
         Yields:
             AgentTaskEvent（实时事件流）
         """
         # 校验 task 归属
         task = await self.get_task(user_id, task_id)
+        
+        # 设置 context
+        if context:
+            task.context = context
         
         if not self._runtime:
             raise AppError(

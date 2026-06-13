@@ -49,6 +49,7 @@ _adapter = OpenAISDKAdapter(
     api_key=_settings.OPENAI_API_KEY,
     base_url=getattr(_settings, "OPENAI_BASE_URL", None),
     enable_tracing=getattr(_settings, "AGENT_TRACING_ENABLED", True),
+    skills_dir=_settings.SKILLS_DIR,  # 新增：Skills 目录
 )
 
 # 初始化 Runtime
@@ -303,6 +304,10 @@ async def stream_chat(
     body = await request.json()
     user_input = body.get("message", "")
     
+    # 获取 Authorization header 传递给 Runtime（用于 MCP 鉴权）
+    auth_header = request.headers.get("authorization", "")
+    auth_token = auth_header.replace("Bearer ", "") if auth_header.startswith("Bearer ") else ""
+    
     if not user_input:
         async def error_generator():
             yield f"event: error\n"
@@ -315,11 +320,12 @@ async def stream_chat(
     async def event_generator():
         """SSE 事件生成器"""
         try:
-            # 运行任务
+            # 运行任务（传递 context）
             async for event in service.run_task(
                 user_id=user["id"],
                 task_id=session_id,
                 user_input=user_input,
+                context={"auth_token": auth_token},  # ⭐ 传递 token
             ):
                 # SSE 格式
                 yield f"id: {event.sequence}\n"
@@ -349,13 +355,27 @@ def _convert_events_to_messages(events: list) -> list[AgentChatMessageResponse]:
     """
     将事件流转换为前端期望的消息列表
     
-    TODO: 根据实际事件类型完善转换逻辑
+    提取：
+    - runtime.started: 用户消息（user_input）
+    - message.completed: AI 回复
     """
     messages = []
     
-    # 简单实现：只提取 message.completed 事件
     for event in events:
-        if event.event_type == "message.completed":
+        # 提取用户消息（从 runtime.started 事件）
+        if event.event_type == "runtime.started":
+            payload = event.payload
+            user_input = payload.get("user_input", "")
+            if user_input:
+                messages.append(AgentChatMessageResponse(
+                    id=f"{event.event_id}_user",
+                    role="user",
+                    content=user_input,
+                    created_at=event.created_at,
+                ))
+        
+        # 提取 AI 消息（从 message.completed 事件）
+        elif event.event_type == "message.completed":
             payload = event.payload
             messages.append(AgentChatMessageResponse(
                 id=payload.get("id", event.event_id),

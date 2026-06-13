@@ -48,6 +48,7 @@ class Settings(BaseSettings):
     # Agent 配置
     AGENT_TRACING_ENABLED: bool = True  # 启用本地 tracing
     AGENT_SESSION_DB: str = "runtime/agent/sessions.db"  # Session 数据库路径
+    SKILLS_DIR: str = "backend/runtime/skills"  # Skills 目录路径
 
     class Config:
         env_file = ".env"
