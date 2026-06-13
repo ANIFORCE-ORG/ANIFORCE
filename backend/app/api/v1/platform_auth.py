@@ -651,8 +651,8 @@ async def meta_auth_callback(
                 token_response = await client.get(
                     "https://graph.facebook.com/v25.0/oauth/access_token",
                     params={
-                        "client_id": connection.account_id,
-                        "client_secret": connection.account_secret,
+                        "client_id": settings.META_APP_ID,
+                        "client_secret": settings.META_APP_SECRET,
                         "redirect_uri": f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback",
                         "code": code
                     }
@@ -691,8 +691,8 @@ async def meta_auth_callback(
                     "https://graph.facebook.com/v25.0/oauth/access_token",
                     params={
                         "grant_type": "fb_exchange_token",
-                        "client_id": connection.account_id,
-                        "client_secret": connection.account_secret,
+                        "client_id": settings.META_APP_ID,
+                        "client_secret": settings.META_APP_SECRET,
                         "fb_exchange_token": short_lived_token
                     }
                 )
@@ -772,10 +772,11 @@ async def get_meta_authorize_url(
             raise HTTPException(status_code=404, detail="连接不存在")
         
         # 构建 OAuth 授权 URL
-        scopes = ",".join(connection.scopes or [])
+        # 使用 settings 中配置的 scopes
+        scopes = settings.META_SCOPES
         auth_url = (
             f"https://www.facebook.com/v25.0/dialog/oauth?"
-            f"client_id={connection.account_id}&"
+            f"client_id={settings.META_APP_ID}&"
             f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
             f"scope={scopes}&"
             f"response_type=code&"
