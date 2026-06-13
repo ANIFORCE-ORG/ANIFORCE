@@ -280,10 +280,19 @@ class SystemPromptManager:
     @staticmethod
     def _get_skills_index(skills_dir: Optional[str]) -> str:
         """获取 Skills 索引"""
+        import os
+        from loguru import logger
+        
+        logger.debug(f"[PROMPT] 当前工作目录: {os.getcwd()}")
+        logger.debug(f"[PROMPT] Skills 目录: {skills_dir}")
+        
         if not skills_dir:
             return "（Skills 未配置）"
         
         skills_path = Path(skills_dir)
+        logger.debug(f"[PROMPT] Skills 绝对路径: {skills_path.absolute()}")
+        logger.debug(f"[PROMPT] Skills 目录存在: {skills_path.exists()}")
+        
         if not skills_path.exists():
             return "（Skills 目录不存在）"
         

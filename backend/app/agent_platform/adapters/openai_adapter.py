@@ -48,8 +48,8 @@ class OpenAISDKAdapter:
         self.api_key = api_key
         self.base_url = base_url
         self.enable_tracing = enable_tracing
-        self.skills_dir = skills_dir or "backend/runtime/skills"
-        self.sandbox_dir = sandbox_dir or "backend/runtime/agent/sandbox"
+        self.skills_dir = skills_dir or "runtime/skills"
+        self.sandbox_dir = sandbox_dir or "runtime/agent/sandbox"
         self.tracer = get_tracer() if enable_tracing else None
         
         # 创建沙箱目录
