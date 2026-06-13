@@ -22,7 +22,8 @@ from agents import (
     RunConfig,  # 添加 RunConfig
 )
 from agents.run import RunResult
-from agents.sandbox import SandboxAgent, Manifest, SandboxRuntime  # 添加 SandboxRuntime
+from agents.sandbox import SandboxAgent, Manifest
+from agents.sandbox.runtime import SandboxRuntime  # 正确的导入路径
 from agents.sandbox.capabilities import Capabilities, Skills, LocalDirLazySkillSource
 from agents.sandbox.entries import LocalDir
 
