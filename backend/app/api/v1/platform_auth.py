@@ -458,64 +458,6 @@ async def get_google_config(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/google/authorize_url/{connection_id}")
-async def get_google_authorize_url(
-    connection_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    获取 Google OAuth 授权 URL
-    
-    Args:
-        connection_id: 连接 ID
-        db: 数据库会话
-        current_user: 当前用户
-        
-    Returns:
-        包含授权 URL 的字典
-    """
-    try:
-        user_id = current_user["id"]
-        
-        # 查询连接
-        stmt = select(PlatformConnection).where(
-            PlatformConnection.id == connection_id,
-            PlatformConnection.user_id == user_id,
-            PlatformConnection.platform == "Google"
-        )
-        result = await db.execute(stmt)
-        connection = result.scalar_one_or_none()
-        
-        if not connection:
-            raise HTTPException(status_code=404, detail="连接不存在")
-        
-        # 使用 settings 中配置的 scopes
-        scope_str = settings.GOOGLE_SCOPES
-        
-        # 构建 Google OAuth 授权 URL
-        redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
-        authorize_url = (
-            f"https://accounts.google.com/o/oauth2/v2/auth"
-            f"?response_type=code"
-            f"&client_id={settings.GOOGLE_CLIENT_ID}"
-            f"&redirect_uri={redirect_uri}"
-            f"&scope={scope_str}"
-            f"&access_type=offline"
-            f"&prompt=consent"
-            f"&state={connection_id}"
-        )
-        
-        logger.info(f"Generated Google authorize URL for connection: {connection_id}, authroize_url: {authorize_url}")
-        return {"authorize_url": authorize_url}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to generate Google authorize URL: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/connections", response_model=List[PlatformConnectionResponse])
 async def get_all_connections(
     db: AsyncSession = Depends(get_db),
@@ -591,6 +533,122 @@ async def delete_connection(
     except Exception as e:
         await db.rollback()
         logger.error(f"Failed to delete connection: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== Meta OAuth API ====================
+
+@router.post("/meta/start_oauth")
+async def start_meta_oauth(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    直接启动 Meta OAuth 流程（自动创建 connection 并返回授权 URL）
+    
+    Args:
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        包含授权 URL 和 connection_id 的字典
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 自动创建一个新的 connection 记录
+        # account_id 和 account_secret 留空，避免在数据库中暴露平台核心信息
+        # 实际使用时从 settings 中获取
+        new_connection = PlatformConnection(
+            user_id=user_id,
+            platform="Meta",
+            account_id="",  # 留空，不存储敏感信息
+            account_name="Meta 广告账户",  # 默认名称
+            account_secret="",  # 留空，不存储敏感信息
+            access_token="",  # 暂时为空，等待 OAuth 授权
+            scopes=settings.META_SCOPES.split(","),  # 从 settings 获取 scopes
+            status="unauthorized"
+        )
+        db.add(new_connection)
+        await db.commit()
+        await db.refresh(new_connection)
+        
+        logger.info(f"Created new Meta connection for user: {user_id}, connection_id: {new_connection.id}")
+        
+        # 构建 OAuth 授权 URL
+        scopes = settings.META_SCOPES
+        auth_url = (
+            f"https://www.facebook.com/v25.0/dialog/oauth?"
+            f"client_id={settings.META_APP_ID}&"
+            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
+            f"scope={scopes}&"
+            f"response_type=code&"
+            f"state={new_connection.id}"
+        )
+        
+        logger.info(f"Generated Meta authorize URL for new connection: {new_connection.id}, authorize_url: {auth_url}")
+        
+        return {
+            "authorize_url": auth_url,
+            "connection_id": new_connection.id
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to start Meta OAuth: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/meta/authorize_url/{connection_id}")
+async def get_meta_authorize_url(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Meta OAuth 授权 URL（供前端使用，用于重新授权）
+    
+    Args:
+        connection_id: 连接 ID
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        授权 URL
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 查询连接
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 构建 OAuth 授权 URL
+        # 使用 settings 中配置的 scopes
+        scopes = settings.META_SCOPES
+        auth_url = (
+            f"https://www.facebook.com/v25.0/dialog/oauth?"
+            f"client_id={settings.META_APP_ID}&"
+            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
+            f"scope={scopes}&"
+            f"response_type=code&"
+            f"state={connection_id}"
+        )
+
+        logger.info(f"Generated Meta authorize URL for connection: {connection_id}, authroize_url: {auth_url}")
+        
+        return {"authorize_url": auth_url}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get authorize URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -768,66 +826,7 @@ async def meta_auth_callback(
         )
 
 
-@router.post("/meta/start_oauth")
-async def start_meta_oauth(
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    直接启动 Meta OAuth 流程（自动创建 connection 并返回授权 URL）
-    
-    Args:
-        db: 数据库会话
-        current_user: 当前用户
-    
-    Returns:
-        包含授权 URL 和 connection_id 的字典
-    """
-    try:
-        user_id = current_user["id"]
-        
-        # 自动创建一个新的 connection 记录
-        # account_id 和 account_secret 留空，避免在数据库中暴露平台核心信息
-        # 实际使用时从 settings 中获取
-        new_connection = PlatformConnection(
-            user_id=user_id,
-            platform="Meta",
-            account_id="",  # 留空，不存储敏感信息
-            account_name="Meta 广告账户",  # 默认名称
-            account_secret="",  # 留空，不存储敏感信息
-            access_token="",  # 暂时为空，等待 OAuth 授权
-            scopes=settings.META_SCOPES.split(","),  # 从 settings 获取 scopes
-            status="unauthorized"
-        )
-        db.add(new_connection)
-        await db.commit()
-        await db.refresh(new_connection)
-        
-        logger.info(f"Created new Meta connection for user: {user_id}, connection_id: {new_connection.id}")
-        
-        # 构建 OAuth 授权 URL
-        scopes = settings.META_SCOPES
-        auth_url = (
-            f"https://www.facebook.com/v25.0/dialog/oauth?"
-            f"client_id={settings.META_APP_ID}&"
-            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
-            f"scope={scopes}&"
-            f"response_type=code&"
-            f"state={new_connection.id}"
-        )
-        
-        logger.info(f"Generated Meta authorize URL for new connection: {new_connection.id}, authorize_url: {auth_url}")
-        
-        return {
-            "authorize_url": auth_url,
-            "connection_id": new_connection.id
-        }
-        
-    except Exception as e:
-        await db.rollback()
-        logger.error(f"Failed to start Meta OAuth: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
+# ==================== Google OAuth API ====================
 
 @router.post("/google/start_oauth")
 async def start_google_oauth(
@@ -867,13 +866,15 @@ async def start_google_oauth(
         logger.info(f"Created new Google connection for user: {user_id}, connection_id: {new_connection.id}")
         
         # 构建 OAuth 授权 URL
+        # 将逗号分隔的 scopes 转换为空格分隔（Google OAuth 要求）
+        scopes = settings.GOOGLE_SCOPES.replace(",", " ")
         redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
         auth_url = (
             f"https://accounts.google.com/o/oauth2/v2/auth"
             f"?response_type=code"
             f"&client_id={settings.GOOGLE_CLIENT_ID}"
             f"&redirect_uri={redirect_uri}"
-            f"&scope={settings.GOOGLE_SCOPES}"
+            f"&scope={scopes}"
             f"&access_type=offline"
             f"&prompt=consent"
             f"&state={new_connection.id}"
@@ -892,22 +893,22 @@ async def start_google_oauth(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/meta/authorize_url/{connection_id}")
-async def get_meta_authorize_url(
+@router.get("/google/authorize_url/{connection_id}")
+async def get_google_authorize_url(
     connection_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    获取 Meta OAuth 授权 URL（供前端使用，用于重新授权）
+    获取 Google OAuth 授权 URL
     
     Args:
         connection_id: 连接 ID
         db: 数据库会话
         current_user: 当前用户
-    
+        
     Returns:
-        授权 URL
+        包含授权 URL 的字典
     """
     try:
         user_id = current_user["id"]
@@ -915,7 +916,8 @@ async def get_meta_authorize_url(
         # 查询连接
         stmt = select(PlatformConnection).where(
             PlatformConnection.id == connection_id,
-            PlatformConnection.user_id == user_id
+            PlatformConnection.user_id == user_id,
+            PlatformConnection.platform == "Google"
         )
         result = await db.execute(stmt)
         connection = result.scalar_one_or_none()
@@ -923,26 +925,29 @@ async def get_meta_authorize_url(
         if not connection:
             raise HTTPException(status_code=404, detail="连接不存在")
         
-        # 构建 OAuth 授权 URL
         # 使用 settings 中配置的 scopes
-        scopes = settings.META_SCOPES
-        auth_url = (
-            f"https://www.facebook.com/v25.0/dialog/oauth?"
-            f"client_id={settings.META_APP_ID}&"
-            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
-            f"scope={scopes}&"
-            f"response_type=code&"
-            f"state={connection_id}"
-        )
-
-        logger.info(f"Generated Meta authorize URL for connection: {connection_id}, authroize_url: {auth_url}")
+        scope_str = settings.GOOGLE_SCOPES
         
-        return {"authorize_url": auth_url}
+        # 构建 Google OAuth 授权 URL
+        redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
+        authorize_url = (
+            f"https://accounts.google.com/o/oauth2/v2/auth"
+            f"?response_type=code"
+            f"&client_id={settings.GOOGLE_CLIENT_ID}"
+            f"&redirect_uri={redirect_uri}"
+            f"&scope={scope_str}"
+            f"&access_type=offline"
+            f"&prompt=consent"
+            f"&state={connection_id}"
+        )
+        
+        logger.info(f"Generated Google authorize URL for connection: {connection_id}, authroize_url: {authorize_url}")
+        return {"authorize_url": authorize_url}
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get authorize URL: {e}")
+        logger.error(f"Failed to generate Google authorize URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -1040,6 +1045,32 @@ async def google_auth_callback(
                 if refresh_token:
                     logger.info(f"Got refresh token for connection: {connection_id}, refresh_token: {refresh_token[:20]}...")
                 
+                # 使用 access_token 获取用户信息（openid 和 name）
+                logger.info(f"Fetching user info from Google API for connection: {connection_id}")
+                try:
+                    userinfo_response = await client.get(
+                        "https://www.googleapis.com/oauth2/v2/userinfo",
+                        headers={
+                            "Authorization": f"Bearer {access_token}"
+                        }
+                    )
+                    
+                    if userinfo_response.status_code == 200:
+                        userinfo = userinfo_response.json()
+                        account_id = userinfo.get("id", "")  # Google user ID (openid)
+                        account_name = userinfo.get("name", "Google 广告账户")
+                        account_email = userinfo.get("email", "")
+                        
+                        logger.info(f"Got user info: id={account_id}, name={account_name}, email={account_email}")
+                    else:
+                        logger.warning(f"Failed to get user info: status={userinfo_response.status_code}, using default values")
+                        account_id = ""
+                        account_name = "Google 广告账户"
+                except Exception as e:
+                    logger.error(f"Error fetching user info: {e}, using default values")
+                    account_id = ""
+                    account_name = "Google 广告账户"
+                
             except httpx.TimeoutException as e:
                 logger.error(f"Timeout while getting access token: {e}")
                 return RedirectResponse(
@@ -1060,6 +1091,8 @@ async def google_auth_callback(
         connection.access_token = access_token
         connection.refresh_token = refresh_token
         connection.token_type = token_data.get("token_type", "Bearer")
+        connection.account_id = account_id  # 更新为真实的 Google user ID
+        connection.account_name = account_name  # 更新为真实的用户名
         
         # 计算过期时间
         if expires_in:

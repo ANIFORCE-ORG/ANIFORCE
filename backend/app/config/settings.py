@@ -36,7 +36,7 @@ class Settings(BaseSettings):
     # Google OAuth 配置
     GOOGLE_CLIENT_ID: str = ""
     GOOGLE_CLIENT_SECRET: str = ""
-    GOOGLE_SCOPES: str = "https://www.googleapis.com/auth/adwords"
+    GOOGLE_SCOPES: str = "https://www.googleapis.com/auth/adwords,profile,email,openid"
     
     # 服务地址配置（根据运行模式自动切换）
     # Local 模式: http://localhost:3010 / http://localhost:8010
