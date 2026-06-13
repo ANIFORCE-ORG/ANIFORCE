@@ -7,6 +7,7 @@ export interface User {
   name: string
   email: string
   avatar?: string
+  system_role?: 'ADMIN' | 'USER'
 }
 
 export interface LoginCredentials {
@@ -70,6 +71,9 @@ export const useAuthStore = defineStore('auth', () => {
       const response = await axios.post<LoginResponse>('/api/v1/auth/login', credentials)
       
       if (response.data.success && response.data.data) {
+        console.log('[Auth] Login response data:', response.data.data)
+        console.log('[Auth] User data:', response.data.data.user)
+        console.log('[Auth] User system_role:', response.data.data.user.system_role)
         user.value = response.data.data.user
         token.value = response.data.data.access_token
         return response.data
