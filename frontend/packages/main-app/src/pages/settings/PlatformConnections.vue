@@ -2,8 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import MetaConfigDialog from '@/components/settings/MetaConfigDialog.vue'
-import GoogleConfigDialog from '@/components/settings/GoogleConfigDialog.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { navItems } from '@/config/navigation'
@@ -13,10 +11,8 @@ import { useToast } from '@/composables/useToast'
 const router = useRouter()
 const { success, error: showError } = useToast()
 const activePlatform = ref<'meta' | 'google' | 'tiktok'>('meta')
-const showConfigDialog = ref(false)
 const connections = ref<PlatformConnectionResponse[]>([])
 const loading = ref(false)
-const editingConnection = ref<PlatformConnectionResponse | null>(null)
 const showDeleteConfirm = ref(false)
 const deletingConnection = ref<PlatformConnectionResponse | null>(null)
 
@@ -62,16 +58,6 @@ const switchPanel = (item: any) => {
   }
 }
 
-const openConfigDialog = () => {
-  editingConnection.value = null
-  showConfigDialog.value = true
-}
-
-const closeConfigDialog = () => {
-  showConfigDialog.value = false
-  editingConnection.value = null
-}
-
 const loadConnections = async () => {
   loading.value = true
   try {
@@ -84,21 +70,18 @@ const loadConnections = async () => {
   }
 }
 
-const handleSaveConfig = async (data: any) => {
-  console.log('保存配置:', data)
-  closeConfigDialog()
-  await loadConnections()
-  success('配置已保存')
-}
-
-const handleImportToken = (data: any) => {
-  console.log('导入沙盒账户:', data)
-}
-
-const handleEdit = (connection: PlatformConnectionResponse) => {
-  console.log('编辑连接:', connection)
-  editingConnection.value = connection
-  showConfigDialog.value = true
+const handleAddMetaAccount = async () => {
+  try {
+    // 调用新接口：自动创建 connection 并获取授权 URL
+    const response = await platformApi.startMetaOAuth()
+    // 在新窗口中打开授权页面
+    window.open(response.authorize_url, '_blank', 'width=600,height=700')
+    // 刷新连接列表
+    await loadConnections()
+  } catch (err: any) {
+    console.error('启动 Meta OAuth 失败:', err)
+    showError('启动授权失败，请重试')
+  }
 }
 
 const handleAuthorize = async (connection: PlatformConnectionResponse) => {
@@ -417,10 +400,10 @@ onMounted(() => {
 
             <!-- Meta 平台特殊功能 -->
             <div v-if="activePlatform === 'meta'" class="flex items-center justify-between">
-              <p class="text-[11px] text-slate-600 dark:text-slate-400">配置 Meta 广告账户连接</p>
+              <p class="text-[11px] text-slate-600 dark:text-slate-400">点击添加账户后将直接跳转到 Meta OAuth 授权页面</p>
               <button
                 class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors"
-                @click="openConfigDialog"
+                @click="handleAddMetaAccount"
               >
                 添加广告账户
               </button>
@@ -428,13 +411,7 @@ onMounted(() => {
             
             <!-- Google 平台特殊功能 -->
             <div v-if="activePlatform === 'google'" class="flex items-center justify-between">
-              <p class="text-[11px] text-slate-600 dark:text-slate-400">配置 Google 广告账户连接</p>
-              <button
-                class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors"
-                @click="openConfigDialog"
-              >
-                添加广告账户
-              </button>
+              <p class="text-[11px] text-slate-600 dark:text-slate-400">Google 平台连接功能开发中</p>
             </div>
           </section>
 
@@ -461,7 +438,7 @@ onMounted(() => {
                   <tr>
                     <th v-if="activePlatform === 'google'" class="px-[9px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400 w-[37px]"></th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">账户名称</th>
-                    <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">APP ID</th>
+                    <th v-if="activePlatform !== 'meta'" class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">APP ID</th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">授权范围</th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">状态</th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">更新时间</th>
@@ -487,7 +464,7 @@ onMounted(() => {
                       <td class="px-[16px] py-[12px] text-[11px] text-slate-900 dark:text-white">
                         {{ connection.account_name || '-' }}
                       </td>
-                    <td class="px-[16px] py-[12px] text-[11px] text-slate-600 dark:text-slate-400 font-mono">
+                    <td v-if="activePlatform !== 'meta'" class="px-[16px] py-[12px] text-[11px] text-slate-600 dark:text-slate-400 font-mono">
                       {{ connection.account_id }}
                     </td>
                     <td class="px-[16px] py-[12px] text-[10px]">
@@ -512,12 +489,6 @@ onMounted(() => {
                     </td>
                     <td class="px-[16px] py-[12px] text-right">
                       <div class="flex items-center justify-end gap-[6px]">
-                        <button
-                          class="px-[9px] py-[6px] rounded text-[10px] font-medium border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                          @click="handleEdit(connection)"
-                        >
-                          编辑
-                        </button>
                         <button
                           class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
                           :class="connection.status === 'active' 
@@ -674,35 +645,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Meta 配置弹窗组件 -->
-    <MetaConfigDialog
-      v-if="activePlatform === 'meta'"
-      :show="showConfigDialog"
-      :connection-id="editingConnection?.id || null"
-      :initial-data="editingConnection ? {
-        account_name: editingConnection.account_name || '',
-        app_id: editingConnection.account_id,
-        scopes: editingConnection.scopes || []
-      } : null"
-      @close="closeConfigDialog"
-      @save="handleSaveConfig"
-      @import="handleImportToken"
-    />
-    
-    <!-- Google 配置弹窗组件 -->
-    <GoogleConfigDialog
-      v-if="activePlatform === 'google'"
-      :show="showConfigDialog"
-      :connection-id="editingConnection?.id || null"
-      :initial-data="editingConnection ? {
-        account_name: editingConnection.account_name || '',
-        client_id: editingConnection.account_id,
-        scopes: editingConnection.scopes || []
-      } : null"
-      @close="closeConfigDialog"
-      @save="handleSaveConfig"
-    />
-    
     <!-- 删除确认弹窗 -->
     <ConfirmDialog
       :show="showDeleteConfirm"

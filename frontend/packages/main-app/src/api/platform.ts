@@ -56,6 +56,9 @@ export const platformApi = {
   getMetaAuthorizeUrl: (connectionId: string) =>
     http.get<{ authorize_url: string }>(`/platform-auth/meta/authorize_url/${connectionId}`),
 
+  startMetaOAuth: () =>
+    http.post<{ authorize_url: string; connection_id: string }>('/platform-auth/meta/start_oauth'),
+
   saveGoogleConfig: (data: GoogleConfigRequest) =>
     http.post<PlatformConnectionResponse>('/platform-auth/google/config', data),
 

@@ -708,9 +708,38 @@ async def meta_auth_callback(
             except Exception as e:
                 logger.warning(f"Exception during long-lived token conversion: {e}, using short-lived token instead")
         
+        # 获取访问令牌
+        access_token = token_data.get("access_token")
+        
+        # 使用 access_token 调用 Meta API 获取账户信息
+        account_id = ""
+        account_name = ""
+        try:
+            logger.info(f"Fetching account info from Meta API for connection: {connection_id}")
+            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+                me_response = await client.get(
+                    "https://graph.facebook.com/v25.0/me",
+                    params={
+                        "fields": "id,name",
+                        "access_token": access_token
+                    }
+                )
+                
+                if me_response.status_code == 200:
+                    me_data = me_response.json()
+                    account_id = me_data.get("id", "")
+                    account_name = me_data.get("name", "")
+                    logger.info(f"Successfully fetched account info: id={account_id}, name={account_name}")
+                else:
+                    logger.warning(f"Failed to fetch account info: status={me_response.status_code}, response={me_response.text}")
+        except Exception as e:
+            logger.warning(f"Exception while fetching account info: {e}, will leave account_id and account_name empty")
+        
         # 更新连接信息
-        connection.access_token = token_data.get("access_token")
+        connection.access_token = access_token
         connection.token_type = token_data.get("token_type", "bearer")
+        connection.account_id = account_id  # 更新账户ID
+        connection.account_name = account_name if account_name else "Meta 广告账户"  # 更新账户名称
         
         # 计算过期时间
         expires_in = token_data.get("expires_in")
@@ -724,7 +753,7 @@ async def meta_auth_callback(
         connection.updated_at = datetime.utcnow()
         
         await db.commit()
-        logger.info(f"Updated connection with access token: {connection_id}")
+        logger.info(f"Updated connection with access token and account info: {connection_id}, account_id={account_id}, account_name={account_name}")
         
         # 重定向到前端页面
         return RedirectResponse(
@@ -740,6 +769,67 @@ async def meta_auth_callback(
         )
 
 
+@router.post("/meta/start_oauth")
+async def start_meta_oauth(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    直接启动 Meta OAuth 流程（自动创建 connection 并返回授权 URL）
+    
+    Args:
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        包含授权 URL 和 connection_id 的字典
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 自动创建一个新的 connection 记录
+        # account_id 和 account_secret 留空，避免在数据库中暴露平台核心信息
+        # 实际使用时从 settings 中获取
+        new_connection = PlatformConnection(
+            user_id=user_id,
+            platform="Meta",
+            account_id="",  # 留空，不存储敏感信息
+            account_name="Meta 广告账户",  # 默认名称
+            account_secret="",  # 留空，不存储敏感信息
+            access_token="",  # 暂时为空，等待 OAuth 授权
+            scopes=settings.META_SCOPES.split(","),  # 从 settings 获取 scopes
+            status="unauthorized"
+        )
+        db.add(new_connection)
+        await db.commit()
+        await db.refresh(new_connection)
+        
+        logger.info(f"Created new Meta connection for user: {user_id}, connection_id: {new_connection.id}")
+        
+        # 构建 OAuth 授权 URL
+        scopes = settings.META_SCOPES
+        auth_url = (
+            f"https://www.facebook.com/v25.0/dialog/oauth?"
+            f"client_id={settings.META_APP_ID}&"
+            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
+            f"scope={scopes}&"
+            f"response_type=code&"
+            f"state={new_connection.id}"
+        )
+        
+        logger.info(f"Generated Meta authorize URL for new connection: {new_connection.id}, authorize_url: {auth_url}")
+        
+        return {
+            "authorize_url": auth_url,
+            "connection_id": new_connection.id
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to start Meta OAuth: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/meta/authorize_url/{connection_id}")
 async def get_meta_authorize_url(
     connection_id: str,
@@ -747,7 +837,7 @@ async def get_meta_authorize_url(
     current_user: dict = Depends(get_current_user)
 ):
     """
-    获取 Meta OAuth 授权 URL（供前端使用）
+    获取 Meta OAuth 授权 URL（供前端使用，用于重新授权）
     
     Args:
         connection_id: 连接 ID
