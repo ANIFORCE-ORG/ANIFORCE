@@ -124,8 +124,21 @@ async def copilotkit_agent_run(
     if not auth_token and auth_header.startswith("Bearer "):
         auth_token = auth_header.replace("Bearer ", "")
 
-    # 生成 task_id（使用 thread_id 作为 session）
+    # 确保 task 存在 — 用 thread_id 作为 task_id
     task_id = thread_id
+    try:
+        await service.get_task(user["id"], task_id)
+    except Exception:
+        # AG-UI 用 thread_id 作为 task_id，直接通过 service 的 repo 创建
+        from ...agent_platform.models import AgentTask, AgentTaskStatus
+        task = AgentTask(
+            task_id=task_id,
+            user_id=user["id"],
+            task_type="conversation",
+            title=f"AG-UI {thread_id[:12]}",
+            status=AgentTaskStatus.PENDING,
+        )
+        await service._repo.create(task)
 
     logger.bind(thread_id=thread_id, run_id=run_id).info(
         f"AG-UI run started: {user_input[:100]}"
