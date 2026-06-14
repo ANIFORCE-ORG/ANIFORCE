@@ -285,12 +285,14 @@ export function useHomeAgentSession() {
 
     try {
       // ========== AG-UI 协议 SSE 流 ==========
+      console.log('[AG-UI] 使用 AG-UI 协议发送消息:', text)
       // 构建 AG-UI 请求
       const aguiRequest = {
         threadId: activeSession.value.id,
         messages: [{ role: 'user' as const, content: text }],
         state: {},
       }
+      console.log('[AG-UI] aguiRequest:', aguiRequest)
 
       for await (const event of streamAgUiMessages(aguiRequest)) {
         // RunStarted → runtime.started

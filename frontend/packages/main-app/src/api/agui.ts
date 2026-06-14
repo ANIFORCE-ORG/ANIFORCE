@@ -31,6 +31,7 @@ export interface AgUiSseEvent {
  * @returns 异步迭代器，逐个返回 SSE 事件
  */
 export async function* streamAgUiMessages(request: AgUiRequest): AsyncGenerator<AgUiSseEvent, void, undefined> {
+  console.log('[AG-UI SSE] 准备调用 /api/v1/copilotkit', request)
   const token = localStorage.getItem('animagus_token')
   if (!token) throw new Error('未登录，无法调用 Agent')
 
