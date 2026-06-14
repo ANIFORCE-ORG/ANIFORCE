@@ -10,8 +10,12 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
 from datetime import datetime, timedelta
+import asyncio
 import httpx
 from loguru import logger
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
 
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
@@ -94,6 +98,7 @@ class PlatformConnectionResponse(BaseModel):
     account_name: Optional[str]
     status: str
     scopes: Optional[List[str]]
+    token_expires_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     
@@ -1045,29 +1050,27 @@ async def google_auth_callback(
                 if refresh_token:
                     logger.info(f"Got refresh token for connection: {connection_id}, refresh_token: {refresh_token[:20]}...")
                 
-                # 使用 access_token 获取用户信息（openid 和 name）
-                logger.info(f"Fetching user info from Google API for connection: {connection_id}")
+                # 使用 Google SDK 获取用户信息（openid 和 name）
+                logger.info(f"Fetching user info via Google SDK for connection: {connection_id}")
                 try:
-                    userinfo_response = await client.get(
-                        "https://www.googleapis.com/oauth2/v2/userinfo",
-                        headers={
-                            "Authorization": f"Bearer {access_token}"
-                        }
-                    )
+                    credentials = Credentials(token=access_token)
                     
-                    if userinfo_response.status_code == 200:
-                        userinfo = userinfo_response.json()
-                        account_id = userinfo.get("id", "")  # Google user ID (openid)
-                        account_name = userinfo.get("name", "Google 广告账户")
-                        account_email = userinfo.get("email", "")
-                        
-                        logger.info(f"Got user info: id={account_id}, name={account_name}, email={account_email}")
-                    else:
-                        logger.warning(f"Failed to get user info: status={userinfo_response.status_code}, using default values")
-                        account_id = ""
-                        account_name = "Google 广告账户"
+                    def _fetch_userinfo():
+                        service = build('oauth2', 'v2', credentials=credentials)
+                        return service.userinfo().get().execute()
+                    
+                    userinfo = await asyncio.to_thread(_fetch_userinfo)
+                    account_id = userinfo.get("id", "")  # Google user ID (openid)
+                    account_name = userinfo.get("name", "Google 广告账户")
+                    account_email = userinfo.get("email", "")
+                    
+                    logger.info(f"Got user info via SDK: id={account_id}, name={account_name}, email={account_email}")
+                except HttpError as e:
+                    logger.error(f"Google SDK HTTP error fetching user info: {e.status_code} - {e.reason}, using default values")
+                    account_id = ""
+                    account_name = "Google 广告账户"
                 except Exception as e:
-                    logger.error(f"Error fetching user info: {e}, using default values")
+                    logger.error(f"Error fetching user info via SDK: {e}, using default values")
                     account_id = ""
                     account_name = "Google 广告账户"
                 

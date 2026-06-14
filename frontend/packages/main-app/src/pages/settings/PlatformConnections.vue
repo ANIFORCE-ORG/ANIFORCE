@@ -200,11 +200,26 @@ const isPlatformConnected = (platformId: string) => {
   return connections.value.some(conn => conn.platform === platformName && conn.status === 'active')
 }
 
+// 判断 token 是否已过期
+const isTokenExpired = (connection: PlatformConnectionResponse) => {
+  if (!connection.token_expires_at) return false
+  return new Date(connection.token_expires_at) < new Date()
+}
+
+// 获取连接的有效状态（考虑 token 过期）
+const getEffectiveStatus = (connection: PlatformConnectionResponse) => {
+  if (connection.status === 'active' && isTokenExpired(connection)) {
+    return 'token_expired'
+  }
+  return connection.status
+}
+
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'active': '已激活',
     'unauthorized': '未授权',
     'expired': '已过期',
+    'token_expired': '授权过期',
     'revoked': '已撤销'
   }
   return statusMap[status] || status
@@ -215,6 +230,7 @@ const getStatusClass = (status: string) => {
     'active': 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400',
     'unauthorized': 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
     'expired': 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+    'token_expired': 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
     'revoked': 'bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-400'
   }
   return classMap[status] || classMap['unauthorized']
@@ -523,8 +539,8 @@ onMounted(() => {
                       </div>
                     </td>
                     <td class="px-[16px] py-[12px] text-[10px]">
-                      <span class="px-[6px] py-[4px] rounded font-medium" :class="getStatusClass(connection.status)">
-                        {{ getStatusText(connection.status) }}
+                      <span class="px-[6px] py-[4px] rounded font-medium" :class="getStatusClass(getEffectiveStatus(connection))">
+                        {{ getStatusText(getEffectiveStatus(connection)) }}
                       </span>
                     </td>
                     <td class="px-[16px] py-[12px] text-[10px] text-slate-600 dark:text-slate-400">
@@ -536,20 +552,20 @@ onMounted(() => {
                         <button
                           v-if="(activePlatform === 'meta' || activePlatform === 'google')"
                           class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
-                          :class="connection.status === 'active'
+                          :class="getEffectiveStatus(connection) === 'active'
                             ? 'border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                             : 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'"
-                          :disabled="connection.status !== 'active'"
+                          :disabled="getEffectiveStatus(connection) !== 'active'"
                           @click="handleSyncAdAccounts(connection)"
                         >
                           同步广告子账号
                         </button>
                         <button
                           class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
-                          :class="connection.status === 'active' 
+                          :class="getEffectiveStatus(connection) === 'active' 
                             ? 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'
                             : 'border-primary text-primary hover:bg-primary/5'"
-                          :disabled="connection.status === 'active'"
+                          :disabled="getEffectiveStatus(connection) === 'active'"
                           @click="handleAuthorize(connection)"
                         >
                           授权

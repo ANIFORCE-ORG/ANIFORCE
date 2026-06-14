@@ -23,6 +23,7 @@ export interface PlatformConnectionResponse {
   account_name: string | null
   status: string
   scopes: string[] | null
+  token_expires_at: string | null
   created_at: string
   updated_at: string
 }
