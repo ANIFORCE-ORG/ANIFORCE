@@ -235,10 +235,10 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
   >
-    <div class="assistant-model-row">
-      <span v-if="modelLabel">{{ modelLabel }}</span>
-      <span v-if="isStreaming && estimatedTokens > 0" class="stream-stat">↓ {{ estimatedTokens }}</span>
-      <span v-if="isStreaming && tps !== null" class="tps-badge">{{ tps.toFixed(1) }} t/s</span>
+    <!-- 流式传输状态提示 (仅在流式时显示) -->
+    <div v-if="isStreaming" class="assistant-streaming-row">
+      <span v-if="estimatedTokens > 0" class="stream-stat">↓ {{ estimatedTokens }}</span>
+      <span v-if="tps !== null" class="tps-badge">{{ tps.toFixed(1) }} t/s</span>
     </div>
 
     <div class="assistant-block-list">
@@ -282,10 +282,10 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
     <div class="assistant-footer">
       <div class="footer-left">
         <span v-if="modelLabel" class="model-badge">{{ modelLabel }}</span>
+        <span v-if="usageText" class="usage-text">{{ usageText }}</span>
       </div>
 
       <div class="footer-right">
-        <span v-if="usageText" class="usage-text">{{ usageText }}</span>
         <button v-if="textContent && !isStreaming" class="copy-button" :class="{ visible: hovered || copied }" @click="copy(textContent)">
           <span class="material-symbols-outlined">content_copy</span>
         </button>
@@ -401,7 +401,7 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   }
 }
 
-.assistant-model-row {
+.assistant-streaming-row {
   display: flex;
   align-items: center;
   gap: 10px;
