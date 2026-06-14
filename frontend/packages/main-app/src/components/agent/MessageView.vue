@@ -2,6 +2,7 @@
 import { computed, onUnmounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import type { AgentMessage } from '@/api/agent'
+import ActivityMessageView from './ActivityMessageView.vue'
 
 const props = defineProps<{
   message: AgentMessage
@@ -40,6 +41,7 @@ markdown.renderer.rules.link_open = (tokens, idx, options, env, self) => {
 
 const isUser = computed(() => props.message.role === 'user')
 const isAssistant = computed(() => props.message.role === 'assistant')
+const isActivity = computed(() => props.message.role === 'activity')
 const textContent = computed(() => messageText(props.message))
 const blocks = computed(() => contentBlocks(props.message))
 const userImageBlocks = computed(() => {
@@ -203,8 +205,14 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
 </script>
 
 <template>
+  <!-- Activity Message (工具调用卡片) -->
+  <div v-if="isActivity" class="activity-message-wrapper">
+    <ActivityMessageView :content="message.content as any" />
+  </div>
+
+  <!-- User Message -->
   <div
-    v-if="isUser"
+    v-else-if="isUser"
     class="user-message"
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
@@ -280,48 +288,396 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
 </template>
 
 <style scoped>
-.user-message { display: flex; flex-direction: column; align-items: flex-end; margin-bottom: 16px; }
-.user-bubble { max-width: 85%; background: var(--user-bg); border: 1px solid color-mix(in srgb, var(--accent) 22%, transparent); border-radius: 16px; padding: 9px 13px; color: var(--text); font-size: 14px; line-height: 1.42; white-space: pre-wrap; word-break: break-word; }
-.user-images { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 7px; }
-.user-images img { display: block; max-width: 240px; max-height: 240px; border: 1px solid color-mix(in srgb, var(--accent) 16%, transparent); border-radius: 7px; object-fit: contain; background: var(--surface); }
+/* Activity Message */
+.activity-message-wrapper {
+  margin-bottom: 20px;
+}
+
+/* User Message - 增加阴影和圆润 */
+.user-message {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-bottom: 24px;
+}
+
+.user-bubble {
+  max-width: 85%;
+  background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+  border: 1px solid rgba(59, 130, 246, 0.15);
+  border-radius: 18px;
+  padding: 12px 16px;
+  color: var(--text);
+  font-size: 14.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.user-bubble:hover {
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+  transform: translateY(-1px);
+}
+
+.user-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.user-images img {
+  display: block;
+  max-width: 240px;
+  max-height: 240px;
+  border: 1px solid rgba(59, 130, 246, 0.2);
+  border-radius: 10px;
+  object-fit: contain;
+  background: var(--surface);
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
 .user-text:empty { display: none; }
-.message-actions { display: flex; gap: 6px; align-items: center; margin-top: 3px; opacity: 0; pointer-events: none; transition: opacity .12s; color: var(--text-dim); font-size: 10px; }
-.message-actions.visible { opacity: 1; pointer-events: auto; }
-.message-actions button, .copy-assistant { border: 0; background: none; color: var(--text-dim); cursor: pointer; border-radius: 5px; padding: 3px 8px; font-size: 11px; }
-.message-actions button:hover, .copy-assistant:hover { color: var(--accent); }
-.assistant-message { margin-bottom: 18px; padding: 2px 0; }
-.assistant-model-row { display: flex; align-items: center; gap: 8px; min-height: 16px; margin-bottom: 4px; color: var(--text-dim); font-size: 11px; }
+
+.message-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 6px;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.message-actions.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.message-actions button,
+.copy-assistant {
+  border: 0;
+  background: none;
+  color: var(--text-dim);
+  cursor: pointer;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  transition: all 0.15s ease;
+}
+
+.message-actions button:hover,
+.copy-assistant:hover {
+  color: var(--accent);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+/* Assistant Message - 增加呼吸感 */
+.assistant-message {
+  margin-bottom: 28px;
+  padding: 0;
+  animation: fadeInUp 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.assistant-model-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 18px;
+  margin-bottom: 8px;
+  color: var(--text-dim);
+  font-size: 11.5px;
+  padding-left: 2px;
+}
+
 .stream-stat { color: var(--text); }
-.tps-badge { border-radius: 4px; padding: 1px 6px; background: var(--accent); color: #fff; font-size: 11px; }
-.assistant-block-list { display: flex; flex-direction: column; gap: 8px; background: var(--assistant-bg); border-radius: 14px; padding: 2px 0; }
-.markdown-body { color: var(--text); font-size: 14px; line-height: 1.7; word-break: break-word; }
-.markdown-body :deep(p) { margin: 0 0 8px; }
+
+.tps-badge {
+  border-radius: 6px;
+  padding: 2px 8px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 500;
+  box-shadow: 0 1px 3px rgba(59, 130, 246, 0.3);
+}
+
+.assistant-block-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: transparent;
+  padding: 0;
+}
+
+/* Markdown Body - 增加间距和层次 */
+.markdown-body {
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.75;
+  word-break: break-word;
+  padding: 4px 0;
+}
+
+.markdown-body :deep(p) {
+  margin: 0 0 12px;
+}
+
 .markdown-body :deep(.md-gap) { height: 0; }
 .markdown-body :deep(p:last-child) { margin-bottom: 0; }
-.markdown-body :deep(h1), .markdown-body :deep(h2), .markdown-body :deep(h3) { margin: 10px 0 4px; font-weight: 600; color: var(--text); }
-.markdown-body :deep(h1) { font-size: 1.15em; } .markdown-body :deep(h2) { font-size: 1.05em; } .markdown-body :deep(h3) { font-size: .95em; }
-.markdown-body :deep(ul) { margin: 4px 0 8px; padding-left: 20px; }
-.markdown-body :deep(blockquote) { margin: 4px 0; border-left: 3px solid var(--border); padding: 2px 10px; color: var(--text-muted); background: transparent; border-radius: 0; }
-.markdown-body :deep(table) { width: 100%; margin: 8px 0; border-collapse: collapse; font-size: 13px; }
-.markdown-body :deep(th), .markdown-body :deep(td) { border: 1px solid var(--border); padding: 5px 10px; text-align: left; vertical-align: top; }
-.markdown-body :deep(th) { background: var(--bg-panel); font-weight: 600; }
-.markdown-body :deep(code) { background: var(--bg-selected); border-radius: 3px; padding: 1px 4px; font-family: var(--font-mono); font-size: .9em; }
-.code-block { overflow: hidden; margin: 4px 0; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); }
-.code-head { display: flex; justify-content: space-between; align-items: center; padding: 3px 10px; border-bottom: 1px solid var(--border); background: var(--bg-panel); color: var(--text-dim); font-size: 11px; }
-.code-head button { border: 0; background: none; color: var(--text-muted); cursor: pointer; font-size: 11px; }
-.code-block pre { overflow: auto; margin: 0; padding: 10px 12px; font-size: 12.5px; line-height: 1.6; color: var(--text); }
-.thinking-block, .tool-call-block { overflow: hidden; border: 1px solid var(--outline-variant); border-radius: 12px; background: var(--surface-container); font-size: 12px; }
-.thinking-block > button, .tool-call-block > button { display: flex; align-items: center; gap: 7px; width: 100%; padding: 6px 10px; border: 0; background: none; color: var(--text-muted); cursor: pointer; text-align: left; }
-.thinking-content { border-top: 1px solid var(--outline-variant); padding: 8px 10px; color: var(--text-muted); background: var(--surface); line-height: 1.6; white-space: pre-wrap; }
-.tool-name { flex-shrink: 0; color: var(--success); font-family: var(--font-mono); font-weight: 600; font-size: 11px; }
-.tool-preview { min-width: 0; flex: 1; overflow: hidden; color: var(--text-dim); font-family: var(--font-mono); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
-.tool-status, .chev { flex-shrink: 0; color: var(--text-dim); font-size: 11px; }
-.tool-call-block.error { border-color: color-mix(in srgb, var(--error) 40%, var(--outline-variant)); background: color-mix(in srgb, var(--error) 7%, var(--surface)); }
+
+.markdown-body :deep(h1),
+.markdown-body :deep(h2),
+.markdown-body :deep(h3) {
+  margin: 16px 0 8px;
+  font-weight: 600;
+  color: var(--text);
+  letter-spacing: -0.01em;
+}
+
+.markdown-body :deep(h1) { font-size: 1.3em; }
+.markdown-body :deep(h2) { font-size: 1.15em; }
+.markdown-body :deep(h3) { font-size: 1.05em; }
+
+.markdown-body :deep(ul) {
+  margin: 8px 0 12px;
+  padding-left: 24px;
+}
+
+.markdown-body :deep(blockquote) {
+  margin: 8px 0;
+  border-left: 3px solid var(--border);
+  padding: 4px 14px;
+  color: var(--text-muted);
+  background: rgba(100, 116, 139, 0.04);
+  border-radius: 0 6px 6px 0;
+}
+
+.markdown-body :deep(table) {
+  width: 100%;
+  margin: 12px 0;
+  border-collapse: collapse;
+  font-size: 13.5px;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.markdown-body :deep(th),
+.markdown-body :deep(td) {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-body :deep(th) {
+  background: var(--bg-panel);
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.markdown-body :deep(code) {
+  background: rgba(100, 116, 139, 0.08);
+  border: 1px solid rgba(100, 116, 139, 0.1);
+  border-radius: 4px;
+  padding: 2px 6px;
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+/* Code Block - 增加阴影 */
+.code-block {
+  overflow: hidden;
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04), 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+.code-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 14px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-panel);
+  color: var(--text-dim);
+  font-size: 11.5px;
+  font-weight: 500;
+}
+
+.code-head button {
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  font-size: 11px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  transition: all 0.15s ease;
+}
+
+.code-head button:hover {
+  color: var(--accent);
+  background: rgba(59, 130, 246, 0.08);
+}
+
+.code-block pre {
+  overflow: auto;
+  margin: 0;
+  padding: 14px 16px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}
+
+/* Tool blocks - 增加圆润和阴影 */
+.thinking-block,
+.tool-call-block {
+  overflow: hidden;
+  border: 1px solid var(--outline-variant);
+  border-radius: 12px;
+  background: var(--surface-container);
+  font-size: 12.5px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s ease;
+}
+
+.thinking-block:hover,
+.tool-call-block:hover {
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.thinking-block > button,
+.tool-call-block > button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s ease;
+}
+
+.thinking-block > button:hover,
+.tool-call-block > button:hover {
+  background: rgba(100, 116, 139, 0.04);
+}
+
+.thinking-content {
+  border-top: 1px solid var(--outline-variant);
+  padding: 10px 12px;
+  color: var(--text-muted);
+  background: var(--surface);
+  line-height: 1.6;
+  white-space: pre-wrap;
+}
+
+.tool-name {
+  flex-shrink: 0;
+  color: var(--success);
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 11.5px;
+}
+
+.tool-preview {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  color: var(--text-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-status,
+.chev {
+  flex-shrink: 0;
+  color: var(--text-dim);
+  font-size: 11px;
+}
+
+.tool-call-block.error {
+  border-color: color-mix(in srgb, var(--error) 40%, var(--outline-variant));
+  background: color-mix(in srgb, var(--error) 7%, var(--surface));
+}
+
 .tool-call-block.error .tool-name { color: var(--error); }
-.tool-pre { overflow: auto; max-height: 400px; margin: 0; border-top: 1px solid var(--outline-variant); padding: 8px 10px; background: var(--surface); color: var(--text-muted); font-size: 12px; line-height: 1.5; white-space: pre-wrap; word-break: break-word; }
+
+.tool-pre {
+  overflow: auto;
+  max-height: 400px;
+  margin: 0;
+  border-top: 1px solid var(--outline-variant);
+  padding: 10px 12px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
 .tool-pre.result { background: var(--bg); }
-.assistant-footer { display: flex; align-items: center; gap: 8px; margin-top: 4px; color: var(--text-dim); font-size: 11px; }
-.copy-assistant { opacity: 0; pointer-events: none; transition: opacity .12s; }
-.copy-assistant.visible { opacity: 1; pointer-events: auto; }
-.assistant-footer .time { margin-left: auto; font-size: 10px; }
+
+.assistant-footer {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  color: var(--text-dim);
+  font-size: 11px;
+  padding-left: 2px;
+}
+
+.copy-assistant {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+.copy-assistant.visible {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.assistant-footer .time {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: var(--text-dim);
+}
+
+/* Dark mode 优化 */
+:global(.dark) .user-bubble {
+  background: linear-gradient(135deg, rgba(59, 130, 246, 0.12) 0%, rgba(37, 99, 235, 0.08) 100%);
+  border-color: rgba(59, 130, 246, 0.25);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(59, 130, 246, 0.1);
+}
+
+:global(.dark) .user-bubble:hover {
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3), 0 2px 4px rgba(59, 130, 246, 0.15);
+}
 </style>

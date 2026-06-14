@@ -87,6 +87,20 @@ export const useAgentStore = defineStore('agent', () => {
     messagesBySession.value.set(sessionId, [...current, msg])
   }
   
+  // AG-UI: 插入或更新 activity 消息
+  function upsertActivityMessage(sessionId: string, msg: AgentMessage): void {
+    const current = messagesBySession.value.get(sessionId) || []
+    const index = current.findIndex(m => m.id === msg.id)
+    if (index >= 0) {
+      // 更新现有 activity（例如 running → completed）
+      current[index] = msg
+      messagesBySession.value.set(sessionId, [...current])
+    } else {
+      // 插入新 activity
+      messagesBySession.value.set(sessionId, [...current, msg])
+    }
+  }
+  
   function upsertTimelineBlock(sessionId: string, block: AgentTimelineBlock): void {
     const current = timelineBySession.value.get(sessionId) || []
     const index = current.findIndex(b => b.id === block.id)
@@ -130,6 +144,7 @@ export const useAgentStore = defineStore('agent', () => {
     persistToLocalStorage,
     setMessages,
     appendMessage,
+    upsertActivityMessage,  // AG-UI: activity 消息插入/更新
     upsertTimelineBlock,
     setWorkspace,
   }

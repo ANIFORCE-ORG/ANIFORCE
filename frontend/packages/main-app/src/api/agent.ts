@@ -22,8 +22,8 @@ export type AgentContentBlock = TextContentBlock | ImageContentBlock | Record<st
 
 export interface AgentMessage {
   id?: string
-  role: 'user' | 'assistant' | 'system' | 'toolResult' | 'bashExecution' | 'custom' | 'branchSummary' | 'compactionSummary'
-  content?: string | AgentContentBlock[]
+  role: 'user' | 'assistant' | 'system' | 'toolResult' | 'bashExecution' | 'custom' | 'branchSummary' | 'compactionSummary' | 'activity'
+  content?: string | AgentContentBlock[] | ActivityContent
   sequence?: number
   created_at?: string
   timestamp?: number | string
@@ -34,6 +34,14 @@ export interface AgentMessage {
   toolName?: string
   isError?: boolean
   [key: string]: unknown
+}
+
+export interface ActivityContent {
+  activityType: string
+  toolName: string
+  status: 'running' | 'completed' | 'error'
+  title: string
+  arguments?: Record<string, unknown>
 }
 
 export interface AgentModel {

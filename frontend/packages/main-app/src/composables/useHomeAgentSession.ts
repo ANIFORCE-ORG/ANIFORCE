@@ -356,16 +356,35 @@ export function useHomeAgentSession() {
           }
         }
 
-        // ActivitySnapshot → 更新工具卡片状态
+        // ActivitySnapshot → 插入/更新 activity 消息
         if (event.event === 'ActivitySnapshot') {
-          const { messageId, content } = event.data
-          if (content && typeof content === 'object') {
+          const { messageId, content, activityType } = event.data
+          if (content && typeof content === 'object' && activeSession.value) {
             const activityContent = content as Record<string, unknown>
             const toolName = String(activityContent.toolName || 'tool')
-            const status = String(activityContent.status || 'running')
+            const statusRaw = String(activityContent.status || 'running')
+            const status = (statusRaw === 'completed' ? 'completed' : statusRaw === 'error' ? 'error' : 'running') as 'running' | 'completed' | 'error'
+            const title = String(activityContent.title || toolName)
             const args = activityContent.arguments as Record<string, unknown> | undefined
             
-            // 找到对应的工具并更新
+            // 创建 activity 消息
+            const activityMessage: AgentMessage = {
+              id: String(messageId || `activity_${Date.now()}`),
+              role: 'activity' as const,
+              content: {
+                activityType: String(activityType || 'TOOL_CALL'),
+                toolName,
+                status,
+                title,
+                arguments: args,
+              },
+              timestamp: Date.now(),
+            }
+            
+            // 插入或更新 activity 消息
+            store.upsertActivityMessage(activeSession.value.id, activityMessage)
+            
+            // 同时更新 executionTools（用于 phase 显示）
             const toolId = String(messageId || '').replace('activity_', '')
             const index = executionTools.value.findIndex(t => t.id === toolId || t.name === toolName)
             if (index >= 0) {
@@ -376,13 +395,6 @@ export function useHomeAgentSession() {
               }
               executionTools.value = [...executionTools.value]
             }
-            
-            upsertTimelineTool({
-              id: toolId,
-              toolName,
-              status: status === 'completed' ? 'completed' : status === 'error' ? 'error' : 'running',
-              arguments: args,
-            })
           }
         }
 

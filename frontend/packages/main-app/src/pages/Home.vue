@@ -4,7 +4,6 @@ import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
 import LiveWorkspaceShell from '@/components/agent/workspace/LiveWorkspaceShell.vue'
-import TimelineBlockRenderer from '@/components/agent/timeline/TimelineBlockRenderer.vue'
 import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
@@ -101,16 +100,6 @@ const currentTask = computed(() => agent.currentTask.value)
 const hasBusinessTask = computed(() => Boolean(currentTask.value?.task_type && currentTask.value.task_type !== 'conversation' && currentTask.value.task_type !== 'data_query'))
 const hasWorkspaceToolResults = computed(() => agent.workspaceToolResults.value.length > 0)
 const taskPanelVisible = computed(() => true)
-const streamingTimelineBlocks = computed(() => {
-  const messageId = agent.streamingMessage.value?.id
-  if (!messageId) return []
-  return agent.timelineBlocks.value.filter(block => block.parentMessageId === messageId)
-})
-const orphanTimelineBlocks = computed(() => agent.timelineBlocks.value.filter(block => {
-  if (streamingTimelineBlocks.value.some(item => item.id === block.id)) return false
-  if (!block.parentMessageId) return true
-  return !agent.visibleMessages.value.some(message => message.id === block.parentMessageId)
-}))
 const workspaceStyle = computed(() => ({
   width: workspaceCollapsed.value ? '56px' : `${workspaceWidth.value}px`
 }))
@@ -321,11 +310,6 @@ function openProject(project: { id: string }) {
   navigateTo(`/projects/${encodeURIComponent(project.id)}`)
 }
 
-function timelineBlocksForMessage(message: AgentMessage) {
-  if (!message.id) return []
-  return agent.timelineBlocks.value.filter(block => block.parentMessageId === message.id)
-}
-
 function handleTaskAction(action: string) {
   if (action.includes(':')) {
     window.requestAnimationFrame(() => {
@@ -497,6 +481,7 @@ onBeforeUnmount(() => {
       </div>
 
       <template v-else>
+        <!-- 消息列表：user / assistant / activity 都在这里 -->
         <template v-for="(message, index) in agent.visibleMessages.value" :key="message.id || `${message.role}-${message.timestamp}-${index}`">
           <MessageView
             :message="message"
@@ -504,21 +489,9 @@ onBeforeUnmount(() => {
             :model-names="agent.modelNames.value"
             :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
           />
-          <TransitionGroup
-            v-if="timelineBlocksForMessage(message).length"
-            name="timeline-flow"
-            tag="div"
-            class="agent-inline-timeline"
-          >
-            <TimelineBlockRenderer
-              v-for="block in timelineBlocksForMessage(message)"
-              :key="block.id"
-              :block="block"
-              @action="agent.handleTimelineAction"
-            />
-          </TransitionGroup>
         </template>
 
+        <!-- 流式消息 -->
         <MessageView
           v-if="agent.streamingMessage.value"
           :message="agent.streamingMessage.value"
@@ -526,32 +499,8 @@ onBeforeUnmount(() => {
           :tool-results="toolResults"
           :model-names="agent.modelNames.value"
         />
-        <TransitionGroup
-          v-if="streamingTimelineBlocks.length"
-          name="timeline-flow"
-          tag="div"
-          class="agent-inline-timeline"
-        >
-          <TimelineBlockRenderer
-            v-for="block in streamingTimelineBlocks"
-            :key="block.id"
-            :block="block"
-            @action="agent.handleTimelineAction"
-          />
-        </TransitionGroup>
-        <TransitionGroup
-          v-if="orphanTimelineBlocks.length"
-          name="timeline-flow"
-          tag="div"
-          class="agent-inline-timeline"
-        >
-          <TimelineBlockRenderer
-            v-for="block in orphanTimelineBlocks"
-            :key="block.id"
-            :block="block"
-            @action="agent.handleTimelineAction"
-          />
-        </TransitionGroup>
+        
+        <!-- Agent 运行中提示 -->
         <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="flex items-center gap-2 py-4 text-sm text-slate-500">
           <div class="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
           <span>{{ phaseLabel(agent.agentPhase.value) }}</span>
@@ -690,15 +639,15 @@ onBeforeUnmount(() => {
   --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 }
 
+/* 助手消息区域 - 移除左侧 border，增加间距 */
 .agent-output :deep(.assistant-message) {
-  margin-bottom: 22px;
-  padding: 0 0 0 14px;
-  border-left: 2px solid rgba(37, 99, 235, .16);
+  margin-bottom: 32px;
+  padding: 0;
 }
 
 .agent-output :deep(.assistant-model-row) {
   min-height: 18px;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
   color: #94a3b8;
   font-size: 11px;
 }
@@ -706,14 +655,14 @@ onBeforeUnmount(() => {
 .agent-output :deep(.stream-stat),
 .agent-output :deep(.tps-badge) {
   border-radius: 999px;
-  padding: 1px 6px;
+  padding: 2px 8px;
   background: #f1f5f9;
   color: #64748b;
   font-size: 10px;
 }
 
 .agent-output :deep(.assistant-block-list) {
-  gap: 10px;
+  gap: 12px;
 }
 
 .agent-output :deep(.markdown-body) {
