@@ -203,7 +203,7 @@ const isPlatformConnected = (platformId: string) => {
 // 判断 token 是否已过期
 const isTokenExpired = (connection: PlatformConnectionResponse) => {
   if (!connection.token_expires_at) return false
-  return new Date(connection.token_expires_at) < new Date()
+  return new Date(connection.token_expires_at + 'Z') < new Date()
 }
 
 // 获取连接的有效状态（考虑 token 过期）

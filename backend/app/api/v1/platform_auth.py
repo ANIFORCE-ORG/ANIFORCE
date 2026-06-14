@@ -9,7 +9,7 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import asyncio
 import httpx
 from loguru import logger
@@ -931,7 +931,7 @@ async def get_google_authorize_url(
             raise HTTPException(status_code=404, detail="连接不存在")
         
         # 使用 settings 中配置的 scopes
-        scopes_str = settings.GOOGLE_SCOPES.replace(",", "%20")
+        scope_str = settings.GOOGLE_SCOPES.replace(",", "%20")
         
         # 构建 Google OAuth 授权 URL
         redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
