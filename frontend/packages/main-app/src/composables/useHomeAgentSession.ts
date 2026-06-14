@@ -9,6 +9,7 @@ import {
   type AgentModel,
   type AgentSession,
 } from '@/api/agent'
+import { streamAgUiMessages, type AgUiMessage } from '@/api/agui'
 import { useAgentStore } from '@/store/agent'
 
 export type AgentPhase =
@@ -283,62 +284,67 @@ export function useHomeAgentSession() {
     store.streamingMessage = assistant
 
     try {
-      for await (const event of streamAgentMessage(activeSession.value.id, text)) {
-        if (event.event === 'runtime.started') {
-          const payload = readEventPayload(event.data)
-          currentRunId = String(payload.run_id || payload.task_id || payload.id || currentRunId || `run_${Date.now()}`)
+      // ========== AG-UI 协议 SSE 流 ==========
+      // 构建 AG-UI 请求
+      const aguiRequest = {
+        threadId: activeSession.value.id,
+        messages: [{ role: 'user' as const, content: text }],
+        state: {},
+      }
+
+      for await (const event of streamAgUiMessages(aguiRequest)) {
+        // RunStarted → runtime.started
+        if (event.event === 'RunStarted') {
+          const { threadId, runId } = event.data
+          currentRunId = String(runId || `run_${Date.now()}`)
           store.agentPhase = { kind: 'waiting_model' }
         }
-        if (event.event === 'message.started') {
-          const started = readAssistantEvent(event.data)
-          assistant.id = started.id || assistant.id
-          currentAssistantMessageId = assistant.id
-          attachCurrentRunTimelineBlocks(assistant.id)
-          assistant.provider = started.provider || assistant.provider
-          assistant.model = started.model || assistant.model
-          assistant.created_at = started.created_at || assistant.created_at
+
+        // TextMessageContent → message.updated (流式文本)
+        if (event.event === 'TextMessageContent') {
+          const { messageId, delta } = event.data
+          if (!currentAssistantMessageId) {
+            assistant.id = String(messageId || `msg_${Date.now()}`)
+            currentAssistantMessageId = assistant.id
+            attachCurrentRunTimelineBlocks(assistant.id)
+          }
+          if (delta && typeof delta === 'string') {
+            enqueueTypewriter(delta)
+          }
         }
-        if (event.event === 'message.updated') {
-          const updated = readAssistantEvent(event.data)
-          if (updated.provider) assistant.provider = updated.provider
-          if (updated.model) assistant.model = updated.model
-          enqueueTypewriter(String(updated.delta || ''))
-        }
-        if (event.event === 'message.completed') {
-          const completed = readAssistantEvent(event.data)
+
+        // TextMessageEnd → message.completed
+        if (event.event === 'TextMessageEnd') {
+          const { messageId } = event.data
           drainTypewriter()
-          const previousAssistantId = assistant.id
-          assistant.id = completed.id || assistant.id
-          if (previousAssistantId !== assistant.id) reparentTimelineBlocks(previousAssistantId, assistant.id)
-          currentAssistantMessageId = assistant.id
-          attachCurrentRunTimelineBlocks(assistant.id)
-          assistant.content = completed.content || assistant.content || ''
-          assistant.created_at = completed.created_at || assistant.created_at
-          assistant.provider = completed.provider || assistant.provider
-          assistant.model = completed.model || assistant.model
-          assistant.usage = completed.usage || readUsage(event.data) || assistant.usage
+          if (messageId) {
+            const previousAssistantId = assistant.id
+            assistant.id = String(messageId)
+            if (previousAssistantId !== assistant.id) {
+              reparentTimelineBlocks(previousAssistantId, assistant.id)
+            }
+            currentAssistantMessageId = assistant.id
+            attachCurrentRunTimelineBlocks(assistant.id)
+          }
         }
-        if (event.event === 'runtime.completed') {
-          const usage = readUsage(event.data)
-          if (usage) assistant.usage = usage
-          markRunningToolsCompleted()
-        }
-        if (event.event === 'tool_call.started') {
-          const payload = readEventPayload(event.data)
-          const toolName = String(payload.tool_name || 'tool')
-          const toolId = String(payload.tool_call_id || payload.id || `${toolName}_${Date.now()}_${executionTools.value.length}`)
+
+        // ToolCallStart → tool_call.started
+        if (event.event === 'ToolCallStart') {
+          const { toolCallId, toolCallName } = event.data
+          const toolName = String(toolCallName || 'tool')
+          const toolId = String(toolCallId || `${toolName}_${Date.now()}`)
           const tool: AgentExecutionTool = {
             id: toolId,
             name: toolName,
             status: 'running',
-            arguments: normalizeRecord(payload.arguments),
+            arguments: undefined,
           }
           executionTools.value = [...executionTools.value, tool].slice(-6)
           upsertTimelineTool({
             id: toolId,
             toolName,
             status: 'running',
-            arguments: normalizeRecord(payload.arguments),
+            arguments: undefined,
           })
           store.agentPhase = {
             kind: 'running_tools',
@@ -347,39 +353,109 @@ export function useHomeAgentSession() {
               .map(item => ({ id: item.id, name: item.name })),
           }
         }
-        if (event.event === 'tool_call.completed' || event.event === 'tool_call.error') {
-          const payload = readEventPayload(event.data)
-          const toolName = String(payload.tool_name || 'tool')
-          const index = findLatestToolIndex(toolName)
-          const toolId = String(payload.tool_call_id || payload.id || (index >= 0 ? executionTools.value[index].id : `${toolName}_${Date.now()}`))
-          const status = event.event === 'tool_call.error' ? 'error' : 'completed'
+
+        // ActivitySnapshot → 更新工具卡片状态
+        if (event.event === 'ActivitySnapshot') {
+          const { messageId, content } = event.data
+          if (content && typeof content === 'object') {
+            const activityContent = content as Record<string, unknown>
+            const toolName = String(activityContent.toolName || 'tool')
+            const status = String(activityContent.status || 'running')
+            const args = activityContent.arguments as Record<string, unknown> | undefined
+            
+            // 找到对应的工具并更新
+            const toolId = String(messageId || '').replace('activity_', '')
+            const index = executionTools.value.findIndex(t => t.id === toolId || t.name === toolName)
+            if (index >= 0) {
+              executionTools.value[index] = {
+                ...executionTools.value[index],
+                status: status === 'completed' ? 'completed' : status === 'error' ? 'error' : 'running',
+                arguments: args || executionTools.value[index].arguments,
+              }
+              executionTools.value = [...executionTools.value]
+            }
+            
+            upsertTimelineTool({
+              id: toolId,
+              toolName,
+              status: status === 'completed' ? 'completed' : status === 'error' ? 'error' : 'running',
+              arguments: args,
+            })
+          }
+        }
+
+        // ToolCallEnd → tool_call.completed
+        if (event.event === 'ToolCallEnd') {
+          const { toolCallId } = event.data
+          const toolId = String(toolCallId || '')
+          const index = executionTools.value.findIndex(t => t.id === toolId)
           if (index >= 0) {
             executionTools.value[index] = {
               ...executionTools.value[index],
-              id: toolId,
-              status,
-              result: payload.result,
+              status: 'completed',
             }
             executionTools.value = [...executionTools.value]
           }
-          upsertTimelineTool({
-            id: toolId,
-            toolName,
-            status,
-            result: payload.result,
-          })
-          appendBusinessResultBlock(toolId, toolName, payload.result)
+          
           const running = executionTools.value.filter(item => item.status === 'running')
           store.agentPhase = running.length
             ? { kind: 'running_tools', tools: running.map(item => ({ id: item.id, name: item.name })) }
             : { kind: 'waiting_model' }
         }
-        if (event.event === 'CUSTOM') {
-          handleCustomEvent(event.data)
+
+        // ToolCallResult → 提取业务数据
+        if (event.event === 'ToolCallResult') {
+          const { toolCallId, content: resultContent } = event.data
+          const toolId = String(toolCallId || '')
+          
+          // 解析 result
+          let result: unknown = resultContent
+          if (typeof resultContent === 'string') {
+            try {
+              const parsed = JSON.parse(resultContent)
+              if (parsed && typeof parsed === 'object' && parsed.text) {
+                result = parsed.text
+              } else {
+                result = parsed
+              }
+            } catch {
+              result = resultContent
+            }
+          }
+          
+          const index = executionTools.value.findIndex(t => t.id === toolId)
+          if (index >= 0) {
+            executionTools.value[index] = {
+              ...executionTools.value[index],
+              result,
+            }
+            executionTools.value = [...executionTools.value]
+            
+            const toolName = executionTools.value[index].name
+            upsertTimelineTool({
+              id: toolId,
+              toolName,
+              status: 'completed',
+              result,
+            })
+            appendBusinessResultBlock(toolId, toolName, result)
+          }
         }
-        if (event.event === 'runtime.error') {
-          const payload = readEventPayload(event.data)
-          throw new Error(String(payload.message || event.data.message || 'Agent stream error'))
+
+        // StateSnapshot → 提取状态（可选，暂不处理）
+        if (event.event === 'StateSnapshot') {
+          // AG-UI state management - 未来可用于提取业务状态
+        }
+
+        // RunFinished → runtime.completed
+        if (event.event === 'RunFinished') {
+          markRunningToolsCompleted()
+        }
+
+        // RunError → runtime.error
+        if (event.event === 'RunError') {
+          const { message } = event.data
+          throw new Error(String(message || 'AG-UI 流式响应错误'))
         }
       }
       drainTypewriter()
