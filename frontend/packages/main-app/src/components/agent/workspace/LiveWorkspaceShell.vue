@@ -4,6 +4,7 @@ import CampaignDraftWorkspace from './CampaignDraftWorkspace.vue'
 import CreativeWorkspace from './CreativeWorkspace.vue'
 import EmbeddedTaskTimeline, { type WorkspaceStep } from './EmbeddedTaskTimeline.vue'
 import ProjectWorkspaceDetail from './ProjectWorkspaceDetail.vue'
+import ProjectListWorkspace from './ProjectListWorkspace.vue'
 import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus } from '../TaskStatusPanel.vue'
 import ProjectCollectionView from '@/components/projects/ProjectCollectionView.vue'
 import CampaignCollectionView from '@/components/campaigns/CampaignCollectionView.vue'
@@ -122,6 +123,18 @@ function clearSelectedProject() {
   sessionStorage.removeItem(selectedProjectStorageKey.value)
 }
 
+function handleProjectListWorkspaceAction(action: string, payload: Record<string, unknown>) {
+  const project = payload.project as Project | undefined
+  const projectId = String(payload.projectId || project?.id || '')
+  if (action === 'open_project' && projectId) {
+    emit('openProject', project || ({ id: projectId } as Project))
+    return
+  }
+  if (action === 'create_campaign' && projectId) {
+    window.location.href = `/campaign/create?project_id=${encodeURIComponent(projectId)}`
+  }
+}
+
 const campaignPayload = computed<Record<string, unknown> | null>(() => {
   return unwrapToolPayload(latestToolResult('listCampaigns')?.result)
 })
@@ -147,7 +160,17 @@ const materialItems = computed<Material[]>(() => {
 })
 
 const hasMaterialResult = computed(() => Boolean(materialPayload.value))
-const hasStructuredBusinessResult = computed(() => hasProjectResult.value || hasCampaignResult.value || hasMaterialResult.value || workspaceKind.value !== 'empty')
+
+const projectListPayload = computed<Record<string, unknown> | null>(() => {
+  const tool = latestToolResult('project_list')
+  if (!tool) return null
+  const result = tool.result
+  if (!result || typeof result !== 'object') return null
+  return result as Record<string, unknown>
+})
+
+const hasProjectListResult = computed(() => Boolean(projectListPayload.value))
+const hasStructuredBusinessResult = computed(() => hasProjectResult.value || hasCampaignResult.value || hasMaterialResult.value || hasProjectListResult.value || workspaceKind.value !== 'empty')
 
 function formatToolResult(value: unknown): string {
   if (value === undefined) return '运行中...'
@@ -246,6 +269,12 @@ function formatToolResult(value: unknown): string {
                 mode="workspace"
                 embedded
                 @view-detail="selectProject"
+              />
+            </div>
+            <div v-else-if="hasProjectListResult" class="h-full">
+              <ProjectListWorkspace
+                :result="projectListPayload || {}"
+                @action="handleProjectListWorkspaceAction"
               />
             </div>
             <div v-else-if="hasCampaignResult" class="space-y-4">

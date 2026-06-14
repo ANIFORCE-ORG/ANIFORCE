@@ -1,7 +1,5 @@
 import type {
   AGUIEvent,
-  AGUIEventHandler,
-  EnhancedMessage,
   ExecutionPlan,
   ToolCall,
   HITLConfirmationRequest,
@@ -10,7 +8,6 @@ import type {
 import {
   isTextMessageEvent,
   isMessageCompletedEvent,
-  isToolCallEvent,
   isCustomEvent,
   getCustomEventSubtype,
   AGUIEventType,
@@ -36,7 +33,6 @@ export interface AgentStreamEvent {
   data: Record<string, any>
 }
 
-// AG-UI 增强事件处理器
 export interface AGUIEventHandlers {
   onTextMessage?: (content: string) => void
   onMessageCompleted?: (content: string) => void
@@ -57,6 +53,48 @@ function authHeaders(): Record<string, string> {
 
 function apiUrl(path: string): string {
   return `${API_BASE_URL}${path}`
+}
+
+function readEventPayload(data: Record<string, any>): Record<string, any> {
+  const payload = data.payload
+  return payload && typeof payload === 'object' ? payload : data
+}
+
+function parseSseEvent(rawEvent: string): AgentStreamEvent | null {
+  const lines = rawEvent.split('\n')
+  let event = 'message'
+  const dataLines: string[] = []
+
+  for (const line of lines) {
+    if (line.startsWith('event:')) event = line.slice(6).trim()
+    if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
+  }
+
+  if (!dataLines.length) return null
+
+  try {
+    return { event, data: JSON.parse(dataLines.join('\n')) }
+  } catch {
+    return { event, data: { text: dataLines.join('\n') } }
+  }
+}
+
+function toolEventToTool(eventType: string, payload: Record<string, any>): ToolCall | null {
+  if (eventType === AGUIEventType.TOOL_CALL_START || eventType === 'tool_call.started') {
+    return {
+      tool_name: String(payload.tool_name || 'tool'),
+      tool_args: payload.arguments || payload.tool_args || payload.args,
+      started_at: new Date().toISOString(),
+    }
+  }
+  if (eventType === AGUIEventType.TOOL_CALL_END || eventType === 'tool_call.completed') {
+    return {
+      tool_name: String(payload.tool_name || 'tool'),
+      tool_result: payload.result || payload.tool_result,
+      completed_at: new Date().toISOString(),
+    }
+  }
+  return null
 }
 
 export class AgentService {
@@ -171,38 +209,7 @@ export class AgentService {
       reader.releaseLock()
     }
   }
-}
 
-function readEventPayload(data: Record<string, any>): Record<string, any> {
-  const payload = data.payload
-  return payload && typeof payload === 'object' ? payload : data
-}
-
-function parseSseEvent(rawEvent: string): AgentStreamEvent | null {
-  const lines = rawEvent.split('\n')
-  let event = 'message'
-  const dataLines: string[] = []
-
-  for (const line of lines) {
-    if (line.startsWith('event:')) event = line.slice(6).trim()
-    if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
-  }
-
-  if (!dataLines.length) return null
-
-  try {
-    return { event, data: JSON.parse(dataLines.join('\n')) }
-  } catch {
-    return { event, data: { text: dataLines.join('\n') } }
-  }
-}
-
-export const agentService = new AgentService()
-
-  /**
-   * AG-UI 增强的流式对话
-   * 支持所有 AG-UI 协议事件
-   */
   async *streamChatWithHandlers(
     sessionId: string,
     message: string,
@@ -211,121 +218,65 @@ export const agentService = new AgentService()
     for await (const event of this.streamChat(sessionId, message)) {
       const aguiEvent: AGUIEvent = event as AGUIEvent
       const eventType = aguiEvent.event
-      const payload = aguiEvent.data.payload || aguiEvent.data
+      const payload = readEventPayload(aguiEvent.data)
 
       try {
-        // 文本消息事件
         if (isTextMessageEvent(eventType)) {
           const content = String(payload.delta || payload.content || '')
-          if (content && handlers.onTextMessage) {
-            handlers.onTextMessage(content)
-          }
+          if (content) handlers.onTextMessage?.(content)
         }
 
-        // 消息完成事件
         if (isMessageCompletedEvent(eventType)) {
           const content = String(payload.content || payload.text || '')
-          if (handlers.onMessageCompleted) {
-            handlers.onMessageCompleted(content)
-          }
+          handlers.onMessageCompleted?.(content)
         }
 
-        // 工具调用事件
-        if (isToolCallEvent(eventType)) {
-          if (eventType === AGUIEventType.TOOL_CALL_START) {
-            const tool: ToolCall = {
-              tool_name: String(payload.tool_name || ''),
-              started_at: new Date().toISOString(),
-            }
-            if (handlers.onToolCall) {
-              handlers.onToolCall(tool)
-            }
-          } else if (eventType === AGUIEventType.TOOL_CALL_ARGS) {
-            const tool: ToolCall = {
-              tool_name: String(payload.tool_name || ''),
-              tool_args: payload.tool_args || payload.args,
-            }
-            if (handlers.onToolCall) {
-              handlers.onToolCall(tool)
-            }
-          } else if (eventType === AGUIEventType.TOOL_CALL_END) {
-            const tool: ToolCall = {
-              tool_name: String(payload.tool_name || ''),
-              tool_result: payload.tool_result || payload.result,
-              completed_at: new Date().toISOString(),
-            }
-            if (handlers.onToolCall) {
-              handlers.onToolCall(tool)
-            }
-          }
-        }
+        const tool = toolEventToTool(eventType, payload)
+        if (tool) handlers.onToolCall?.(tool)
 
-        // 自定义事件（Plan/Todo/HITL）
         if (isCustomEvent(eventType)) {
           const subtype = getCustomEventSubtype(aguiEvent)
 
           if (subtype === CustomEventSubtype.PLAN_CREATED) {
-            const plan: ExecutionPlan = {
+            handlers.onPlanCreated?.({
               plan_id: String(payload.plan_id || ''),
               task_id: sessionId,
               todos: payload.todos || [],
-            }
-            if (handlers.onPlanCreated) {
-              handlers.onPlanCreated(plan)
-            }
+            })
           } else if (
             subtype === CustomEventSubtype.TODO_STARTED ||
             subtype === CustomEventSubtype.TODO_COMPLETED ||
             subtype === CustomEventSubtype.TODO_FAILED ||
             subtype === CustomEventSubtype.TODO_SKIPPED
           ) {
-            const todoId = String(payload.todo_id || '')
-            const status = subtype.replace('todo.', '')
-            if (handlers.onTodoUpdated) {
-              handlers.onTodoUpdated(todoId, status)
-            }
+            handlers.onTodoUpdated?.(String(payload.todo_id || ''), subtype.replace('todo.', ''))
           } else if (subtype === CustomEventSubtype.HITL_CONFIRMATION_REQUEST) {
-            const request: HITLConfirmationRequest = {
+            handlers.onHITLRequest?.({
               request_id: String(payload.request_id || ''),
               operation: String(payload.operation || ''),
               description: String(payload.description || ''),
               risk_level: payload.risk_level || 'medium',
               details: payload.details,
-            }
-            if (handlers.onHITLRequest) {
-              handlers.onHITLRequest(request)
-            }
+            })
           }
         }
 
-        // 共享状态事件
         if (eventType === AGUIEventType.STATE_SNAPSHOT) {
-          const state: SharedState = payload.state || payload
-          if (handlers.onStateUpdate) {
-            handlers.onStateUpdate(state)
-          }
+          handlers.onStateUpdate?.(payload.state || payload)
         }
 
-        // 错误事件
         if (eventType === AGUIEventType.RUNTIME_ERROR || eventType === 'error') {
-          if (handlers.onError) {
-            handlers.onError(payload)
-          }
+          handlers.onError?.(payload)
         }
 
         yield aguiEvent
       } catch (error) {
         console.error('AG-UI event handling error:', error)
-        if (handlers.onError) {
-          handlers.onError({ message: 'Event handling failed', error })
-        }
+        handlers.onError?.({ message: 'Event handling failed', error })
       }
     }
   }
 
-  /**
-   * 发送 HITL 确认响应
-   */
   async sendHITLResponse(
     sessionId: string,
     requestId: string,
@@ -349,3 +300,6 @@ export const agentService = new AgentService()
       throw new Error(`Send HITL response failed: ${response.status}`)
     }
   }
+}
+
+export const agentService = new AgentService()

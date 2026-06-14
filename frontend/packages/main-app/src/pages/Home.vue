@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
 import LiveWorkspaceShell from '@/components/agent/workspace/LiveWorkspaceShell.vue'
+import TimelineBlockRenderer from '@/components/agent/timeline/TimelineBlockRenderer.vue'
 import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
@@ -100,6 +101,16 @@ const currentTask = computed(() => agent.currentTask.value)
 const hasBusinessTask = computed(() => Boolean(currentTask.value?.task_type && currentTask.value.task_type !== 'conversation' && currentTask.value.task_type !== 'data_query'))
 const hasWorkspaceToolResults = computed(() => agent.workspaceToolResults.value.length > 0)
 const taskPanelVisible = computed(() => true)
+const streamingTimelineBlocks = computed(() => {
+  const messageId = agent.streamingMessage.value?.id
+  if (!messageId) return []
+  return agent.timelineBlocks.value.filter(block => block.parentMessageId === messageId)
+})
+const orphanTimelineBlocks = computed(() => agent.timelineBlocks.value.filter(block => {
+  if (streamingTimelineBlocks.value.some(item => item.id === block.id)) return false
+  if (!block.parentMessageId) return true
+  return !agent.visibleMessages.value.some(message => message.id === block.parentMessageId)
+}))
 const workspaceStyle = computed(() => ({
   width: workspaceCollapsed.value ? '56px' : `${workspaceWidth.value}px`
 }))
@@ -306,7 +317,13 @@ async function analyzeProject(project: { id: string; name: string }) {
 }
 
 function openProject(project: { id: string }) {
-  navigateTo(`/projects/${project.id}`)
+  if (!project?.id) return
+  navigateTo(`/projects/${encodeURIComponent(project.id)}`)
+}
+
+function timelineBlocksForMessage(message: AgentMessage) {
+  if (!message.id) return []
+  return agent.timelineBlocks.value.filter(block => block.parentMessageId === message.id)
 }
 
 function handleTaskAction(action: string) {
@@ -387,7 +404,12 @@ onMounted(async () => {
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
   await Promise.all([agent.refreshModels(), agent.refreshSessions()])
-  if (agent.sessions.value.length > 0) await agent.selectSession(agent.sessions.value[0])
+  const existing = agent.activeSession.value
+  const savedSessionId = localStorage.getItem('aniforce.activeSessionId')
+  const saved = savedSessionId ? agent.sessions.value.find(session => session.id === savedSessionId) : null
+  if (existing && agent.sessions.value.some(session => session.id === existing.id)) return
+  if (saved) await agent.selectSession(saved)
+  else if (agent.sessions.value.length > 0) await agent.selectSession(agent.sessions.value[0])
   else await createSessionForActiveMode()
 })
 
@@ -482,7 +504,21 @@ onBeforeUnmount(() => {
             :model-names="agent.modelNames.value"
             :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
           />
+          <TransitionGroup
+            v-if="timelineBlocksForMessage(message).length"
+            name="timeline-flow"
+            tag="div"
+            class="agent-inline-timeline"
+          >
+            <TimelineBlockRenderer
+              v-for="block in timelineBlocksForMessage(message)"
+              :key="block.id"
+              :block="block"
+              @action="agent.handleTimelineAction"
+            />
+          </TransitionGroup>
         </template>
+
         <MessageView
           v-if="agent.streamingMessage.value"
           :message="agent.streamingMessage.value"
@@ -490,6 +526,32 @@ onBeforeUnmount(() => {
           :tool-results="toolResults"
           :model-names="agent.modelNames.value"
         />
+        <TransitionGroup
+          v-if="streamingTimelineBlocks.length"
+          name="timeline-flow"
+          tag="div"
+          class="agent-inline-timeline"
+        >
+          <TimelineBlockRenderer
+            v-for="block in streamingTimelineBlocks"
+            :key="block.id"
+            :block="block"
+            @action="agent.handleTimelineAction"
+          />
+        </TransitionGroup>
+        <TransitionGroup
+          v-if="orphanTimelineBlocks.length"
+          name="timeline-flow"
+          tag="div"
+          class="agent-inline-timeline"
+        >
+          <TimelineBlockRenderer
+            v-for="block in orphanTimelineBlocks"
+            :key="block.id"
+            :block="block"
+            @action="agent.handleTimelineAction"
+          />
+        </TransitionGroup>
         <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="flex items-center gap-2 py-4 text-sm text-slate-500">
           <div class="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
           <span>{{ phaseLabel(agent.agentPhase.value) }}</span>
@@ -703,6 +765,35 @@ onBeforeUnmount(() => {
   color: #94a3b8;
 }
 
+.agent-inline-timeline {
+  display: grid;
+  gap: 12px;
+  margin: 10px 0 18px 14px;
+}
+
+.timeline-flow-enter-active,
+.timeline-flow-leave-active,
+.timeline-flow-move {
+  transition: opacity .26s ease, transform .26s ease, filter .26s ease;
+}
+
+.timeline-flow-enter-from,
+.timeline-flow-leave-to {
+  opacity: 0;
+  filter: blur(4px);
+  transform: translateY(10px) scale(.985);
+}
+
+.timeline-flow-leave-active {
+  position: absolute;
+}
+
+@media (max-width: 640px) {
+  .agent-inline-timeline {
+    margin-left: 0;
+  }
+}
+
 :global(.dark) .agent-output {
   --bg: #0f172a;
   --surface: #0f172a;
@@ -742,4 +833,5 @@ onBeforeUnmount(() => {
   background: rgba(15, 23, 42, .72);
   border-color: #334155;
 }
+
 </style>

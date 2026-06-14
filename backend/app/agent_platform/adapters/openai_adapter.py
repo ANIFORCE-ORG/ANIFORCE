@@ -7,25 +7,29 @@ OpenAI Agents SDK 适配器
 - 统一错误处理
 """
 
+import json
 import os
 from typing import AsyncIterator, Optional
 from pathlib import Path
 from loguru import logger
+from openai import AsyncOpenAI
 
 from agents import (
     Agent,
     Runner,
     SQLiteSession,
     set_default_openai_api,
+    set_default_openai_client,
     set_default_openai_key,
     set_tracing_disabled,
     RunConfig,  # 添加 RunConfig
 )
 from agents.run import RunResult
-from agents.sandbox import SandboxAgent, Manifest
-from agents.sandbox.runtime import SandboxRuntime  # 正确的导入路径
+from agents.sandbox import SandboxAgent, Manifest, SandboxRunConfig
 from agents.sandbox.capabilities import Capabilities, Skills, LocalDirLazySkillSource
 from agents.sandbox.entries import LocalDir
+from agents.sandbox.sandboxes.unix_local import UnixLocalSandboxClient
+from agents.models.openai_responses import OpenAIResponsesModel  # 添加 Responses API
 
 from ..models import AgentTaskEvent, EventType
 from ..errors import AppError, AgentErrorCode, ErrorCategory
@@ -49,14 +53,15 @@ class OpenAISDKAdapter:
         self.base_url = base_url
         self.enable_tracing = enable_tracing
         self.skills_dir = skills_dir or "runtime/skills"
-        self.sandbox_dir = sandbox_dir or "runtime/agent/sandbox"
+        self.sandbox_dir = str(Path(sandbox_dir or "runtime/agent/sandbox").resolve())
         self.tracer = get_tracer() if enable_tracing else None
+        self._tool_name_by_call_id: dict[str, str] = {}
         
         # 创建沙箱目录
         Path(self.sandbox_dir).mkdir(parents=True, exist_ok=True)
         
-        # SDK 默认走 Responses API；当前兼容网关只支持 Chat Completions。
-        set_default_openai_api("chat_completions")
+        # 使用 Responses API（支持 SandboxAgent 的 Hosted Tools）
+        set_default_openai_api("responses")
         # 项目使用本地 JSONL tracing，禁用 OpenAI 官方 trace export。
         set_tracing_disabled(True)
         if api_key:
@@ -64,8 +69,56 @@ class OpenAISDKAdapter:
             set_default_openai_key(api_key, use_for_tracing=False)
         if base_url:
             os.environ["OPENAI_BASE_URL"] = base_url
+
+        self.openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        set_default_openai_client(self.openai_client, use_for_tracing=False)
         
         logger.info(f"OpenAI SDK Adapter initialized: {model} | tracing={enable_tracing}")
+    
+    def _generate_skills_index(self) -> str:
+        """生成 Skills 索引（用于注入到 System Prompt）"""
+        skills_path = Path(self.skills_dir)
+        if not skills_path.exists():
+            return ""
+        
+        skills_list = []
+        for skill_dir in skills_path.iterdir():
+            if not skill_dir.is_dir():
+                continue
+            
+            skill_md = skill_dir / "SKILL.md"
+            if not skill_md.exists():
+                continue
+            
+            try:
+                content = skill_md.read_text(encoding='utf-8')
+                # 解析 frontmatter
+                lines = content.split('\n')
+                if lines[0].strip() == '---':
+                    name = ""
+                    description = ""
+                    for line in lines[1:]:
+                        if line.strip() == '---':
+                            break
+                        if line.startswith('name:'):
+                            name = line.split(':', 1)[1].strip().strip('"')
+                        if line.startswith('description:'):
+                            description = line.split(':', 1)[1].strip().strip('"')
+                    
+                    if name and description:
+                        skills_list.append(f"- **{name}**: {description}")
+                        logger.debug(f"[SDK] Found skill: {name}")
+            except Exception as e:
+                logger.warning(f"[SDK] Failed to parse skill {skill_dir.name}: {e}")
+        
+        if not skills_list:
+            return ""
+        
+        index = "以下是可用的专业知识库（Skills），当用户需求涉及相关领域时，请参考对应 Skill 的工作流程：\n\n"
+        index += "\n".join(skills_list)
+        index += "\n\n**使用方式**: 当用户提及上述领域时，请在回复中引用对应 Skill 的最佳实践。"
+        
+        return index
     
     def create_agent(
         self,
@@ -87,14 +140,20 @@ class OpenAISDKAdapter:
         skills_path = Path(self.skills_dir)
         has_skills = enable_skills and skills_path.exists()
         
+        # 创建 Responses API 模型（支持 Hosted Tools）
+        responses_model = OpenAIResponsesModel(
+            model=self.model,
+            openai_client=self.openai_client,
+        )
+        
         if has_skills:
-            # 使用 SandboxAgent（支持 Skills）
+            # 使用 SandboxAgent（支持 Skills + Sandbox 工具）
             agent = SandboxAgent(
                 name=name,
                 instructions=instructions,
-                model=self.model,
+                model=responses_model,  # 使用 Responses API
                 mcp_servers=mcp_servers or [],
-                default_manifest=Manifest(root=self.sandbox_dir),  # 自定义沙箱目录
+                default_manifest=Manifest(root=self.sandbox_dir),
                 capabilities=Capabilities.default() + [
                     Skills(
                         lazy_from=LocalDirLazySkillSource(
@@ -103,17 +162,17 @@ class OpenAISDKAdapter:
                     )
                 ]
             )
-            logger.info(f"[SDK] Created SandboxAgent with Skills: {self.skills_dir}")
+            logger.info(f"[SDK] Created SandboxAgent with Responses API + Skills: {self.skills_dir}")
             logger.info(f"[SDK] Sandbox directory: {self.sandbox_dir}")
         else:
             # 使用普通 Agent（向后兼容）
             agent = Agent(
                 name=name,
                 instructions=instructions,
-                model=self.model,
+                model=responses_model,  # 使用 Responses API
                 mcp_servers=mcp_servers or [],
             )
-            logger.info(f"[SDK] Created Agent without Skills (skills_dir not found or disabled)")
+            logger.info(f"[SDK] Created Agent with Responses API (skills disabled)")
         
         logger.debug(f"[SDK] Agent '{name}' with {len(mcp_servers or [])} MCP servers")
         return agent
@@ -159,16 +218,17 @@ class OpenAISDKAdapter:
             is_sandbox_agent = isinstance(agent, SandboxAgent)
             
             if is_sandbox_agent:
-                # SandboxAgent 需要 RunConfig
-                sandbox_runtime = SandboxRuntime(
-                    sandbox_dir=self.sandbox_dir,
+                # SandboxAgent 需要 RunConfig(sandbox=SandboxRunConfig(client=...))
+                config = RunConfig(
+                    sandbox=SandboxRunConfig(
+                        client=UnixLocalSandboxClient()
+                    )
                 )
-                config = RunConfig(sandbox=sandbox_runtime)
                 result = Runner.run_streamed(
                     agent,
                     input=input_text,
                     session=session,
-                    config=config,
+                    run_config=config,
                 )
             else:
                 # 普通 Agent
@@ -356,8 +416,19 @@ class OpenAISDKAdapter:
             
             # tool_called
             if name == "tool_called":
-                tool_name = getattr(item, "name", "unknown")
-                arguments = getattr(item, "arguments", {})
+                tool_info = self._extract_tool_call_info(item)
+                if not tool_info:
+                    logger.debug(f"[SDK] ignored non-tool tool_called item: {type(item).__name__}")
+                    return events
+                tool_name = tool_info["tool_name"]
+                arguments = tool_info["arguments"]
+                tool_call_id = tool_info.get("tool_call_id")
+                
+                logger.debug(
+                    f"[SDK] tool_called event: item_type={type(item).__name__} | "
+                    f"run_item_type={getattr(item, 'type', None)} | "
+                    f"tool_name={tool_name} | tool_call_id={tool_call_id}"
+                )
                 
                 # Trace 工具调用
                 if self.tracer:
@@ -371,6 +442,7 @@ class OpenAISDKAdapter:
                     task_id=task_id,
                     event_type=EventType.TOOL_CALL_STARTED,
                     payload={
+                        "tool_call_id": tool_call_id,
                         "tool_name": tool_name,
                         "arguments": arguments,
                     },
@@ -379,8 +451,13 @@ class OpenAISDKAdapter:
             
             # tool_output
             elif name == "tool_output":
-                tool_name = getattr(item, "name", "unknown")
-                result = getattr(item, "content", None)
+                output_info = self._extract_tool_output_info(item)
+                if not output_info:
+                    logger.debug(f"[SDK] ignored non-tool tool_output item: {type(item).__name__}")
+                    return events
+                tool_name = output_info["tool_name"]
+                result = output_info.get("result")
+                tool_call_id = output_info.get("tool_call_id")
                 
                 # Trace 工具结果
                 if self.tracer:
@@ -395,6 +472,7 @@ class OpenAISDKAdapter:
                     task_id=task_id,
                     event_type=EventType.TOOL_CALL_COMPLETED,
                     payload={
+                        "tool_call_id": tool_call_id,
                         "tool_name": tool_name,
                         "result": result,
                     },
@@ -416,3 +494,65 @@ class OpenAISDKAdapter:
                 ))
         
         return events
+
+    def _extract_tool_call_info(self, item) -> Optional[dict]:
+        """Extract tool call metadata from SDK RunItem wrappers."""
+        if not item or getattr(item, "type", None) != "tool_call_item":
+            return None
+
+        raw_item = getattr(item, "raw_item", item)
+        tool_name = getattr(item, "tool_name", None) or self._read_field(raw_item, "name")
+        if not tool_name:
+            return None
+
+        arguments = self._read_field(raw_item, "arguments", {})
+        if isinstance(arguments, str):
+            try:
+                arguments = json.loads(arguments) if arguments.strip() else {}
+            except Exception:
+                arguments = {"raw": arguments}
+        elif arguments is None:
+            arguments = {}
+
+        tool_call_id = getattr(item, "call_id", None) or self._read_field(raw_item, "call_id") or self._read_field(raw_item, "id")
+        if tool_call_id:
+            self._tool_name_by_call_id[str(tool_call_id)] = str(tool_name)
+
+        return {
+            "tool_call_id": tool_call_id,
+            "tool_name": tool_name,
+            "arguments": arguments,
+        }
+
+    def _extract_tool_output_info(self, item) -> Optional[dict]:
+        """Extract tool output metadata from SDK RunItem wrappers."""
+        if not item or getattr(item, "type", None) != "tool_call_output_item":
+            return None
+
+        raw_item = getattr(item, "raw_item", item)
+        tool_call_id = getattr(item, "call_id", None) or self._read_field(raw_item, "call_id") or self._read_field(raw_item, "id")
+        result = getattr(item, "output", None)
+        if result is None:
+            result = self._read_field(raw_item, "output") or self._read_field(raw_item, "content")
+
+        return {
+            "tool_call_id": tool_call_id,
+            "tool_name": self._tool_name_by_call_id.get(str(tool_call_id), "unknown") if tool_call_id else "unknown",
+            "result": self._normalize_tool_result(result),
+        }
+
+    def _read_field(self, value, field: str, default=None):
+        if isinstance(value, dict):
+            return value.get(field, default)
+        return getattr(value, field, default)
+
+    def _normalize_tool_result(self, result):
+        if isinstance(result, list):
+            texts = []
+            for entry in result:
+                text = self._read_field(entry, "text")
+                if text is not None:
+                    texts.append(str(text))
+            if texts:
+                return "\n".join(texts)
+        return result

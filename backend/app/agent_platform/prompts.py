@@ -31,8 +31,8 @@ class SystemPromptManager:
             System Prompt 字符串
         """
         
-        # 获取 Skills 索引
-        skills_index = SystemPromptManager._get_skills_index(skills_dir)
+        # Skills 索引由 OpenAI Agents SDK 的 Skills capability 在运行时自动注入。
+        skills_index = SystemPromptManager._get_skills_usage_instructions()
         
         # 获取 MCP Tools 列表
         mcp_tools_list = SystemPromptManager._format_mcp_tools(available_mcp_tools)
@@ -44,8 +44,6 @@ class SystemPromptManager:
 你拥有以下能力：
 
 ## 1. Skills（领域知识）
-
-你可以使用 `load_skill` 工具加载以下 Skills：
 
 {skills_index}
 
@@ -278,62 +276,17 @@ class SystemPromptManager:
         return prompt
     
     @staticmethod
-    def _get_skills_index(skills_dir: Optional[str]) -> str:
-        """获取 Skills 索引"""
-        import os
-        from loguru import logger
-        
-        logger.debug(f"[PROMPT] 当前工作目录: {os.getcwd()}")
-        logger.debug(f"[PROMPT] Skills 目录: {skills_dir}")
-        
-        if not skills_dir:
-            return "（Skills 未配置）"
-        
-        skills_path = Path(skills_dir)
-        logger.debug(f"[PROMPT] Skills 绝对路径: {skills_path.absolute()}")
-        logger.debug(f"[PROMPT] Skills 目录存在: {skills_path.exists()}")
-        
-        if not skills_path.exists():
-            return "（Skills 目录不存在）"
-        
-        # 扫描 Skills 目录
-        skills = []
-        for skill_dir in skills_path.iterdir():
-            if skill_dir.is_dir():
-                skill_md = skill_dir / "SKILL.md"
-                if skill_md.exists():
-                    # 读取 frontmatter
-                    try:
-                        content = skill_md.read_text(encoding='utf-8')
-                        lines = content.split('\n')
-                        
-                        # 提取 name 和 description
-                        name = None
-                        description = None
-                        in_frontmatter = False
-                        
-                        for line in lines:
-                            if line.strip() == '---':
-                                if not in_frontmatter:
-                                    in_frontmatter = True
-                                else:
-                                    break
-                            elif in_frontmatter:
-                                if line.startswith('name:'):
-                                    name = line.split(':', 1)[1].strip()
-                                elif line.startswith('description:'):
-                                    description = line.split(':', 1)[1].strip().strip('"\'')
-                        
-                        if name and description:
-                            skills.append(f"- **{name}**: {description}")
-                    
-                    except Exception as e:
-                        logger.warning(f"[SystemPrompt] 读取 Skill {skill_dir.name} 失败: {e}")
-        
-        if len(skills) == 0:
-            return "（未找到可用的 Skills）"
-        
-        return "\n".join(skills)
+    def _get_skills_usage_instructions() -> str:
+        """获取 Skills 使用说明。
+
+        OpenAI Agents SDK 会通过 SandboxAgent capability.instructions() 自动注入
+        Skills 名称、描述、路径和 load_skill 使用规则，这里不能自行做文件系统
+        检查，否则会和 SDK 的运行时注入产生冲突。
+        """
+        return (
+            "你具备 OpenAI Agents SDK Skills 能力。可用 Skills 列表、描述、路径和 "
+            "`load_skill` 使用规则由 SDK 在运行时自动注入到上下文中。"
+        )
     
     @staticmethod
     def _format_mcp_tools(tools: Optional[List[str]]) -> str:

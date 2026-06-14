@@ -9,6 +9,7 @@ import {
   type AgentModel,
   type AgentSession,
 } from '@/api/agent'
+import { useAgentStore } from '@/store/agent'
 
 export type AgentPhase =
   | { kind: 'queued' }
@@ -57,24 +58,106 @@ export interface AgentCurrentTask {
   artifacts?: Array<Record<string, unknown>>
 }
 
+export interface AgentExecutionTodo {
+  id: string
+  title: string
+  description?: string
+  status: 'pending' | 'running' | 'completed' | 'failed' | 'skipped'
+}
+
+export interface AgentExecutionTool {
+  id: string
+  name: string
+  status: 'running' | 'completed' | 'error'
+  arguments?: Record<string, unknown>
+  result?: unknown
+}
+
+export interface AgentTimelineMeta {
+  runId?: string
+  messageId: string
+  parentMessageId?: string
+  toolCallId?: string
+  activityType?: 'TOOL_CALL' | 'PLAN' | 'BUSINESS_RESULT'
+  createdAt: number
+  updatedAt: number
+}
+
+export type AgentTimelineBlock =
+  | (AgentTimelineMeta & {
+      type: 'tool_activity'
+      id: string
+      toolName: string
+      status: 'running' | 'completed' | 'error'
+      title: string
+      description?: string
+      summary?: string
+      arguments?: Record<string, unknown>
+      result?: unknown
+    })
+  | (AgentTimelineMeta & {
+      type: 'project_list'
+      id: string
+      summary: string
+      projects: Record<string, unknown>[]
+      sourceToolCallId?: string
+      surfaceId: string
+    })
+  | (AgentTimelineMeta & {
+      type: 'plan'
+      id: string
+      todos: AgentExecutionTodo[]
+    })
+
 export function useHomeAgentSession() {
-  const sessions = ref<AgentSession[]>([])
-  const activeSession = ref<AgentSession | null>(null)
-  const messages = ref<AgentMessage[]>([])
-  const streamingMessage = ref<AgentMessage | null>(null)
-  const agentRunning = ref(false)
-  const agentPhase = ref<AgentPhase>(null)
-  const loading = ref(false)
-  const error = ref<string | null>(null)
-  const models = ref<AgentModel[]>([])
-  const selectedModel = ref<{ provider: string; modelId: string } | null>(null)
+  const store = useAgentStore()
+  
+  // 从 store 读取全局状态（这些是 computed，只读）
+  const sessions = computed(() => store.sessions)
+  const activeSession = computed(() => store.activeSession)
+  const messages = computed(() => store.messages)
+  const timelineBlocks = computed(() => store.timelineBlocks)
+  const workspaceToolResults = computed(() => store.workspaceToolResults)
+  const models = computed(() => store.models)
+  const selectedModel = computed(() => store.selectedModel)
+  const loading = computed(() => store.loading)
+  const error = computed(() => store.error)
+  const agentRunning = computed(() => store.agentRunning)
+  const agentPhase = computed(() => store.agentPhase)
+  const streamingMessage = computed(() => store.streamingMessage)
+  
+  // 本地临时状态（不需要跨页面持久化）
+  const executionPlan = ref<{ id: string; todos: AgentExecutionTodo[] } | null>(null)
+  const executionTools = ref<AgentExecutionTool[]>([])
   const retryInfo = ref<null>(null)
   const commandStatus = ref<string | null>(null)
   const contextUsage = ref<ContextUsage | null>(null)
   const currentTask = ref<AgentCurrentTask | null>(null)
-  const workspaceToolResults = ref<Array<{ id: string; name: string; result?: unknown; isError?: boolean }>>([])
+  
+  let currentRunId: string | undefined
+  let currentAssistantMessageId: string | undefined
   let typewriterTimer: number | null = null
   let typewriterBuffer = ''
+
+  function restoreTimelineFromCache(): void {
+    if (!activeSession.value) return
+    store.restoreFromLocalStorage(activeSession.value.id)
+  }
+
+  function persistTimelineToCache(): void {
+    if (!activeSession.value) return
+    store.persistToLocalStorage(activeSession.value.id)
+  }
+
+  function restoreWorkspaceFromCache(): void {
+    if (!activeSession.value) return
+    store.restoreFromLocalStorage(activeSession.value.id)
+  }
+
+  function persistWorkspaceToCache(): void {
+    if (!activeSession.value) return
+    store.persistToLocalStorage(activeSession.value.id)
+  }
 
   const visibleMessages = computed(() => messages.value.filter(message => message.role === 'user' || message.role === 'assistant'))
   const modelNames = computed(() => Object.fromEntries(models.value.map(model => [`${model.provider}:${model.id}`, model.name])))
@@ -106,55 +189,60 @@ export function useHomeAgentSession() {
 
   async function refreshModels(): Promise<void> {
     const res = await listAgentModels()
-    models.value = res.models
+    store.models = res.models
     if (!selectedModel.value && res.models.length) {
-      selectedModel.value = { provider: res.models[0].provider, modelId: res.models[0].id }
+      store.selectedModel = { provider: res.models[0].provider, modelId: res.models[0].id }
     }
   }
 
   async function refreshSessions(): Promise<void> {
-    sessions.value = await listAgentSessions()
+    store.sessions = await listAgentSessions()
   }
 
   async function createSession(route?: AgentRouteContext | Event): Promise<void> {
-    loading.value = true
-    error.value = null
+    store.loading = true
+    store.error = null
     try {
       const normalizedRoute = route instanceof Event ? undefined : route
       const session = await createAgentSession({ title: normalizedRoute?.title || `Agent Session ${sessions.value.length + 1}` })
-      sessions.value = [session, ...sessions.value.filter(item => item.id !== session.id)]
+      store.sessions = [session, ...sessions.value.filter(item => item.id !== session.id)]
       await selectSession(session)
     } finally {
-      loading.value = false
+      store.loading = false
     }
   }
 
   async function selectSession(session: AgentSession): Promise<void> {
-    activeSession.value = session
-    loading.value = true
-    error.value = null
-    streamingMessage.value = null
-    agentRunning.value = false
+    store.activeSessionId = session.id
+    localStorage.setItem('aniforce.activeSessionId', session.id)
+    store.loading = true
+    store.error = null
+    store.streamingMessage = null
+    store.agentRunning = false
+    executionPlan.value = null
+    executionTools.value = []
+    currentRunId = undefined
+    currentAssistantMessageId = undefined
     try {
       const detail = await getAgentSession(session.id)
-      messages.value = detail.messages
+      store.setMessages(session.id, detail.messages)
+      restoreTimelineFromCache()
+      restoreWorkspaceFromCache()
     } catch (err: any) {
-      error.value = err?.message || '加载 Agent 会话失败'
+      store.error = err?.message || '加载 Agent 会话失败'
     } finally {
-      loading.value = false
+      store.loading = false
     }
   }
 
   async function renameSession(sessionId: string, title: string): Promise<void> {
-    sessions.value = sessions.value.map(item => item.id === sessionId ? { ...item, title } : item)
-    if (activeSession.value?.id === sessionId) activeSession.value = { ...activeSession.value, title }
+    store.sessions = sessions.value.map(item => item.id === sessionId ? { ...item, title } : item)
   }
 
   async function deleteSession(sessionId: string): Promise<void> {
-    sessions.value = sessions.value.filter(item => item.id !== sessionId)
-    if (activeSession.value?.id === sessionId) {
-      activeSession.value = null
-      messages.value = []
+    store.sessions = sessions.value.filter(item => item.id !== sessionId)
+    if (store.activeSessionId === sessionId) {
+      store.activeSessionId = null
       if (sessions.value.length) await selectSession(sessions.value[0])
       else await createSession()
     }
@@ -166,13 +254,18 @@ export function useHomeAgentSession() {
     if (!activeSession.value) await createSession()
     if (!activeSession.value) return
 
-    error.value = null
-    agentRunning.value = true
-    agentPhase.value = { kind: 'waiting_model' }
+    const sessionId = activeSession.value.id
+    store.error = null
+    store.agentRunning = true
+    store.agentPhase = { kind: 'waiting_model' }
+    executionPlan.value = null
+    executionTools.value = []
+    currentRunId = `run_${Date.now()}`
+    currentAssistantMessageId = undefined
     stopTypewriter()
     typewriterBuffer = ''
 
-    messages.value.push({
+    store.appendMessage(sessionId, {
       id: `local_user_${Date.now()}`,
       role: 'user',
       content: text,
@@ -187,16 +280,20 @@ export function useHomeAgentSession() {
       provider: selectedModel.value?.provider,
       model: selectedModel.value?.modelId,
     }
-    streamingMessage.value = assistant
+    store.streamingMessage = assistant
 
     try {
       for await (const event of streamAgentMessage(activeSession.value.id, text)) {
         if (event.event === 'runtime.started') {
-          agentPhase.value = { kind: 'waiting_model' }
+          const payload = readEventPayload(event.data)
+          currentRunId = String(payload.run_id || payload.task_id || payload.id || currentRunId || `run_${Date.now()}`)
+          store.agentPhase = { kind: 'waiting_model' }
         }
         if (event.event === 'message.started') {
           const started = readAssistantEvent(event.data)
           assistant.id = started.id || assistant.id
+          currentAssistantMessageId = assistant.id
+          attachCurrentRunTimelineBlocks(assistant.id)
           assistant.provider = started.provider || assistant.provider
           assistant.model = started.model || assistant.model
           assistant.created_at = started.created_at || assistant.created_at
@@ -210,7 +307,11 @@ export function useHomeAgentSession() {
         if (event.event === 'message.completed') {
           const completed = readAssistantEvent(event.data)
           drainTypewriter()
+          const previousAssistantId = assistant.id
           assistant.id = completed.id || assistant.id
+          if (previousAssistantId !== assistant.id) reparentTimelineBlocks(previousAssistantId, assistant.id)
+          currentAssistantMessageId = assistant.id
+          attachCurrentRunTimelineBlocks(assistant.id)
           assistant.content = completed.content || assistant.content || ''
           assistant.created_at = completed.created_at || assistant.created_at
           assistant.provider = completed.provider || assistant.provider
@@ -220,6 +321,61 @@ export function useHomeAgentSession() {
         if (event.event === 'runtime.completed') {
           const usage = readUsage(event.data)
           if (usage) assistant.usage = usage
+          markRunningToolsCompleted()
+        }
+        if (event.event === 'tool_call.started') {
+          const payload = readEventPayload(event.data)
+          const toolName = String(payload.tool_name || 'tool')
+          const toolId = String(payload.tool_call_id || payload.id || `${toolName}_${Date.now()}_${executionTools.value.length}`)
+          const tool: AgentExecutionTool = {
+            id: toolId,
+            name: toolName,
+            status: 'running',
+            arguments: normalizeRecord(payload.arguments),
+          }
+          executionTools.value = [...executionTools.value, tool].slice(-6)
+          upsertTimelineTool({
+            id: toolId,
+            toolName,
+            status: 'running',
+            arguments: normalizeRecord(payload.arguments),
+          })
+          store.agentPhase = {
+            kind: 'running_tools',
+            tools: executionTools.value
+              .filter(item => item.status === 'running')
+              .map(item => ({ id: item.id, name: item.name })),
+          }
+        }
+        if (event.event === 'tool_call.completed' || event.event === 'tool_call.error') {
+          const payload = readEventPayload(event.data)
+          const toolName = String(payload.tool_name || 'tool')
+          const index = findLatestToolIndex(toolName)
+          const toolId = String(payload.tool_call_id || payload.id || (index >= 0 ? executionTools.value[index].id : `${toolName}_${Date.now()}`))
+          const status = event.event === 'tool_call.error' ? 'error' : 'completed'
+          if (index >= 0) {
+            executionTools.value[index] = {
+              ...executionTools.value[index],
+              id: toolId,
+              status,
+              result: payload.result,
+            }
+            executionTools.value = [...executionTools.value]
+          }
+          upsertTimelineTool({
+            id: toolId,
+            toolName,
+            status,
+            result: payload.result,
+          })
+          appendBusinessResultBlock(toolId, toolName, payload.result)
+          const running = executionTools.value.filter(item => item.status === 'running')
+          store.agentPhase = running.length
+            ? { kind: 'running_tools', tools: running.map(item => ({ id: item.id, name: item.name })) }
+            : { kind: 'waiting_model' }
+        }
+        if (event.event === 'CUSTOM') {
+          handleCustomEvent(event.data)
         }
         if (event.event === 'runtime.error') {
           const payload = readEventPayload(event.data)
@@ -227,27 +383,28 @@ export function useHomeAgentSession() {
         }
       }
       drainTypewriter()
-      messages.value.push({ ...assistant })
-      streamingMessage.value = null
+      store.appendMessage(sessionId, { ...assistant })
+      store.streamingMessage = null
     } catch (err: any) {
-      error.value = err?.message || 'Agent 流式响应失败'
+      store.error = err?.message || 'Agent 流式响应失败'
       if (streamingMessage.value && !String(streamingMessage.value.content || '').trim()) {
         streamingMessage.value.content = '抱歉，Agent 流式响应失败，请稍后重试。'
       }
     } finally {
       stopTypewriter()
       typewriterBuffer = ''
-      agentRunning.value = false
-      agentPhase.value = null
+      store.agentRunning = false
+      store.agentPhase = null
+      markRunningToolsCompleted()
     }
   }
 
   function abort(): void {
-    error.value = '当前最小版本暂未接入取消；刷新页面可停止前端等待。'
+    store.error = '当前最小版本暂未接入取消；刷新页面可停止前端等待。'
   }
 
   function changeModel(provider: string, modelId: string): void {
-    selectedModel.value = { provider, modelId }
+    store.selectedModel = { provider, modelId }
   }
 
   function readEventPayload(data: Record<string, unknown>): Record<string, unknown> {
@@ -267,6 +424,312 @@ export function useHomeAgentSession() {
     const usage = payload.usage
     if (usage && typeof usage === 'object') return usage as AgentMessage['usage']
     return undefined
+  }
+
+  function normalizeRecord(value: unknown): Record<string, unknown> | undefined {
+    return value && typeof value === 'object' && !Array.isArray(value)
+      ? value as Record<string, unknown>
+      : undefined
+  }
+
+  function handleCustomEvent(data: Record<string, unknown>): void {
+    const payload = readEventPayload(data)
+    const subtype = String(payload.subtype || '')
+    if (subtype === 'plan.created') {
+      const todos = Array.isArray(payload.todos) ? payload.todos : []
+      executionPlan.value = {
+        id: String(payload.plan_id || `plan_${Date.now()}`),
+        todos: todos.map((todo, index) => {
+          const record = todo && typeof todo === 'object' ? todo as Record<string, unknown> : {}
+          return {
+            id: String(record.id || `todo_${index + 1}`),
+            title: String(record.title || `步骤 ${index + 1}`),
+            description: record.description ? String(record.description) : undefined,
+            status: normalizeTodoStatus(record.status),
+          }
+        }),
+      }
+      upsertPlanBlock()
+      return
+    }
+
+    if (subtype.startsWith('todo.') && executionPlan.value) {
+      const todoId = String(payload.todo_id || '')
+      const nextStatus = normalizeTodoStatus(subtype.replace('todo.', ''))
+      executionPlan.value = {
+        ...executionPlan.value,
+        todos: executionPlan.value.todos.map(todo =>
+          todo.id === todoId ? { ...todo, status: nextStatus } : todo
+        ),
+      }
+      upsertPlanBlock()
+    }
+  }
+
+  function upsertPlanBlock(): void {
+    if (!executionPlan.value) return
+    const blockId = executionPlan.value.id
+    const existing = timelineBlocks.value.find(item => item.type === 'plan' && item.id === blockId)
+    const now = Date.now()
+    const block: AgentTimelineBlock = {
+      ...timelineMeta({ id: blockId, existing, activityType: 'PLAN', now }),
+      type: 'plan',
+      id: blockId,
+      todos: executionPlan.value.todos,
+    }
+    if (!activeSession.value) return
+    store.upsertTimelineBlock(activeSession.value.id, block)
+  }
+
+  function upsertTimelineTool(input: {
+    id: string
+    toolName: string
+    status: 'running' | 'completed' | 'error'
+    arguments?: Record<string, unknown>
+    result?: unknown
+  }): void {
+    if (isInvisibleTool(input.toolName, input.arguments)) return
+    const presentation = toolPresentation(input.toolName, input.arguments, input.result, input.status)
+    const existing = timelineBlocks.value.find(item => item.type === 'tool_activity' && item.toolCallId === input.id)
+    const now = Date.now()
+    const block: AgentTimelineBlock = {
+      ...timelineMeta({ id: `activity_tool_${input.id}`, existing, toolCallId: input.id, activityType: 'TOOL_CALL', now }),
+      type: 'tool_activity',
+      id: `activity_tool_${input.id}`,
+      toolName: input.toolName,
+      status: input.status,
+      title: presentation.title,
+      description: presentation.description,
+      summary: presentation.summary,
+      arguments: input.arguments || (existing?.type === 'tool_activity' ? existing.arguments : undefined),
+      result: input.result,
+    }
+    if (!activeSession.value) return
+    store.upsertTimelineBlock(activeSession.value.id, block)
+  }
+
+  function isInvisibleTool(toolName: string, args?: Record<string, unknown>): boolean {
+    return toolName === 'unknown' && (!args || Object.keys(args).length === 0)
+  }
+
+  function toolPresentation(
+    toolName: string,
+    args: Record<string, unknown> | undefined,
+    result: unknown,
+    status: 'running' | 'completed' | 'error'
+  ): { title: string; description?: string; summary?: string } {
+    if (toolName === 'list_projects') {
+      const limit = args?.limit ? `最多 ${args.limit} 个` : '默认数量'
+      const statusText = args?.status ? `状态 ${args.status}` : '全部状态'
+      return {
+        title: status === 'running' ? '正在查询项目列表' : status === 'error' ? '项目列表查询失败' : '项目列表查询完成',
+        description: `从 ANIFORCE 项目库读取当前账号可访问项目（${statusText} · ${limit}）`,
+        summary: status === 'completed' ? summarizeProjectResult(result) : undefined,
+      }
+    }
+    if (toolName === 'get_project_detail') {
+      return {
+        title: status === 'running' ? '正在读取项目详情' : status === 'error' ? '项目详情读取失败' : '项目详情读取完成',
+        description: args?.project_id ? `项目 ID：${args.project_id}` : undefined,
+      }
+    }
+    if (toolName === 'create_project') {
+      return {
+        title: status === 'running' ? '正在创建项目' : status === 'error' ? '项目创建失败' : '项目创建完成',
+        description: args?.name ? `项目：${args.name}` : undefined,
+      }
+    }
+    return {
+      title: status === 'running' ? '正在执行 Agent 操作' : status === 'error' ? 'Agent 操作失败' : 'Agent 操作完成',
+      description: toolName,
+    }
+  }
+
+  function appendBusinessResultBlock(toolCallId: string, toolName: string, result: unknown): void {
+    if (toolName !== 'list_projects') return
+    const projects = extractProjects(result)
+    if (!projects) return
+    const blockId = `surface_project_list_${toolCallId}`
+    const existing = timelineBlocks.value.find(item => item.id === blockId)
+    const now = Date.now()
+    const block: AgentTimelineBlock = {
+      ...timelineMeta({ id: blockId, existing, toolCallId, activityType: 'BUSINESS_RESULT', now }),
+      type: 'project_list',
+      id: blockId,
+      summary: `共 ${projects.length} 个项目`,
+      projects,
+      sourceToolCallId: toolCallId,
+      surfaceId: `project-list-${toolCallId}`,
+    }
+    if (!activeSession.value) return
+    const sessionId = activeSession.value.id
+    store.upsertTimelineBlock(sessionId, block)
+    store.setWorkspace(sessionId, [{
+      id: `workspace_${blockId}`,
+      name: 'project_list',
+      result: {
+        type: 'project_list',
+        projects,
+        summary: block.summary,
+      },
+    }])
+  }
+
+  function summarizeProjectResult(result: unknown): string {
+    const projects = extractProjects(result)
+    if (projects) return `找到 ${projects.length} 个项目`
+    const text = typeof result === 'string' ? result : ''
+    const match = /找到\s*(\d+)\s*个项目/.exec(text)
+    return match ? `找到 ${match[1]} 个项目` : '已获得查询结果'
+  }
+
+  function extractProjects(result: unknown): Record<string, unknown>[] | null {
+    if (!result) return null
+    if (typeof result === 'object') {
+      const record = result as Record<string, unknown>
+      const candidates = [record.projects, record.items, record.list]
+      for (const candidate of candidates) {
+        if (Array.isArray(candidate)) return candidate.filter(isRecord)
+      }
+      if (typeof record.text === 'string') return extractProjects(record.text)
+    }
+    if (typeof result !== 'string') return null
+    const projects: Record<string, unknown>[] = []
+    const chunks = result.split(/\n(?=\d+\.\s+\*\*)/g)
+    for (const chunk of chunks) {
+      const nameMatch = /\d+\.\s+\*\*(.*?)\*\*/.exec(chunk)
+      const idMatch = /ID:\s*([^\n]+)/.exec(chunk)
+      if (!nameMatch || !idMatch) continue
+      const budgetMatch = /预算:\s*[¥￥]?([\d,\.]+)/.exec(chunk)
+      const statusMatch = /状态:\s*([^\n]+)/.exec(chunk)
+      const descriptionMatch = /描述:\s*([^\n]+)/.exec(chunk)
+      projects.push({
+        id: idMatch[1].trim(),
+        name: nameMatch[1].trim(),
+        total_budget: budgetMatch ? Number(budgetMatch[1].replace(/,/g, '')) : 0,
+        spent: 0,
+        status: statusMatch ? statusMatch[1].trim() : undefined,
+        description: descriptionMatch ? descriptionMatch[1].trim() : undefined,
+        game_type: '',
+        target_market: '',
+        tags: [],
+      })
+    }
+    return projects.length ? projects : null
+  }
+
+  function isRecord(value: unknown): value is Record<string, unknown> {
+    return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+  }
+
+  function reparentTimelineBlocks(previousParentId: string | undefined, nextParentId: string | undefined): void {
+    if (!previousParentId || !nextParentId || previousParentId === nextParentId) return
+    if (!activeSession.value) return
+    const sessionId = activeSession.value.id
+    let changed = false
+    const current = store.timelineBySession.get(sessionId) || []
+    const updated = current.map(block => {
+      if (block.parentMessageId !== previousParentId) return block
+      changed = true
+      return { ...block, parentMessageId: nextParentId, updatedAt: Date.now() }
+    })
+    if (changed) {
+      store.timelineBySession.set(sessionId, updated)
+      store.persistToLocalStorage(sessionId)
+    }
+  }
+
+  function attachCurrentRunTimelineBlocks(parentMessageId: string | undefined): void {
+    if (!parentMessageId || !currentRunId) return
+    if (!activeSession.value) return
+    const sessionId = activeSession.value.id
+    let changed = false
+    const current = store.timelineBySession.get(sessionId) || []
+    const updated = current.map(block => {
+      if (block.parentMessageId || block.runId !== currentRunId) return block
+      changed = true
+      return { ...block, parentMessageId, updatedAt: Date.now() }
+    })
+    if (changed) {
+      store.timelineBySession.set(sessionId, updated)
+      store.persistToLocalStorage(sessionId)
+    }
+  }
+
+  function timelineMeta(input: {
+    id: string
+    existing?: AgentTimelineBlock
+    toolCallId?: string
+    activityType: AgentTimelineMeta['activityType']
+    now: number
+  }): AgentTimelineMeta {
+    return {
+      runId: input.existing?.runId || currentRunId,
+      messageId: input.existing?.messageId || input.id,
+      parentMessageId: input.existing?.parentMessageId || currentAssistantMessageId,
+      toolCallId: input.existing?.toolCallId || input.toolCallId,
+      activityType: input.activityType,
+      createdAt: input.existing?.createdAt || input.now,
+      updatedAt: input.now,
+    }
+  }
+
+  function handleTimelineAction(action: string, payload: Record<string, unknown>): void {
+    if (action === 'open_project' && payload.projectId) {
+      window.location.href = `/projects/${encodeURIComponent(String(payload.projectId))}`
+      return
+    }
+    if (action === 'create_campaign' && payload.projectId) {
+      window.location.href = `/campaign/create?project_id=${encodeURIComponent(String(payload.projectId))}`
+      return
+    }
+    if (action === 'open_in_workspace' && payload.type === 'project_list') {
+      if (!activeSession.value) return
+      const projects = Array.isArray(payload.projects) ? payload.projects : []
+      store.setWorkspace(activeSession.value.id, [{
+        id: `workspace_${Date.now()}`,
+        name: 'project_list',
+        result: {
+          type: 'project_list',
+          projects,
+          summary: payload.summary || `共 ${projects.length} 个项目`
+        }
+      }])
+    }
+  }
+
+  function normalizeTodoStatus(value: unknown): AgentExecutionTodo['status'] {
+    if (value === 'running' || value === 'completed' || value === 'failed' || value === 'skipped') return value
+    return 'pending'
+  }
+
+  function findLatestToolIndex(toolName: string): number {
+    for (let index = executionTools.value.length - 1; index >= 0; index -= 1) {
+      if (executionTools.value[index]?.name === toolName && executionTools.value[index]?.status === 'running') return index
+    }
+    for (let index = executionTools.value.length - 1; index >= 0; index -= 1) {
+      if (executionTools.value[index]?.name === toolName) return index
+    }
+    return -1
+  }
+
+  function markRunningToolsCompleted(): void {
+    let changed = false
+    executionTools.value = executionTools.value.map(tool => {
+      if (tool.status !== 'running') return tool
+      changed = true
+      return { ...tool, status: 'completed' }
+    })
+    if (changed) executionTools.value = [...executionTools.value]
+    
+    if (!activeSession.value) return
+    const sessionId = activeSession.value.id
+    const current = store.timelineBySession.get(sessionId) || []
+    const updated = current.map(block => {
+      if (block.type !== 'tool_activity' || block.status !== 'running') return block
+      return { ...block, status: 'completed' as const, title: toolPresentation(block.toolName, block.arguments, block.result, 'completed').title, updatedAt: Date.now() }
+    })
+    store.timelineBySession.set(sessionId, updated)
   }
 
   function enqueueTypewriter(delta: string): void {
@@ -315,6 +778,9 @@ export function useHomeAgentSession() {
     contextUsage,
     currentTask,
     workspaceToolResults,
+    executionPlan,
+    executionTools,
+    timelineBlocks,
     visibleMessages,
     sessionStats,
     refreshModels,
@@ -326,5 +792,6 @@ export function useHomeAgentSession() {
     send,
     abort,
     changeModel,
+    handleTimelineAction,
   }
 }

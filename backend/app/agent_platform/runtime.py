@@ -12,7 +12,7 @@ from contextlib import asynccontextmanager
 
 from loguru import logger
 
-from .models import AgentTask, AgentTaskEvent, AgentTaskStatus, EventType, ExecutionPlan
+from .models import AgentTask, AgentTaskEvent, AgentTaskStatus, EventType, ExecutionPlan, TodoStatus
 from .repositories.base import AgentTaskRepository
 from .adapters.openai_adapter import OpenAISDKAdapter
 from .errors import AppError, AgentErrorCode, ErrorCategory
@@ -106,6 +106,7 @@ class AgentRuntime:
         
         try:
             task_logger.info(f"[RUNTIME] Task started: {task.task_type}")
+            self.current_plan = None
             
             # 1. 更新状态为 running
             await self.repo.update_status(task.task_id, AgentTaskStatus.RUNNING)
@@ -159,12 +160,12 @@ class AgentRuntime:
                     
                     # 检测执行计划
                     if event.event_type == EventType.MESSAGE_UPDATED:
-                        content = event.payload.get("content", "")
+                        content = event.payload.get("delta") or event.payload.get("content", "")
                         if content:
                             message_buffer.append(content)
                             
-                            # 尝试提取 Plan（累积到一定长度后）
-                            if len("".join(message_buffer)) > 100:
+                            # 尝试提取 Plan。流式 delta 可能一次就包含完整计划，不能只读 content。
+                            if self.current_plan is None:
                                 full_message = "".join(message_buffer)
                                 plan_result = await self._detect_and_extract_plan(
                                     full_message,
@@ -378,7 +379,7 @@ class AgentRuntime:
         
         if current_todo:
             # 标记为 running
-            current_todo.status = "running"
+            current_todo.status = TodoStatus.RUNNING
             
             # 创建 TODO_STARTED 事件
             todo_event = AgentTaskEvent(

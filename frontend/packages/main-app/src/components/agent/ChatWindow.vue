@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type { AgentMessage } from '@/api/agent'
-import type { AgentPhase } from '@/composables/useHomeAgentSession'
+import type { AgentPhase, AgentTimelineBlock } from '@/composables/useHomeAgentSession'
 import MessageView from './MessageView.vue'
 import ChatInput from './ChatInput.vue'
+import TimelineBlockRenderer from './timeline/TimelineBlockRenderer.vue'
 
 const props = defineProps<{
   messages: AgentMessage[]
@@ -15,6 +16,7 @@ const props = defineProps<{
   modelNames?: Record<string, string>
   retryInfo?: { attempt: number; maxAttempts: number; errorMessage?: string } | null
   commandStatus?: string | null
+  timelineBlocks?: AgentTimelineBlock[]
   loading?: boolean
   error?: string | null
 }>()
@@ -22,6 +24,7 @@ const emit = defineEmits<{
   send: [message: string, images?: Array<{ type: 'image'; data: string; mimeType: string }>]
   abort: []
   modelChange: [provider: string, modelId: string]
+  timelineAction: [action: string, payload: Record<string, unknown>]
 }>()
 
 const scroller = ref<HTMLElement | null>(null)
@@ -44,7 +47,7 @@ const toolResults = computed(() => {
   }
   return map
 })
-const empty = computed(() => !props.loading && visibleMessages.value.length === 0 && !props.streamingMessage && !props.isStreaming)
+const empty = computed(() => !props.loading && visibleMessages.value.length === 0 && !props.streamingMessage && !props.isStreaming && !props.timelineBlocks?.length)
 function phaseLabel(phase: AgentPhase): string {
   if (phase?.kind === 'queued') return 'Queued for worker...'
   if (phase?.kind === 'running_tools') {
@@ -101,6 +104,14 @@ watch(() => [props.messages.length, props.streamingMessage], () => scrollBottom(
               :tool-results="toolResults"
               :model-names="modelNames"
             />
+            <div v-if="timelineBlocks?.length" class="timeline-blocks">
+              <TimelineBlockRenderer
+                v-for="block in timelineBlocks"
+                :key="block.id"
+                :block="block"
+                @action="(action, payload) => emit('timelineAction', action, payload)"
+              />
+            </div>
             <div v-if="isStreaming && !streamingMessage" class="phase-line">{{ phaseLabel(agentPhase) }}</div>
           </div>
         </div>
@@ -130,6 +141,7 @@ watch(() => [props.messages.length, props.streamingMessage], () => scrollBottom(
 .hero-title b { color: var(--accent); font-weight: 400; }
 .message-scroll { flex: 1; overflow-y: auto; padding-top: 16px; scrollbar-width: none; }
 .message-column { max-width: 820px; margin: 0 auto; padding: 0 52px 0 16px; }
+.timeline-blocks { display: flex; flex-direction: column; gap: 10px; margin: 4px 0 18px; }
 .phase-line { padding: 8px 0 20px; color: var(--text-muted); font-size: 13px; animation: pulse 1.5s infinite; }
 @keyframes pulse { 0%,100%{ opacity:.45 } 50%{ opacity:1 } }
 </style>
