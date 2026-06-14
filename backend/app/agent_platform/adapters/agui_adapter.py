@@ -130,7 +130,9 @@ class AgUiEventAdapter:
         if event_type == "message.completed":
             mid = self._current_message_id or f"msg_{uuid.uuid4().hex[:12]}"
             self._current_message_id = None
-            return [TextMessageEndEvent(message_id=mid)]
+            # 提取 usage 信息
+            usage = payload.get("usage")
+            return [TextMessageEndEvent(message_id=mid, usage=usage)]
 
         # === Tool Call Started ===
         if event_type == "tool_call.started":

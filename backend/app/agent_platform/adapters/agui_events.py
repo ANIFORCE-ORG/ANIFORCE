@@ -113,14 +113,18 @@ class TextMessageContentEvent(AgUiEvent):
 
 
 class TextMessageEndEvent(AgUiEvent):
-    def __init__(self, message_id: str):
+    def __init__(self, message_id: str, usage: dict | None = None):
         self.message_id = message_id
+        self.usage = usage
 
     def event_type(self) -> str:
         return "TextMessageEnd"
 
     def to_dict(self) -> dict:
-        return {"messageId": self.message_id}
+        data = {"messageId": self.message_id}
+        if self.usage:
+            data["usage"] = self.usage
+        return data
 
 
 # ============================================================

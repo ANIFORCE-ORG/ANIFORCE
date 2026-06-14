@@ -317,7 +317,7 @@ export function useHomeAgentSession() {
 
         // TextMessageEnd → message.completed
         if (event.event === 'TextMessageEnd') {
-          const { messageId } = event.data
+          const { messageId, usage } = event.data
           drainTypewriter()
           if (messageId) {
             const previousAssistantId = assistant.id
@@ -327,6 +327,10 @@ export function useHomeAgentSession() {
             }
             currentAssistantMessageId = assistant.id
             attachCurrentRunTimelineBlocks(assistant.id)
+          }
+          // 保存 usage 到当前 assistant 消息
+          if (usage && assistant.content) {
+            assistant.usage = usage as any
           }
         }
 
