@@ -13,122 +13,123 @@ const props = defineProps<{
   content: ActivityContent
 }>()
 
-const statusIcon = computed(() => {
-  if (props.content.status === 'completed') return 'check_circle'
-  if (props.content.status === 'error') return 'error'
-  return 'pending'
+const statusDotClass = computed(() => {
+  if (props.content.status === 'completed') return 'status-dot-completed'
+  if (props.content.status === 'error') return 'status-dot-error'
+  return 'status-dot-running'
 })
 
-const statusColor = computed(() => {
-  if (props.content.status === 'completed') return 'text-emerald-600 dark:text-emerald-400'
-  if (props.content.status === 'error') return 'text-red-600 dark:text-red-400'
-  return 'text-blue-600 dark:text-blue-400'
+const durationText = computed(() => {
+  // 可以后续从 props 传入实际耗时
+  if (props.content.status === 'running') return '...'
+  return ''
 })
-
-const statusBg = computed(() => {
-  if (props.content.status === 'completed') return 'bg-emerald-50 dark:bg-emerald-950/30'
-  if (props.content.status === 'error') return 'bg-red-50 dark:bg-red-950/30'
-  return 'bg-blue-50 dark:bg-blue-950/30'
-})
-
-const statusBorder = computed(() => {
-  if (props.content.status === 'completed') return 'border-emerald-200 dark:border-emerald-800'
-  if (props.content.status === 'error') return 'border-red-200 dark:border-red-800'
-  return 'border-blue-200 dark:border-blue-800'
-})
-
-const isRunning = computed(() => props.content.status === 'running')
 </script>
 
 <template>
-  <div
-    class="activity-card group relative rounded-xl border transition-all duration-300"
-    :class="[
-      statusBg,
-      statusBorder,
-      isRunning ? 'animate-pulse-subtle' : 'hover:shadow-md'
-    ]"
-  >
-    <!-- 左侧状态指示条 -->
-    <div
-      class="absolute left-0 top-0 bottom-0 w-1 rounded-l-xl transition-all duration-300"
-      :class="isRunning ? 'bg-blue-500 animate-pulse' : props.content.status === 'completed' ? 'bg-emerald-500' : 'bg-red-500'"
-    />
-    
-    <div class="pl-4 pr-4 py-3 flex items-center gap-3">
-      <!-- 状态图标 -->
-      <div class="flex-shrink-0">
-        <span
-          class="material-symbols-outlined text-xl transition-all duration-300"
-          :class="[statusColor, isRunning ? 'animate-spin-slow' : '']"
-        >
-          {{ statusIcon }}
-        </span>
-      </div>
-      
-      <!-- 内容区 -->
+  <div class="activity-card">
+    <div class="activity-content">
+      <!-- 状态圆点（8px） -->
+      <div class="status-dot" :class="statusDotClass"></div>
+
+      <!-- 工具信息 -->
       <div class="flex-1 min-w-0">
-        <div class="flex items-center gap-2">
-          <span class="text-sm font-medium text-slate-900 dark:text-slate-100">
-            {{ content.title }}
-          </span>
-          <span
-            v-if="content.toolName"
-            class="text-xs font-mono px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400"
-          >
-            {{ content.toolName }}
-          </span>
-        </div>
-        
-        <!-- 参数（折叠显示） -->
-        <div
-          v-if="content.arguments && Object.keys(content.arguments).length > 0"
-          class="mt-1.5 text-xs text-slate-500 dark:text-slate-400 font-mono"
-        >
-          {{ JSON.stringify(content.arguments).slice(0, 80) }}{{ Object.keys(content.arguments).length > 3 ? '...' : '' }}
-        </div>
+        <span class="activity-title">{{ content.title }}</span>
+        <span v-if="content.toolName" class="activity-tool">{{ content.toolName }}</span>
       </div>
-      
-      <!-- 运行中动画指示器 -->
-      <div v-if="isRunning" class="flex-shrink-0">
-        <div class="flex gap-1">
-          <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style="animation-delay: 0s" />
-          <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style="animation-delay: 0.15s" />
-          <div class="w-1.5 h-1.5 rounded-full bg-blue-500 animate-bounce" style="animation-delay: 0.3s" />
-        </div>
-      </div>
+
+      <!-- 耗时/状态 -->
+      <span class="activity-duration">{{ durationText }}</span>
     </div>
   </div>
 </template>
 
 <style scoped>
 .activity-card {
-  backdrop-filter: blur(8px);
+  padding: 12px 16px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 1rem;
+  transition: border-color 0.16s ease;
+  margin: 8px 0;
 }
 
-@keyframes pulse-subtle {
+.activity-card:hover {
+  border-color: rgba(19, 127, 236, 0.3);
+}
+
+.activity-content {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+/* 状态圆点 - 8px，扁平设计 */
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.status-dot-running {
+  background: #137fec;
+  animation: pulse-dot 2s ease-in-out infinite;
+}
+
+.status-dot-completed {
+  background: #10b981;
+}
+
+.status-dot-error {
+  background: #ef4444;
+}
+
+/* 柔和的脉动动画（只有圆点动） */
+@keyframes pulse-dot {
   0%, 100% {
     opacity: 1;
   }
   50% {
-    opacity: 0.92;
+    opacity: 0.5;
   }
 }
 
-.animate-pulse-subtle {
-  animation: pulse-subtle 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+.activity-title {
+  font-size: 14px;
+  font-weight: 500;
+  color: #0f172a;
 }
 
-.animate-spin-slow {
-  animation: spin 2s linear infinite;
+.activity-tool {
+  font-size: 11px;
+  color: #94a3b8;
+  margin-left: 8px;
+  font-family: 'SF Mono', 'Monaco', 'Cascadia Code', monospace;
 }
 
-@keyframes spin {
-  from {
-    transform: rotate(0deg);
-  }
-  to {
-    transform: rotate(360deg);
-  }
+.activity-duration {
+  font-size: 11px;
+  color: #94a3b8;
+  flex-shrink: 0;
+}
+
+/* Dark mode */
+.dark .activity-card {
+  background: rgba(30, 41, 59, 0.5);
+  border-color: #334155;
+}
+
+.dark .activity-card:hover {
+  border-color: rgba(59, 130, 246, 0.5);
+}
+
+.dark .activity-title {
+  color: #f8fafc;
+}
+
+.dark .activity-tool,
+.dark .activity-duration {
+  color: #cbd5e1;
 }
 </style>

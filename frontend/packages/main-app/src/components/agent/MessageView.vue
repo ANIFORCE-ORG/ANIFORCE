@@ -280,9 +280,16 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
     </div>
 
     <div class="assistant-footer">
-      <span v-if="usageText">{{ usageText }}</span>
-      <button v-if="textContent && !isStreaming" class="copy-assistant" :class="{ visible: hovered || copied }" @click="copy(textContent)">{{ copied ? 'Copied' : 'Copy' }}</button>
-      <span v-if="!isStreaming && formatTime(message.timestamp || message.created_at)" class="time">{{ formatTime(message.timestamp || message.created_at) }}</span>
+      <div class="footer-left">
+        <span v-if="modelLabel" class="model-badge">{{ modelLabel }}</span>
+      </div>
+
+      <div class="footer-right">
+        <span v-if="usageText" class="usage-text">{{ usageText }}</span>
+        <button v-if="textContent && !isStreaming" class="copy-button" :class="{ visible: hovered || copied }" @click="copy(textContent)">
+          <span class="material-symbols-outlined">content_copy</span>
+        </button>
+      </div>
     </div>
   </div>
 </template>
@@ -645,29 +652,77 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
 
 .assistant-footer {
   display: flex;
+  justify-content: space-between;
   align-items: center;
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #f1f5f9;
   gap: 10px;
-  margin-top: 8px;
-  color: var(--text-dim);
-  font-size: 11px;
-  padding-left: 2px;
 }
 
-.copy-assistant {
+.footer-left,
+.footer-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.model-badge {
+  font-size: 11px;
+  color: #64748b;
+  padding: 2px 8px;
+  background: #f1f5f9;
+  border-radius: 4px;
+}
+
+.usage-text {
+  font-size: 11px;
+  color: #94a3b8;
+}
+
+.copy-button {
+  padding: 4px;
+  border: 0;
+  background: none;
+  color: #cbd5e1;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all 0.16s ease;
   opacity: 0;
   pointer-events: none;
-  transition: opacity 0.2s ease;
 }
 
-.copy-assistant.visible {
+.copy-button.visible {
   opacity: 1;
   pointer-events: auto;
 }
 
-.assistant-footer .time {
-  margin-left: auto;
-  font-size: 10.5px;
-  color: var(--text-dim);
+.copy-button:hover {
+  color: #137fec;
+  background: #eff6ff;
+}
+
+.copy-button .material-symbols-outlined {
+  font-size: 16px;
+}
+
+/* Dark mode */
+:global(.dark) .assistant-footer {
+  border-top-color: #334155;
+}
+
+:global(.dark) .model-badge {
+  background: rgba(15, 23, 42, 0.7);
+  color: #cbd5e1;
+}
+
+:global(.dark) .usage-text {
+  color: #94a3b8;
+}
+
+:global(.dark) .copy-button:hover {
+  color: #60a5fa;
+  background: rgba(59, 130, 246, 0.1);
 }
 
 /* Dark mode 优化 */
