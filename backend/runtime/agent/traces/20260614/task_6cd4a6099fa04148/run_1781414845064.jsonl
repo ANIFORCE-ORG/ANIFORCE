@@ -1,0 +1,3 @@
+{"event": "trace.start", "trace_id": "task_6cd4a6099fa04148:run_1781414845064", "task_id": "task_6cd4a6099fa04148", "run_id": "run_1781414845064", "user_id": "user_test_001", "task_type": "conversation", "timestamp": "2026-06-14T13:27:25.064615"}
+{"event": "sdk.call", "method": "run_streamed", "agent_name": "ANIFORCE Assistant", "input_text": "hi", "session_id": "session_8f4b617bfe574a49", "timestamp": "2026-06-14T13:27:25.140607", "trace_id": "task_6cd4a6099fa04148:run_1781414845064"}
+{"event": "trace.end", "duration_ms": 284, "timestamp": "2026-06-14T13:27:25.349150", "trace_id": "task_6cd4a6099fa04148:run_1781414845064"}

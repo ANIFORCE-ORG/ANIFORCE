@@ -1,0 +1,16 @@
+id: 0
+event: runtime.started
+data: {"event_id": "event_task_2ce498b4413d4dd3_0", "task_id": "task_2ce498b4413d4dd3", "event_type": "runtime.started", "payload": {"task_type": "conversation", "user_input": "你有哪些skill"}, "sequence": 0, "created_at": "2026-06-13 14:57:00.963703"}
+
+id: 1
+event: handoff
+data: {"event_id": "event_task_2ce498b4413d4dd3_0", "task_id": "task_2ce498b4413d4dd3", "event_type": "handoff", "payload": {"agent_name": "ANIFORCE Assistant"}, "sequence": 1, "created_at": "2026-06-13 14:57:01.000711"}
+
+id: 2
+event: runtime.error
+data: {"event_id": "event_task_2ce498b4413d4dd3_2", "task_id": "task_2ce498b4413d4dd3", "event_type": "runtime.error", "payload": {"code": "SDK_ERROR", "message": "SDK stream error: sandbox workspace root must be absolute"}, "sequence": 2, "created_at": "2026-06-13 14:57:01.028706"}
+
+id: 3
+event: runtime.completed
+data: {"event_id": "event_task_2ce498b4413d4dd3_3", "task_id": "task_2ce498b4413d4dd3", "event_type": "runtime.completed", "payload": {"final_output": null, "usage": {"input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 0}}, "sequence": 3, "created_at": "2026-06-13 14:57:01.072566"}
+

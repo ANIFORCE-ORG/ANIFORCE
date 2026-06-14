@@ -1,0 +1,101 @@
+{"event": "trace.start", "trace_id": "e2e-002:run_1781435230855", "task_id": "e2e-002", "run_id": "run_1781435230855", "user_id": "user_test_001", "task_type": "conversation", "timestamp": "2026-06-14T19:07:10.855903"}
+{"event": "sdk.call", "method": "run_streamed", "agent_name": "ANIFORCE Assistant", "input_text": "现在有哪些项目？", "session_id": "session_4202de47ef364109", "timestamp": "2026-06-14T19:07:11.045180", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "agent_updated_stream_event", "data": {"raw_event": "AgentUpdatedStreamEvent"}, "timestamp": "2026-06-14T19:07:11.046794", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "handoff", "payload": {"agent_name": "ANIFORCE Assistant"}, "sequence": 1, "timestamp": "2026-06-14T19:07:11.047219", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:13.649715", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:13.649963", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:13.650097", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:13.650850", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:13.650975", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:13.651097", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:13.651448", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:13.665374", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:14.074535", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:14.077012", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "run_item_stream_event", "data": {"raw_event": "RunItemStreamEvent"}, "timestamp": "2026-06-14T19:07:14.077137", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "tool.call", "tool_name": "list_projects", "arguments": {"limit": 20}, "result": null, "error": null, "timestamp": "2026-06-14T19:07:14.077285", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "tool_call.started", "payload": {"tool_call_id": "call_Te9YSChvX6vJQHj00MlsasHb", "tool_name": "list_projects", "arguments": {"limit": 20}}, "sequence": 2, "timestamp": "2026-06-14T19:07:14.077388", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:14.106225", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "run_item_stream_event", "data": {"raw_event": "RunItemStreamEvent"}, "timestamp": "2026-06-14T19:07:14.112282", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "tool.call", "tool_name": "list_projects", "arguments": {}, "result": "{'type': 'text', 'text': '你还没有创建任何项目。'}", "error": null, "timestamp": "2026-06-14T19:07:14.112475", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "tool_call.completed", "payload": {"tool_call_id": "call_Te9YSChvX6vJQHj00MlsasHb", "tool_name": "list_projects", "result": {"type": "text", "text": "你还没有创建任何项目。"}}, "sequence": 3, "timestamp": "2026-06-14T19:07:14.112580", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.835030", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.835235", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.835333", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.835418", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.844606", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "您"}, "sequence": 4, "timestamp": "2026-06-14T19:07:15.844759", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.885439", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "当前"}, "sequence": 5, "timestamp": "2026-06-14T19:07:15.885572", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.893437", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "还"}, "sequence": 6, "timestamp": "2026-06-14T19:07:15.893556", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.917988", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "没有"}, "sequence": 7, "timestamp": "2026-06-14T19:07:15.918177", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.928385", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "任何"}, "sequence": 8, "timestamp": "2026-06-14T19:07:15.928507", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.937021", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "项目"}, "sequence": 9, "timestamp": "2026-06-14T19:07:15.937209", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:15.968884", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "。"}, "sequence": 10, "timestamp": "2026-06-14T19:07:15.969035", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.075352", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "  \n\n"}, "sequence": 11, "timestamp": "2026-06-14T19:07:16.075465", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.132360", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "如果"}, "sequence": 12, "timestamp": "2026-06-14T19:07:16.132546", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.140224", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "需要"}, "sequence": 13, "timestamp": "2026-06-14T19:07:16.140361", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.201168", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "，我"}, "sequence": 14, "timestamp": "2026-06-14T19:07:16.201302", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.216677", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "可以"}, "sequence": 15, "timestamp": "2026-06-14T19:07:16.216807", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.222844", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "帮"}, "sequence": 16, "timestamp": "2026-06-14T19:07:16.222952", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.267569", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "您"}, "sequence": 17, "timestamp": "2026-06-14T19:07:16.267699", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.274307", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "：\n"}, "sequence": 18, "timestamp": "2026-06-14T19:07:16.274490", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.281176", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "-"}, "sequence": 19, "timestamp": "2026-06-14T19:07:16.281286", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.288068", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": " 创建"}, "sequence": 20, "timestamp": "2026-06-14T19:07:16.288199", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.295540", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "一个"}, "sequence": 21, "timestamp": "2026-06-14T19:07:16.295670", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.301187", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "新"}, "sequence": 22, "timestamp": "2026-06-14T19:07:16.301315", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.308264", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "项目"}, "sequence": 23, "timestamp": "2026-06-14T19:07:16.308394", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.314702", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "\n"}, "sequence": 24, "timestamp": "2026-06-14T19:07:16.314812", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.320656", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "-"}, "sequence": 25, "timestamp": "2026-06-14T19:07:16.320765", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.326377", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": " "}, "sequence": 26, "timestamp": "2026-06-14T19:07:16.326532", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.365625", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "先"}, "sequence": 27, "timestamp": "2026-06-14T19:07:16.365817", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.375269", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "按"}, "sequence": 28, "timestamp": "2026-06-14T19:07:16.375375", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.381166", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "游戏"}, "sequence": 29, "timestamp": "2026-06-14T19:07:16.381288", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.429209", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "类型"}, "sequence": 30, "timestamp": "2026-06-14T19:07:16.429321", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.435566", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "和"}, "sequence": 31, "timestamp": "2026-06-14T19:07:16.435696", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.441176", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "预算"}, "sequence": 32, "timestamp": "2026-06-14T19:07:16.441284", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.446902", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "帮"}, "sequence": 33, "timestamp": "2026-06-14T19:07:16.447020", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.471385", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "您"}, "sequence": 34, "timestamp": "2026-06-14T19:07:16.471512", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.510523", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "规划"}, "sequence": 35, "timestamp": "2026-06-14T19:07:16.510638", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.517126", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "项目"}, "sequence": 36, "timestamp": "2026-06-14T19:07:16.517255", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.523553", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.updated", "payload": {"delta": "结构"}, "sequence": 37, "timestamp": "2026-06-14T19:07:16.523686", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.560394", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.560796", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.568013", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "raw_response_event", "data": {"raw_event": "RawResponsesStreamEvent"}, "timestamp": "2026-06-14T19:07:16.600003", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "sdk.event", "event_type": "run_item_stream_event", "data": {"raw_event": "RunItemStreamEvent"}, "timestamp": "2026-06-14T19:07:16.601138", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "llm.response", "model": "gpt-5.4", "response": "您当前还没有任何项目。  \n\n如果需要，我可以帮您：\n- 创建一个新项目\n- 先按游戏类型和预算帮您规划项目结构", "usage": {}, "metadata": {}, "timestamp": "2026-06-14T19:07:16.606893", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "agent.event", "event_type": "message.completed", "payload": {"role": "assistant", "content": "您当前还没有任何项目。  \n\n如果需要，我可以帮您：\n- 创建一个新项目\n- 先按游戏类型和预算帮您规划项目结构", "usage": {"input": 4534, "output": 56, "cacheRead": 0, "cacheWrite": 0, "totalTokens": 4590}}, "sequence": 38, "timestamp": "2026-06-14T19:07:16.607013", "trace_id": "e2e-002:run_1781435230855"}
+{"event": "trace.end", "duration_ms": 5769, "timestamp": "2026-06-14T19:07:16.625779", "trace_id": "e2e-002:run_1781435230855"}

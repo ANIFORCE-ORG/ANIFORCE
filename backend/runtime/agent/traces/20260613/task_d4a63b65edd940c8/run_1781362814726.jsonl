@@ -1,0 +1,5 @@
+{"event": "trace.start", "trace_id": "task_d4a63b65edd940c8:run_1781362814726", "task_id": "task_d4a63b65edd940c8", "run_id": "run_1781362814726", "user_id": "user_test_001", "task_type": "conversation", "timestamp": "2026-06-13T23:00:14.726467"}
+{"event": "sdk.call", "method": "run_streamed", "agent_name": "ANIFORCE Assistant", "input_text": "你有哪些skill", "session_id": "session_b4a44b880f8c455f", "timestamp": "2026-06-13T23:00:14.776582", "trace_id": "task_d4a63b65edd940c8:run_1781362814726"}
+{"event": "sdk.event", "event_type": "agent_updated_stream_event", "data": {"raw_event": "AgentUpdatedStreamEvent"}, "timestamp": "2026-06-13T23:00:14.778748", "trace_id": "task_d4a63b65edd940c8:run_1781362814726"}
+{"event": "agent.event", "event_type": "handoff", "payload": {"agent_name": "ANIFORCE Assistant"}, "sequence": 1, "timestamp": "2026-06-13T23:00:14.778972", "trace_id": "task_d4a63b65edd940c8:run_1781362814726"}
+{"event": "trace.end", "duration_ms": 235, "timestamp": "2026-06-13T23:00:14.962213", "trace_id": "task_d4a63b65edd940c8:run_1781362814726"}

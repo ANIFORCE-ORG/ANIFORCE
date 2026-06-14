@@ -1,0 +1,8 @@
+id: 0
+event: runtime.started
+data: {"event_id": "event_task_bc5929cc94e34998_0", "task_id": "task_bc5929cc94e34998", "event_type": "runtime.started", "payload": {"task_type": "conversation", "user_input": "你有哪些skill"}, "sequence": 0, "created_at": "2026-06-13 14:52:57.135013"}
+
+id: 1
+event: runtime.error
+data: {"event_id": "event_task_bc5929cc94e34998_1", "task_id": "task_bc5929cc94e34998", "event_type": "runtime.error", "payload": {"code": "SDK_ERROR", "message": "SDK execution failed: SandboxRuntime.__init__() got an unexpected keyword argument 'sandbox_dir'", "category": "runtime", "data": {}}, "sequence": 1, "created_at": "2026-06-13 14:52:57.198673"}
+

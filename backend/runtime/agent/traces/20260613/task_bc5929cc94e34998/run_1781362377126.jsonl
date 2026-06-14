@@ -1,0 +1,3 @@
+{"event": "trace.start", "trace_id": "task_bc5929cc94e34998:run_1781362377126", "task_id": "task_bc5929cc94e34998", "run_id": "run_1781362377126", "user_id": "user_test_001", "task_type": "conversation", "timestamp": "2026-06-13T22:52:57.126611"}
+{"event": "sdk.call", "method": "run_streamed", "agent_name": "ANIFORCE Assistant", "input_text": "你有哪些skill", "session_id": "session_3525a0a90aec4f47", "timestamp": "2026-06-13T22:52:57.183332", "trace_id": "task_bc5929cc94e34998:run_1781362377126"}
+{"event": "trace.end", "duration_ms": 82, "timestamp": "2026-06-13T22:52:57.209043", "trace_id": "task_bc5929cc94e34998:run_1781362377126"}
