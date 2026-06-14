@@ -160,7 +160,7 @@ export function useHomeAgentSession() {
     store.persistToLocalStorage(activeSession.value.id)
   }
 
-  const visibleMessages = computed(() => messages.value.filter(message => message.role === 'user' || message.role === 'assistant'))
+  const visibleMessages = computed(() => messages.value.filter(message => message.role === 'user' || message.role === 'assistant' || message.role === 'activity'))
   const modelNames = computed(() => Object.fromEntries(models.value.map(model => [`${model.provider}:${model.id}`, model.name])))
   const sessionStats = computed<SessionStats | null>(() => {
     const totals = messages.value.reduce(
