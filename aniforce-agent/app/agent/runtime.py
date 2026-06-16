@@ -279,29 +279,27 @@ class AgentRuntime:
             else:
                 logger.warning("JWT Token not found in context, skipping HTTP MCP")
 
-        options: ClaudeAgentOptions = {
-            "cwd": str(session_dir),
-            "model": model or getattr(settings, "CLAUDE_AGENT_MODEL", "claude-opus-4"),
-            "max_turns": max_turns,
-            "permission_mode": "default",
-            "allowed_tools": final_tools,
-            "env": env,
-            "session_store": self.session_store,
-            "session_key": {
-                "project_key": "aniforce",
-                "session_id": session_id,
-            },
-            "session_store_flush": True,  # 确保 Session 数据及时持久化
+        # 构造 ClaudeAgentOptions 对象（不是 dict！）
+        options = ClaudeAgentOptions(
+            cwd=str(session_dir),
+            model=model or getattr(settings, "CLAUDE_AGENT_MODEL", "claude-opus-4"),
+            max_turns=max_turns,
+            permission_mode="default",
+            allowed_tools=final_tools,
+            env=env,
+            session_store=self.session_store,
+            session_id=session_id,  # 正确的参数名
+            session_store_flush="eager",  # 确保 Session 数据及时持久化
             # 流式配置（参考学习手册第 6 章）
-            "include_partial_messages": True,  # ✅ P0 修正：启用真正的流式输出
+            include_partial_messages=True,  # ✅ P0 修正：启用真正的流式输出
             # 优化配置（参考学习手册第 5 章）
-            "thinking": {"type": "disabled"},  # 降低延迟
-            "effort": "low",  # 轻量任务优先速度
-        }
+            thinking={"type": "disabled"},  # 降低延迟
+            effort="low",  # 轻量任务优先速度
+        )
 
         # 添加 MCP 服务器配置
         if final_mcp_servers:
-            options["mcp_servers"] = final_mcp_servers
+            options.mcp_servers = final_mcp_servers
             logger.debug(f"MCP servers configured: {list(final_mcp_servers.keys())}")
 
         return options
