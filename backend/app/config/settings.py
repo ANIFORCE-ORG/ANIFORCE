@@ -13,6 +13,9 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_EXPIRE_MINUTES: int = 60 * 24
 
+    # 内部服务通信 Token（Agent 服务调用后端 MCP）
+    INTERNAL_TOKEN: str = "change-me-in-production"
+
     # 模拟延迟（秒）
     DEMO_DELAY_ANALYSIS: float = 2.0
     DEMO_DELAY_MATERIAL: float = 4.0
