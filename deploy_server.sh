@@ -247,8 +247,7 @@ else
   if check_port_in_use $BACKEND_PORT; then
     ok "后端服务已启动 (端口: $BACKEND_PORT)"
   else
-    #fail "后端服务启动失败 (端口: $BACKEND_PORT)"
-    info "后端服务启动失败 (端口: $BACKEND_PORT)"
+    fail "后端服务启动失败 (端口: $BACKEND_PORT)"
   fi
 fi
 
