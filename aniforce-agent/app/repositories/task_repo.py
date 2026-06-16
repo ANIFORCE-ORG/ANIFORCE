@@ -106,21 +106,37 @@ class TaskRepository:
         await self.db.commit()
         return await self.get_by_id(task_id, user_id)
     
-    async def update_result(
-        self, task_id: str, user_id: str, result: dict
-    ) -> Optional[AgentTask]:
-        """更新任务结果"""
+    async def update_title(
+        self, task_id: str, user_id: str, title: str
+    ) -> bool:
+        """更新任务标题"""
         now = datetime.utcnow().isoformat()
-        await self.db.execute(
+        cursor = await self.db.execute(
             """
             UPDATE tasks
-            SET result = ?, status = ?, updated_at = ?
+            SET title = ?, updated_at = ?
             WHERE task_id = ? AND user_id = ?
             """,
-            (json.dumps(result), TaskStatus.COMPLETED.value, now, task_id, user_id),
+            (title, now, task_id, user_id),
         )
         await self.db.commit()
-        return await self.get_by_id(task_id, user_id)
+        return cursor.rowcount > 0
+
+    async def update_result(
+        self, task_id: str, user_id: str, result: dict
+    ) -> bool:
+        """更新任务结果"""
+        now = datetime.utcnow().isoformat()
+        cursor = await self.db.execute(
+            """
+            UPDATE tasks
+            SET result = ?, updated_at = ?
+            WHERE task_id = ? AND user_id = ?
+            """,
+            (json.dumps(result), now, task_id, user_id),
+        )
+        await self.db.commit()
+        return cursor.rowcount > 0
     
     async def update_error(
         self, task_id: str, user_id: str, error: dict
