@@ -1,0 +1,87 @@
+{
+  "profile": "codefoxai_sonnet",
+  "test_prompt": "Read the file README.md and create a summary in summary.txt",
+  "test_results": [
+    {
+      "label": "B_accept_edits",
+      "prompt": "Read the file README.md and create a summary in summary.txt",
+      "permission_mode": "acceptEdits",
+      "allowed_tools": [],
+      "disallowed_tools": [],
+      "has_callback": false,
+      "success": true,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "final_text": "I've created a summary of the README.md file in summary.txt. The summary covers:\n\n- **Project overview**: AI-powered game marketing platform\n- **Technical stack**: Vue 3 frontend, FastAPI backend, three-layer architecture\n- **Key features**: Project/campaign/material management, monitoring, AI chat\n- **Project structure**: Frontend monorepo and backend service organization\n- **Quick start**: One-command deployment scripts for local and cloud modes\n- **Recent updates**: Toast system, login optimization, material management refactoring\n- **Requirements**: Node.js 20+, pnpm 9+, Python 3.10+\n\nThe summary is now saved in summary.txt.",
+      "error_message": null
+    },
+    {
+      "label": "C_allowed_tools",
+      "prompt": "Read the file README.md and create a summary in summary.txt",
+      "permission_mode": "default",
+      "allowed_tools": [
+        "Read"
+      ],
+      "disallowed_tools": [],
+      "has_callback": false,
+      "success": false,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "final_text": null,
+      "error_message": "None"
+    },
+    {
+      "label": "D_disallowed_tools",
+      "prompt": "Read the file README.md and create a summary in summary.txt",
+      "permission_mode": "acceptEdits",
+      "allowed_tools": [],
+      "disallowed_tools": [
+        "Write"
+      ],
+      "has_callback": false,
+      "success": false,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "final_text": null,
+      "error_message": "None"
+    },
+    {
+      "label": "E_callback_deny",
+      "prompt": "Read the file README.md and create a summary in summary.txt",
+      "permission_mode": "default",
+      "allowed_tools": [],
+      "disallowed_tools": [],
+      "has_callback": true,
+      "success": false,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "final_text": null,
+      "error_message": "None"
+    },
+    {
+      "label": "F_callback_redirect",
+      "prompt": "Read the file README.md and create a summary in summary.txt",
+      "permission_mode": "acceptEdits",
+      "allowed_tools": [],
+      "disallowed_tools": [],
+      "has_callback": true,
+      "success": false,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "final_text": null,
+      "error_message": "None"
+    }
+  ],
+  "conclusions": {
+    "B_accept_edits": "accepted",
+    "C_allowed_tools": "failed",
+    "D_disallowed_tools": "blocked",
+    "E_callback_deny": "allowed",
+    "F_callback_redirect": "failed"
+  }
+}

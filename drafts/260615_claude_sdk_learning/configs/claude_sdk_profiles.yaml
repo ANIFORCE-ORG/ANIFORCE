@@ -1,0 +1,9 @@
+profiles:
+  codefoxai_sonnet:
+    ANTHROPIC_AUTH_TOKEN: "sk-o0giBF5bZbqYQ5LwLpt4vBm5npG6syLw9mrZKj5yJ6yu0ZnS"
+    ANTHROPIC_BASE_URL: "https://www.codefoxai.top"
+    CLAUDE_AGENT_MODEL: "claude-opus-4-6"
+  copilot_sonnet:
+    ANTHROPIC_AUTH_TOKEN: "sk-hvtAUe3lPjYQtwiZqLMfYg"
+    ANTHROPIC_BASE_URL: "https://copilot.huya.info/api/anthropic"
+    CLAUDE_AGENT_MODEL: "claude-sonnet-4-6"

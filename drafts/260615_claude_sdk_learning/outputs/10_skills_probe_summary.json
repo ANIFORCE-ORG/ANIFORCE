@@ -1,0 +1,42 @@
+{
+  "skill_stats": {
+    "skill_tool_called": 0,
+    "mcp_tools_called": 0,
+    "campaigns_created": 0,
+    "campaigns_listed": 0
+  },
+  "hook_stats": {
+    "PreToolUse_triggered": 0,
+    "skill_tool_intercepted": 0
+  },
+  "campaigns_db": {
+    "proj_001": [
+      {
+        "id": "camp_001",
+        "name": "Facebook 广告",
+        "platform": "facebook",
+        "budget": 20000,
+        "status": "active"
+      },
+      {
+        "id": "camp_002",
+        "name": "Google Ads",
+        "platform": "google",
+        "budget": 15000,
+        "status": "active"
+      }
+    ]
+  },
+  "conclusions": {
+    "skills_system_works": false,
+    "skills_trigger_mcp": false,
+    "hooks_intercept_skill": false
+  },
+  "skills_architecture": {
+    "skill_definition": "SKILL.md frontmatter + body",
+    "skill_activation": "ClaudeAgentOptions.skills parameter",
+    "skill_invocation": "Skill tool (must be in allowed_tools)",
+    "skill_mcp_relation": "Skill describes workflows, MCP provides capabilities",
+    "skill_context_injection": "SKILL.md content injected when Skill tool called"
+  }
+}

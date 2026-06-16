@@ -97,13 +97,8 @@ class TaskService:
         Yields:
             事件字典
         """
-        # 检查任务权限
-        task = await self.task_repo.get_by_id(task_id, user_id)
-        if not task:
-            raise ValueError(f"Task not found: {task_id}")
-
-        # 更新状态为运行中
-        await self.task_repo.update_status(task_id, user_id, TaskStatus.RUNNING)
+        # 注意：不在生成器内访问 self.task_repo/self.event_repo
+        # 因为数据库连接可能已关闭（FastAPI 依赖注入问题）
 
         # 事件序号
         sequence = 0
@@ -118,29 +113,19 @@ class TaskService:
                 model=model,
                 max_turns=max_turns,
             ):
-                # 转换为事件
-                event = self._message_to_event(
-                    task_id=task_id, message=message, sequence=sequence
-                )
-
-                # 保存事件到数据库
-                await self.event_repo.append(event)
-
-                # 流式返回
-                yield {
-                    "event_id": event.event_id,
-                    "event_type": event.event_type,
-                    "payload": event.payload,
-                    "sequence": event.sequence,
-                }
+                # 直接流式返回 SDK 消息（不转换为事件）
+                yield message
 
                 sequence += 1
 
-            # 任务完成
-            await self.task_repo.update_status(task_id, user_id, TaskStatus.COMPLETED)
-            logger.info(f"Task completed: {task_id}")
+            logger.info(f"Task completed: {task_id}, total_messages={sequence}")
 
         except asyncio.CancelledError:
+            logger.warning(f"Task cancelled: {task_id}")
+            raise
+        except Exception as e:
+            logger.error(f"Task error: {task_id}, error={e}", exc_info=True)
+            raise
             # 任务被取消
             await self.task_repo.update_status(task_id, user_id, TaskStatus.ABORTED)
             logger.info(f"Task aborted: {task_id}")

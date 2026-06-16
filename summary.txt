@@ -1,0 +1,58 @@
+# ANIMAGUS Project Summary
+
+## Project Overview
+ANIMAGUS is an AI-powered game marketing platform that provides a one-stop solution for global game marketing campaigns.
+
+## Technical Architecture
+- **Three-layer decoupled design**: Frontend DAL layer and backend Repository layer use interface abstraction for seamless Demo/Production mode switching
+- **Frontend**: Vue 3.4 + TypeScript, Vite 5, TailwindCSS 3.4, Pinia state management
+- **Backend**: FastAPI + Uvicorn, Pydantic v2, JWT authentication, dependency injection
+- **Demo Mode**: Environment variable controlled - both frontend and backend can run in demo mode with mock data
+
+## Key Features
+- Project management
+- Campaign management
+- Creative/material management
+- Real-time monitoring and dashboard
+- Market analysis
+- AI chat interaction for marketing insights
+- Multi-platform connections (Meta, Google Ads, etc.)
+
+## Project Structure
+```
+ANIMAGUS/
+├── frontend/          # Vue3 monorepo with pnpm workspace
+│   └── packages/
+│       ├── main-app/  # Main Vue3 application (port 3010)
+│       └── shared/    # Shared utilities and types
+├── backend/           # FastAPI service (port 8010)
+│   └── app/
+│       ├── api/       # API routes
+│       ├── services/  # Business logic
+│       ├── models/    # SQLAlchemy models
+│       └── schemas/   # Pydantic schemas
+├── docs/              # Project documentation
+└── html/              # HTML prototypes
+```
+
+## Quick Start
+- **One-command deployment**: `./run_server.sh` (supports local/cloud modes)
+- **Local mode**: Development with hot reload
+- **Cloud mode**: Production deployment with multi-worker support
+- **Stop services**: `./stop_server.sh`
+
+## Recent Updates (2026-05-16)
+1. **Toast notification system**: Multi-toast display with 4 types (success/error/warning/info)
+2. **Login error handling optimization**: Precise error messages based on HTTP status codes
+3. **Material management refactoring**: Organized into `pages/creatives/` directory
+4. **File upload improvements**: Drag-and-drop support, file validation, progress tracking framework
+
+## Environment Requirements
+- Node.js >= 20.0.0
+- pnpm >= 9.0.0
+- Python >= 3.10
+
+## Access URLs
+- Frontend: http://localhost:3010
+- Backend API: http://localhost:8010
+- API Docs: http://localhost:8010/docs (when DEBUG=true)
