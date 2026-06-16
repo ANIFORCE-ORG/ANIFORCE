@@ -1,5 +1,6 @@
 # FastAPI 核心
 fastapi==0.115.0
+starlette==0.38.6
 uvicorn[standard]==0.32.0
 pydantic==2.9.2
 pydantic-settings==2.6.0

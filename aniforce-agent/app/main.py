@@ -5,6 +5,8 @@ from contextlib import asynccontextmanager
 
 from app.config import get_settings, init_task_db
 from app.middleware import AuthMiddleware
+from app.api.copilotkit import router as copilotkit_router
+from app.api.tasks import router as tasks_router
 
 
 @asynccontextmanager
@@ -38,6 +40,10 @@ app.add_middleware(
 
 # 注册认证中间件
 app.add_middleware(AuthMiddleware)
+
+# 注册路由
+app.include_router(copilotkit_router, prefix="/api/agent")
+app.include_router(tasks_router, prefix="/api/agent")
 
 
 @app.get("/")
