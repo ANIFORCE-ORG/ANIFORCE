@@ -11,18 +11,31 @@ HTTP MCP 桥接
 - 通过 HTTP MCP 协议调用后端 API
 - JWT Token 通过 Header 透传
 - Internal Token 用于服务间认证
+
+参考：学习手册第 9 章 MCP 集成
 """
 
-from typing import Optional
+from typing import Optional, Dict, Any
 from app.config.settings import settings
 
 
 def create_http_mcp_config(
     backend_url: Optional[str] = None,
     auth_token: Optional[str] = None,
-) -> dict:
+) -> Dict[str, Any]:
     """
     创建 HTTP MCP Server 配置（调用后端服务）
+
+    Claude SDK HTTP MCP 格式：
+    {
+        "backend": {
+            "command": "http",
+            "args": ["<backend_url>/api/v1/mcp"],
+            "env": {
+                "HTTP_HEADERS": "Authorization: Bearer <token>|X-Internal-Token: <token>"
+            }
+        }
+    }
 
     Args:
         backend_url: 后端服务 URL（默认使用配置）
@@ -33,24 +46,32 @@ def create_http_mcp_config(
     """
     url = backend_url or settings.BACKEND_URL
 
-    headers = {
-        "X-Internal-Token": settings.INTERNAL_TOKEN,
-    }
+    # 如果未配置后端服务，返回空配置
+    if not url:
+        return {}
+
+    # 构造请求头
+    headers = [
+        f"X-Internal-Token: {settings.INTERNAL_TOKEN}",
+        "Content-Type: application/json",
+    ]
 
     # 如果提供了 JWT Token，添加到请求头
     if auth_token:
-        headers["Authorization"] = f"Bearer {auth_token}"
+        headers.insert(0, f"Authorization: Bearer {auth_token}")
 
     return {
-        "command": "http",
-        "args": [url],
-        "env": {
-            "HTTP_MCP_HEADERS": "|".join([f"{k}:{v}" for k, v in headers.items()]),
-        },
+        "backend": {
+            "command": "http",
+            "args": [f"{url}/api/v1/mcp"],
+            "env": {
+                "HTTP_HEADERS": "|".join(headers),
+            },
+        }
     }
 
 
-def create_backend_mcp_servers(auth_token: Optional[str] = None) -> dict:
+def create_backend_mcp_servers(auth_token: Optional[str] = None) -> Dict[str, Any]:
     """
     创建后端 MCP 服务器集合
 
@@ -60,9 +81,8 @@ def create_backend_mcp_servers(auth_token: Optional[str] = None) -> dict:
     Returns:
         MCP Servers 配置字典
     """
-    return {
-        "backend": create_http_mcp_config(auth_token=auth_token),
-    }
+    config = create_http_mcp_config(auth_token=auth_token)
+    return config if config else {}
 
 
 # 后端工具名称枚举（与后端 API 对应）

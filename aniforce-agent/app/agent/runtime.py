@@ -23,6 +23,8 @@ from app.config.settings import settings
 from app.agent.session_store import SQLiteSessionStore
 from app.agent.skill_manager import SkillManager
 from app.agent.sandbox import SandboxManager
+from app.mcp.remote import create_backend_mcp_servers
+from app.core.context import get_jwt_token
 
 logger = logging.getLogger(__name__)
 
@@ -263,6 +265,20 @@ class AgentRuntime:
         if hasattr(settings, "ANTHROPIC_BASE_URL") and settings.ANTHROPIC_BASE_URL:
             env["ANTHROPIC_BASE_URL"] = settings.ANTHROPIC_BASE_URL
 
+        # ✅ P0 修正：自动配置 HTTP MCP（连接后端服务）
+        final_mcp_servers = mcp_servers
+        if not final_mcp_servers:
+            # 从 Context 获取 JWT Token
+            jwt_token = get_jwt_token()
+            if jwt_token and settings.BACKEND_URL:
+                # 自动配置后端 MCP
+                final_mcp_servers = create_backend_mcp_servers(auth_token=jwt_token)
+                logger.info(f"Auto-configured backend MCP: backend_url={settings.BACKEND_URL}")
+            elif not settings.BACKEND_URL:
+                logger.warning("BACKEND_URL not configured, skipping HTTP MCP")
+            else:
+                logger.warning("JWT Token not found in context, skipping HTTP MCP")
+
         options: ClaudeAgentOptions = {
             "cwd": str(session_dir),
             "model": model or getattr(settings, "CLAUDE_AGENT_MODEL", "claude-opus-4"),
@@ -275,14 +291,18 @@ class AgentRuntime:
                 "project_key": "aniforce",
                 "session_id": session_id,
             },
+            "session_store_flush": True,  # 确保 Session 数据及时持久化
+            # 流式配置（参考学习手册第 6 章）
+            "include_partial_messages": True,  # ✅ P0 修正：启用真正的流式输出
             # 优化配置（参考学习手册第 5 章）
             "thinking": {"type": "disabled"},  # 降低延迟
             "effort": "low",  # 轻量任务优先速度
         }
 
         # 添加 MCP 服务器配置
-        if mcp_servers:
-            options["mcp_servers"] = mcp_servers
+        if final_mcp_servers:
+            options["mcp_servers"] = final_mcp_servers
+            logger.debug(f"MCP servers configured: {list(final_mcp_servers.keys())}")
 
         return options
 
