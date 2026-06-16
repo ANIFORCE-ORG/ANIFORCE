@@ -36,9 +36,6 @@ class TaskService:
         self.event_repo = event_repo
         self.agent_runtime = agent_runtime
 
-        # 运行中的任务：task_id -> AbortController
-        self._running_tasks: dict[str, asyncio.Event] = {}
-
     async def create_task(
         self,
         *,
@@ -82,7 +79,7 @@ class TaskService:
         task_id: str,
         user_id: str,
         prompt: str,
-        session_id: Optional[str] = None,
+        session_id: str,  # 必须提供 session_id（ClaudeSDKClient 架构）
         model: Optional[str] = None,
         max_turns: int = 20,
     ) -> AsyncGenerator[dict, None]:
@@ -93,7 +90,7 @@ class TaskService:
             task_id: 任务 ID
             user_id: 用户 ID
             prompt: 用户输入
-            session_id: 会话 ID
+            session_id: 会话 ID（必须，用于 ClaudeSDKClient 实例管理）
             model: Claude 模型
             max_turns: 最大轮数
 
@@ -108,23 +105,18 @@ class TaskService:
         # 更新状态为运行中
         await self.task_repo.update_status(task_id, user_id, TaskStatus.RUNNING)
 
-        # 创建取消信号
-        abort_event = asyncio.Event()
-        self._running_tasks[task_id] = abort_event
-
         # 事件序号
         sequence = 0
 
         try:
-            # 执行 Agent
-            async for message in self.agent_runtime.execute(
-                prompt=prompt,
+            # 执行 Agent（通过 ClaudeSDKClient）
+            async for message in self.agent_runtime.query(
                 session_id=session_id,
                 user_id=user_id,
                 task_id=task_id,
+                prompt=prompt,
                 model=model,
                 max_turns=max_turns,
-                abort_signal=abort_event,
             ):
                 # 转换为事件
                 event = self._message_to_event(
@@ -161,10 +153,6 @@ class TaskService:
             logger.error(f"Task error: {task_id}, {e}", exc_info=True)
             raise
 
-        finally:
-            # 清理
-            self._running_tasks.pop(task_id, None)
-
     async def cancel_task(self, task_id: str, user_id: str):
         """
         取消任务
@@ -178,16 +166,22 @@ class TaskService:
         if not task:
             raise ValueError(f"Task not found: {task_id}")
 
-        # 触发取消信号
-        abort_event = self._running_tasks.get(task_id)
-        if abort_event:
-            abort_event.set()
-            logger.info(f"Cancel signal sent: {task_id}")
+        # 使用 ClaudeSDKClient 的 interrupt 能力
+        if task.session_id:
+            client = self.agent_runtime._clients.get(task.session_id)
+            if client:
+                try:
+                    await client.interrupt()
+                    logger.info(f"Task interrupted: {task_id}")
+                except Exception as e:
+                    logger.error(f"Error interrupting task: {e}", exc_info=True)
+            else:
+                logger.warning(f"No active client for session: {task.session_id}")
         else:
-            logger.warning(f"Task not running: {task_id}")
+            logger.warning(f"Task has no session_id: {task_id}")
 
-        # 清理 Agent Runtime
-        await self.agent_runtime.cancel_task(task_id, task.session_id)
+        # 更新状态
+        await self.task_repo.update_status(task_id, user_id, TaskStatus.ABORTED)
 
     async def get_task(self, task_id: str, user_id: str) -> Optional[AgentTask]:
         """

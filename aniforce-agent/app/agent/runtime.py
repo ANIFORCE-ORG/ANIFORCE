@@ -1,21 +1,23 @@
 """
-AgentRuntime - Claude SDK 封装层
+AgentRuntime - Claude SDK 封装层（ClaudeSDKClient 有状态架构）
 
-核心职责：
-- 封装 claude_agent_sdk.query() 调用
-- 管理 Session、Skill、Sandbox 生命周期
-- 集成本地 MCP 工具和 HTTP MCP 桥接
-- 提供统一的 Agent 执行接口
-- 处理 AbortController 和任务取消
+核心设计：
+- 每个 session_id 对应一个长期持有的 ClaudeSDKClient 实例
+- 用户每轮消息 → await client.query(prompt)
+- SSE 流式推送 → async for msg in client.receive_response()
+- 生命周期管理：session 超时/用户离线时 disconnect
+- 实例池管理：存储/复用/清理 client 实例
+
+参考学习手册第 5 章：路线 A（Client 有状态）
 """
 
 import os
-import uuid
+import asyncio
 from pathlib import Path
-from typing import Optional, AsyncGenerator, Any
+from typing import Optional, AsyncGenerator, Any, Dict
 import logging
 
-from claude_agent_sdk import query, ClaudeAgentOptions
+from claude_agent_sdk import ClaudeSDKClient, ClaudeAgentOptions
 
 from app.config.settings import settings
 from app.agent.session_store import SQLiteSessionStore
@@ -26,7 +28,7 @@ logger = logging.getLogger(__name__)
 
 
 class AgentRuntime:
-    """Agent 运行时管理器"""
+    """Agent 运行时管理器（ClaudeSDKClient 实例池）"""
 
     def __init__(self):
         # Session Store
@@ -41,73 +43,173 @@ class AgentRuntime:
         # Sandbox Manager
         self.sandbox_manager = SandboxManager(runtime_dir=settings.RUNTIME_DIR)
 
-    async def execute(
+        # Client 实例池：session_id -> ClaudeSDKClient
+        self._clients: Dict[str, ClaudeSDKClient] = {}
+
+        # Client 锁：防止并发创建
+        self._locks: Dict[str, asyncio.Lock] = {}
+
+    async def get_or_create_client(
         self,
         *,
-        prompt: str,
-        session_id: Optional[str] = None,
+        session_id: str,
         user_id: str,
         task_id: str,
         model: Optional[str] = None,
         max_turns: int = 20,
         mcp_servers: Optional[dict] = None,
         allowed_tools: Optional[list[str]] = None,
-        abort_signal: Optional[Any] = None,
-    ) -> AsyncGenerator[Any, None]:
+    ) -> ClaudeSDKClient:
         """
-        执行 Agent 任务
+        获取或创建 ClaudeSDKClient 实例
 
         Args:
-            prompt: 用户输入
-            session_id: 会话 ID（为空则创建新会话）
-            user_id: 用户 ID（用于权限隔离）
+            session_id: 会话 ID
+            user_id: 用户 ID
             task_id: 任务 ID
-            model: Claude 模型名称
-            max_turns: 最大对话轮数
+            model: Claude 模型
+            max_turns: 最大轮数
             mcp_servers: MCP 服务器配置
-            allowed_tools: 允许的工具列表
-            abort_signal: 取消信号（AbortController）
+            allowed_tools: 允许的工具
+
+        Returns:
+            ClaudeSDKClient 实例
+        """
+        # 已存在则直接返回
+        if session_id in self._clients:
+            logger.debug(f"Reusing existing client: session_id={session_id}")
+            return self._clients[session_id]
+
+        # 获取锁（防止并发创建）
+        if session_id not in self._locks:
+            self._locks[session_id] = asyncio.Lock()
+
+        async with self._locks[session_id]:
+            # 双重检查
+            if session_id in self._clients:
+                return self._clients[session_id]
+
+            # 创建新 client
+            logger.info(f"Creating new client: session_id={session_id}, user_id={user_id}")
+
+            # 创建会话目录
+            session_dir = self.sandbox_manager.create_session_dir(session_id)
+
+            # 初始化 Skills
+            self.skill_manager.init_session_skills(session_id)
+
+            # 构造 Options
+            options = self._build_options(
+                session_id=session_id,
+                user_id=user_id,
+                task_id=task_id,
+                session_dir=session_dir,
+                model=model,
+                max_turns=max_turns,
+                mcp_servers=mcp_servers,
+                allowed_tools=allowed_tools,
+            )
+
+            # 创建 client（不用 async with，手动管理生命周期）
+            client = ClaudeSDKClient(options)
+            await client.connect()
+
+            # 存入池
+            self._clients[session_id] = client
+
+            logger.info(f"Client created and connected: session_id={session_id}")
+            return client
+
+    async def query(
+        self,
+        *,
+        session_id: str,
+        user_id: str,
+        task_id: str,
+        prompt: str,
+        model: Optional[str] = None,
+        max_turns: int = 20,
+        mcp_servers: Optional[dict] = None,
+        allowed_tools: Optional[list[str]] = None,
+    ) -> AsyncGenerator[Any, None]:
+        """
+        执行查询（流式返回消息）
+
+        Args:
+            session_id: 会话 ID
+            user_id: 用户 ID
+            task_id: 任务 ID
+            prompt: 用户输入
+            model: Claude 模型
+            max_turns: 最大轮数
+            mcp_servers: MCP 服务器配置
+            allowed_tools: 允许的工具
 
         Yields:
             Claude SDK 消息流
         """
-        # 生成 session_id
-        if not session_id:
-            session_id = f"session_{uuid.uuid4().hex[:16]}"
-
-        # 创建会话目录
-        session_dir = self.sandbox_manager.create_session_dir(session_id)
-
-        # 初始化 Skills
-        self.skill_manager.init_session_skills(session_id)
-
-        # 构造 Claude Agent Options
-        options = self._build_options(
+        # 获取或创建 client
+        client = await self.get_or_create_client(
             session_id=session_id,
             user_id=user_id,
             task_id=task_id,
-            session_dir=session_dir,
             model=model,
             max_turns=max_turns,
             mcp_servers=mcp_servers,
             allowed_tools=allowed_tools,
         )
 
-        logger.info(
-            f"Starting agent execution: task_id={task_id}, session_id={session_id}, user_id={user_id}"
-        )
+        logger.info(f"Sending query: session_id={session_id}, prompt_len={len(prompt)}")
 
         try:
-            # 调用 Claude SDK
-            async for message in query(prompt, options, abort_signal=abort_signal):
+            # 发送用户消息
+            await client.query(prompt)
+
+            # 接收响应（流式）
+            async for message in client.receive_response():
                 yield message
 
+            logger.info(f"Query completed: session_id={session_id}")
+
         except Exception as e:
-            logger.error(f"Agent execution error: {e}", exc_info=True)
+            logger.error(f"Query error: session_id={session_id}, error={e}", exc_info=True)
             raise
 
-        finally:
-            logger.info(f"Agent execution finished: task_id={task_id}")
+    async def disconnect_client(self, session_id: str):
+        """
+        断开并清理 client
+
+        Args:
+            session_id: 会话 ID
+        """
+        client = self._clients.pop(session_id, None)
+        if client:
+            try:
+                await client.disconnect()
+                logger.info(f"Client disconnected: session_id={session_id}")
+            except Exception as e:
+                logger.error(f"Error disconnecting client: {e}", exc_info=True)
+
+        # 清理锁
+        self._locks.pop(session_id, None)
+
+    async def cleanup_session(self, session_id: str):
+        """
+        完整清理会话（Client + Sandbox + Skills）
+
+        Args:
+            session_id: 会话 ID
+        """
+        # 断开 client
+        await self.disconnect_client(session_id)
+
+        # 清理 Sandbox
+        await self.sandbox_manager.cleanup_session(session_id)
+
+        # 清理 Skills
+        self.skill_manager.cleanup_session_skills(session_id)
+
+        logger.info(f"Session fully cleaned up: session_id={session_id}")
 
     def _build_options(
         self,
@@ -153,10 +255,13 @@ class AgentRuntime:
         env = {
             **os.environ,
             "ANTHROPIC_API_KEY": settings.ANTHROPIC_API_KEY,
-            "ANTHROPIC_BASE_URL": getattr(settings, "ANTHROPIC_BASE_URL", ""),
             "ANIFORCE_USER_ID": user_id,  # 传递用户信息给工具
             "ANIFORCE_TASK_ID": task_id,
         }
+
+        # 添加可选配置
+        if hasattr(settings, "ANTHROPIC_BASE_URL") and settings.ANTHROPIC_BASE_URL:
+            env["ANTHROPIC_BASE_URL"] = settings.ANTHROPIC_BASE_URL
 
         options: ClaudeAgentOptions = {
             "cwd": str(session_dir),
@@ -170,6 +275,9 @@ class AgentRuntime:
                 "project_key": "aniforce",
                 "session_id": session_id,
             },
+            # 优化配置（参考学习手册第 5 章）
+            "thinking": {"type": "disabled"},  # 降低延迟
+            "effort": "low",  # 轻量任务优先速度
         }
 
         # 添加 MCP 服务器配置
@@ -178,38 +286,9 @@ class AgentRuntime:
 
         return options
 
-    async def cancel_task(self, task_id: str, session_id: Optional[str] = None):
-        """
-        取消任务
-
-        Args:
-            task_id: 任务 ID
-            session_id: 会话 ID
-        """
-        # 终止进程（如果有）
-        if session_id:
-            await self.sandbox_manager.kill_process(session_id)
-
-        logger.info(f"Task cancelled: task_id={task_id}")
-
-    async def cleanup_session(self, session_id: str):
-        """
-        清理会话资源
-
-        Args:
-            session_id: 会话 ID
-        """
-        # 清理 Sandbox（进程 + 目录）
-        await self.sandbox_manager.cleanup_session(session_id)
-
-        # 清理 Skills
-        self.skill_manager.cleanup_session_skills(session_id)
-
-        logger.info(f"Session cleaned up: session_id={session_id}")
-
     def list_sessions(self) -> list[str]:
         """列出所有活跃会话"""
-        return self.sandbox_manager.list_sessions()
+        return list(self._clients.keys())
 
     def get_session_info(self, session_id: str) -> dict:
         """
@@ -221,10 +300,21 @@ class AgentRuntime:
         Returns:
             会话信息字典
         """
+        has_client = session_id in self._clients
         return {
             "session_id": session_id,
+            "has_client": has_client,
             "session_dir": str(self.sandbox_manager.get_session_dir(session_id)),
             "skills_dir": str(self.skill_manager.get_session_skills_dir(session_id)),
-            "is_running": self.sandbox_manager.is_process_running(session_id),
-            "process_id": self.sandbox_manager.get_process_id(session_id),
         }
+
+    async def cleanup_all(self):
+        """清理所有会话（用于服务关闭）"""
+        session_ids = list(self._clients.keys())
+        logger.info(f"Cleaning up {len(session_ids)} active sessions")
+
+        for session_id in session_ids:
+            try:
+                await self.cleanup_session(session_id)
+            except Exception as e:
+                logger.error(f"Error cleaning session {session_id}: {e}")

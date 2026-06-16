@@ -176,14 +176,17 @@ async def test_agent_runtime_init(temp_dirs):
         assert runtime.skill_manager is not None
         assert runtime.sandbox_manager is not None
 
+        # 检查 client 池为空
+        assert len(runtime._clients) == 0
+
         # 测试会话信息获取
         session_id = "session_info_test"
         runtime.sandbox_manager.create_session_dir(session_id)
 
         info = runtime.get_session_info(session_id)
         assert info["session_id"] == session_id
-        assert "session_dir" in info
-        assert "is_running" in info
+        assert "has_client" in info
+        assert info["has_client"] is False  # 未创建 client
 
         # 清理
         await runtime.cleanup_session(session_id)
