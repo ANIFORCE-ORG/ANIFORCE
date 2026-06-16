@@ -30,13 +30,15 @@ export interface PlatformConnectionResponse {
 
 export interface SubAccountRequest {
   name: string
-  customer_id: string
+  sub_account_id: string
+  bm_customer_id?: string
 }
 
 export interface SubAccountResponse {
   id: string
   name: string
-  customer_id: string
+  sub_account_id: string
+  bm_customer_id?: string
   status: string
   updated_at: string
 }
@@ -65,6 +67,9 @@ export const platformApi = {
 
   syncMetaAdAccounts: (connectionId: string) =>
     http.post(`/platform-auth/meta/${connectionId}/sync-adaccounts`),
+
+  syncGoogleAdAccounts: (connectionId: string) =>
+    http.post(`/platform-auth/google/${connectionId}/sync-adaccounts`),
 
   saveGoogleConfig: (data: GoogleConfigRequest) =>
     http.post<PlatformConnectionResponse>('/platform-auth/google/config', data),

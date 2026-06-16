@@ -16,6 +16,8 @@ from loguru import logger
 from google.oauth2.credentials import Credentials
 from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
+from google.ads.googleads.client import GoogleAdsClient
+from google.ads.googleads.errors import GoogleAdsException
 
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
@@ -109,14 +111,16 @@ class PlatformConnectionResponse(BaseModel):
 class SubAccountRequest(BaseModel):
     """子账号请求"""
     name: str
-    customer_id: str
+    sub_account_id: str
+    bm_customer_id: Optional[str] = None
 
 
 class SubAccountResponse(BaseModel):
     """子账号响应"""
     id: str
     name: str
-    customer_id: str
+    sub_account_id: str
+    bm_customer_id: Optional[str] = None
     status: str
     updated_at: datetime
     
@@ -1166,7 +1170,8 @@ async def get_sub_accounts(
             SubAccountResponse(
                 id=binding.id,
                 name=binding.sub_account_name,
-                customer_id=binding.customer_id,
+                sub_account_id=binding.sub_account_id,
+                bm_customer_id=binding.bm_customer_id,
                 status=binding.status,
                 updated_at=binding.updated_at
             )
@@ -1210,7 +1215,8 @@ async def add_sub_account(
         new_binding = SubAccountBinding(
             parent_connection_id=connection_id,
             sub_account_name=request.name,
-            customer_id=request.customer_id,
+            sub_account_id=request.sub_account_id,
+            bm_customer_id=request.bm_customer_id,
             status="active"
         )
         
@@ -1223,7 +1229,8 @@ async def add_sub_account(
         return SubAccountResponse(
             id=new_binding.id,
             name=new_binding.sub_account_name,
-            customer_id=new_binding.customer_id,
+            sub_account_id=new_binding.sub_account_id,
+            bm_customer_id=new_binding.bm_customer_id,
             status=new_binding.status,
             updated_at=new_binding.updated_at
         )
@@ -1370,7 +1377,7 @@ async def sync_meta_ad_accounts(
                     binding = SubAccountBinding(
                         parent_connection_id=connection_id,
                         sub_account_name=account_name,
-                        customer_id=account_id,
+                        sub_account_id=account_id,
                         status=mapped_status
                     )
                     db.add(binding)
@@ -1399,4 +1406,176 @@ async def sync_meta_ad_accounts(
     except Exception as e:
         await db.rollback()
         logger.error(f"Failed to sync ad accounts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/google/{connection_id}/sync-adaccounts")
+async def sync_google_ads_accounts(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    同步 Google Ads 广告账户
+    使用 Google Ads SDK 获取 MCC 账户及其子账号并写入 sub_account_bindings
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 验证连接是否存在且属于当前用户
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        if connection.platform != "Google":
+            raise HTTPException(status_code=400, detail="只支持 Google 平台")
+        
+        if connection.status != "active":
+            raise HTTPException(status_code=400, detail="连接未授权，请先完成授权")
+        
+        # 获取 refresh_token 和 developer_token
+        refresh_token = connection.refresh_token
+        if not refresh_token:
+            raise HTTPException(status_code=400, detail="缺少 refresh_token")
+        
+        developer_token = settings.GOOGLE_DEVELOPER_TOKEN
+        if not developer_token:
+            raise HTTPException(status_code=500, detail="服务器未配置 GOOGLE_DEVELOPER_TOKEN")
+        
+        # 使用 Google Ads SDK 获取可访问的客户账户
+        def _get_google_ads_accounts():
+            """同步函数：获取 Google Ads 账户"""
+            credentials_dict = {
+                "developer_token": developer_token,
+                "use_proto_plus": True,
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "refresh_token": refresh_token,
+            }
+            
+            # 初始化客户端
+            client = GoogleAdsClient.load_from_dict(credentials_dict, version="v24")
+            
+            # 获取可访问的客户账户
+            customer_service = client.get_service("CustomerService")
+            accessible_customers = customer_service.list_accessible_customers()
+            
+            customer_ids = [
+                resource_name.split('/')[-1] 
+                for resource_name in accessible_customers.resource_names
+            ]
+            
+            logger.info(f"Found {len(customer_ids)} accessible customer accounts")
+            
+            # 对每个 MCC 账户，获取其子账号
+            all_sub_accounts = []
+            
+            for customer_id in customer_ids:
+                try:
+                    # 为每个 customer_id 创建新的客户端配置
+                    credentials_dict_with_login = {
+                        "developer_token": developer_token,
+                        "use_proto_plus": True,
+                        "client_id": settings.GOOGLE_CLIENT_ID,
+                        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                        "refresh_token": refresh_token,
+                        "login_customer_id": customer_id,
+                    }
+                    
+                    client_with_login = GoogleAdsClient.load_from_dict(credentials_dict_with_login, version="v24")
+                    ga_service = client_with_login.get_service("GoogleAdsService")
+                    
+                    # 查询子账号
+                    query = """
+                        SELECT
+                            customer_client.client_customer,
+                            customer_client.level,
+                            customer_client.manager,
+                            customer_client.descriptive_name,
+                            customer_client.currency_code,
+                            customer_client.time_zone,
+                            customer_client.id
+                        FROM customer_client
+                        WHERE customer_client.level <= 1
+                    """
+                    
+                    response = ga_service.search(customer_id=customer_id, query=query)
+                    
+                    for row in response:
+                        customer_client = row.customer_client
+                        all_sub_accounts.append({
+                            "sub_account_id": str(customer_client.id),
+                            "sub_account_name": customer_client.descriptive_name,
+                            "bm_customer_id": customer_id,  # MCC ID
+                            "level": customer_client.level,
+                            "manager": customer_client.manager,
+                            "currency_code": customer_client.currency_code,
+                            "time_zone": customer_client.time_zone,
+                        })
+                    
+                    logger.info(f"Found sub-accounts under MCC {customer_id}")
+                    
+                except GoogleAdsException as ex:
+                    logger.warning(f"Failed to query sub-accounts for customer {customer_id}: {ex.failure}")
+                    continue
+                except Exception as e:
+                    logger.warning(f"Error querying customer {customer_id}: {e}")
+                    continue
+            
+            return all_sub_accounts
+        
+        # 在线程中执行同步调用
+        logger.info(f"Starting Google Ads sync for connection: {connection_id}")
+        sub_accounts = await asyncio.to_thread(_get_google_ads_accounts)
+        
+        logger.info(f"Retrieved {len(sub_accounts)} total sub-accounts from Google Ads API")
+        
+        # 删除现有的子账号绑定（重新同步）
+        stmt = select(SubAccountBinding).where(
+            SubAccountBinding.parent_connection_id == connection_id
+        )
+        result = await db.execute(stmt)
+        existing_bindings = result.scalars().all()
+        for binding in existing_bindings:
+            await db.delete(binding)
+        
+        # 创建新的子账号绑定
+        synced_count = 0
+        for account in sub_accounts:
+            binding = SubAccountBinding(
+                parent_connection_id=connection_id,
+                sub_account_name=account["sub_account_name"],
+                sub_account_id=account["sub_account_id"],
+                bm_customer_id=account["bm_customer_id"],
+                status="active"
+            )
+            db.add(binding)
+            synced_count += 1
+            
+            logger.info(f"Synced Google Ads account: id={account['sub_account_id']}, name={account['sub_account_name']}, mcc={account['bm_customer_id']}")
+        
+        await db.commit()
+        
+        logger.info(f"Successfully synced {synced_count} Google Ads accounts for connection: {connection_id}")
+        
+        return {
+            "message": f"成功同步 {synced_count} 个广告账户",
+            "synced_count": synced_count
+        }
+        
+    except HTTPException:
+        raise
+    except GoogleAdsException as ex:
+        await db.rollback()
+        logger.error(f"Google Ads API error: {ex.failure}")
+        raise HTTPException(status_code=500, detail=f"Google Ads API 错误: {ex.failure.errors[0].message if ex.failure.errors else str(ex)}")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to sync Google Ads accounts: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

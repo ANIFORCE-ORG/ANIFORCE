@@ -8,7 +8,7 @@ from app.config.database import Base
 
 
 class SubAccountBinding(Base):
-    """子账号绑定模型 - 管理 Google 母账号和子账号的关系"""
+    """子账号绑定模型 - 管理 Google/Meta 母账号和子账号的关系"""
     __tablename__ = "sub_account_bindings"
     
     # 主键
@@ -24,7 +24,8 @@ class SubAccountBinding(Base):
     
     # 子账号信息
     sub_account_name: Mapped[str] = mapped_column(String(255), nullable=False)
-    customer_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    sub_account_id: Mapped[str] = mapped_column(String(100), nullable=False)  # Google Customer ID 或 Meta Ad Account ID
+    bm_customer_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)  # Google MCC ID 或 Meta BM ID
     
     # 状态
     status: Mapped[str] = mapped_column(
@@ -41,4 +42,4 @@ class SubAccountBinding(Base):
     parent_connection: Mapped["PlatformConnection"] = relationship(back_populates="sub_account_bindings")
     
     def __repr__(self):
-        return f"<SubAccountBinding(id={self.id}, parent_connection_id={self.parent_connection_id}, customer_id={self.customer_id})>"
+        return f"<SubAccountBinding(id={self.id}, parent_connection_id={self.parent_connection_id}, sub_account_id={self.sub_account_id})>"

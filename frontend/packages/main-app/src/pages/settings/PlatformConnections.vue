@@ -106,15 +106,18 @@ const handleSyncAdAccounts = async (connection: PlatformConnectionResponse) => {
       await platformApi.syncMetaAdAccounts(connection.id)
       success('Meta 广告账户同步成功')
     } else if (connection.platform === 'Google') {
-      // Google 平台同步功能待实现
-      showError('Google 平台同步功能开发中')
-      return
+      await platformApi.syncGoogleAdAccounts(connection.id)
+      success('Google 广告账户同步成功')
     } else {
       showError('该平台暂不支持同步功能')
       return
     }
     // 刷新连接列表
     await loadConnections()
+    // 如果当前账户已展开，重新加载子账号
+    if (isExpanded(connection.id)) {
+      await loadSubAccounts(connection.id)
+    }
   } catch (err: any) {
     console.error('同步广告账户失败:', err)
     showError('同步广告账户失败，请重试')
@@ -294,7 +297,7 @@ const handleAddSubAccount = async () => {
   try {
     const newSubAccount = await platformApi.addSubAccount(currentParentConnectionId.value, {
       name: newSubAccountName.value,
-      customer_id: newSubAccountCustomerId.value
+      sub_account_id: newSubAccountCustomerId.value
     })
 
     // 更新本地数据
@@ -621,7 +624,7 @@ onMounted(() => {
                                   </div>
                                   <div class="flex items-center gap-[12px] mt-[4px]">
                                     <span class="text-[10px] text-slate-600 dark:text-slate-400">
-                                      <span class="font-medium">Customer ID:</span> {{ subAccount.customer_id }}
+                                      <span class="font-medium">Sub Account ID:</span> {{ subAccount.sub_account_id }}
                                     </span>
                                     <span class="text-[10px] text-slate-500 dark:text-slate-400">
                                       更新时间: {{ formatDate(subAccount.updated_at) }}
