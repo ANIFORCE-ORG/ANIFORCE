@@ -104,6 +104,8 @@ class AgentRuntime:
             logger.info(f"Session {session_id} has_history={has_history}")
 
             # 构造 Options
+            # 从 context 获取 JWT（用于闭包注入到 MCP 工具，并发安全）
+            jwt_token = get_jwt_token()
             options = self._build_options(
                 session_id=session_id,
                 user_id=user_id,
@@ -113,6 +115,7 @@ class AgentRuntime:
                 max_turns=max_turns,
                 mcp_servers=mcp_servers,
                 allowed_tools=allowed_tools,
+                jwt_token=jwt_token,
                 resume=session_id if has_history else None,
             )
 
@@ -163,10 +166,6 @@ class AgentRuntime:
         )
 
         logger.info(f"Sending query: session_id={session_id}, prompt_len={len(prompt)}")
-
-        # 设置 HITL 上下文（SDK MCP 工具在主进程执行，读不了 subprocess env，用 contextvars）
-        from app.mcp.hitl_server import set_hitl_context
-        set_hitl_context(task_id, user_id)
 
         try:
             # 发送用户消息
@@ -252,6 +251,7 @@ class AgentRuntime:
         max_turns: int,
         mcp_servers: Optional[dict],
         allowed_tools: Optional[list[str]],
+        jwt_token: Optional[str],
         resume: Optional[str] = None,
     ) -> ClaudeAgentOptions:
         """
@@ -266,6 +266,8 @@ class AgentRuntime:
             max_turns: 最大轮数
             mcp_servers: MCP 服务器配置
             allowed_tools: 允许的工具
+            jwt_token: 本次请求用户的 JWT（闭包注入到 MCP 工具）
+            resume: 恢复的 session ID
 
         Returns:
             ClaudeAgentOptions
@@ -351,23 +353,21 @@ class AgentRuntime:
         if getattr(settings, "ANTHROPIC_BASE_URL", None):
             env["ANTHROPIC_BASE_URL"] = settings.ANTHROPIC_BASE_URL
 
-        # ✅ P0 修正：自动配置 Backend SDK MCP Server
+        # ✅ 自动配置 Backend SDK MCP Server + HITL MCP Server
+        # 并发安全：每次 query 创建独立实例，jwt/user/task 通过闭包注入
         final_mcp_servers = mcp_servers
         if not final_mcp_servers:
-            # 从 Context 获取 JWT Token
-            jwt_token = get_jwt_token()
             logger.info(f"Building options: jwt_token={'<present>' if jwt_token else '<missing>'}, backend_url={settings.BACKEND_URL}")
             if jwt_token and settings.BACKEND_URL:
-                # 自动配置后端 SDK MCP Server + HITL MCP Server
                 from app.mcp.backend_sdk_server import get_backend_mcp_config
                 from app.mcp.hitl_server import get_hitl_mcp_config
-                final_mcp_servers = get_backend_mcp_config()
-                final_mcp_servers.update(get_hitl_mcp_config())
+                final_mcp_servers = get_backend_mcp_config(jwt_token, user_id, task_id)
+                final_mcp_servers.update(get_hitl_mcp_config(task_id, user_id))
                 logger.info(f"Auto-configured MCP Servers: backend_url={settings.BACKEND_URL}, servers={list(final_mcp_servers.keys())}")
             elif not settings.BACKEND_URL:
                 logger.warning("BACKEND_URL not configured, skipping Backend MCP")
             else:
-                logger.warning("JWT Token not found in context, skipping Backend MCP")
+                logger.warning("JWT Token not found, skipping Backend MCP")
 
         # 构造 ClaudeAgentOptions 对象（不是 dict！）
         options = ClaudeAgentOptions(
