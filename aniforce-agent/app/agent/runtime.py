@@ -62,7 +62,7 @@ class AgentRuntime:
         allowed_tools: Optional[list[str]] = None,
     ) -> ClaudeSDKClient:
         """
-        获取或创建 ClaudeSDKClient 实例
+        创建 ClaudeSDKClient 实例（每次 query 新建，用 resume 恢复上下文）
 
         Args:
             session_id: 会话 ID
@@ -75,29 +75,33 @@ class AgentRuntime:
 
         Returns:
             ClaudeSDKClient 实例
-        """
-        # 已存在则直接返回
-        if session_id in self._clients:
-            logger.debug(f"Reusing existing client: session_id={session_id}")
-            return self._clients[session_id]
 
-        # 获取锁（防止并发创建）
+        说明：
+            SDK 的 session_id 和 resume 是两个不同参数：
+            - session_id: 新建会话时用的 ID
+            - resume: 指定要恢复的 session ID
+            本方法通过 session_store 判断该 session 是否已存在：
+            - 不存在 → 用 session_id 新建
+            - 已存在 → 用 resume 恢复
+            每次 query 完成后销毁 client（见 query 方法的 finally）
+        """
+        # 获取锁（防止同一 session 并发创建）
         if session_id not in self._locks:
             self._locks[session_id] = asyncio.Lock()
 
         async with self._locks[session_id]:
-            # 双重检查
-            if session_id in self._clients:
-                return self._clients[session_id]
-
             # 创建新 client
-            logger.info(f"Creating new client: session_id={session_id}, user_id={user_id}")
+            logger.info(f"Creating client: session_id={session_id}, user_id={user_id}")
 
             # 创建会话目录
             session_dir = self.sandbox_manager.create_session_dir(session_id)
 
             # 初始化 Skills
             self.skill_manager.init_session_skills(session_id)
+
+            # 判断是新建还是 resume：检查 session_store 是否已有该 session 的记录
+            has_history = await self._session_has_history(session_id)
+            logger.info(f"Session {session_id} has_history={has_history}")
 
             # 构造 Options
             options = self._build_options(
@@ -109,16 +113,14 @@ class AgentRuntime:
                 max_turns=max_turns,
                 mcp_servers=mcp_servers,
                 allowed_tools=allowed_tools,
+                resume=session_id if has_history else None,
             )
 
-            # 创建 client（不用 async with，手动管理生命周期）
+            # 创建 client
             client = ClaudeSDKClient(options)
             await client.connect()
 
-            # 存入池
-            self._clients[session_id] = client
-
-            logger.info(f"Client created and connected: session_id={session_id}")
+            logger.info(f"Client created and connected: session_id={session_id}, resume={has_history}")
             return client
 
     async def query(
@@ -175,6 +177,29 @@ class AgentRuntime:
         except Exception as e:
             logger.error(f"Query error: session_id={session_id}, error={e}", exc_info=True)
             raise
+        finally:
+            # 每轮 query 完成后断开 client，避免下轮同 session_id 报 "already in use"
+            # SDK 会从 session_store resume 上下文，无需长期持有 client
+            logger.info(f"Disconnecting client after query: session_id={session_id}")
+            await self.disconnect_client(session_id)
+
+    async def _session_has_history(self, session_id: str) -> bool:
+        """检查 session_store 中是否已有该 session 的对话记录"""
+        try:
+            import sqlite3
+            from app.config.settings import settings as _settings
+            db_path = _settings.SESSION_DB_PATH
+            if not Path(db_path).exists():
+                return False
+            conn = sqlite3.connect(str(db_path))
+            cur = conn.cursor()
+            cur.execute("SELECT COUNT(*) FROM sessions WHERE session_id = ?", (session_id,))
+            count = cur.fetchone()[0]
+            conn.close()
+            return count > 0
+        except Exception as e:
+            logger.debug(f"Check session history failed (treat as no history): {e}")
+            return False
 
     async def disconnect_client(self, session_id: str):
         """
@@ -223,6 +248,7 @@ class AgentRuntime:
         max_turns: int,
         mcp_servers: Optional[dict],
         allowed_tools: Optional[list[str]],
+        resume: Optional[str] = None,
     ) -> ClaudeAgentOptions:
         """
         构造 Claude Agent Options
@@ -343,7 +369,8 @@ class AgentRuntime:
             disallowed_tools=disallowed_tools,  # 明确禁用干扰工具
             env=env,
             session_store=self.session_store,
-            session_id=session_id,  # 正确的参数名
+            session_id=session_id if not resume else None,  # 新建时设 session_id
+            resume=resume,  # 恢复时设 resume
             session_store_flush="eager",  # 确保 Session 数据及时持久化
             # 流式配置（参考学习手册第 6 章）
             include_partial_messages=True,  # ✅ P0 修正：启用真正的流式输出

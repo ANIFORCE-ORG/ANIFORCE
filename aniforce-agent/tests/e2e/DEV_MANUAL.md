@@ -39,7 +39,7 @@
 | 6 | SDK 集成（Sandbox + Skill） | ✅ 通过 | `block6_sandbox_skill.py` |
 | 7 | MCP 工具接 backend | ✅ 通过 | `block7_mcp_backend.py` |
 | 8 | 多租户隔离 | ✅ 通过 | `block8_multi_tenant.py` |
-| 9 | 对话历史 + resume | ⏸️ 待开发 | - |
+| 9 | 对话历史 + resume | ✅ 通过 | `block9_history_resume.py` |
 
 **执行顺序**：1 → 2 → 3 → 4 → 5 → 6 → 7 → 8 → 9
 
