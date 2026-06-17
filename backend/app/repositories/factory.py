@@ -10,6 +10,7 @@ from app.repositories.protocols import (
     MaterialRepository,
     CampaignRepository,
     MetricRepository,
+    PlatformAuthRepository,
 )
 from app.repositories.mock.mock_chat_repo import MockChatRepository
 from app.repositories.mock.mock_material_repo import MockMaterialRepository
@@ -75,3 +76,17 @@ def get_metric_repo(session: AsyncSession = Depends(get_db)) -> MetricRepository
         # Demo 模式暂时也使用 SQLite
         return SqliteMetricRepository(session)
     return SqliteMetricRepository(session)
+
+
+@lru_cache()
+def get_platform_auth_repo() -> PlatformAuthRepository:
+    """获取平台授权 Repository（Mock 实现）"""
+    # 返回一个简单的 mock 对象
+    class MockPlatformAuthRepository:
+        async def get_by_id(self, auth_id: str) -> dict | None:
+            return None
+        
+        async def list_by_user(self, user_id: str, platform: str | None = None) -> list[dict]:
+            return []
+    
+    return MockPlatformAuthRepository()

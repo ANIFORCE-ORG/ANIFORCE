@@ -74,3 +74,20 @@ logs/
 *.bak
 *.tmp
 *.temp
+
+# ===== Agent 开发临时数据 =====
+drafts/**/sandbox/
+drafts/**/sandbox_*/
+drafts/**/telemetry/
+drafts/**/backups/
+drafts/**/projects/
+drafts/**/*.last-cleanup
+backend/runtime/agent/traces/
+aniforce-agent/tests/manual/runtime/
+aniforce-agent/QUALITY_ASSESSMENT.md
+
+# ===== SDK 子模块内容变动（引用锁定） =====
+resources/claude-agent-sdk-python/*
+!resources/claude-agent-sdk-python/.git
+drafts/260615_claude_sdk_learning/examples/01_claude_config_sandbox/.claude.json
+!drafts/260615_claude_sdk_learning/examples/01_claude_config_sandbox/.claude.json

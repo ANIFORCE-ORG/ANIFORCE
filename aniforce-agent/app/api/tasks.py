@@ -18,6 +18,8 @@ from app.api.deps import get_current_user_id
 from app.services.task_service import TaskService
 from app.repositories.task_repo import TaskRepository
 from app.repositories.event_repo import EventRepository
+from app.repositories.output_repo import OutputRepository
+from app.models.output import OutputStatus
 from app.agent.runtime import AgentRuntime
 from app.config.database import get_task_db
 
@@ -32,6 +34,11 @@ class CreateTaskRequest(BaseModel):
     title: str
     input_data: Optional[dict] = None
     session_id: Optional[str] = None
+
+
+class UpdateOutputStatusRequest(BaseModel):
+    """更新 Output 状态请求"""
+    status: str
 
 
 async def get_task_service(db=Depends(get_task_db)) -> TaskService:
@@ -117,6 +124,23 @@ async def get_task(
     }
 
 
+@router.get("/{task_id}/outputs")
+async def get_task_outputs(
+    task_id: str,
+    user_id: str = Depends(get_current_user_id),
+    task_service: TaskService = Depends(get_task_service),
+    db=Depends(get_task_db),
+):
+    """获取任务产物"""
+    task = await task_service.get_task(task_id, user_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+
+    output_repo = OutputRepository(db)
+    outputs = await output_repo.list_by_task(task_id)
+    return {"outputs": [output.to_dict() for output in outputs]}
+
+
 @router.get("/{task_id}/events")
 async def get_task_events(
     task_id: str,
@@ -139,6 +163,39 @@ async def get_task_events(
             for event in events
         ]
     }
+
+
+@router.patch("/outputs/{output_id}")
+async def update_output_status(
+    output_id: str,
+    request: UpdateOutputStatusRequest,
+    user_id: str = Depends(get_current_user_id),
+    db=Depends(get_task_db),
+):
+    """验证/拒绝任务产物"""
+    output_repo = OutputRepository(db)
+    output = await output_repo.get_by_id(output_id)
+    if not output:
+        raise HTTPException(status_code=404, detail="Output not found")
+
+    # 验证产物属于该用户的任务
+    task_repo = TaskRepository(db)
+    task = await task_repo.get_by_id(output.task_id, user_id)
+    if not task:
+        raise HTTPException(status_code=403, detail="Access denied")
+
+    try:
+        output_status = OutputStatus(request.status)
+    except ValueError:
+        raise HTTPException(status_code=400, detail=f"Invalid status: {request.status}")
+
+    success = await output_repo.update_status(
+        output_id, output_status, verified_by=user_id if output_status == OutputStatus.VERIFIED else None
+    )
+    if not success:
+        raise HTTPException(status_code=500, detail="Failed to update status")
+
+    return {"output_id": output_id, "status": request.status}
 
 
 @router.delete("/{task_id}")

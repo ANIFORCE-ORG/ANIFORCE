@@ -47,6 +47,7 @@ class Settings(BaseSettings):
 
     class Config:
         env_file = ".env"
+        extra = "ignore"  # 忽略 .env 中未定义的字段（允许与 Agent 共享 .env）
 
 
 @lru_cache()

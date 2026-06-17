@@ -26,13 +26,15 @@ def create_http_mcp_config(
     """
     创建 HTTP MCP Server 配置（调用后端服务）
 
-    Claude SDK HTTP MCP 格式：
+    Claude SDK HTTP MCP 格式（McpHttpServerConfig）：
     {
         "backend": {
-            "command": "http",
-            "args": ["<backend_url>/api/v1/mcp"],
-            "env": {
-                "HTTP_HEADERS": "Authorization: Bearer <token>|X-Internal-Token: <token>"
+            "type": "http",
+            "url": "<backend_url>/api/v1/mcp",
+            "headers": {
+                "Authorization": "Bearer <token>",
+                "X-Internal-Token": "<token>",
+                "Content-Type": "application/json"
             }
         }
     }
@@ -50,23 +52,21 @@ def create_http_mcp_config(
     if not url:
         return {}
 
-    # 构造请求头
-    headers = [
-        f"X-Internal-Token: {settings.INTERNAL_TOKEN}",
-        "Content-Type: application/json",
-    ]
+    # 构造请求头（符合 Claude SDK McpHttpServerConfig 类型）
+    headers = {
+        "X-Internal-Token": settings.INTERNAL_TOKEN,
+        "Content-Type": "application/json",
+    }
 
     # 如果提供了 JWT Token，添加到请求头
     if auth_token:
-        headers.insert(0, f"Authorization: Bearer {auth_token}")
+        headers["Authorization"] = f"Bearer {auth_token}"
 
     return {
         "backend": {
-            "command": "http",
-            "args": [f"{url}/api/v1/mcp"],
-            "env": {
-                "HTTP_HEADERS": "|".join(headers),
-            },
+            "type": "http",
+            "url": f"{url}/api/v1/mcp",
+            "headers": headers,
         }
     }
 

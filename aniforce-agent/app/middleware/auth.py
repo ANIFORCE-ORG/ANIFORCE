@@ -20,9 +20,9 @@ class AuthMiddleware(BaseHTTPMiddleware):
             token = auth_header.replace("Bearer ", "")
             try:
                 payload = decode_access_token(token)
-                # 提取用户信息并存入上下文
+                # 提取用户信息并存入上下文（使用 JWT 标准的 sub 字段）
                 user = {
-                    "id": payload.get("sub"),
+                    "id": payload.get("sub"),  # JWT 标准字段
                     "email": payload.get("email"),
                     "name": payload.get("name"),
                 }

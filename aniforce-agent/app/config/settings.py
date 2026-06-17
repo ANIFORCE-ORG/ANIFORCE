@@ -25,6 +25,9 @@ class Settings(BaseSettings):
     
     # Claude API
     ANTHROPIC_API_KEY: str = ""
+    ANTHROPIC_AUTH_TOKEN: str = ""  # Claude SDK 需要
+    ANTHROPIC_BASE_URL: str = ""  # 可选：代理 URL
+    CLAUDE_AGENT_MODEL: str = "claude-opus-4"  # 默认模型
     
     # 数据库路径
     TASK_DB_PATH: str = "runtime/agent/tasks.db"
@@ -33,12 +36,12 @@ class Settings(BaseSettings):
     # Runtime 配置
     RUNTIME_DIR: str = "runtime/sessions"
     SKILLS_SOURCE_DIR: str = "app/skills"
+    SKILL_SOURCE_DIR: str = "app/skills"  # 兼容性别名
     
     # CORS
     CORS_ALLOW_ORIGINS: str = "http://localhost:3000,http://localhost:3010"
     
-    class Config:
-        env_file = ".env"
+    model_config = {"env_file": ".env"}
 
 
 @lru_cache()

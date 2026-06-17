@@ -23,7 +23,6 @@ from app.config.settings import settings
 from app.agent.session_store import SQLiteSessionStore
 from app.agent.skill_manager import SkillManager
 from app.agent.sandbox import SandboxManager
-from app.mcp.remote import create_backend_mcp_servers
 from app.core.context import get_jwt_token
 
 logger = logging.getLogger(__name__)
@@ -253,31 +252,42 @@ class AgentRuntime:
         # 合并用户指定的工具
         final_tools = list(set(default_tools + (allowed_tools or [])))
 
-        # 环境变量
+        # 环境变量：只带 ANTHROPIC_*/CLAUDE_* 前缀，避免父进程污染（AGENTS.md 配置污染排查）
         env = {
-            **os.environ,
-            "ANTHROPIC_API_KEY": settings.ANTHROPIC_API_KEY,
-            "ANIFORCE_USER_ID": user_id,  # 传递用户信息给工具
-            "ANIFORCE_TASK_ID": task_id,
+            key: value
+            for key, value in os.environ.items()
+            if key.startswith("ANTHROPIC_") or key.startswith("CLAUDE_")
         }
+        env["ANTHROPIC_API_KEY"] = settings.ANTHROPIC_API_KEY
+        env["ANTHROPIC_AUTH_TOKEN"] = settings.ANTHROPIC_AUTH_TOKEN or settings.ANTHROPIC_API_KEY  # Claude SDK 需要
+        env["ANIFORCE_USER_ID"] = user_id  # 传递用户信息给工具
+        env["ANIFORCE_TASK_ID"] = task_id
+        env["CLAUDE_AGENT_SDK_CLIENT_APP"] = "aniforce-agent/1.0"
+        # CLAUDE_CONFIG_DIR 隔离：指向 session 目录下的空配置目录，避免加载本机 /root/.claude 的 hooks/plugins/skills
+        # （AGENTS.md「Claude SDK 调用必须做的三件事」实证：不隔离会触发 api_retry）
+        claude_config_dir = session_dir / ".claude_config"
+        claude_config_dir.mkdir(parents=True, exist_ok=True)
+        env["CLAUDE_CONFIG_DIR"] = str(claude_config_dir)
 
         # 添加可选配置
-        if hasattr(settings, "ANTHROPIC_BASE_URL") and settings.ANTHROPIC_BASE_URL:
+        if getattr(settings, "ANTHROPIC_BASE_URL", None):
             env["ANTHROPIC_BASE_URL"] = settings.ANTHROPIC_BASE_URL
 
-        # ✅ P0 修正：自动配置 HTTP MCP（连接后端服务）
+        # ✅ P0 修正：自动配置 Backend SDK MCP Server
         final_mcp_servers = mcp_servers
         if not final_mcp_servers:
             # 从 Context 获取 JWT Token
             jwt_token = get_jwt_token()
+            logger.info(f"Building options: jwt_token={'<present>' if jwt_token else '<missing>'}, backend_url={settings.BACKEND_URL}")
             if jwt_token and settings.BACKEND_URL:
-                # 自动配置后端 MCP
-                final_mcp_servers = create_backend_mcp_servers(auth_token=jwt_token)
-                logger.info(f"Auto-configured backend MCP: backend_url={settings.BACKEND_URL}")
+                # 自动配置后端 SDK MCP Server
+                from app.mcp.backend_sdk_server import get_backend_mcp_config
+                final_mcp_servers = get_backend_mcp_config()
+                logger.info(f"Auto-configured Backend SDK MCP Server: backend_url={settings.BACKEND_URL}, servers={list(final_mcp_servers.keys())}")
             elif not settings.BACKEND_URL:
-                logger.warning("BACKEND_URL not configured, skipping HTTP MCP")
+                logger.warning("BACKEND_URL not configured, skipping Backend MCP")
             else:
-                logger.warning("JWT Token not found in context, skipping HTTP MCP")
+                logger.warning("JWT Token not found in context, skipping Backend MCP")
 
         # 构造 ClaudeAgentOptions 对象（不是 dict！）
         options = ClaudeAgentOptions(

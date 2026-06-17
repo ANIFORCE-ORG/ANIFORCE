@@ -11,7 +11,6 @@ Task Service - 任务业务逻辑层
 import uuid
 import asyncio
 from typing import Optional, AsyncGenerator
-from datetime import datetime
 import logging
 
 from app.models.task import AgentTask, TaskStatus
@@ -82,6 +81,7 @@ class TaskService:
         session_id: str,  # 必须提供 session_id（ClaudeSDKClient 架构）
         model: Optional[str] = None,
         max_turns: int = 20,
+        allowed_tools: Optional[list[str]] = None,
     ) -> AsyncGenerator[dict, None]:
         """
         运行任务（流式返回事件）
@@ -112,6 +112,7 @@ class TaskService:
                 prompt=prompt,
                 model=model,
                 max_turns=max_turns,
+                allowed_tools=allowed_tools,
             ):
                 # 直接流式返回 SDK 消息（不转换为事件）
                 yield message
@@ -125,17 +126,6 @@ class TaskService:
             raise
         except Exception as e:
             logger.error(f"Task error: {task_id}, error={e}", exc_info=True)
-            raise
-            # 任务被取消
-            await self.task_repo.update_status(task_id, user_id, TaskStatus.ABORTED)
-            logger.info(f"Task aborted: {task_id}")
-            raise
-
-        except Exception as e:
-            # 任务出错
-            error_data = {"error": str(e), "type": type(e).__name__}
-            await self.task_repo.update_error(task_id, user_id, error_data)
-            logger.error(f"Task error: {task_id}, {e}", exc_info=True)
             raise
 
     async def cancel_task(self, task_id: str, user_id: str):
@@ -218,27 +208,3 @@ class TaskService:
 
         return await self.event_repo.list_by_task(task_id, after_sequence)
 
-    def _message_to_event(
-        self, task_id: str, message: any, sequence: int
-    ) -> AgentEvent:
-        """
-        将 Claude SDK 消息转换为事件
-
-        Args:
-            task_id: 任务 ID
-            message: SDK 消息
-            sequence: 序号
-
-        Returns:
-            AgentEvent
-        """
-        event = AgentEvent(
-            event_id=f"event_{uuid.uuid4().hex[:16]}",
-            task_id=task_id,
-            event_type=message.get("type", "unknown"),
-            payload=message,
-            sequence=sequence,
-            created_at=datetime.utcnow(),
-        )
-
-        return event
