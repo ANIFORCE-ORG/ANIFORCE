@@ -240,17 +240,60 @@ class AgentRuntime:
         Returns:
             ClaudeAgentOptions
         """
-        # 默认工具集（安全工具）
-        default_tools = [
+        # 工具集：收敛到广告投放场景最小集（移除代码开发专用工具）
+        # tools: 限制可用工具集（SDK 会从上下文中移除未列出的工具）
+        # - Read/Write: 生成分析报告
+        # - Skill: 调用业务 Skill
+        # - AskUserQuestion: HITL 确认
+        # - WebFetch/WebSearch: 竞品分析（可选）
+        base_tools = [
             "Read",
-            "Glob",
-            "Grep",
-            "WebFetch",
+            "Write",
             "Skill",
+            "AskUserQuestion",
+            "WebFetch",
+            "WebSearch",
         ]
 
         # 合并用户指定的工具
-        final_tools = list(set(default_tools + (allowed_tools or [])))
+        final_tools = list(set(base_tools + (allowed_tools or [])))
+
+        # MCP 工具免确认（backend 业务工具直接允许调用，不弹权限确认）
+        mcp_allowed = [
+            "mcp__backend__list_projects",
+            "mcp__backend__get_project",
+            "mcp__backend__list_campaigns",
+            "mcp__backend__get_campaign",
+            "mcp__backend__list_materials",
+            "mcp__backend__get_material",
+        ]
+        final_allowed_tools = list(set(final_tools + mcp_allowed))
+
+        # 明确禁用干扰工具（DesignSync / Task 系列 / Cron / Git worktree / Bash）
+        disallowed_tools = [
+            "DesignSync",
+            "Task",
+            "TaskCreate",
+            "TaskGet",
+            "TaskList",
+            "TaskOutput",
+            "TaskStop",
+            "TaskUpdate",
+            "EnterPlanMode",
+            "ExitPlanMode",
+            "EnterWorktree",
+            "ExitWorktree",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "ScheduleWakeup",
+            "Workflow",
+            "Bash",
+            "Edit",
+            "Glob",
+            "Grep",
+            "NotebookEdit",
+        ]
 
         # 环境变量：只带 ANTHROPIC_*/CLAUDE_* 前缀，避免父进程污染（AGENTS.md 配置污染排查）
         env = {
@@ -295,7 +338,9 @@ class AgentRuntime:
             model=model or getattr(settings, "CLAUDE_AGENT_MODEL", "claude-opus-4"),
             max_turns=max_turns,
             permission_mode="default",
-            allowed_tools=final_tools,
+            tools=final_tools,  # 限制可用工具集（从上下文移除未列出的工具）
+            allowed_tools=final_allowed_tools,  # 免确认工具（含 MCP 工具）
+            disallowed_tools=disallowed_tools,  # 明确禁用干扰工具
             env=env,
             session_store=self.session_store,
             session_id=session_id,  # 正确的参数名
