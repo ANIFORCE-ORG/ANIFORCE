@@ -105,6 +105,18 @@ class SqliteCampaignRepository:
         campaign.status = CampaignStatus(status)
         await self.session.flush()
     
+    async def update_budget(self, campaign_id: str, budget: float) -> None:
+        """更新广告投放预算"""
+        result = await self.session.execute(
+            select(Campaign).where(Campaign.id == campaign_id)
+        )
+        campaign = result.scalar_one_or_none()
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+        
+        campaign.budget = budget
+        await self.session.flush()
+    
     async def update_spent(self, campaign_id: str, amount: float) -> None:
         """更新广告投放已消耗金额"""
         result = await self.session.execute(

@@ -137,6 +137,33 @@ class MCPService:
                 },
                 "handler": self.get_campaign,
             },
+            "create_campaign": {
+                "description": "Create a new ad campaign under a project",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {"type": "string", "description": "Project ID"},
+                        "name": {"type": "string", "description": "Campaign name"},
+                        "platform": {"type": "string", "description": "Ad platform: meta/google/tiktok"},
+                        "budget": {"type": "number", "description": "Total budget"},
+                        "status": {"type": "string", "description": "Initial status (optional): draft/active/paused", "default": "draft"},
+                    },
+                    "required": ["project_id", "name", "platform", "budget"],
+                },
+                "handler": self.create_campaign,
+            },
+            "update_campaign_budget": {
+                "description": "Update a campaign's total budget",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "campaign_id": {"type": "string", "description": "Campaign ID"},
+                        "budget": {"type": "number", "description": "New total budget"},
+                    },
+                    "required": ["campaign_id", "budget"],
+                },
+                "handler": self.update_campaign_budget,
+            },
             # 素材管理
             "list_materials": {
                 "description": "List materials for a project",
@@ -301,6 +328,46 @@ class MCPService:
         await self.get_project(user_id, campaign["project_id"])
 
         return campaign
+
+    async def create_campaign(
+        self,
+        user_id: str,
+        project_id: str,
+        name: str,
+        platform: str,
+        budget: float,
+        status: Optional[str] = "draft",
+    ) -> dict:
+        """创建广告计划"""
+        # 验证项目权限
+        await self.get_project(user_id, project_id)
+
+        campaign = await self.campaign_repo.create(
+            project_id=project_id,
+            name=name,
+            platform=platform,
+            budget=budget,
+            status=status,
+        )
+        await self.campaign_repo.session.commit()
+        return campaign
+
+    async def update_campaign_budget(
+        self, user_id: str, campaign_id: str, budget: float
+    ) -> dict:
+        """更新广告计划预算"""
+        campaign = await self.campaign_repo.get_by_id(campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        # 验证项目权限
+        await self.get_project(user_id, campaign["project_id"])
+
+        await self.campaign_repo.update_budget(campaign_id, budget)
+        await self.campaign_repo.session.commit()
+
+        updated = await self.campaign_repo.get_by_id(campaign_id)
+        return updated
 
     async def list_materials(
         self,

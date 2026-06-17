@@ -35,7 +35,7 @@
 | 2 | Claude SDK 调通（最小闭环） | ✅ SDK 调通 | `block2_claude_sdk.py` |
 | 3 | 业务事件系统基础 | ✅ 通过 | `block3_business_events.py` |
 | 4 | 通用任务模型 + DB Schema | ✅ 通过 | `block4_task_model.py` |
-| 5 | 第一个任务：性能分析 | 📋 TODO | - |
+| 5 | 端到端业务剧本 A（全链路仿真）| ✅ 通过 | `block5_e2e_campaign.py` |
 | 6 | SDK 集成（Sandbox + Skill） | ✅ 通过 | `block6_sandbox_skill.py` |
 | 7 | MCP 工具接 backend | ✅ 通过 | `block7_mcp_backend.py` |
 | 8 | 多租户隔离 | ✅ 通过 | `block8_multi_tenant.py` |

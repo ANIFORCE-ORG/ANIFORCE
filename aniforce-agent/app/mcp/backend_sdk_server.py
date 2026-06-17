@@ -143,6 +143,35 @@ async def get_campaign(args: Dict[str, Any]) -> Dict[str, Any]:
     return await call_backend_mcp_tool("get_campaign", args)
 
 
+@tool(
+    "create_campaign",
+    "在指定项目下创建新的广告计划（写操作，通常需先调用 confirm_action 获取用户确认）",
+    {
+        "project_id": {"type": "string", "description": "项目 ID"},
+        "name": {"type": "string", "description": "计划名称"},
+        "platform": {"type": "string", "description": "投放平台：meta/google/tiktok"},
+        "budget": {"type": "number", "description": "总预算"},
+        "status": {"type": "string", "description": "初始状态（可选）：draft/active/paused", "default": "draft"},
+    }
+)
+async def create_campaign(args: Dict[str, Any]) -> Dict[str, Any]:
+    """创建广告计划"""
+    return await call_backend_mcp_tool("create_campaign", args)
+
+
+@tool(
+    "update_campaign_budget",
+    "更新广告计划的总预算（写操作，通常需先调用 confirm_action 获取用户确认）",
+    {
+        "campaign_id": {"type": "string", "description": "计划 ID"},
+        "budget": {"type": "number", "description": "新的总预算"},
+    }
+)
+async def update_campaign_budget(args: Dict[str, Any]) -> Dict[str, Any]:
+    """更新广告计划预算"""
+    return await call_backend_mcp_tool("update_campaign_budget", args)
+
+
 # ============================================================
 # 素材管理工具
 # ============================================================
@@ -191,6 +220,8 @@ def create_backend_sdk_mcp_server():
             get_project,
             list_campaigns,
             get_campaign,
+            create_campaign,
+            update_campaign_budget,
             list_materials,
             get_material,
         ],

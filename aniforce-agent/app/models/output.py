@@ -15,6 +15,7 @@ class OutputType(str, Enum):
     REPORT = "report"
     ARTIFACT = "artifact"
     TEXT = "text"
+    HITL_REQUEST = "hitl_request"
 
 
 class OutputStatus(str, Enum):

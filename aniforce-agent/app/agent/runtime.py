@@ -164,6 +164,10 @@ class AgentRuntime:
 
         logger.info(f"Sending query: session_id={session_id}, prompt_len={len(prompt)}")
 
+        # 设置 HITL 上下文（SDK MCP 工具在主进程执行，读不了 subprocess env，用 contextvars）
+        from app.mcp.hitl_server import set_hitl_context
+        set_hitl_context(task_id, user_id)
+
         try:
             # 发送用户消息
             await client.query(prompt)
@@ -276,10 +280,11 @@ class AgentRuntime:
             "Read",
             "Write",
             "Skill",
-            "AskUserQuestion",
             "WebFetch",
             "WebSearch",
         ]
+        # 注意：不包含 AskUserQuestion —— 它依赖 SDK permission callback，
+        # 在 SSE 架构里无法响应。HITL 改用 mcp__hitl__confirm_action（路径 B）
 
         # 合并用户指定的工具
         final_tools = list(set(base_tools + (allowed_tools or [])))
@@ -290,8 +295,11 @@ class AgentRuntime:
             "mcp__backend__get_project",
             "mcp__backend__list_campaigns",
             "mcp__backend__get_campaign",
+            "mcp__backend__create_campaign",
+            "mcp__backend__update_campaign_budget",
             "mcp__backend__list_materials",
             "mcp__backend__get_material",
+            "mcp__hitl__confirm_action",
         ]
         final_allowed_tools = list(set(final_tools + mcp_allowed))
 
@@ -319,6 +327,7 @@ class AgentRuntime:
             "Glob",
             "Grep",
             "NotebookEdit",
+            "AskUserQuestion",
         ]
 
         # 环境变量：只带 ANTHROPIC_*/CLAUDE_* 前缀，避免父进程污染（AGENTS.md 配置污染排查）
@@ -349,10 +358,12 @@ class AgentRuntime:
             jwt_token = get_jwt_token()
             logger.info(f"Building options: jwt_token={'<present>' if jwt_token else '<missing>'}, backend_url={settings.BACKEND_URL}")
             if jwt_token and settings.BACKEND_URL:
-                # 自动配置后端 SDK MCP Server
+                # 自动配置后端 SDK MCP Server + HITL MCP Server
                 from app.mcp.backend_sdk_server import get_backend_mcp_config
+                from app.mcp.hitl_server import get_hitl_mcp_config
                 final_mcp_servers = get_backend_mcp_config()
-                logger.info(f"Auto-configured Backend SDK MCP Server: backend_url={settings.BACKEND_URL}, servers={list(final_mcp_servers.keys())}")
+                final_mcp_servers.update(get_hitl_mcp_config())
+                logger.info(f"Auto-configured MCP Servers: backend_url={settings.BACKEND_URL}, servers={list(final_mcp_servers.keys())}")
             elif not settings.BACKEND_URL:
                 logger.warning("BACKEND_URL not configured, skipping Backend MCP")
             else:
