@@ -1,0 +1,182 @@
+{
+  "profile": "codefoxai_sonnet",
+  "test_prompt": "Use the Read tool to read input.txt, then use the Write tool to save the uppercase version to output.txt",
+  "test_workspace": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260615_claude_sdk_learning/outputs/07_test_workspace",
+  "test_results": [
+    {
+      "label": "A_bypass_no_callback",
+      "prompt": "Use the Read tool to read input.txt, then use the Write tool to save the uppercase version to output.txt",
+      "permission_mode": "bypassPermissions",
+      "allowed_tools": [],
+      "has_callback": true,
+      "success": false,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "assistant_messages": [],
+      "callback_stats": {
+        "total_calls": 0,
+        "allow_count": 0,
+        "deny_count": 0,
+        "redirect_count": 0,
+        "tool_history": []
+      },
+      "error_message": "Command failed with exit code 1 (exit code: 1)\nError output: Check stderr output for details",
+      "timed_out": false
+    },
+    {
+      "label": "B_default_with_callback",
+      "prompt": "Use the Read tool to read input.txt, then use the Write tool to save the uppercase version to output.txt",
+      "permission_mode": "default",
+      "allowed_tools": [
+        "Read"
+      ],
+      "has_callback": true,
+      "success": true,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "assistant_messages": [
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        }
+      ],
+      "callback_stats": {
+        "total_calls": 0,
+        "allow_count": 0,
+        "deny_count": 0,
+        "redirect_count": 0,
+        "tool_history": []
+      },
+      "error_message": null,
+      "timed_out": false
+    },
+    {
+      "label": "C_callback_deny",
+      "prompt": "Use the Read tool to read input.txt, then use the Write tool to save the uppercase version to output.txt",
+      "permission_mode": "default",
+      "allowed_tools": [
+        "Read"
+      ],
+      "has_callback": true,
+      "success": true,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "assistant_messages": [
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        }
+      ],
+      "callback_stats": {
+        "total_calls": 0,
+        "allow_count": 0,
+        "deny_count": 0,
+        "redirect_count": 0,
+        "tool_history": []
+      },
+      "error_message": null,
+      "timed_out": false
+    },
+    {
+      "label": "D_callback_redirect",
+      "prompt": "Use the Read tool to read input.txt, then use the Write tool to save the uppercase version to output.txt",
+      "permission_mode": "default",
+      "allowed_tools": [
+        "Read"
+      ],
+      "has_callback": true,
+      "success": true,
+      "tool_calls": [],
+      "tool_results": [],
+      "permission_denials": [],
+      "assistant_messages": [
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        },
+        {
+          "type": "AssistantMessage",
+          "content_types": []
+        }
+      ],
+      "callback_stats": {
+        "total_calls": 1,
+        "allow_count": 0,
+        "deny_count": 0,
+        "redirect_count": 1,
+        "tool_history": [
+          {
+            "tool": "Write",
+            "input": {
+              "file_path": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260615_claude_sdk_learning/outputs/07_test_workspace/output.txt",
+              "content": "THIS IS TEST INPUT DATA.\nLINE 2.\nLINE 3.\n"
+            },
+            "action": "redirect",
+            "original": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260615_claude_sdk_learning/outputs/07_test_workspace/output.txt",
+            "redirected": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260615_claude_sdk_learning/outputs/07_test_workspace/sandbox/output.txt"
+          }
+        ]
+      },
+      "error_message": null,
+      "timed_out": false
+    }
+  ],
+  "conclusions": {
+    "A_bypass_triggered_callback": false,
+    "B_default_triggered_callback": false,
+    "C_write_denied": false,
+    "D_write_redirected": true
+  },
+  "key_finding": "permission_mode='acceptEdits'/'bypassPermissions' 不触发 can_use_tool 回调，只有 'default' 模式会触发但需要处理交互超时"
+}

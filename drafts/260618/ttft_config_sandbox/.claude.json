@@ -1,0 +1,26 @@
+{
+  "unpinOpus47LaunchEffort": true,
+  "unpinOpus48LaunchEffort": true,
+  "unpinFable5LaunchEffort": true,
+  "firstStartTime": "2026-06-18T15:07:39.734Z",
+  "machineID": "0eb34b832b8043b15bab2fbb21778424f6fa87ebe3351ec2740bd226f7a0a6bf",
+  "opusProMigrationComplete": true,
+  "sonnet1m45MigrationComplete": true,
+  "seenNotifications": {},
+  "migrationVersion": 13,
+  "userID": "ecef5deb83fa17f39ec0555324702e78b577501dce408a08b431ad8065fdde4b",
+  "projects": {
+    "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE": {
+      "allowedTools": [],
+      "mcpContextUris": [],
+      "mcpServers": {},
+      "enabledMcpjsonServers": [],
+      "disabledMcpjsonServers": [],
+      "hasTrustDialogAccepted": false,
+      "projectOnboardingSeenCount": 0,
+      "hasClaudeMdExternalIncludesApproved": false,
+      "hasClaudeMdExternalIncludesWarningShown": false,
+      "hasUnseenTeamArtifacts": false
+    }
+  }
+}

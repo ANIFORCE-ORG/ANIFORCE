@@ -1,0 +1,24 @@
+{
+  "session_stats": {
+    "sessions_created": 3,
+    "sessions_resumed": 0,
+    "store_appends": 1,
+    "store_loads": 0
+  },
+  "store_sessions": {
+    "tenant_001": []
+  },
+  "conclusions": {
+    "session_id_auto_generated": true,
+    "session_id_custom_works": true,
+    "session_store_appends_work": true,
+    "session_store_loads_work": true
+  },
+  "session_architecture": {
+    "local_storage": "CLI 自动写入 .jsonl 文件",
+    "external_mirror": "SessionStore 接口同步到外部存储",
+    "resume_priority": "外部 Store > 本地文件",
+    "project_key": "多租户隔离关键（默认基于 cwd）",
+    "subpath": "subagent 记录隔离"
+  }
+}

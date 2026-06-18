@@ -1,0 +1,38 @@
+{
+  "test_stats": {
+    "sdk_mcp_called": 1,
+    "sse_mcp_called": 0,
+    "sdk_mcp_success": 1,
+    "sse_mcp_success": 0,
+    "sdk_mcp_error": 0,
+    "sse_mcp_error": 0
+  },
+  "comparison": {
+    "SDK_in_process_MCP": {
+      "部署": "单进程",
+      "性能": "无 IPC 开销",
+      "语言": "仅 Python",
+      "鉴权": "需要 Hooks 实现",
+      "扩展性": "绑定到主应用",
+      "适用场景": "Python 应用、业务逻辑封装"
+    },
+    "SSE_MCP_Server": {
+      "部署": "独立服务",
+      "性能": "网络延迟",
+      "语言": "任意语言",
+      "鉴权": "NestJS Guards",
+      "扩展性": "独立扩展",
+      "适用场景": "多语言、服务解耦、多租户"
+    }
+  },
+  "aitoearn_mcp_architecture": {
+    "transport": "SSE (Server-Sent Events)",
+    "endpoints": {
+      "sse_connection": "GET /api/mcp/sse",
+      "messages": "POST /api/mcp/messages?sessionId=xxx"
+    },
+    "authentication": "NestJS Guards + getUser() context",
+    "tool_registration": "@Tool decorator + McpRegistryService",
+    "session_isolation": "sessionId + transports Map"
+  }
+}

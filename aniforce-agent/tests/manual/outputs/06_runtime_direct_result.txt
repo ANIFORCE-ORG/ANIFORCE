@@ -1,0 +1,25 @@
+JWT Token not found in context, skipping HTTP MCP
+======================================================================
+🧪 直接测试 AgentRuntime + ClaudeSDKClient
+======================================================================
+
+✅ API Key: sk-hvtAUe3lPjYQtwiZq...
+✅ Base URL: https://copilot.huya.info/api/anthropic
+
+✅ Task database initialized
+📝 Session ID: 3e9eb88d-495e-4ded-97c0-868d6a630b73
+
+======================================================================
+🔵 第一轮：告知信息
+======================================================================
+👤 用户: 法国的首都是巴黎。请简短确认（一句话）。
+
+🔄 调用 AgentRuntime.query()...
+🤖 Claude 回复:
+----------------------------------------------------------------------
+  [1] HookEventMessage
+  [2] HookEventMessage
+  [3] SystemMessage
+  [4] SystemMessage
+  [5] SystemMessage
+Failed to authenticate. API Error: 401 无效的令牌 (request id: 20260616141716691375392on0kyzat)

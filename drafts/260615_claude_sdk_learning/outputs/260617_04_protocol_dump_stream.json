@@ -1,0 +1,422 @@
+{
+  "scenario": "stream",
+  "prompt": "你好",
+  "message_count": 14,
+  "by_type": {
+    "SystemMessage": [
+      0,
+      1
+    ],
+    "StreamEvent": [
+      2,
+      3,
+      4,
+      5,
+      6,
+      7,
+      8,
+      10,
+      11,
+      12
+    ],
+    "AssistantMessage": [
+      9
+    ],
+    "ResultMessage": [
+      13
+    ]
+  },
+  "stream_event_types": {
+    "message_start": [
+      2
+    ],
+    "content_block_start": [
+      3
+    ],
+    "content_block_delta": [
+      4,
+      5,
+      6,
+      7,
+      8
+    ],
+    "content_block_stop": [
+      10
+    ],
+    "message_delta": [
+      11
+    ],
+    "message_stop": [
+      12
+    ]
+  },
+  "messages": [
+    {
+      "index": 0,
+      "class": "SystemMessage",
+      "data": {
+        "subtype": "init",
+        "data": {
+          "type": "system",
+          "subtype": "init",
+          "cwd": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260617/sandbox_stream",
+          "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+          "tools": [
+            "Task",
+            "AskUserQuestion",
+            "CronCreate",
+            "CronDelete",
+            "CronList",
+            "DesignSync",
+            "EnterPlanMode",
+            "EnterWorktree",
+            "ExitPlanMode",
+            "ExitWorktree",
+            "Glob",
+            "Grep",
+            "NotebookEdit",
+            "Read",
+            "ScheduleWakeup",
+            "Skill",
+            "TaskCreate",
+            "TaskGet",
+            "TaskList",
+            "TaskOutput",
+            "TaskStop",
+            "TaskUpdate",
+            "WebFetch",
+            "WebSearch",
+            "Workflow"
+          ],
+          "mcp_servers": [],
+          "model": "claude-sonnet-4-6",
+          "permissionMode": "dontAsk",
+          "slash_commands": [
+            "deep-research",
+            "design-sync",
+            "update-config",
+            "verify",
+            "debug",
+            "code-review",
+            "simplify",
+            "batch",
+            "fewer-permission-prompts",
+            "loop",
+            "claude-api",
+            "run",
+            "run-skill-generator",
+            "clear",
+            "compact",
+            "context",
+            "heapdump",
+            "init",
+            "reload-skills",
+            "review",
+            "security-review",
+            "usage",
+            "insights",
+            "goal",
+            "team-onboarding"
+          ],
+          "apiKeySource": "none",
+          "claude_code_version": "2.1.179",
+          "output_style": "default",
+          "agents": [
+            "claude",
+            "Explore",
+            "general-purpose",
+            "Plan",
+            "statusline-setup"
+          ],
+          "skills": [
+            "deep-research",
+            "design-sync",
+            "update-config",
+            "verify",
+            "debug",
+            "code-review",
+            "simplify",
+            "batch",
+            "fewer-permission-prompts",
+            "loop",
+            "claude-api",
+            "run",
+            "run-skill-generator"
+          ],
+          "plugins": [],
+          "analytics_disabled": false,
+          "product_feedback_disabled": false,
+          "uuid": "1d0d14f6-7583-431e-b392-c14602607cc9",
+          "memory_paths": {
+            "auto": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260615_claude_sdk_learning/examples/01_claude_config_sandbox/projects/-workspace-nas-data-huya-projects-OpenAgents-projects-ANIFORCE/memory/"
+          },
+          "fast_mode_state": "off"
+        }
+      },
+      "subtype": "init"
+    },
+    {
+      "index": 1,
+      "class": "SystemMessage",
+      "data": {
+        "subtype": "status",
+        "data": {
+          "type": "system",
+          "subtype": "status",
+          "status": "requesting",
+          "uuid": "095d72f4-cc5f-43b0-93f7-2e04f0416837",
+          "session_id": "9802f655-0978-4a54-b27d-e35628e94591"
+        }
+      },
+      "subtype": "status"
+    },
+    {
+      "index": 2,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "7289af62-e8a5-4126-ba3a-60518691c444",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "message_start",
+          "message": {
+            "id": "2026061712451371b8c2c7a5fd440b",
+            "type": "message",
+            "role": "assistant",
+            "model": "claude-sonnet-4-6",
+            "content": [],
+            "usage": {}
+          }
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "message_start"
+    },
+    {
+      "index": 3,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "c368c443-570b-4a44-8428-864dd52c5a14",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "content_block_start",
+          "index": 0,
+          "content_block": {
+            "type": "text",
+            "text": ""
+          }
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "content_block_start"
+    },
+    {
+      "index": 4,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "afb88446-005e-4c15-ba98-e5314fce4d27",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "你好"
+          }
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "content_block_delta"
+    },
+    {
+      "index": 5,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "4259d3da-c512-43f6-877e-0045b7b34a18",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "，"
+          }
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "content_block_delta"
+    },
+    {
+      "index": 6,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "c651daa7-bfb7-4cfa-82a8-5ca9d9758712",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "很高兴"
+          }
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "content_block_delta"
+    },
+    {
+      "index": 7,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "772d4dbb-e342-4eac-9ffd-9ab2f7300d11",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "为你"
+          }
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "content_block_delta"
+    },
+    {
+      "index": 8,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "909d2348-999a-4365-ac93-9df90470eea3",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "content_block_delta",
+          "index": 0,
+          "delta": {
+            "type": "text_delta",
+            "text": "服务。"
+          }
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "content_block_delta"
+    },
+    {
+      "index": 9,
+      "class": "AssistantMessage",
+      "data": {
+        "content": [
+          {
+            "text": "你好，很高兴为你服务。"
+          }
+        ],
+        "model": "claude-sonnet-4-6",
+        "parent_tool_use_id": null,
+        "error": null,
+        "usage": {},
+        "message_id": "2026061712451371b8c2c7a5fd440b",
+        "stop_reason": null,
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "uuid": "3c3037b4-4c4a-41c9-99eb-de62e22d5e5e"
+      }
+    },
+    {
+      "index": 10,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "4543db16-d5db-4695-b092-cb3d26930f9c",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "content_block_stop",
+          "index": 0
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "content_block_stop"
+    },
+    {
+      "index": 11,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "e5144870-dd43-4773-a885-34e4fef6df18",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "message_delta",
+          "delta": {
+            "stop_reason": "end_turn"
+          },
+          "usage": {
+            "input_tokens": 22372,
+            "cache_creation_input_tokens": 0,
+            "cache_read_input_tokens": 0,
+            "output_tokens": 8
+          }
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "message_delta"
+    },
+    {
+      "index": 12,
+      "class": "StreamEvent",
+      "data": {
+        "uuid": "2350d2d3-d7cf-4d27-b292-83864c69d646",
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "event": {
+          "type": "message_stop"
+        },
+        "parent_tool_use_id": null
+      },
+      "stream_event_type": "message_stop"
+    },
+    {
+      "index": 13,
+      "class": "ResultMessage",
+      "data": {
+        "subtype": "success",
+        "duration_ms": 5067,
+        "duration_api_ms": 5030,
+        "is_error": false,
+        "num_turns": 1,
+        "session_id": "9802f655-0978-4a54-b27d-e35628e94591",
+        "stop_reason": "end_turn",
+        "total_cost_usd": 0.06723599999999999,
+        "usage": {
+          "input_tokens": 22372,
+          "cache_creation_input_tokens": 0,
+          "cache_read_input_tokens": 0,
+          "output_tokens": 8,
+          "server_tool_use": {
+            "web_search_requests": 0,
+            "web_fetch_requests": 0
+          },
+          "service_tier": "standard",
+          "cache_creation": {
+            "ephemeral_1h_input_tokens": 0,
+            "ephemeral_5m_input_tokens": 0
+          },
+          "inference_geo": "",
+          "iterations": [],
+          "speed": "standard"
+        },
+        "result": "你好，很高兴为你服务。",
+        "structured_output": null,
+        "model_usage": {
+          "claude-sonnet-4-6": {
+            "inputTokens": 22372,
+            "outputTokens": 8,
+            "cacheReadInputTokens": 0,
+            "cacheCreationInputTokens": 0,
+            "webSearchRequests": 0,
+            "costUSD": 0.06723599999999999,
+            "contextWindow": 200000,
+            "maxOutputTokens": 32000
+          }
+        },
+        "permission_denials": [],
+        "deferred_tool_use": null,
+        "errors": null,
+        "api_error_status": null,
+        "uuid": "116e7d74-75dd-4825-80ce-4ff6407c841d"
+      }
+    }
+  ]
+}

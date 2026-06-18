@@ -1,0 +1,22 @@
+{
+  "hook_stats": {
+    "PreToolUse_triggered": 2,
+    "PostToolUse_triggered": 0,
+    "PreToolUse_denied": 0,
+    "PreToolUse_allowed": 1,
+    "PreToolUse_modified": 1,
+    "PostToolUse_modified": 0
+  },
+  "callback_stats": {
+    "can_use_tool_triggered": 1,
+    "can_use_tool_allowed": 0,
+    "can_use_tool_denied": 1,
+    "can_use_tool_modified": 0
+  },
+  "conclusions": {
+    "hook_pretooluse_can_deny": false,
+    "hook_pretooluse_can_modify": true,
+    "hook_posttooluse_can_inject_context": false,
+    "callback_triggered_with_default_mode": true
+  }
+}

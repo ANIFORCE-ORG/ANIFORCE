@@ -1,0 +1,27 @@
+{
+  "case": "max_turns",
+  "profile": "codefoxai_sonnet",
+  "max_turns": 1,
+  "elapsed_ms": 6292.29,
+  "message_count": 6,
+  "message_class_counts": {
+    "SystemMessage": 1,
+    "AssistantMessage": 2,
+    "UserMessage": 1,
+    "ResultMessage": 1,
+    "ProbeException": 1
+  },
+  "system_subtype_counts": {
+    "init": 1
+  },
+  "tool_use_counts": {
+    "Read": 1
+  },
+  "result_subtype": "error_max_turns",
+  "result_is_error": true,
+  "result_num_turns": 2,
+  "result_session_id": "5e4f171c-d26d-4ec1-823b-b324b5c090bb",
+  "utils_changed": false,
+  "log_path": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260615_claude_sdk_learning/outputs/02_agent_loop_max_turns.log",
+  "output_path": "/workspace/nas-data/huya_projects/OpenAgents/projects/ANIFORCE/drafts/260615_claude_sdk_learning/outputs/02_agent_loop_max_turns.jsonl"
+}
