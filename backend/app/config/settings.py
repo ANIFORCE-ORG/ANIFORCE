@@ -28,6 +28,17 @@ class Settings(BaseSettings):
     # 外部服务
     OPENAI_API_KEY: str = ""
     
+    # Meta OAuth 配置
+    META_APP_ID: str = ""
+    META_APP_SECRET: str = ""
+    META_SCOPES: str = ""
+    
+    # Google OAuth 配置
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_SCOPES: str = "https://www.googleapis.com/auth/adwords,profile,email,openid"
+    GOOGLE_DEVELOPER_TOKEN: str = ""  # Google Ads API Developer Token
+    
     # 服务地址配置（根据运行模式自动切换）
     # Local 模式: http://localhost:3010 / http://localhost:8010
     # Cloud 模式: http://8.148.151.36:3010 / https://8.148.151.36:8010

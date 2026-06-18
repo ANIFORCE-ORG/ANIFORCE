@@ -9,14 +9,21 @@ from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from typing import List, Optional
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
+import asyncio
 import httpx
 from loguru import logger
+from google.oauth2.credentials import Credentials
+from googleapiclient.discovery import build
+from googleapiclient.errors import HttpError
+from google.ads.googleads.client import GoogleAdsClient
+from google.ads.googleads.errors import GoogleAdsException
 
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
 from app.config.database import get_db
 from app.models import PlatformConnection
+from app.models.sub_account_binding import SubAccountBinding
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/platform-auth", tags=["platform-auth"])
@@ -93,6 +100,7 @@ class PlatformConnectionResponse(BaseModel):
     account_name: Optional[str]
     status: str
     scopes: Optional[List[str]]
+    token_expires_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
     
@@ -103,14 +111,16 @@ class PlatformConnectionResponse(BaseModel):
 class SubAccountRequest(BaseModel):
     """子账号请求"""
     name: str
-    customer_id: str
+    sub_account_id: str
+    bm_customer_id: Optional[str] = None
 
 
 class SubAccountResponse(BaseModel):
     """子账号响应"""
     id: str
     name: str
-    customer_id: str
+    sub_account_id: str
+    bm_customer_id: Optional[str] = None
     status: str
     updated_at: datetime
     
@@ -457,66 +467,6 @@ async def get_google_config(
         raise HTTPException(status_code=500, detail=str(e))
 
 
-@router.get("/google/authorize_url/{connection_id}")
-async def get_google_authorize_url(
-    connection_id: str,
-    db: AsyncSession = Depends(get_db),
-    current_user: dict = Depends(get_current_user)
-):
-    """
-    获取 Google OAuth 授权 URL
-    
-    Args:
-        connection_id: 连接 ID
-        db: 数据库会话
-        current_user: 当前用户
-        
-    Returns:
-        包含授权 URL 的字典
-    """
-    try:
-        user_id = current_user["id"]
-        
-        # 查询连接
-        stmt = select(PlatformConnection).where(
-            PlatformConnection.id == connection_id,
-            PlatformConnection.user_id == user_id,
-            PlatformConnection.platform == "Google"
-        )
-        result = await db.execute(stmt)
-        connection = result.scalar_one_or_none()
-        
-        if not connection:
-            raise HTTPException(status_code=404, detail="连接不存在")
-        
-        # 构建 scope 字符串（添加 https://www.googleapis.com/auth/ 前缀）
-        scope_prefix = "https://www.googleapis.com/auth/"
-        scopes = [f"{scope_prefix}{scope}" for scope in connection.scopes]
-        scope_str = " ".join(scopes)
-        
-        # 构建 Google OAuth 授权 URL
-        redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
-        authorize_url = (
-            f"https://accounts.google.com/o/oauth2/v2/auth"
-            f"?response_type=code"
-            f"&client_id={connection.account_id}"
-            f"&redirect_uri={redirect_uri}"
-            f"&scope={scope_str}"
-            f"&access_type=offline"
-            f"&prompt=consent"
-            f"&state={connection_id}"
-        )
-        
-        logger.info(f"Generated Google authorize URL for connection: {connection_id}, authroize_url: {authorize_url}")
-        return {"authorize_url": authorize_url}
-        
-    except HTTPException:
-        raise
-    except Exception as e:
-        logger.error(f"Failed to generate Google authorize URL: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
-
-
 @router.get("/connections", response_model=List[PlatformConnectionResponse])
 async def get_all_connections(
     db: AsyncSession = Depends(get_db),
@@ -595,6 +545,122 @@ async def delete_connection(
         raise HTTPException(status_code=500, detail=str(e))
 
 
+# ==================== Meta OAuth API ====================
+
+@router.post("/meta/start_oauth")
+async def start_meta_oauth(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    直接启动 Meta OAuth 流程（自动创建 connection 并返回授权 URL）
+    
+    Args:
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        包含授权 URL 和 connection_id 的字典
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 自动创建一个新的 connection 记录
+        # account_id 和 account_secret 留空，避免在数据库中暴露平台核心信息
+        # 实际使用时从 settings 中获取
+        new_connection = PlatformConnection(
+            user_id=user_id,
+            platform="Meta",
+            account_id="",  # 留空，不存储敏感信息
+            account_name="Meta 广告账户",  # 默认名称
+            account_secret="",  # 留空，不存储敏感信息
+            access_token="",  # 暂时为空，等待 OAuth 授权
+            scopes=settings.META_SCOPES.split(","),  # 从 settings 获取 scopes
+            status="unauthorized"
+        )
+        db.add(new_connection)
+        await db.commit()
+        await db.refresh(new_connection)
+        
+        logger.info(f"Created new Meta connection for user: {user_id}, connection_id: {new_connection.id}")
+        
+        # 构建 OAuth 授权 URL
+        scopes = settings.META_SCOPES
+        auth_url = (
+            f"https://www.facebook.com/v25.0/dialog/oauth?"
+            f"client_id={settings.META_APP_ID}&"
+            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
+            f"scope={scopes}&"
+            f"response_type=code&"
+            f"state={new_connection.id}"
+        )
+        
+        logger.info(f"Generated Meta authorize URL for new connection: {new_connection.id}, authorize_url: {auth_url}")
+        
+        return {
+            "authorize_url": auth_url,
+            "connection_id": new_connection.id
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to start Meta OAuth: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.get("/meta/authorize_url/{connection_id}")
+async def get_meta_authorize_url(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取 Meta OAuth 授权 URL（供前端使用，用于重新授权）
+    
+    Args:
+        connection_id: 连接 ID
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        授权 URL
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 查询连接
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        # 构建 OAuth 授权 URL
+        # 使用 settings 中配置的 scopes
+        scopes = settings.META_SCOPES
+        auth_url = (
+            f"https://www.facebook.com/v25.0/dialog/oauth?"
+            f"client_id={settings.META_APP_ID}&"
+            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
+            f"scope={scopes}&"
+            f"response_type=code&"
+            f"state={connection_id}"
+        )
+
+        logger.info(f"Generated Meta authorize URL for connection: {connection_id}, authroize_url: {auth_url}")
+        
+        return {"authorize_url": auth_url}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get authorize URL: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @router.get("/meta/auth_callback")
 async def meta_auth_callback(
     code: Optional[str] = Query(None, description="OAuth 授权码"),
@@ -651,8 +717,8 @@ async def meta_auth_callback(
                 token_response = await client.get(
                     "https://graph.facebook.com/v25.0/oauth/access_token",
                     params={
-                        "client_id": connection.account_id,
-                        "client_secret": connection.account_secret,
+                        "client_id": settings.META_APP_ID,
+                        "client_secret": settings.META_APP_SECRET,
                         "redirect_uri": f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback",
                         "code": code
                     }
@@ -691,8 +757,8 @@ async def meta_auth_callback(
                     "https://graph.facebook.com/v25.0/oauth/access_token",
                     params={
                         "grant_type": "fb_exchange_token",
-                        "client_id": connection.account_id,
-                        "client_secret": connection.account_secret,
+                        "client_id": settings.META_APP_ID,
+                        "client_secret": settings.META_APP_SECRET,
                         "fb_exchange_token": short_lived_token
                     }
                 )
@@ -708,9 +774,38 @@ async def meta_auth_callback(
             except Exception as e:
                 logger.warning(f"Exception during long-lived token conversion: {e}, using short-lived token instead")
         
+        # 获取访问令牌
+        access_token = token_data.get("access_token")
+        
+        # 使用 access_token 调用 Meta API 获取账户信息
+        account_id = ""
+        account_name = ""
+        try:
+            logger.info(f"Fetching account info from Meta API for connection: {connection_id}")
+            async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+                me_response = await client.get(
+                    "https://graph.facebook.com/v25.0/me",
+                    params={
+                        "fields": "id,name",
+                        "access_token": access_token
+                    }
+                )
+                
+                if me_response.status_code == 200:
+                    me_data = me_response.json()
+                    account_id = me_data.get("id", "")
+                    account_name = me_data.get("name", "")
+                    logger.info(f"Successfully fetched account info: id={account_id}, name={account_name}")
+                else:
+                    logger.warning(f"Failed to fetch account info: status={me_response.status_code}, response={me_response.text}")
+        except Exception as e:
+            logger.warning(f"Exception while fetching account info: {e}, will leave account_id and account_name empty")
+        
         # 更新连接信息
-        connection.access_token = token_data.get("access_token")
+        connection.access_token = access_token
         connection.token_type = token_data.get("token_type", "bearer")
+        connection.account_id = account_id  # 更新账户ID
+        connection.account_name = account_name if account_name else "Meta 广告账户"  # 更新账户名称
         
         # 计算过期时间
         expires_in = token_data.get("expires_in")
@@ -724,7 +819,7 @@ async def meta_auth_callback(
         connection.updated_at = datetime.utcnow()
         
         await db.commit()
-        logger.info(f"Updated connection with access token: {connection_id}")
+        logger.info(f"Updated connection with access token and account info: {connection_id}, account_id={account_id}, account_name={account_name}")
         
         # 重定向到前端页面
         return RedirectResponse(
@@ -740,22 +835,89 @@ async def meta_auth_callback(
         )
 
 
-@router.get("/meta/authorize_url/{connection_id}")
-async def get_meta_authorize_url(
+# ==================== Google OAuth API ====================
+
+@router.post("/google/start_oauth")
+async def start_google_oauth(
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    直接启动 Google OAuth 流程（自动创建 connection 并返回授权 URL）
+    
+    Args:
+        db: 数据库会话
+        current_user: 当前用户
+    
+    Returns:
+        包含授权 URL 和 connection_id 的字典
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 自动创建一个新的 connection 记录
+        # account_id 和 account_secret 留空，避免在数据库中暴露平台核心信息
+        # 实际使用时从 settings 中获取
+        new_connection = PlatformConnection(
+            user_id=user_id,
+            platform="Google",
+            account_id="",  # 留空，不存储敏感信息
+            account_name="Google 广告账户",  # 默认名称
+            account_secret="",  # 留空，不存储敏感信息
+            access_token="",  # 暂时为空，等待 OAuth 授权
+            scopes=[settings.GOOGLE_SCOPES],  # 从 settings 获取 scopes
+            status="unauthorized"
+        )
+        db.add(new_connection)
+        await db.commit()
+        await db.refresh(new_connection)
+        
+        logger.info(f"Created new Google connection for user: {user_id}, connection_id: {new_connection.id}")
+        
+        # 构建 OAuth 授权 URL
+        # 将逗号分隔的 scopes 转换为空格分隔（Google OAuth 要求）
+        scopes = settings.GOOGLE_SCOPES.replace(",", "%20")
+        redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
+        auth_url = (
+            f"https://accounts.google.com/o/oauth2/v2/auth"
+            f"?response_type=code"
+            f"&client_id={settings.GOOGLE_CLIENT_ID}"
+            f"&redirect_uri={redirect_uri}"
+            f"&scope={scopes}"
+            f"&access_type=offline"
+            f"&prompt=consent"
+            f"&state={new_connection.id}"
+        )
+        
+        logger.info(f"Generated Google authorize URL for new connection: {new_connection.id}, authorize_url: {auth_url}")
+        
+        return {
+            "authorize_url": auth_url,
+            "connection_id": new_connection.id
+        }
+        
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to start Google OAuth: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.get("/google/authorize_url/{connection_id}")
+async def get_google_authorize_url(
     connection_id: str,
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
     """
-    获取 Meta OAuth 授权 URL（供前端使用）
+    获取 Google OAuth 授权 URL
     
     Args:
         connection_id: 连接 ID
         db: 数据库会话
         current_user: 当前用户
-    
+        
     Returns:
-        授权 URL
+        包含授权 URL 的字典
     """
     try:
         user_id = current_user["id"]
@@ -763,7 +925,8 @@ async def get_meta_authorize_url(
         # 查询连接
         stmt = select(PlatformConnection).where(
             PlatformConnection.id == connection_id,
-            PlatformConnection.user_id == user_id
+            PlatformConnection.user_id == user_id,
+            PlatformConnection.platform == "Google"
         )
         result = await db.execute(stmt)
         connection = result.scalar_one_or_none()
@@ -771,25 +934,29 @@ async def get_meta_authorize_url(
         if not connection:
             raise HTTPException(status_code=404, detail="连接不存在")
         
-        # 构建 OAuth 授权 URL
-        scopes = ",".join(connection.scopes or [])
-        auth_url = (
-            f"https://www.facebook.com/v25.0/dialog/oauth?"
-            f"client_id={connection.account_id}&"
-            f"redirect_uri={settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/meta/auth_callback&"
-            f"scope={scopes}&"
-            f"response_type=code&"
-            f"state={connection_id}"
-        )
-
-        logger.info(f"Generated Meta authorize URL for connection: {connection_id}, authroize_url: {auth_url}")
+        # 使用 settings 中配置的 scopes
+        scope_str = settings.GOOGLE_SCOPES.replace(",", "%20")
         
-        return {"authorize_url": auth_url}
+        # 构建 Google OAuth 授权 URL
+        redirect_uri = f"{settings.OAUTH_REDIRECT_BASE_URL}/api/v1/platform-auth/google/auth_callback"
+        authorize_url = (
+            f"https://accounts.google.com/o/oauth2/v2/auth"
+            f"?response_type=code"
+            f"&client_id={settings.GOOGLE_CLIENT_ID}"
+            f"&redirect_uri={redirect_uri}"
+            f"&scope={scope_str}"
+            f"&access_type=offline"
+            f"&prompt=consent"
+            f"&state={connection_id}"
+        )
+        
+        logger.info(f"Generated Google authorize URL for connection: {connection_id}, authroize_url: {authorize_url}")
+        return {"authorize_url": authorize_url}
         
     except HTTPException:
         raise
     except Exception as e:
-        logger.error(f"Failed to get authorize URL: {e}")
+        logger.error(f"Failed to generate Google authorize URL: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 
@@ -861,8 +1028,8 @@ async def google_auth_callback(
                     "https://oauth2.googleapis.com/token",
                     data={
                         "code": code,
-                        "client_id": connection.account_id,
-                        "client_secret": connection.account_secret,
+                        "client_id": settings.GOOGLE_CLIENT_ID,
+                        "client_secret": settings.GOOGLE_CLIENT_SECRET,
                         "redirect_uri": redirect_uri,
                         "grant_type": "authorization_code"
                     },
@@ -887,6 +1054,30 @@ async def google_auth_callback(
                 if refresh_token:
                     logger.info(f"Got refresh token for connection: {connection_id}, refresh_token: {refresh_token[:20]}...")
                 
+                # 使用 Google SDK 获取用户信息（openid 和 name）
+                logger.info(f"Fetching user info via Google SDK for connection: {connection_id}")
+                try:
+                    credentials = Credentials(token=access_token)
+                    
+                    def _fetch_userinfo():
+                        service = build('oauth2', 'v2', credentials=credentials)
+                        return service.userinfo().get().execute()
+                    
+                    userinfo = await asyncio.to_thread(_fetch_userinfo)
+                    account_id = userinfo.get("id", "")  # Google user ID (openid)
+                    account_name = userinfo.get("name", "Google 广告账户")
+                    account_email = userinfo.get("email", "")
+                    
+                    logger.info(f"Got user info via SDK: id={account_id}, name={account_name}, email={account_email}")
+                except HttpError as e:
+                    logger.error(f"Google SDK HTTP error fetching user info: {e.status_code} - {e.reason}, using default values")
+                    account_id = ""
+                    account_name = "Google 广告账户"
+                except Exception as e:
+                    logger.error(f"Error fetching user info via SDK: {e}, using default values")
+                    account_id = ""
+                    account_name = "Google 广告账户"
+                
             except httpx.TimeoutException as e:
                 logger.error(f"Timeout while getting access token: {e}")
                 return RedirectResponse(
@@ -907,6 +1098,8 @@ async def google_auth_callback(
         connection.access_token = access_token
         connection.refresh_token = refresh_token
         connection.token_type = token_data.get("token_type", "Bearer")
+        connection.account_id = account_id  # 更新为真实的 Google user ID
+        connection.account_name = account_name  # 更新为真实的用户名
         
         # 计算过期时间
         if expires_in:
@@ -977,7 +1170,8 @@ async def get_sub_accounts(
             SubAccountResponse(
                 id=binding.id,
                 name=binding.sub_account_name,
-                customer_id=binding.customer_id,
+                sub_account_id=binding.sub_account_id,
+                bm_customer_id=binding.bm_customer_id,
                 status=binding.status,
                 updated_at=binding.updated_at
             )
@@ -1021,7 +1215,8 @@ async def add_sub_account(
         new_binding = SubAccountBinding(
             parent_connection_id=connection_id,
             sub_account_name=request.name,
-            customer_id=request.customer_id,
+            sub_account_id=request.sub_account_id,
+            bm_customer_id=request.bm_customer_id,
             status="active"
         )
         
@@ -1034,7 +1229,8 @@ async def add_sub_account(
         return SubAccountResponse(
             id=new_binding.id,
             name=new_binding.sub_account_name,
-            customer_id=new_binding.customer_id,
+            sub_account_id=new_binding.sub_account_id,
+            bm_customer_id=new_binding.bm_customer_id,
             status=new_binding.status,
             updated_at=new_binding.updated_at
         )
@@ -1094,4 +1290,292 @@ async def delete_sub_account(
         raise
     except Exception as e:
         logger.error(f"Failed to delete sub account: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/meta/{connection_id}/sync-adaccounts")
+async def sync_meta_ad_accounts(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    同步 Meta 广告账户
+    调用 Meta API 获取 adaccounts 并写入 sub_account_bindings
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 验证连接是否存在且属于当前用户
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        if connection.platform != "Meta":
+            raise HTTPException(status_code=400, detail="只支持 Meta 平台")
+        
+        if connection.status != "active":
+            raise HTTPException(status_code=400, detail="连接未授权，请先完成授权")
+        
+        # 调用 Meta API 获取广告账户
+        access_token = connection.access_token
+        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
+            try:
+                logger.info(f"Fetching ad accounts from Meta API for connection: {connection_id}")
+                ad_accounts_response = await client.get(
+                    "https://graph.facebook.com/v25.0/me/adaccounts",
+                    params={
+                        "fields": "id,name,account_status,currency,business_id,spend_cap,timezone_name",
+                        "access_token": access_token
+                    }
+                )
+                
+                if ad_accounts_response.status_code != 200:
+                    logger.error(f"Failed to fetch ad accounts: status={ad_accounts_response.status_code}, response={ad_accounts_response.text}")
+                    raise HTTPException(status_code=500, detail="获取广告账户失败")
+                
+                ad_accounts_data = ad_accounts_response.json()
+                ad_accounts = ad_accounts_data.get("data", [])
+                
+                logger.info(f"Fetched {len(ad_accounts)} ad accounts from Meta API")
+                
+                # 状态映射
+                status_mapping = {
+                    "1": "active",        # 正常可投放
+                    "2": "disabled",      # 被封/禁用
+                    "3": "pending_review", # 待审核
+                    "7": "payment_required", # 需充值/付款
+                    "9": "suspended"      # 暂停
+                }
+                
+                # 删除现有的子账号绑定（重新同步）
+                stmt = select(SubAccountBinding).where(
+                    SubAccountBinding.parent_connection_id == connection_id
+                )
+                result = await db.execute(stmt)
+                existing_bindings = result.scalars().all()
+                for binding in existing_bindings:
+                    await db.delete(binding)
+                
+                # 创建新的子账号绑定
+                synced_count = 0
+                for ad_account in ad_accounts:
+                    account_id = ad_account.get("id", "")
+                    account_name = ad_account.get("name", "")
+                    account_status = str(ad_account.get("account_status", ""))
+                    
+                    # 映射状态
+                    mapped_status = status_mapping.get(account_status, "unknown")
+                    
+                    # 创建子账号绑定
+                    binding = SubAccountBinding(
+                        parent_connection_id=connection_id,
+                        sub_account_name=account_name,
+                        sub_account_id=account_id,
+                        status=mapped_status
+                    )
+                    db.add(binding)
+                    synced_count += 1
+                    
+                    logger.info(f"Synced ad account: id={account_id}, name={account_name}, status={mapped_status}")
+                
+                await db.commit()
+                
+                logger.info(f"Successfully synced {synced_count} ad accounts for connection: {connection_id}")
+                
+                return {
+                    "message": f"成功同步 {synced_count} 个广告账户",
+                    "synced_count": synced_count
+                }
+                
+            except httpx.TimeoutException as e:
+                logger.error(f"Timeout while fetching ad accounts: {e}")
+                raise HTTPException(status_code=500, detail="请求超时")
+            except httpx.HTTPError as e:
+                logger.error(f"HTTP error while fetching ad accounts: {e}")
+                raise HTTPException(status_code=500, detail="网络错误")
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to sync ad accounts: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@router.post("/google/{connection_id}/sync-adaccounts")
+async def sync_google_ads_accounts(
+    connection_id: str,
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    同步 Google Ads 广告账户
+    使用 Google Ads SDK 获取 MCC 账户及其子账号并写入 sub_account_bindings
+    """
+    try:
+        user_id = current_user["id"]
+        
+        # 验证连接是否存在且属于当前用户
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id
+        )
+        result = await db.execute(stmt)
+        connection = result.scalar_one_or_none()
+        
+        if not connection:
+            raise HTTPException(status_code=404, detail="连接不存在")
+        
+        if connection.platform != "Google":
+            raise HTTPException(status_code=400, detail="只支持 Google 平台")
+        
+        if connection.status != "active":
+            raise HTTPException(status_code=400, detail="连接未授权，请先完成授权")
+        
+        # 获取 refresh_token 和 developer_token
+        refresh_token = connection.refresh_token
+        if not refresh_token:
+            raise HTTPException(status_code=400, detail="缺少 refresh_token")
+        
+        developer_token = settings.GOOGLE_DEVELOPER_TOKEN
+        if not developer_token:
+            raise HTTPException(status_code=500, detail="服务器未配置 GOOGLE_DEVELOPER_TOKEN")
+        
+        # 使用 Google Ads SDK 获取可访问的客户账户
+        def _get_google_ads_accounts():
+            """同步函数：获取 Google Ads 账户"""
+            credentials_dict = {
+                "developer_token": developer_token,
+                "use_proto_plus": True,
+                "client_id": settings.GOOGLE_CLIENT_ID,
+                "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                "refresh_token": refresh_token,
+            }
+            
+            # 初始化客户端
+            client = GoogleAdsClient.load_from_dict(credentials_dict, version="v24")
+            
+            # 获取可访问的客户账户
+            customer_service = client.get_service("CustomerService")
+            accessible_customers = customer_service.list_accessible_customers()
+            
+            customer_ids = [
+                resource_name.split('/')[-1] 
+                for resource_name in accessible_customers.resource_names
+            ]
+            
+            logger.info(f"Found {len(customer_ids)} accessible customer accounts")
+            
+            # 对每个 MCC 账户，获取其子账号
+            all_sub_accounts = []
+            
+            for customer_id in customer_ids:
+                try:
+                    # 为每个 customer_id 创建新的客户端配置
+                    credentials_dict_with_login = {
+                        "developer_token": developer_token,
+                        "use_proto_plus": True,
+                        "client_id": settings.GOOGLE_CLIENT_ID,
+                        "client_secret": settings.GOOGLE_CLIENT_SECRET,
+                        "refresh_token": refresh_token,
+                        "login_customer_id": customer_id,
+                    }
+                    
+                    client_with_login = GoogleAdsClient.load_from_dict(credentials_dict_with_login, version="v24")
+                    ga_service = client_with_login.get_service("GoogleAdsService")
+                    
+                    # 查询子账号
+                    query = """
+                        SELECT
+                            customer_client.client_customer,
+                            customer_client.level,
+                            customer_client.manager,
+                            customer_client.descriptive_name,
+                            customer_client.currency_code,
+                            customer_client.time_zone,
+                            customer_client.id
+                        FROM customer_client
+                        WHERE customer_client.level <= 1
+                    """
+                    
+                    response = ga_service.search(customer_id=customer_id, query=query)
+                    
+                    for row in response:
+                        customer_client = row.customer_client
+                        all_sub_accounts.append({
+                            "sub_account_id": str(customer_client.id),
+                            "sub_account_name": customer_client.descriptive_name,
+                            "bm_customer_id": customer_id,  # MCC ID
+                            "level": customer_client.level,
+                            "manager": customer_client.manager,
+                            "currency_code": customer_client.currency_code,
+                            "time_zone": customer_client.time_zone,
+                        })
+                    
+                    logger.info(f"Found sub-accounts under MCC {customer_id}")
+                    
+                except GoogleAdsException as ex:
+                    logger.warning(f"Failed to query sub-accounts for customer {customer_id}: {ex.failure}")
+                    continue
+                except Exception as e:
+                    logger.warning(f"Error querying customer {customer_id}: {e}")
+                    continue
+            
+            return all_sub_accounts
+        
+        # 在线程中执行同步调用
+        logger.info(f"Starting Google Ads sync for connection: {connection_id}")
+        sub_accounts = await asyncio.to_thread(_get_google_ads_accounts)
+        
+        logger.info(f"Retrieved {len(sub_accounts)} total sub-accounts from Google Ads API")
+        
+        # 删除现有的子账号绑定（重新同步）
+        stmt = select(SubAccountBinding).where(
+            SubAccountBinding.parent_connection_id == connection_id
+        )
+        result = await db.execute(stmt)
+        existing_bindings = result.scalars().all()
+        for binding in existing_bindings:
+            await db.delete(binding)
+        
+        # 创建新的子账号绑定
+        synced_count = 0
+        for account in sub_accounts:
+            binding = SubAccountBinding(
+                parent_connection_id=connection_id,
+                sub_account_name=account["sub_account_name"],
+                sub_account_id=account["sub_account_id"],
+                bm_customer_id=account["bm_customer_id"],
+                status="active"
+            )
+            db.add(binding)
+            synced_count += 1
+            
+            logger.info(f"Synced Google Ads account: id={account['sub_account_id']}, name={account['sub_account_name']}, mcc={account['bm_customer_id']}")
+        
+        await db.commit()
+        
+        logger.info(f"Successfully synced {synced_count} Google Ads accounts for connection: {connection_id}")
+        
+        return {
+            "message": f"成功同步 {synced_count} 个广告账户",
+            "synced_count": synced_count
+        }
+        
+    except HTTPException:
+        raise
+    except GoogleAdsException as ex:
+        await db.rollback()
+        logger.error(f"Google Ads API error: {ex.failure}")
+        raise HTTPException(status_code=500, detail=f"Google Ads API 错误: {ex.failure.errors[0].message if ex.failure.errors else str(ex)}")
+    except Exception as e:
+        await db.rollback()
+        logger.error(f"Failed to sync Google Ads accounts: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))

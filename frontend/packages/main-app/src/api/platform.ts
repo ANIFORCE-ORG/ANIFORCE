@@ -23,19 +23,22 @@ export interface PlatformConnectionResponse {
   account_name: string | null
   status: string
   scopes: string[] | null
+  token_expires_at: string | null
   created_at: string
   updated_at: string
 }
 
 export interface SubAccountRequest {
   name: string
-  customer_id: string
+  sub_account_id: string
+  bm_customer_id?: string
 }
 
 export interface SubAccountResponse {
   id: string
   name: string
-  customer_id: string
+  sub_account_id: string
+  bm_customer_id?: string
   status: string
   updated_at: string
 }
@@ -55,6 +58,18 @@ export const platformApi = {
 
   getMetaAuthorizeUrl: (connectionId: string) =>
     http.get<{ authorize_url: string }>(`/platform-auth/meta/authorize_url/${connectionId}`),
+
+  startMetaOAuth: () =>
+    http.post<{ authorize_url: string; connection_id: string }>('/platform-auth/meta/start_oauth'),
+
+  startGoogleOAuth: () =>
+    http.post<{ authorize_url: string; connection_id: string }>('/platform-auth/google/start_oauth'),
+
+  syncMetaAdAccounts: (connectionId: string) =>
+    http.post(`/platform-auth/meta/${connectionId}/sync-adaccounts`),
+
+  syncGoogleAdAccounts: (connectionId: string) =>
+    http.post(`/platform-auth/google/${connectionId}/sync-adaccounts`),
 
   saveGoogleConfig: (data: GoogleConfigRequest) =>
     http.post<PlatformConnectionResponse>('/platform-auth/google/config', data),

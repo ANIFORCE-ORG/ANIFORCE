@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import { useAuthStore } from '@/store/auth'
 
 interface NavItem {
   id: string
@@ -23,11 +24,10 @@ interface Props {
 
 const props = withDefaults(defineProps<Props>(), {
   navItems: () => [
-    { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
+    { id: 'dashboard', icon: 'bar_chart', label: '数据概览', path: '/dashboard' },
     { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
     { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
     { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
-    { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
   ],
   sessions: () => [],
   activePanel: ''
@@ -40,6 +40,12 @@ const emit = defineEmits<{
 
 const router = useRouter()
 const route = useRoute()
+const auth = useAuthStore()
+
+// 检查是否为管理员
+const isAdmin = computed(() => {
+  return auth.user?.system_role === 'ADMIN'
+})
 
 // 折叠状态 - 从localStorage读取初始值
 const SIDEBAR_COLLAPSED_KEY = 'animagus_sidebar_collapsed'
@@ -119,6 +125,30 @@ const handleSessionClick = (session: Session) => {
               class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
             >
               {{ item.label }}
+            </div>
+          </li>
+          
+          <!-- 系统管理按钮 - 仅管理员可见 -->
+          <li
+            v-if="isAdmin"
+            class="flex items-center rounded-lg cursor-pointer transition-all relative group"
+            :class="[
+              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
+              isActivePanel('system-admin')
+                ? 'bg-primary/10 text-primary font-semibold'
+                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+            ]"
+            @click="handleNavClick({ id: 'system-admin', icon: 'admin_panel_settings', label: '系统管理', path: '/system-admin' })"
+          >
+            <span class="material-symbols-outlined text-[15px]">admin_panel_settings</span>
+            <span v-if="!isCollapsed" class="text-[11px]">系统管理</span>
+            
+            <!-- Tooltip for collapsed state -->
+            <div
+              v-if="isCollapsed"
+              class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
+            >
+              系统管理
             </div>
           </li>
         </ul>

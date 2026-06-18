@@ -2,8 +2,6 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import MetaConfigDialog from '@/components/settings/MetaConfigDialog.vue'
-import GoogleConfigDialog from '@/components/settings/GoogleConfigDialog.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { navItems } from '@/config/navigation'
@@ -13,10 +11,8 @@ import { useToast } from '@/composables/useToast'
 const router = useRouter()
 const { success, error: showError } = useToast()
 const activePlatform = ref<'meta' | 'google' | 'tiktok'>('meta')
-const showConfigDialog = ref(false)
 const connections = ref<PlatformConnectionResponse[]>([])
 const loading = ref(false)
-const editingConnection = ref<PlatformConnectionResponse | null>(null)
 const showDeleteConfirm = ref(false)
 const deletingConnection = ref<PlatformConnectionResponse | null>(null)
 
@@ -62,16 +58,6 @@ const switchPanel = (item: any) => {
   }
 }
 
-const openConfigDialog = () => {
-  editingConnection.value = null
-  showConfigDialog.value = true
-}
-
-const closeConfigDialog = () => {
-  showConfigDialog.value = false
-  editingConnection.value = null
-}
-
 const loadConnections = async () => {
   loading.value = true
   try {
@@ -84,21 +70,58 @@ const loadConnections = async () => {
   }
 }
 
-const handleSaveConfig = async (data: any) => {
-  console.log('保存配置:', data)
-  closeConfigDialog()
-  await loadConnections()
-  success('配置已保存')
+const handleAddMetaAccount = async () => {
+  try {
+    // 调用新接口：自动创建 connection 并获取授权 URL
+    const response = await platformApi.startMetaOAuth()
+    // 在新窗口中打开授权页面
+    window.open(response.authorize_url, '_blank', 'width=600,height=700')
+    // 刷新连接列表
+    await loadConnections()
+  } catch (err: any) {
+    console.error('启动 Meta OAuth 失败:', err)
+    showError('启动授权失败，请重试')
+  }
 }
 
-const handleImportToken = (data: any) => {
-  console.log('导入沙盒账户:', data)
+const handleAddGoogleAccount = async () => {
+  try {
+    // 调用新接口：自动创建 connection 并获取授权 URL
+    const response = await platformApi.startGoogleOAuth()
+    // 在新窗口中打开授权页面
+    window.open(response.authorize_url, '_blank', 'width=600,height=700')
+    // 刷新连接列表
+    await loadConnections()
+  } catch (err: any) {
+    console.error('启动 Google OAuth 失败:', err)
+    showError('启动授权失败，请重试')
+  }
 }
 
-const handleEdit = (connection: PlatformConnectionResponse) => {
-  console.log('编辑连接:', connection)
-  editingConnection.value = connection
-  showConfigDialog.value = true
+const handleSyncAdAccounts = async (connection: PlatformConnectionResponse) => {
+  console.log('同步广告账户:', connection)
+  try {
+    // 根据平台类型调用不同的同步接口
+    if (connection.platform === 'Meta') {
+      await platformApi.syncMetaAdAccounts(connection.id)
+      success('Meta 广告账户同步成功')
+    } else if (connection.platform === 'Google') {
+      await platformApi.syncGoogleAdAccounts(connection.id)
+      success('Google 广告账户同步成功')
+    } else {
+      showError('该平台暂不支持同步功能')
+      return
+    }
+    // 刷新连接列表
+    await loadConnections()
+    // 如果当前账户已展开，重新加载子账号
+    if (isExpanded(connection.id)) {
+      await loadSubAccounts(connection.id)
+    }
+  } catch (err: any) {
+    console.error('同步广告账户失败:', err)
+    showError('同步广告账户失败，请重试')
+  }
 }
 
 const handleAuthorize = async (connection: PlatformConnectionResponse) => {
@@ -180,11 +203,26 @@ const isPlatformConnected = (platformId: string) => {
   return connections.value.some(conn => conn.platform === platformName && conn.status === 'active')
 }
 
+// 判断 token 是否已过期
+const isTokenExpired = (connection: PlatformConnectionResponse) => {
+  if (!connection.token_expires_at) return false
+  return new Date(connection.token_expires_at + 'Z') < new Date()
+}
+
+// 获取连接的有效状态（考虑 token 过期）
+const getEffectiveStatus = (connection: PlatformConnectionResponse) => {
+  if (connection.status === 'active' && isTokenExpired(connection)) {
+    return 'token_expired'
+  }
+  return connection.status
+}
+
 const getStatusText = (status: string) => {
   const statusMap: Record<string, string> = {
     'active': '已激活',
     'unauthorized': '未授权',
     'expired': '已过期',
+    'token_expired': '授权过期',
     'revoked': '已撤销'
   }
   return statusMap[status] || status
@@ -195,6 +233,7 @@ const getStatusClass = (status: string) => {
     'active': 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400',
     'unauthorized': 'bg-amber-50 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
     'expired': 'bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400',
+    'token_expired': 'bg-orange-50 dark:bg-orange-900/30 text-orange-700 dark:text-orange-400',
     'revoked': 'bg-slate-50 dark:bg-slate-700 text-slate-700 dark:text-slate-400'
   }
   return classMap[status] || classMap['unauthorized']
@@ -258,7 +297,7 @@ const handleAddSubAccount = async () => {
   try {
     const newSubAccount = await platformApi.addSubAccount(currentParentConnectionId.value, {
       name: newSubAccountName.value,
-      customer_id: newSubAccountCustomerId.value
+      sub_account_id: newSubAccountCustomerId.value
     })
 
     // 更新本地数据
@@ -417,10 +456,10 @@ onMounted(() => {
 
             <!-- Meta 平台特殊功能 -->
             <div v-if="activePlatform === 'meta'" class="flex items-center justify-between">
-              <p class="text-[11px] text-slate-600 dark:text-slate-400">配置 Meta 广告账户连接</p>
+              <p class="text-[11px] text-slate-600 dark:text-slate-400">点击添加账户后将直接跳转到 Meta OAuth 授权页面</p>
               <button
                 class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors"
-                @click="openConfigDialog"
+                @click="handleAddMetaAccount"
               >
                 添加广告账户
               </button>
@@ -428,10 +467,10 @@ onMounted(() => {
             
             <!-- Google 平台特殊功能 -->
             <div v-if="activePlatform === 'google'" class="flex items-center justify-between">
-              <p class="text-[11px] text-slate-600 dark:text-slate-400">配置 Google 广告账户连接</p>
+              <p class="text-[11px] text-slate-600 dark:text-slate-400">点击添加账户后将直接跳转到 Google OAuth 授权页面</p>
               <button
                 class="px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-medium hover:bg-primary/90 transition-colors"
-                @click="openConfigDialog"
+                @click="handleAddGoogleAccount"
               >
                 添加广告账户
               </button>
@@ -459,9 +498,9 @@ onMounted(() => {
               <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-700/50">
                   <tr>
-                    <th v-if="activePlatform === 'google'" class="px-[9px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400 w-[37px]"></th>
+                    <th v-if="activePlatform === 'meta' || activePlatform === 'google'" class="px-[9px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400 w-[37px]"></th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">账户名称</th>
-                    <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">APP ID</th>
+                    <th v-if="activePlatform !== 'meta'" class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">APP ID</th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">授权范围</th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">状态</th>
                     <th class="px-[16px] py-[9px] text-left text-[10px] font-medium text-slate-600 dark:text-slate-400">更新时间</th>
@@ -472,8 +511,8 @@ onMounted(() => {
                   <template v-for="connection in filteredConnections" :key="connection.id">
                     <!-- 主账号行 -->
                     <tr class="hover:bg-slate-50 dark:hover:bg-slate-700/30">
-                      <!-- Google 平台展开按钮 -->
-                      <td v-if="activePlatform === 'google'" class="px-[9px] py-[12px] text-center">
+                      <!-- Meta 和 Google 平台展开按钮 -->
+                      <td v-if="activePlatform === 'meta' || activePlatform === 'google'" class="px-[9px] py-[12px] text-center">
                         <button
                           @click="toggleSubAccounts(connection.id)"
                           class="p-[4px] rounded hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
@@ -487,7 +526,7 @@ onMounted(() => {
                       <td class="px-[16px] py-[12px] text-[11px] text-slate-900 dark:text-white">
                         {{ connection.account_name || '-' }}
                       </td>
-                    <td class="px-[16px] py-[12px] text-[11px] text-slate-600 dark:text-slate-400 font-mono">
+                    <td v-if="activePlatform !== 'meta'" class="px-[16px] py-[12px] text-[11px] text-slate-600 dark:text-slate-400 font-mono">
                       {{ connection.account_id }}
                     </td>
                     <td class="px-[16px] py-[12px] text-[10px]">
@@ -503,8 +542,8 @@ onMounted(() => {
                       </div>
                     </td>
                     <td class="px-[16px] py-[12px] text-[10px]">
-                      <span class="px-[6px] py-[4px] rounded font-medium" :class="getStatusClass(connection.status)">
-                        {{ getStatusText(connection.status) }}
+                      <span class="px-[6px] py-[4px] rounded font-medium" :class="getStatusClass(getEffectiveStatus(connection))">
+                        {{ getStatusText(getEffectiveStatus(connection)) }}
                       </span>
                     </td>
                     <td class="px-[16px] py-[12px] text-[10px] text-slate-600 dark:text-slate-400">
@@ -512,18 +551,24 @@ onMounted(() => {
                     </td>
                     <td class="px-[16px] py-[12px] text-right">
                       <div class="flex items-center justify-end gap-[6px]">
+                        <!-- Meta 和 Google 平台显示同步按钮 -->
                         <button
-                          class="px-[9px] py-[6px] rounded text-[10px] font-medium border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                          @click="handleEdit(connection)"
+                          v-if="(activePlatform === 'meta' || activePlatform === 'google')"
+                          class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
+                          :class="getEffectiveStatus(connection) === 'active'
+                            ? 'border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
+                            : 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'"
+                          :disabled="getEffectiveStatus(connection) !== 'active'"
+                          @click="handleSyncAdAccounts(connection)"
                         >
-                          编辑
+                          同步广告子账号
                         </button>
                         <button
                           class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
-                          :class="connection.status === 'active' 
+                          :class="getEffectiveStatus(connection) === 'active' 
                             ? 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'
                             : 'border-primary text-primary hover:bg-primary/5'"
-                          :disabled="connection.status === 'active'"
+                          :disabled="getEffectiveStatus(connection) === 'active'"
                           @click="handleAuthorize(connection)"
                         >
                           授权
@@ -538,9 +583,9 @@ onMounted(() => {
                     </td>
                     </tr>
                     
-                    <!-- 子账号展开行（仅 Google 平台） -->
-                    <tr v-if="activePlatform === 'google' && isExpanded(connection.id)" class="bg-slate-50/50 dark:bg-slate-700/20">
-                      <td :colspan="activePlatform === 'google' ? 7 : 6" class="px-0 py-0">
+                    <!-- 子账号展开行（Meta 和 Google 平台） -->
+                    <tr v-if="(activePlatform === 'meta' || activePlatform === 'google') && isExpanded(connection.id)" class="bg-slate-50/50 dark:bg-slate-700/20">
+                      <td :colspan="activePlatform === 'meta' ? 6 : 7" class="px-0 py-0">
                         <div class="px-[25px] py-[12px]">
                           <!-- 加载中 -->
                           <div v-if="loadingSubAccounts.has(connection.id)" class="text-center py-[12px]">
@@ -554,11 +599,13 @@ onMounted(() => {
                               <h4 class="text-[10px] font-semibold text-slate-700 dark:text-slate-300">子账号列表</h4>
                               <div class="flex items-center gap-[9px]">
                                 <span class="text-[10px] text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].length }} 个子账号</span>
+                                <!-- Google 平台显示手动添加按钮 -->
                                 <button
+                                  v-if="activePlatform === 'google'"
                                   @click="openAddSubAccountDialog(connection.id)"
                                   class="px-[9px] py-[6px] rounded text-[10px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                                 >
-                                  + 添加子账号
+                                  添加子账号
                                 </button>
                               </div>
                             </div>
@@ -577,7 +624,7 @@ onMounted(() => {
                                   </div>
                                   <div class="flex items-center gap-[12px] mt-[4px]">
                                     <span class="text-[10px] text-slate-600 dark:text-slate-400">
-                                      <span class="font-medium">Customer ID:</span> {{ subAccount.customer_id }}
+                                      <span class="font-medium">Sub Account ID:</span> {{ subAccount.sub_account_id }}
                                     </span>
                                     <span class="text-[10px] text-slate-500 dark:text-slate-400">
                                       更新时间: {{ formatDate(subAccount.updated_at) }}
@@ -599,8 +646,12 @@ onMounted(() => {
                           <!-- 无子账号 -->
                           <div v-else class="text-center py-[12px]">
                             <span class="material-symbols-outlined text-[23px] text-slate-300 dark:text-slate-600">folder_open</span>
-                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-[6px] mb-[9px]">暂无子账号</p>
+                            <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-[6px] mb-[9px]">
+                              {{ activePlatform === 'meta' ? '暂无子账号，请点击上方「同步广告子账号」按钮获取' : '暂无子账号' }}
+                            </p>
+                            <!-- Google 平台显示添加按钮 -->
                             <button
+                              v-if="activePlatform === 'google'"
                               @click="openAddSubAccountDialog(connection.id)"
                               class="px-[12px] py-[6px] rounded text-[11px] font-medium bg-primary text-white hover:bg-primary/90 transition-colors"
                             >
@@ -674,35 +725,6 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- Meta 配置弹窗组件 -->
-    <MetaConfigDialog
-      v-if="activePlatform === 'meta'"
-      :show="showConfigDialog"
-      :connection-id="editingConnection?.id || null"
-      :initial-data="editingConnection ? {
-        account_name: editingConnection.account_name || '',
-        app_id: editingConnection.account_id,
-        scopes: editingConnection.scopes || []
-      } : null"
-      @close="closeConfigDialog"
-      @save="handleSaveConfig"
-      @import="handleImportToken"
-    />
-    
-    <!-- Google 配置弹窗组件 -->
-    <GoogleConfigDialog
-      v-if="activePlatform === 'google'"
-      :show="showConfigDialog"
-      :connection-id="editingConnection?.id || null"
-      :initial-data="editingConnection ? {
-        account_name: editingConnection.account_name || '',
-        client_id: editingConnection.account_id,
-        scopes: editingConnection.scopes || []
-      } : null"
-      @close="closeConfigDialog"
-      @save="handleSaveConfig"
-    />
-    
     <!-- 删除确认弹窗 -->
     <ConfirmDialog
       :show="showDeleteConfirm"

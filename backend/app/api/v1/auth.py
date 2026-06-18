@@ -47,7 +47,12 @@ async def login(
     
     return ResponseBase(
         data=TokenResponse(
-            user=UserResponse(id=user["id"], email=user["email"], name=user["name"]),
+            user=UserResponse(
+                id=user["id"], 
+                email=user["email"], 
+                name=user["name"],
+                system_role=user.get("system_role", "USER")
+            ),
             access_token=access_token,
             refresh_token=refresh_token,
         )
@@ -114,7 +119,12 @@ async def register(
     
     return ResponseBase(
         data=TokenResponse(
-            user=UserResponse(id=user["id"], email=user["email"], name=user["name"]),
+            user=UserResponse(
+                id=user["id"], 
+                email=user["email"], 
+                name=user["name"],
+                system_role=user.get("system_role", "USER")
+            ),
             access_token=access_token,
             refresh_token=refresh_token,
         )
