@@ -105,23 +105,26 @@ const getIconColorClass = () => {
   <Transition name="toast">
     <div
       v-if="visible"
-      class="fixed top-4 right-4 z-50 min-w-[300px] max-w-md"
+      class="fixed top-4 right-4 z-50 z-50"
+      style="min-width: 240px; max-width: 358px;"
     >
       <div
         :class="[
-          'flex items-center gap-3 px-4 py-3 rounded-md border shadow-lg',
+          'flex items-center gap-2 rounded-md border shadow-lg',
           getColorClass()
         ]"
+        style="padding: 9.6px 12.8px;"
       >
-        <span :class="['material-symbols-outlined text-2xl', getIconColorClass()]">
+        <span :class="['material-symbols-outlined', getIconColorClass()]" style="font-size: 19.2px;">
           {{ getIcon() }}
         </span>
-        <p class="flex-1 text-sm font-medium">{{ message }}</p>
+        <p class="flex-1 font-medium" style="font-size: 11.2px;">{{ message }}</p>
         <button
-          class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          class="rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+          style="padding: 3.2px;"
           @click="handleClose"
         >
-          <span class="material-symbols-outlined text-lg">close</span>
+          <span class="material-symbols-outlined" style="font-size: 14.4px;">close</span>
         </button>
       </div>
     </div>

@@ -47,28 +47,31 @@ const getIconColorClass = (type: string) => {
 </script>
 
 <template>
-  <div class="fixed top-4 right-4 z-50 flex flex-col gap-3 pointer-events-none">
+  <div class="fixed top-4 right-4 z-50 flex flex-col pointer-events-none" style="gap: 9.6px;">
     <TransitionGroup name="toast-list">
       <div
         v-for="toast in toasts"
         :key="toast.id"
-        class="pointer-events-auto min-w-[300px] max-w-md"
+        class="pointer-events-auto"
+        style="min-width: 240px; max-width: 358px;"
       >
         <div
           :class="[
-            'flex items-center gap-3 px-4 py-3 rounded-md border shadow-lg',
+            'flex items-center gap-2 rounded-md border shadow-lg',
             getColorClass(toast.type)
           ]"
+          style="padding: 9.6px 12.8px;"
         >
-          <span :class="['material-symbols-outlined text-2xl', getIconColorClass(toast.type)]">
+          <span :class="['material-symbols-outlined', getIconColorClass(toast.type)]" style="font-size: 19.2px;">
             {{ getIcon(toast.type) }}
           </span>
-          <p class="flex-1 text-sm font-medium">{{ toast.message }}</p>
+          <p class="flex-1 font-medium" style="font-size: 11.2px;">{{ toast.message }}</p>
           <button
-            class="p-1 rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            class="rounded-md hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            style="padding: 3.2px;"
             @click="removeToast(toast.id)"
           >
-            <span class="material-symbols-outlined text-lg">close</span>
+            <span class="material-symbols-outlined" style="font-size: 14.4px;">close</span>
           </button>
         </div>
       </div>
