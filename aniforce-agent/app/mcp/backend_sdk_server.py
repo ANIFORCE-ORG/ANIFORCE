@@ -116,6 +116,18 @@ def _make_backend_tool_factory(jwt_token: str, user_id: str, task_id: str):
         return await call_backend("get_project", args)
 
     @tool(
+        "create_project",
+        "创建新项目（写操作，通常需先调用 confirm_action 获取用户确认）",
+        {
+            "name": {"type": "string", "description": "项目名称"},
+            "total_budget": {"type": "number", "description": "总预算"},
+            "description": {"type": "string", "description": "项目描述（可选）"},
+        },
+    )
+    async def create_project(args: Dict[str, Any]) -> Dict[str, Any]:
+        return await call_backend("create_project", args)
+
+    @tool(
         "list_campaigns",
         "列出指定项目下的广告计划列表",
         {
@@ -178,15 +190,73 @@ def _make_backend_tool_factory(jwt_token: str, user_id: str, task_id: str):
     async def get_material(args: Dict[str, Any]) -> Dict[str, Any]:
         return await call_backend("get_material", args)
 
+    # ============================================================
+    # Mock 工具（用于 Agent 长程任务能力展示）
+    # ============================================================
+
+    @tool(
+        "create_material",
+        "创建广告素材（Mock）",
+        {
+            "project_id": {"type": "string", "description": "项目 ID"},
+            "name": {"type": "string", "description": "素材名称"},
+            "material_type": {"type": "string", "description": "素材类型：image/video/text"},
+            "content_url": {"type": "string", "description": "素材内容 URL（可选）"},
+        },
+    )
+    async def create_material(args: Dict[str, Any]) -> Dict[str, Any]:
+        return await call_backend("create_material", args)
+
+    @tool(
+        "generate_material_ai",
+        "AI 生成广告素材（Mock：返回占位 URL）",
+        {
+            "project_id": {"type": "string", "description": "项目 ID"},
+            "prompt": {"type": "string", "description": "生成提示词"},
+            "material_type": {"type": "string", "description": "生成类型：image/video/text", "default": "image"},
+            "count": {"type": "integer", "description": "生成数量", "default": 1},
+        },
+    )
+    async def generate_material_ai(args: Dict[str, Any]) -> Dict[str, Any]:
+        return await call_backend("generate_material_ai", args)
+
+    @tool(
+        "update_campaign_status",
+        "更新广告计划状态（启动/暂停/结束）",
+        {
+            "campaign_id": {"type": "string", "description": "计划 ID"},
+            "status": {"type": "string", "description": "目标状态：draft/active/paused/completed"},
+        },
+    )
+    async def update_campaign_status(args: Dict[str, Any]) -> Dict[str, Any]:
+        return await call_backend("update_campaign_status", args)
+
+    @tool(
+        "get_campaign_performance",
+        "获取广告计划投放数据（Mock：生成模拟数据）",
+        {
+            "campaign_id": {"type": "string", "description": "计划 ID"},
+            "date_range": {"type": "string", "description": "时间范围：last_7d/last_30d/custom", "default": "last_7d"},
+        },
+    )
+    async def get_campaign_performance(args: Dict[str, Any]) -> Dict[str, Any]:
+        return await call_backend("get_campaign_performance", args)
+
     return [
         list_projects,
         get_project,
+        create_project,
         list_campaigns,
         get_campaign,
         create_campaign,
         update_campaign_budget,
         list_materials,
         get_material,
+        # Mock 工具（长程任务能力展示）
+        create_material,
+        generate_material_ai,
+        update_campaign_status,
+        get_campaign_performance,
     ]
 
 

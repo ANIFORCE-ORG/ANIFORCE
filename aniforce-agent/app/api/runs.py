@@ -53,6 +53,7 @@ async def run_agent(
     request: RunRequest,
     user_id: str = Depends(get_current_user_id),
     task_service: TaskService = Depends(get_task_service),
+    db=Depends(get_task_db),
 ):
     """运行 Agent 并返回 ANIFORCE 业务事件 SSE"""
     session_id = request.session_id or str(uuid.uuid4())
@@ -60,6 +61,20 @@ async def run_agent(
         uuid.UUID(session_id)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="session_id must be a UUID") from exc
+
+    # Session 必须属于当前用户；否则同一个 UUID 会让 Claude SDK resume 他人历史会话，造成上下文泄露。
+    cursor = await db.execute(
+        """
+        SELECT user_id FROM tasks
+        WHERE session_id = ?
+        ORDER BY created_at ASC
+        LIMIT 1
+        """,
+        (session_id,),
+    )
+    owner_row = await cursor.fetchone()
+    if owner_row and owner_row[0] != user_id:
+        raise HTTPException(status_code=403, detail="Session does not belong to current user")
 
     input_data = dict(request.input_data or {})
     input_data.update(

@@ -295,12 +295,18 @@ class AgentRuntime:
         mcp_allowed = [
             "mcp__backend__list_projects",
             "mcp__backend__get_project",
+            "mcp__backend__create_project",
             "mcp__backend__list_campaigns",
             "mcp__backend__get_campaign",
             "mcp__backend__create_campaign",
             "mcp__backend__update_campaign_budget",
             "mcp__backend__list_materials",
             "mcp__backend__get_material",
+            # Mock 工具（长程任务能力展示）
+            "mcp__backend__create_material",
+            "mcp__backend__generate_material_ai",
+            "mcp__backend__update_campaign_status",
+            "mcp__backend__get_campaign_performance",
             "mcp__hitl__confirm_action",
         ]
         final_allowed_tools = list(set(final_tools + mcp_allowed))

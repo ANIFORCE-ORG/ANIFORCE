@@ -9,6 +9,7 @@ MCP Service - 业务工具注册与路由
 """
 
 import logging
+import time
 from typing import Any, Dict, Optional
 from fastapi import HTTPException
 
@@ -202,6 +203,82 @@ class MCPService:
                 },
                 "handler": self.list_platform_auths,
             },
+            # ============================================================
+            # Mock 工具（用于 Agent 长程任务能力展示，数据非真实）
+            # ============================================================
+            "create_material": {
+                "description": "创建广告素材（Mock）",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {"type": "string", "description": "项目 ID"},
+                        "name": {"type": "string", "description": "素材名称"},
+                        "material_type": {
+                            "type": "string",
+                            "description": "素材类型：image/video/text",
+                        },
+                        "content_url": {
+                            "type": "string",
+                            "description": "素材内容 URL（可选）",
+                        },
+                    },
+                    "required": ["project_id", "name", "material_type"],
+                },
+                "handler": self.mock_create_material,
+            },
+            "generate_material_ai": {
+                "description": "AI 生成广告素材（Mock：返回占位 URL）",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "project_id": {"type": "string", "description": "项目 ID"},
+                        "prompt": {"type": "string", "description": "生成提示词"},
+                        "material_type": {
+                            "type": "string",
+                            "description": "生成类型：image/video/text",
+                            "default": "image",
+                        },
+                        "count": {
+                            "type": "integer",
+                            "description": "生成数量",
+                            "default": 1,
+                        },
+                    },
+                    "required": ["project_id", "prompt"],
+                },
+                "handler": self.mock_generate_material_ai,
+            },
+            "update_campaign_status": {
+                "description": "更新广告计划状态（启动/暂停/结束）",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "campaign_id": {"type": "string", "description": "计划 ID"},
+                        "status": {
+                            "type": "string",
+                            "description": "目标状态：draft/active/paused/completed",
+                        },
+                    },
+                    "required": ["campaign_id", "status"],
+                },
+                "handler": self.mock_update_campaign_status,
+            },
+            "get_campaign_performance": {
+                "description": "获取广告计划投放数据（Mock：生成模拟数据）",
+                "inputSchema": {
+                    "type": "object",
+                    "properties": {
+                        "campaign_id": {"type": "string", "description": "计划 ID"},
+                        "date_range": {
+                            "type": "string",
+                            "description": "时间范围：last_7d/last_30d/custom",
+                            "default": "last_7d",
+                        },
+                    },
+                    "required": ["campaign_id"],
+                },
+                "handler": self.mock_get_campaign_performance,
+            },
         }
 
     def list_tools(self) -> list[dict]:
@@ -235,10 +312,27 @@ class MCPService:
         if not tool:
             raise HTTPException(status_code=404, detail=f"Tool not found: {tool_name}")
 
+        start_time = time.monotonic()
+        logger.info(
+            "[MCP_ACTION_START] tool=%s user_id=%s args_keys=%s",
+            tool_name,
+            user_id,
+            sorted(arguments.keys()),
+        )
+
         try:
             # 调用处理器
             handler = tool["handler"]
             result = await handler(user_id=user_id, **arguments)
+
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.info(
+                "[MCP_ACTION_DONE] tool=%s user_id=%s duration_ms=%s result_keys=%s",
+                tool_name,
+                user_id,
+                duration_ms,
+                sorted(result.keys()) if isinstance(result, dict) else [],
+            )
 
             # 返回 MCP 标准格式
             return {
@@ -251,7 +345,15 @@ class MCPService:
             }
 
         except Exception as e:
-            logger.error(f"Tool call error: tool={tool_name}, error={e}", exc_info=True)
+            duration_ms = int((time.monotonic() - start_time) * 1000)
+            logger.error(
+                "[MCP_ACTION_ERROR] tool=%s user_id=%s duration_ms=%s error=%s",
+                tool_name,
+                user_id,
+                duration_ms,
+                e,
+                exc_info=True,
+            )
             return {
                 "content": [
                     {
@@ -393,3 +495,191 @@ class MCPService:
             user_id=user_id, platform=platform
         )
         return {"platform_auths": auths}
+
+    # ============================================================
+    # Mock 工具实现（用于 Agent 长程任务能力展示）
+    # ============================================================
+
+    async def mock_create_material(
+        self,
+        user_id: str,
+        project_id: str,
+        name: str,
+        material_type: str,
+        content_url: Optional[str] = None,
+    ) -> dict:
+        """
+        Mock: 创建广告素材
+
+        注意：此工具为 Mock 实现，返回模拟数据用于 Agent 能力展示
+        """
+        # 验证项目权限
+        await self.get_project(user_id, project_id)
+
+        import uuid
+
+        material_id = str(uuid.uuid4())
+        mock_url = content_url or f"https://mock-cdn.aniforce.com/materials/{material_id}.jpg"
+
+        material = {
+            "id": material_id,
+            "project_id": project_id,
+            "name": name,
+            "type": material_type,
+            "url": mock_url,
+            "status": "active",
+            "created_at": "2026-06-17T12:00:00Z",
+            "note": "⚠️ Mock 数据，非真实素材",
+        }
+
+        logger.info(f"[Mock] Created material: {material_id} for project {project_id}")
+        return material
+
+    async def mock_generate_material_ai(
+        self,
+        user_id: str,
+        project_id: str,
+        prompt: str,
+        material_type: str = "image",
+        count: int = 1,
+    ) -> dict:
+        """
+        Mock: AI 生成广告素材
+
+        注意：此工具为 Mock 实现，返回模拟 AI 生成结果
+        """
+        # 验证项目权限
+        await self.get_project(user_id, project_id)
+
+        import uuid
+
+        # Agent/LLM 有时会把 JSON integer 参数传成字符串，Mock 工具兼容数字字符串
+        try:
+            count_int = int(count)
+        except (TypeError, ValueError):
+            count_int = 1
+        count_int = max(1, min(count_int, 10))
+
+        materials = []
+        for i in range(count_int):
+            material_id = str(uuid.uuid4())
+            mock_url = f"https://mock-cdn.aniforce.com/ai-generated/{material_id}.{material_type[:3]}"
+            materials.append(
+                {
+                    "id": material_id,
+                    "project_id": project_id,
+                    "name": f"AI_{material_type}_{i+1}",
+                    "type": material_type,
+                    "url": mock_url,
+                    "prompt": prompt,
+                    "status": "active",
+                    "created_at": "2026-06-17T12:00:00Z",
+                    "note": "⚠️ Mock AI 生成，非真实素材",
+                }
+            )
+
+        logger.info(
+            f"[Mock] AI generated {count_int} materials for project {project_id}: prompt='{prompt[:50]}...'"
+        )
+        return {"materials": materials, "count": count_int}
+
+    async def mock_update_campaign_status(
+        self, user_id: str, campaign_id: str, status: str
+    ) -> dict:
+        """
+        Mock: 更新广告计划状态
+
+        注意：实际应该调用广告平台 API，此处为 Mock 实现
+        """
+        campaign = await self.campaign_repo.get_by_id(campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        # 验证项目权限
+        await self.get_project(user_id, campaign["project_id"])
+
+        # Mock: 真实更新本地 DB 状态，但不调用外部广告平台 API
+        status_map = {
+            "active": "running",  # 前端/业务话术兼容：active 表示已开始投放
+            "running": "running",
+            "draft": "draft",
+            "paused": "paused",
+            "completed": "completed",
+        }
+        normalized_status = status_map.get(str(status).lower())
+        if not normalized_status:
+            raise HTTPException(status_code=400, detail=f"Invalid campaign status: {status}")
+
+        await self.campaign_repo.update_status(campaign_id, normalized_status)
+        await self.campaign_repo.session.commit()
+        updated = await self.campaign_repo.get_by_id(campaign_id)
+
+        logger.info(
+            f"[Mock] Update campaign {campaign_id} status: {campaign['status']} -> {normalized_status}"
+        )
+
+        return {
+            "campaign_id": campaign_id,
+            "campaign_name": campaign["name"],
+            "old_status": campaign["status"],
+            "new_status": normalized_status,
+            "updated_at": updated.get("updated_at") if updated else "2026-06-17T12:00:00Z",
+            "note": "⚠️ Mock 更新：已更新本地 DB，未真实调用广告平台 API",
+        }
+
+    async def mock_get_campaign_performance(
+        self, user_id: str, campaign_id: str, date_range: str = "last_7d"
+    ) -> dict:
+        """
+        Mock: 获取广告计划投放数据
+
+        注意：此工具返回模拟数据，用于 Agent 能力展示
+        真实场景应该调用广告平台 API 获取真实数据
+        """
+        campaign = await self.campaign_repo.get_by_id(campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+
+        # 验证项目权限
+        await self.get_project(user_id, campaign["project_id"])
+
+        # Mock 数据：用 campaign_id 哈希生成稳定的假数据
+        import hashlib
+
+        seed = int(hashlib.md5(campaign_id.encode()).hexdigest()[:8], 16)
+
+        # 根据种子生成模拟数据（同一 campaign_id 每次返回相同数据）
+        impressions = (seed % 100000) + 50000  # 5万-15万展示
+        clicks = impressions // ((seed % 30) + 20)  # CTR 2-5%
+        spent = campaign["budget"] * ((seed % 80) + 20) / 100  # 花了 20-100%
+        conversions = clicks // ((seed % 20) + 10)  # CVR 5-10%
+
+        ctr = round(clicks / impressions * 100, 2) if impressions > 0 else 0
+        cpc = round(spent / clicks, 2) if clicks > 0 else 0
+        cpa = round(spent / conversions, 2) if conversions > 0 else 0
+        # 假设每个转化价值 100 元
+        roi = (
+            round((conversions * 100 - spent) / spent * 100, 2) if spent > 0 else 0
+        )
+
+        logger.info(
+            f"[Mock] Get campaign performance: {campaign_id}, impressions={impressions}, roi={roi}%"
+        )
+
+        return {
+            "campaign_id": campaign_id,
+            "campaign_name": campaign["name"],
+            "platform": campaign["platform"],
+            "date_range": date_range,
+            "metrics": {
+                "impressions": impressions,
+                "clicks": clicks,
+                "conversions": conversions,
+                "spent": round(spent, 2),
+                "ctr": ctr,  # Click-Through Rate
+                "cpc": cpc,  # Cost Per Click
+                "cpa": cpa,  # Cost Per Acquisition
+                "roi": roi,  # Return on Investment (%)
+            },
+            "note": "⚠️ Mock 数据，用于 Agent 能力展示，非真实投放结果",
+        }
