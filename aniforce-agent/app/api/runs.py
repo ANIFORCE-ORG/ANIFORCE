@@ -2,6 +2,7 @@
 
 import logging
 import uuid
+from datetime import datetime
 from typing import Any, Optional
 
 import aiosqlite
@@ -13,7 +14,9 @@ from app.agent.runtime import AgentRuntime
 from app.api.deps import get_current_user_id
 from app.config.database import get_task_db
 from app.config.settings import get_settings
+from app.models import Session
 from app.repositories.event_repo import EventRepository
+from app.repositories.session_repo import SessionRepository
 from app.repositories.task_repo import TaskRepository
 from app.services.business_event_adapter import BusinessEventAdapter
 from app.services.task_service import TaskService
@@ -62,19 +65,31 @@ async def run_agent(
     except ValueError as exc:
         raise HTTPException(status_code=400, detail="session_id must be a UUID") from exc
 
-    # Session 必须属于当前用户；否则同一个 UUID 会让 Claude SDK resume 他人历史会话，造成上下文泄露。
-    cursor = await db.execute(
-        """
-        SELECT user_id FROM tasks
-        WHERE session_id = ?
-        ORDER BY created_at ASC
-        LIMIT 1
-        """,
-        (session_id,),
-    )
-    owner_row = await cursor.fetchone()
-    if owner_row and owner_row[0] != user_id:
-        raise HTTPException(status_code=403, detail="Session does not belong to current user")
+    # ---- Session 归属与自动创建 ----
+    session_repo = SessionRepository(db)
+    existing_session = await session_repo.get_by_id(session_id, user_id)
+
+    if existing_session:
+        # 已有 session，验证归属（get_by_id 已按 user_id 过滤，不匹配返回 None）
+        # 如果 session 存在但不属于当前用户，说明是他人会话，拒绝
+        cursor = await db.execute(
+            "SELECT user_id FROM sessions WHERE session_id = ?",
+            (session_id,),
+        )
+        owner_row = await cursor.fetchone()
+        if owner_row and owner_row[0] != user_id:
+            raise HTTPException(status_code=403, detail="Session does not belong to current user")
+    else:
+        # 新 session，自动创建记录
+        new_session = Session(
+            session_id=session_id,
+            user_id=user_id,
+            title=request.title or request.prompt[:50],
+            status="active",
+            last_active_at=None,
+        )
+        await session_repo.create(new_session)
+        logger.info("Session auto-created: %s, user=%s", session_id, user_id)
 
     input_data = dict(request.input_data or {})
     input_data.update(
@@ -91,6 +106,11 @@ async def run_agent(
         title=request.title or request.prompt[:50],
         input_data=input_data,
         session_id=session_id,
+    )
+
+    # 更新 session 的 last_task_id 和 last_active_at
+    await session_repo.update_last_task(
+        session_id, user_id, task.task_id, datetime.utcnow()
     )
 
     logger.info(

@@ -92,5 +92,24 @@ async def init_task_db():
         await db.execute("CREATE INDEX IF NOT EXISTS idx_task_outputs_type ON task_outputs(output_type)")
         await db.execute("CREATE INDEX IF NOT EXISTS idx_task_outputs_status ON task_outputs(status)")
 
+        # 创建 sessions 表
+        await db.execute("""
+            CREATE TABLE IF NOT EXISTS sessions (
+                session_id TEXT PRIMARY KEY,
+                user_id TEXT NOT NULL,
+                title TEXT NOT NULL DEFAULT '新会话',
+                status TEXT NOT NULL DEFAULT 'active',
+                last_task_id TEXT,
+                last_active_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            )
+        """)
+
+        # 创建会话索引
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_id ON sessions(user_id)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_user_status ON sessions(user_id, status)")
+        await db.execute("CREATE INDEX IF NOT EXISTS idx_sessions_last_active ON sessions(user_id, status, last_active_at DESC)")
+
         await db.commit()
         print("✅ Task database initialized")

@@ -8,6 +8,7 @@ from app.middleware import AuthMiddleware
 from app.api.runs import router as runs_router
 from app.api.tasks import router as tasks_router
 from app.api.hitl import router as hitl_router
+from app.api.sessions import router as sessions_router
 
 
 @asynccontextmanager
@@ -46,6 +47,7 @@ app.add_middleware(AuthMiddleware)
 app.include_router(runs_router, prefix="/api/agent")
 app.include_router(tasks_router, prefix="/api/agent")
 app.include_router(hitl_router, prefix="/api/agent")
+app.include_router(sessions_router, prefix="/api/agent")
 
 
 @app.get("/")

@@ -20,6 +20,11 @@ const router = createRouter({
       component: () => import('@/pages/Home.vue'),
     },
     {
+      path: '/agent-workspace',
+      name: 'agent-workspace',
+      component: () => import('@/pages/AgentWorkspace.vue'),
+    },
+    {
       path: '/market-analysis',
       name: 'market-analysis',
       component: () => import('@/pages/MarketAnalysis.vue'),
@@ -117,7 +122,8 @@ router.beforeEach((to, from, next) => {
   const auth = useAuthStore()
   
   // 需要登录的页面列表
-  const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/account-config', '/ai-usage-config', '/platform-connections']
+  // TODO: 原型阶段移除 /home 鉴权，正式上线恢复
+  const requiresAuth = ['/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/account-config', '/ai-usage-config', '/platform-connections']
   
   // 已登录用户访问GetStart页面,重定向到/home
   if (to.path === '/' && auth.isLoggedIn) {
