@@ -1,0 +1,1184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ANIFORCE 新任务 - Chatbot First</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap" rel="stylesheet">
+  <style>
+    :root{
+      --primary:#3478f6;
+      --primary-600:#215dcc;
+      --primary-soft:#eef5ff;
+      --ink:#111827;
+      --muted:#667085;
+      --line:#e5eaf1;
+      --line-2:#f1f4f8;
+      --panel:#fff;
+      --dark:#0d1324;
+      --ok:#12805c;
+      --warn:#b7791f;
+      --sidebar:320px;
+      --chat:56%;
+      font-size:75%;
+    }
+    *{box-sizing:border-box}
+    html,body{margin:0;min-height:100%}
+    body{
+      font-family:Inter,-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+      color:var(--ink);
+      background:#fff;
+      font-size:1rem;
+      letter-spacing:0;
+    }
+    button,input,select,textarea{font:inherit}
+    button{cursor:pointer}
+    .material-symbols-outlined{
+      font-family:"Material Symbols Outlined";
+      font-size:1.35rem;
+      line-height:1;
+      font-variation-settings:"FILL" 0,"wght" 430,"GRAD" 0,"opsz" 24;
+    }
+    .app{height:100vh;height:100dvh;display:flex;flex-direction:column;background:#fff}
+    .app.sidebar-collapsed{--sidebar:88px}
+    .topbar{
+      height:5.5rem;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      padding:0 2.8rem;
+      border-bottom:1px solid var(--line);
+      background:#fff;
+      z-index:20;
+    }
+    .brand,.top-actions,.user{display:flex;align-items:center}
+    .brand{gap:.85rem}
+    .brand-mark,.avatar{
+      width:2.8rem;
+      height:2.8rem;
+      display:grid;
+      place-items:center;
+      border-radius:999px;
+      flex:0 0 auto;
+    }
+    .brand-mark{
+      color:#fff;
+      background:var(--primary);
+      box-shadow:0 .55rem 1.4rem rgba(52,120,246,.16);
+    }
+    .brand strong{font-size:1.5rem;font-weight:800;color:#2376d9}
+    .top-actions{gap:1.2rem}
+    .user{gap:.75rem}
+    .avatar{border:2px solid #b9d3fb;color:var(--primary-600);background:#eff6ff;font-weight:800}
+    .user strong,.user span{display:block;white-space:nowrap}
+    .user strong{font-size:1rem}
+    .user span{margin-top:.18rem;color:#667085;font-size:.86rem;font-weight:600}
+    .icon-button{
+      width:2.65rem;
+      height:2.65rem;
+      border:0;
+      display:grid;
+      place-items:center;
+      color:#4b5567;
+      background:transparent;
+      border-radius:999px;
+    }
+    .icon-button:hover{background:#f5f7fb}
+    .shell{flex:1;min-height:0;display:grid;grid-template-columns:var(--sidebar) minmax(0,1fr)}
+    .sidebar{border-right:1px solid var(--line);background:#fff;padding:2.9rem 1.1rem 1.4rem;overflow:auto}
+    .side-section+.side-section{margin-top:1.8rem}
+    .side-label{
+      display:flex;
+      justify-content:space-between;
+      align-items:center;
+      padding:0 .1rem 1.1rem;
+      color:#55657d;
+      font-size:.94rem;
+      font-weight:800;
+    }
+    .nav-list{display:grid;gap:.5rem}
+    .nav-item,.history-item{
+      width:100%;
+      border:0;
+      display:flex;
+      align-items:center;
+      background:transparent;
+      border-radius:999px;
+      text-align:left;
+    }
+    .nav-item{
+      min-height:3.6rem;
+      gap:1.05rem;
+      padding:0 1.1rem;
+      color:#4c5a73;
+      font-size:1.13rem;
+      font-weight:650;
+    }
+    .nav-item.active{color:#2f7be6;background:#eaf2ff;font-weight:800}
+    .history-item{
+      min-height:3.85rem;
+      gap:.75rem;
+      padding:0 1.1rem;
+      color:#4f5e76;
+      font-size:1rem;
+      font-weight:700;
+    }
+    .history-item.active{color:#2f7be6;background:#eaf2ff}
+    .history-item span:last-child{overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    .app.sidebar-collapsed .sidebar{padding:1.4rem .75rem}
+    .app.sidebar-collapsed .side-label{justify-content:center;padding-bottom:.85rem}
+    .app.sidebar-collapsed .side-label > span,
+    .app.sidebar-collapsed .nav-item span:last-child,
+    .app.sidebar-collapsed .history-item span:last-child{display:none}
+    .app.sidebar-collapsed .nav-item,
+    .app.sidebar-collapsed .history-item{justify-content:center;padding:0}
+    .app.sidebar-collapsed .side-section+.side-section{margin-top:1.15rem}
+    .main{min-width:0;min-height:0;display:grid;grid-template-rows:4.6rem minmax(0,1fr);background:#fff}
+    .page-head{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:1rem;
+      padding:0 1.35rem;
+      border-bottom:1px solid var(--line);
+      background:#fff;
+    }
+    .page-title{display:flex;align-items:center;gap:.6rem;font-weight:800;font-size:1.05rem}
+    .page-actions{display:flex;gap:.5rem}
+    .btn{
+      min-height:2.55rem;
+      border:1px solid var(--line);
+      border-radius:.55rem;
+      background:#fff;
+      color:#344054;
+      padding:0 .9rem;
+      font-weight:800;
+    }
+    .btn.primary{background:var(--dark);border-color:var(--dark);color:#fff}
+    .btn.soft{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8}
+    .tri{
+      min-height:0;
+      display:grid;
+      grid-template-columns:minmax(30rem,var(--chat)) .45rem minmax(34rem,calc(100% - var(--chat)));
+      background:#fff;
+      overflow:hidden;
+    }
+    .split{
+      cursor:col-resize;
+      background:linear-gradient(90deg,#fff,#edf2f7,#fff);
+      border-left:1px solid var(--line-2);
+      border-right:1px solid var(--line-2);
+    }
+    .split:hover{background:#dbeafe}
+    .chat,.workspace{min-width:0;min-height:0;display:grid}
+    .chat{grid-template-rows:auto auto minmax(0,1fr);background:#fff}
+    .workspace{grid-template-rows:auto minmax(0,1fr);overflow:hidden}
+    .pane-head{
+      min-height:3.35rem;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:1rem;
+      padding:0 1.2rem;
+      border-bottom:1px solid var(--line);
+      background:#fff;
+    }
+    .pane-head h2{margin:0;font-size:1rem}
+    .pane-head p{margin:.12rem 0 0;color:#667085;font-size:.74rem;font-weight:650}
+    .badge{
+      display:inline-flex;
+      align-items:center;
+      gap:.35rem;
+      border:1px solid var(--line);
+      border-radius:999px;
+      padding:.3rem .6rem;
+      color:#667085;
+      font-size:.78rem;
+      font-weight:800;
+      white-space:nowrap;
+    }
+    .badge.live{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8}
+    .badge.ok{border-color:#bbf7d0;background:#f0fdf4;color:#12805c}
+    .badge.warn{border-color:#fde68a;background:#fffbeb;color:#b7791f}
+    .workflow-strip{padding:.64rem .9rem;border-bottom:1px solid var(--line);background:#fff}
+    .workflow-rail{position:relative;width:min(72rem,100%);margin:0 auto;display:grid;grid-template-columns:repeat(4,minmax(8.5rem,1fr));gap:.7rem}
+    .workflow-rail:before{display:none}
+    .node{position:relative;display:grid;grid-template-columns:1.8rem minmax(0,1fr);grid-template-areas:"icon name";align-items:center;column-gap:.5rem;min-width:0;border:1px solid #e5eaf1;border-radius:.58rem;background:#fff;padding:.48rem .62rem;text-align:left;color:#94a3b8;transition:opacity .18s ease,border-color .18s ease,box-shadow .18s ease,background .18s ease,transform .18s ease,color .18s ease}
+    .node-icon{grid-area:icon;width:1.8rem;height:1.8rem;display:grid;place-items:center;border-radius:999px;border:1px solid #d8e4f3;background:#f8fafc;color:#94a3b8;z-index:1}
+    .node-icon.material-symbols-outlined{font-size:.9rem}
+    .node.done,.node.dim,.node.warn:not(.current){opacity:.46;filter:grayscale(1) saturate(0);border-color:#e7ebf3;background:#fafbfc;color:#94a3b8}
+    .node.done .node-icon,.node.dim .node-icon,.node.warn:not(.current) .node-icon{border-color:#e2e8f0;background:#f8fafc;color:#94a3b8;box-shadow:none}
+    .node.done .node-name,.node.dim .node-name,.node.warn:not(.current) .node-name{color:#94a3b8}
+    .node.current{opacity:1;filter:none;border-color:#60a5fa;background:#f8fbff;box-shadow:0 0 0 .16rem rgba(96,165,250,.18),0 .45rem 1.1rem rgba(37,99,235,.1);transform:translateY(-1px)}
+    .node.current .node-icon{border-color:#2563eb;background:#2563eb;color:#fff;box-shadow:0 0 0 .24rem #eaf4ff}
+    .node.warn.current .node-icon{border-color:#2563eb;background:#2563eb;color:#fff;box-shadow:0 0 0 .24rem #eaf4ff}
+    .node-name{grid-area:name;font-size:.86rem;font-weight:850;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+    .node-desc{display:none}
+    .workflow-checks{display:none}
+    .check-chip{display:inline-flex;align-items:center;gap:.26rem;border:1px solid var(--line);border-radius:999px;background:#fff;color:#344054;padding:.16rem .4rem;font-size:.66rem;font-weight:800}
+    .check-chip.ok{border-color:#bbf7d0;background:#f0fdf4;color:#12805c}
+    .check-chip.warn{border-color:#fde68a;background:#fffbeb;color:#b7791f}
+    .check-dot{width:.42rem;height:.42rem;border-radius:999px;background:currentColor;flex:0 0 auto}
+    .chat-body{
+      min-height:0;
+      display:grid;
+      grid-template-rows:minmax(0,1fr) auto;
+      background:#fff;
+    }
+    .chat-stream{
+      min-height:0;
+      overflow:auto;
+      padding:1.4rem 1.45rem 1.1rem;
+      display:grid;
+      align-content:start;
+      gap:1rem;
+      background:#fff;
+    }
+    .prompt-diff{
+      display:grid;
+      gap:.72rem;
+      margin-top:.72rem;
+      padding:.78rem .82rem;
+      border:1px solid #e5eaf1;
+      border-radius:.72rem;
+      background:#fff;
+      box-shadow:0 .35rem 1rem rgba(15,23,42,.035);
+    }
+    .prompt-diff header{
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:.65rem;
+      color:#475569;
+      font-size:.76rem;
+      font-weight:850;
+    }
+    .diff-score{color:#2563eb;font-weight:900}
+    .diff-section{display:grid;gap:.42rem}
+    .diff-section-title{color:#64748b;font-size:.72rem;font-weight:850}
+    .diff-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.45rem}
+    .diff-item{
+      min-width:0;
+      border:1px solid #edf2f7;
+      border-radius:.5rem;
+      background:#fbfdff;
+      padding:.5rem .58rem;
+    }
+    .diff-item span{display:block;color:#64748b;font-size:.68rem;font-weight:850}
+    .diff-item strong{display:block;margin-top:.12rem;color:#111827;font-size:.82rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .diff-missing{
+      display:flex;
+      flex-wrap:wrap;
+      gap:.38rem;
+    }
+    .missing-pill{
+      display:inline-flex;
+      align-items:center;
+      border:1px solid #fed7aa;
+      border-radius:999px;
+      background:#fff7ed;
+      color:#9a3412;
+      padding:.25rem .55rem;
+      font-size:.76rem;
+      font-weight:950;
+    }
+    .missing-pill.empty{
+      border-color:#bbf7d0;
+      background:#f0fdf4;
+      color:#12805c;
+    }
+    .empty-state{
+      min-height:100%;
+      display:grid;
+      align-content:center;
+      justify-items:center;
+      text-align:center;
+      gap:1rem;
+    }
+    .empty-prompt-shell{width:min(58rem,100%);display:grid;justify-items:center;gap:1.55rem}
+    .empty-icon{
+      width:3.7rem;
+      height:3.7rem;
+      display:grid;
+      place-items:center;
+      border-radius:999px;
+      color:#1d4ed8;
+      background:#eff6ff;
+      border:1px solid #bfdbfe;
+    }
+    .empty-state h3{margin:0;font-size:1.35rem}
+    .empty-state p{margin:0;color:#667085;font-weight:650}
+    .input-shell{display:contents}
+    .empty-composer-wrap{width:min(58rem,100%);display:grid;gap:0;border-radius:1.25rem;background:#f4f4f5;box-shadow:0 1.2rem 3rem rgba(15,23,42,.08)}
+    .empty-toolbar{display:flex;align-items:center;justify-content:space-between;gap:.7rem;padding:.62rem .82rem;color:#7a8290;font-size:.82rem;font-weight:750}
+    .empty-tools,.empty-context{display:flex;align-items:center;gap:.45rem;min-width:0}
+    .empty-context{justify-content:flex-start;flex-wrap:wrap}
+    .empty-tool{border:0;background:transparent;color:#7a8290;padding:.22rem .3rem;border-radius:.4rem;display:inline-flex;align-items:center;gap:.28rem;font-weight:800}
+    .empty-tool:hover{background:#eceff3;color:#344054}
+    .empty-context button{border:0;background:transparent;color:#7a8290;padding:.22rem .34rem;border-radius:.4rem;display:inline-flex;align-items:center;gap:.3rem;font-weight:800}
+    .empty-context button:hover{background:#eceff3;color:#344054}
+    .empty-context .material-symbols-outlined,.empty-tools .material-symbols-outlined{font-size:1.1rem}
+    .empty-context-divider{width:1px;height:1rem;background:#d8dee8}
+    .starter-row{display:flex;flex-wrap:wrap;gap:.55rem;justify-content:center}
+    .starter-row button{
+      border:1px solid var(--line);
+      border-radius:999px;
+      background:#fff;
+      color:#344054;
+      padding:.5rem .75rem;
+      font-weight:800;
+      box-shadow:0 .35rem 1rem rgba(15,23,42,.035);
+    }
+    .starter-row button:hover{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8}
+    #messageFeed{display:grid;gap:1rem}
+    .msg{display:grid;gap:.45rem}
+    .msg.user{justify-items:end}
+    .agent-meta{color:#98a2b3;font-size:.78rem;font-weight:800}
+    .bubble{max-width:min(48rem,88%);border:1px solid var(--line);border-radius:.8rem;padding:.82rem 1rem;line-height:1.65;color:#344054;background:#fff}
+    .user .bubble{background:#eff6ff;border-color:#dbeafe;color:#1d355d}
+    .tool-card,.session-card{width:100%;border:1px solid var(--line);border-radius:.72rem;background:#fbfdff;overflow:hidden}
+    .tool-row{display:flex;align-items:center;justify-content:space-between;padding:.72rem .9rem}
+    .tool-name{font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;color:#1d4ed8;font-weight:800}
+    .quick{display:flex;flex-wrap:wrap;gap:.55rem}
+    .quick button{border:1px solid var(--line);border-radius:999px;background:#fff;color:#344054;padding:.45rem .7rem;font-weight:800}
+    .quick button:hover{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8}
+    .session-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem;padding:.85rem .95rem;border-bottom:1px solid var(--line-2);background:#fff}
+    .session-head h3{margin:0;font-size:1rem}
+    .session-list{display:grid;gap:.55rem;max-height:10.4rem;overflow:auto;padding:.75rem .9rem}
+    .session-entry{display:grid;gap:.32rem;padding:.65rem .7rem;border:1px solid var(--line-2);border-radius:.55rem;background:#fff}
+    .session-entry header{display:flex;align-items:center;justify-content:space-between;gap:.7rem;color:#667085;font-size:.75rem;font-weight:800}
+    .session-entry p{margin:0;color:#344054;line-height:1.48}
+    .session-diff{display:flex;flex-wrap:wrap;gap:.35rem}
+    .diff-pill{display:inline-flex;align-items:center;border-radius:999px;background:#eff6ff;color:#1d4ed8;padding:.22rem .48rem;font-size:.72rem;font-weight:800}
+    .composer{
+      display:grid;
+      grid-template-columns:2.55rem minmax(0,1fr) 2.8rem;
+      gap:.65rem;
+      align-items:end;
+      margin:0 1.2rem 1.2rem;
+      padding:.62rem;
+      border:1px solid var(--line);
+      border-radius:1.25rem;
+      background:#fff;
+      box-shadow:0 .7rem 2rem rgba(15,23,42,.055);
+    }
+    .composer button{
+      width:2.55rem;
+      height:2.55rem;
+      border:0;
+      border-radius:999px;
+      display:grid;
+      place-items:center;
+      flex:0 0 auto;
+    }
+    .composer textarea{
+      width:100%;
+      min-width:0;
+      min-height:2.55rem;
+      max-height:12rem;
+      border:0;
+      outline:0;
+      resize:none;
+      overflow:auto;
+      padding:.52rem .1rem;
+      line-height:1.45;
+      color:#111827;
+      background:transparent;
+    }
+    .composer textarea::placeholder{color:#7b8496}
+    .attach{background:#fff;color:#98a2b3}
+    .attach:hover{background:#f5f7fb;color:#667085}
+    .send{background:#8dbffc;color:#fff;font-weight:800}
+    .send:hover{background:#3478f6}
+    .send .material-symbols-outlined{font-size:1.25rem}
+    .work-body{min-width:0;min-height:0;overflow-y:auto;overflow-x:hidden;overscroll-behavior:contain;scrollbar-gutter:stable;background:#fbfcfe;padding:1.15rem 1.05rem 1.4rem 1.15rem;display:grid;grid-template-columns:minmax(0,1fr);align-content:start;gap:.9rem}
+    .version-panel{display:grid;gap:.7rem}
+    .version-head{display:flex;align-items:center;justify-content:space-between;gap:.75rem}
+    .version-head h3{margin:0;font-size:.95rem;color:#1f2937}
+    .version-list{display:grid;gap:.65rem}
+    .version-card{border:1px solid var(--line);border-radius:.7rem;background:#fff;padding:.78rem .85rem;display:grid;gap:.55rem;box-shadow:0 .55rem 1.4rem rgba(15,23,42,.03)}
+    .version-card.active{border-color:#93c5fd;background:#fff;box-shadow:0 0 0 .14rem rgba(147,197,253,.25)}
+    .version-card header{display:flex;align-items:flex-start;justify-content:space-between;gap:.75rem}
+    .version-title{display:grid;gap:.12rem;min-width:0}
+    .version-title strong{font-size:.9rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .version-title span{color:#667085;font-size:.72rem;font-weight:800}
+    .version-prompt{margin:0;color:#344054;line-height:1.45;font-size:.82rem}
+    .version-meta{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.45rem}
+    .version-stat{border:1px solid var(--line-2);border-radius:.48rem;background:#fff;padding:.45rem .5rem;min-width:0}
+    .version-stat span{display:block;color:#667085;font-size:.68rem;font-weight:800}
+    .version-stat strong{display:block;margin-top:.12rem;font-size:.82rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .version-diff{display:flex;flex-wrap:wrap;gap:.35rem}
+    .version-actions{display:flex;justify-content:flex-end;gap:.45rem}
+    .version-actions button{border:1px solid #bfdbfe;border-radius:999px;background:#fff;color:#1d4ed8;padding:.34rem .58rem;font-size:.75rem;font-weight:850}
+    .version-actions button:hover{background:#eff6ff}
+    .version-actions button:disabled{border-color:#d8e4f3;color:#667085;background:#f8fafc;cursor:default}
+    .work-card{width:100%;border:1px solid var(--line);border-radius:.75rem;background:#fff;overflow:hidden;box-shadow:0 .75rem 2rem rgba(15,23,42,.035)}
+    .card-head{display:flex;align-items:flex-start;justify-content:space-between;gap:1rem;padding:.56rem .82rem;border-bottom:1px solid var(--line-2)}
+    .card-head h3{margin:0;font-size:.95rem;line-height:1.2}
+    .meta{display:flex;flex-wrap:wrap;gap:.5rem;margin-top:.24rem;color:#667085;font-size:.72rem;font-weight:750}
+    .tabs{display:none;gap:.32rem;overflow:auto;padding:.36rem .82rem;border-bottom:1px solid var(--line-2)}
+    .tab{border:1px solid var(--line);background:#fff;border-radius:999px;padding:.22rem .48rem;color:#667085;font-size:.72rem;font-weight:800;white-space:nowrap}
+    .tab.active{border-color:#bfdbfe;background:#eff6ff;color:#1d4ed8}
+    .metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:.4rem;padding:.48rem .82rem}
+    .metric{min-width:0;border:1px solid var(--line-2);border-radius:.46rem;background:#fff;padding:.34rem .46rem}
+    .metric span{display:block;color:#667085;font-size:.66rem;font-weight:800}
+    .metric strong{display:block;margin-top:.14rem;font-size:.84rem;line-height:1.15;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .form{display:grid;grid-template-columns:1fr 1fr;gap:.38rem;padding:0 .82rem .5rem}
+    .field{display:grid;gap:.22rem;min-width:0}
+    .field.full{grid-column:1/-1}
+    .field label{color:#667085;font-size:.68rem;font-weight:800}
+    .field input,.field select,.field textarea{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:.45rem;
+      padding:.32rem .46rem;
+      outline:0;
+      min-width:0;
+      background:#fff;
+      font-size:.82rem;
+    }
+    .field textarea{min-height:2.1rem;resize:vertical}
+    .card-actions{display:flex;justify-content:flex-end;gap:.42rem;padding:.45rem .82rem;border-top:1px solid var(--line-2)}
+    .card-actions .btn{min-height:2rem;padding:0 .62rem;font-size:.78rem}
+    .context-cards{display:grid;gap:.9rem}
+    .context-card{
+      width:100%;
+      border:1px solid var(--line);
+      border-radius:.75rem;
+      background:#fff;
+      padding:1rem;
+      display:grid;
+      gap:.9rem;
+      box-shadow:0 .75rem 2rem rgba(15,23,42,.035);
+    }
+    .context-card header{
+      display:flex;
+      align-items:flex-start;
+      justify-content:space-between;
+      gap:.8rem;
+    }
+    .context-card h3{margin:0;font-size:1rem;line-height:1.25}
+    .context-card p{margin:.22rem 0 0;color:#667085;font-size:.76rem;font-weight:700;line-height:1.45}
+    .context-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:.55rem}
+    .context-metric{
+      min-width:0;
+      border:1px solid #edf2f7;
+      border-radius:.55rem;
+      background:#fbfdff;
+      padding:.62rem .7rem;
+    }
+    .context-metric span{display:block;color:#667085;font-size:.7rem;font-weight:850}
+    .context-metric strong{display:block;margin-top:.16rem;color:#111827;font-size:.96rem;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+    .context-note{
+      border:1px solid #dbeafe;
+      border-radius:999px;
+      background:#f8fbff;
+      color:#1d4ed8;
+      padding:.42rem .62rem;
+      width:fit-content;
+      max-width:100%;
+      font-size:.76rem;
+      font-weight:900;
+      white-space:nowrap;
+      overflow:hidden;
+      text-overflow:ellipsis;
+    }
+    .material-list{display:grid;gap:.55rem}
+    .material-row{
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      align-items:center;
+      gap:.75rem;
+      border:1px solid #edf2f7;
+      border-radius:.6rem;
+      background:#fbfdff;
+      padding:.68rem .76rem;
+    }
+    .material-row strong{display:block;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+    .material-row span{color:#667085;font-size:.72rem;font-weight:850}
+    .analysis-table{
+      width:100%;
+      border-collapse:separate;
+      border-spacing:0;
+      overflow:hidden;
+      border:1px solid #edf2f7;
+      border-radius:.65rem;
+      font-size:.78rem;
+    }
+    .analysis-table th,.analysis-table td{
+      padding:.62rem .7rem;
+      border-bottom:1px solid #edf2f7;
+      text-align:left;
+      white-space:nowrap;
+    }
+    .analysis-table tr:last-child td{border-bottom:0}
+    .analysis-table th{color:#667085;background:#fbfdff;font-weight:850}
+    .analysis-table td{color:#111827;font-weight:800}
+    .signal-up{color:#12805c}
+    .signal-warn{color:#b45309}
+    .app[data-mode="active"] .tri{
+      grid-template-columns:minmax(30rem,var(--chat)) 1px minmax(34rem,calc(100% - var(--chat)));
+      background:#fff;
+      border-top:1px solid #dfe3e8;
+    }
+    .app[data-mode="active"] .split{width:1px;background:#dfe3e8;border:0}
+    .app[data-mode="active"] .chat,
+    .app[data-mode="active"] .workspace{background:#fff}
+    .app[data-mode="active"] .workspace{background:#f7f7f8}
+    .app[data-mode="active"] .workspace .pane-head{
+      border-bottom:0;
+      background:#f7f7f8;
+    }
+    .app[data-mode="active"] .pane-head{
+      min-height:4rem;
+      padding:0 2.05rem;
+      border-bottom:1px solid #dfe3e8;
+      background:#fff;
+    }
+    .app[data-mode="active"] .pane-head h2{font-size:1.15rem;font-weight:800;color:#111827}
+    .app[data-mode="active"] .pane-head p{font-size:.82rem;color:#6b7280}
+    .app[data-mode="active"] .chat > .pane-head{display:none}
+    .app[data-mode="active"] .workflow-strip{
+      padding:.72rem 2.05rem;
+      border-bottom:1px solid #dfe3e8;
+      background:#fff;
+    }
+    .app[data-mode="active"] .workflow-rail{gap:.72rem}
+    .app[data-mode="active"] .node{border-radius:.42rem}
+    .app[data-mode="active"] .node.dim,
+    .app[data-mode="active"] .node.done,
+    .app[data-mode="active"] .node.warn:not(.current){
+      border-color:#e7ebf3;
+      background:#f5f6f8;
+      color:#9aa3b2;
+      opacity:.46;
+      filter:grayscale(1) saturate(0);
+    }
+    .app[data-mode="active"] .node.dim .node-icon,
+    .app[data-mode="active"] .node.done .node-icon,
+    .app[data-mode="active"] .node.warn:not(.current) .node-icon{
+      border-color:#e1e6ee;
+      background:#f8fafc;
+      color:#9aa3b2;
+      box-shadow:none;
+    }
+    .app[data-mode="active"] .node.current{
+      border-color:#60a5fa;
+      background:#f8fbff;
+      color:#111827;
+      opacity:1;
+      filter:none;
+      box-shadow:0 0 0 .16rem rgba(96,165,250,.18),0 .45rem 1.1rem rgba(37,99,235,.1);
+      transform:translateY(-1px);
+    }
+    .app[data-mode="active"] .chat-body{
+      display:flex;
+      flex-direction:column;
+      position:relative;
+      flex:1;
+      min-height:0;
+      background:#fff;
+      overflow:hidden;
+    }
+    .app[data-mode="active"] .chat-stream{
+      flex:1;
+      padding:1.9rem 2.6rem 8.3rem;
+      gap:1.45rem;
+      background:#fff;
+    }
+    .app[data-mode="active"] #messageFeed{gap:1.35rem}
+    .app[data-mode="active"] .msg{
+      display:grid;
+      grid-template-columns:2.65rem minmax(0,1fr);
+      column-gap:.75rem;
+      row-gap:0;
+      justify-items:start;
+      align-items:start;
+    }
+    .app[data-mode="active"] .msg:before{
+      content:"AI";
+      grid-column:1;
+      grid-row:1;
+      width:2.25rem;
+      height:2.25rem;
+      display:grid;
+      place-items:center;
+      border-radius:999px;
+      background:#16a34a;
+      color:#fff;
+      font-size:.72rem;
+      font-weight:850;
+    }
+    .app[data-mode="active"] .msg.user{
+      grid-template-columns:minmax(0,1fr) 2.65rem;
+      justify-items:end;
+    }
+    .app[data-mode="active"] .msg.user:before{
+      content:"我";
+      grid-column:2;
+      grid-row:1;
+      width:2.25rem;
+      height:2.25rem;
+      display:grid;
+      place-items:center;
+      border-radius:999px;
+      background:#2f7be6;
+      color:#fff;
+      font-size:.78rem;
+      font-weight:850;
+    }
+    .app[data-mode="active"] .agent-meta{
+      display:none;
+      color:#12a150;
+      font-size:.76rem;
+      font-weight:750;
+    }
+    .app[data-mode="active"] .msg:not(.user) .bubble{
+      grid-column:2;
+      grid-row:1;
+      position:relative;
+      width:fit-content;
+      max-width:min(62rem,92%);
+      border:0;
+      border-radius:1.15rem 1.15rem 1.15rem .3rem;
+      background:#f2f4f7;
+      padding:.72rem .92rem;
+      color:#1f2937;
+      font-size:1.02rem;
+      line-height:1.62;
+      box-shadow:none;
+    }
+    .app[data-mode="active"] .msg:not(.user) .bubble:before{
+      content:"";
+      position:absolute;
+      left:-.55rem;
+      top:1.08rem;
+      width:.72rem;
+      height:.82rem;
+      background:#f2f4f7;
+      clip-path:polygon(0 50%,100% 0,100% 100%);
+      pointer-events:none;
+    }
+    .app[data-mode="active"] .user .bubble{
+      grid-column:1;
+      grid-row:1;
+      position:relative;
+      justify-self:end;
+      border:0;
+      border-radius:1.15rem 1.15rem .3rem 1.15rem;
+      background:#dceafe;
+      color:#1f2937;
+      box-shadow:none;
+    }
+    .app[data-mode="active"] .user .bubble:before{
+      content:"";
+      position:absolute;
+      right:-.55rem;
+      top:1.08rem;
+      width:.72rem;
+      height:.82rem;
+      background:#dceafe;
+      clip-path:polygon(0 0,100% 50%,0 100%);
+      pointer-events:none;
+    }
+    .app[data-mode="active"] .tool-card{display:none!important}
+    .app[data-mode="active"] .quick{display:none!important}
+    .app[data-mode="active"] .quick button{border-color:#d8dee8;background:#fff;box-shadow:none}
+    .app[data-mode="active"] .input-shell{
+      display:block;
+      flex:0 0 auto;
+      background:linear-gradient(180deg,rgba(255,255,255,0),#fff 18%);
+      padding-top:1.4rem;
+      position:absolute;
+      left:0;
+      right:0;
+      bottom:0;
+      z-index:8;
+    }
+    .app[data-mode="active"] .chat{
+      grid-template-rows:auto minmax(0,1fr);
+      align-content:stretch;
+    }
+    .app[data-mode="active"] .chat > .pane-head,
+    .app[data-mode="active"] .workflow-strip,
+    .app[data-mode="active"] .chat-body{
+      min-height:0;
+    }
+    .app[data-mode="active"] .composer{
+      margin:0 2.6rem 1.1rem;
+      border-color:#d8dee8;
+      border-radius:.5rem;
+      box-shadow:none;
+    }
+    .app[data-mode="active"] .send{background:#14161a}
+    .app[data-mode="active"] .send:hover{background:#2b2f36}
+    .app[data-mode="active"] .work-body{
+      background:#fff;
+      padding:1.4rem 1.15rem 1.6rem;
+      gap:1.1rem;
+    }
+    .app[data-mode="active"] .work-card,
+    .app[data-mode="active"] .context-card,
+    .app[data-mode="active"] .version-card{
+      border:1px solid #e7ebf3;
+      border-radius:.72rem;
+      box-shadow:none;
+    }
+    .app[data-mode="active"] .version-card.active{
+      background:#fff;
+      box-shadow:0 0 0 .1rem rgba(59,130,246,.18);
+    }
+    .app[data-mode="active"] .card-head{padding:1.05rem 1.1rem .85rem;border-bottom:1px solid #eef2f7}
+    .app[data-mode="active"] .metrics{padding:.9rem 1.1rem .65rem;gap:.65rem}
+    .app[data-mode="active"] .metric{border:1px solid #eef2f7;background:#fff;border-radius:.48rem;padding:.58rem .72rem}
+    .app[data-mode="active"] .metric strong{font-size:.96rem}
+    .app[data-mode="active"] .form{padding:0 1.1rem 1rem;gap:.62rem}
+    .app[data-mode="active"] .field input,
+    .app[data-mode="active"] .field select,
+    .app[data-mode="active"] .field textarea{border:0;background:#f5f7fa;border-radius:.38rem;padding:.55rem .68rem}
+    .app[data-mode="active"] .card-actions{padding:.4rem 1.1rem 1rem;border-top:0}
+    .app[data-mode="active"] .version-panel{
+      display:grid;
+      gap:.8rem;
+      padding-top:0;
+    }
+    .app[data-mode="active"] .version-head{
+      padding:0 .2rem;
+    }
+    .app[data-mode="active"] .version-head h3{font-size:1rem;color:#111827}
+    .app[data-mode="active"] .version-list{gap:.7rem}
+    .app[data-mode="active"] .version-stat{
+      border:1px solid #edf2f7;
+      background:#fff;
+      box-shadow:0 .18rem .5rem rgba(15,23,42,.03);
+    }
+    .app[data-mode="active"] .version-card{
+      position:relative;
+      overflow:hidden;
+      background:#fff;
+      border:1px solid #dfe6ef;
+      border-radius:.8rem;
+      padding:1rem 1rem 1.05rem;
+      box-shadow:0 .45rem 1.1rem rgba(15,23,42,.05);
+      transition:border-color .18s ease,box-shadow .18s ease,transform .18s ease,background .18s ease;
+    }
+    .app[data-mode="active"] .version-card:hover,
+    .app[data-mode="active"] .version-card:focus-within{
+      border-color:#b7cffd;
+      box-shadow:0 .8rem 1.8rem rgba(15,23,42,.08);
+      transform:translateY(-1px);
+    }
+    .app[data-mode="active"] .version-card.active{
+      border-color:#7aa7ff;
+      background:#fff;
+      box-shadow:0 0 0 .12rem rgba(59,130,246,.22),0 .55rem 1.2rem rgba(15,23,42,.06);
+    }
+    .app[data-mode="active"] .version-card header{align-items:flex-start}
+    .app[data-mode="active"] .version-title strong{font-size:.95rem}
+    .app[data-mode="active"] .version-prompt{font-size:.76rem;color:#64748b}
+    .app[data-mode="active"] .version-card.active .version-prompt{color:#475569}
+    .app[data-mode="active"] .version-diff .diff-pill{
+      background:#f8fbff;
+      border:1px solid #e2ebf7;
+      color:#1d4ed8;
+    }
+    .app[data-mode="active"] .version-card.active .diff-pill{
+      background:#fff;
+      border-color:#d5e6ff;
+    }
+    .app[data-mode="active"] .version-actions button{
+      border:1px solid #c8dcff;
+      background:#fff;
+      color:#2563eb;
+      transition:background .16s ease,border-color .16s ease,box-shadow .16s ease,transform .16s ease;
+    }
+    .app[data-mode="active"] .version-actions button:hover:not(:disabled){
+      border-color:#3478f6;
+      background:#edf5ff;
+      box-shadow:0 .35rem 1rem rgba(37,99,235,.14);
+      transform:translateY(-1px);
+    }
+    .app[data-mode="active"] .version-actions button:focus-visible{
+      outline:0;
+      box-shadow:0 0 0 .18rem rgba(52,120,246,.24);
+    }
+    .app[data-mode="active"] .version-actions button:disabled{
+      border-color:#bfdbfe;
+      background:#eff6ff;
+      color:#2563eb;
+      opacity:1;
+    }
+    .app[data-mode="active"] .workspace .badge{border:0;background:#eef2f7}
+    .app[data-mode="active"] .workspace .badge.live{background:#eef5ff;color:#2563eb}
+    .app[data-mode="active"] .workspace .badge.ok{background:#eff6ff;color:#2563eb}
+    #quickPrompts{display:none!important}
+    .app[data-mode="empty"] .tri{
+      grid-template-columns:minmax(0,1fr);
+      background:linear-gradient(180deg,#fff 0%,#fbfdff 100%);
+    }
+    .app[data-mode="empty"] .split,
+    .app[data-mode="empty"] .workspace,
+    .app[data-mode="empty"] .workflow-strip,
+    .app[data-mode="empty"] .page-actions,
+    .app[data-mode="empty"] #messageFeed,
+    .app[data-mode="empty"] #quickPrompts{display:none}
+    .app[data-mode="empty"] .chat{
+      width:min(70rem,100%);
+      margin:0 auto;
+      grid-template-rows:minmax(0,1fr);
+      background:transparent;
+      border-right:0;
+    }
+    .app[data-mode="empty"] .pane-head{
+      display:none;
+    }
+    .app[data-mode="empty"] .chat-body{
+      min-height:0;
+      display:flex;
+      flex-direction:column;
+      justify-content:center;
+      gap:1rem;
+      padding:2rem 1.8rem 10vh;
+      background:transparent;
+    }
+    .app[data-mode="empty"] .chat-stream{
+      min-height:auto;
+      overflow:visible;
+      padding:0;
+      background:transparent;
+      align-content:center;
+    }
+    .app[data-mode="empty"] .empty-state{
+      min-height:auto;
+      gap:0;
+      padding:0;
+    }
+    .app[data-mode="empty"] .empty-icon{display:none}
+    .app[data-mode="empty"] .empty-state h3{
+      font-size:2.35rem;
+      font-weight:600;
+      line-height:1.12;
+      letter-spacing:0;
+    }
+    .app[data-mode="empty"] .empty-state p{font-size:.95rem}
+    .app[data-mode="empty"] .starter-row{margin-top:.2rem}
+    .app[data-mode="empty"] .starter-row{display:none}
+    .app[data-mode="empty"] .composer{
+      width:100%;
+      margin:0 auto;
+      padding:.7rem .78rem;
+      align-items:center;
+      grid-template-columns:2.2rem minmax(0,1fr) auto 2.65rem;
+      border-radius:1rem;
+      border-color:#d9e2ee;
+      box-shadow:0 .4rem 1.4rem rgba(15,23,42,.07);
+    }
+    .app[data-mode="empty"] .input-shell{
+      width:min(58rem,100%);
+      display:grid;
+      margin:0 auto;
+      border-radius:1.25rem;
+      background:#f4f4f5;
+      box-shadow:0 1.2rem 3rem rgba(15,23,42,.08);
+      overflow:hidden;
+    }
+    .app[data-mode="empty"] .composer button{
+      width:2.2rem;
+      height:2.2rem;
+    }
+    .app[data-mode="empty"] .composer .send{
+      width:2.65rem;
+      height:2.65rem;
+      align-self:center;
+    }
+    .app[data-mode="empty"] .composer .attach{align-self:center}
+    .app[data-mode="empty"] .composer textarea{
+      min-height:4.6rem;
+      padding:1.48rem .1rem .35rem;
+      line-height:1.25;
+      font-size:1.02rem;
+      overflow:hidden;
+    }
+    .composer-options{display:none;align-self:end;align-items:center;gap:.45rem;color:#7a8290;font-size:.88rem;font-weight:800;white-space:nowrap}
+    .app[data-mode="empty"] .composer-options{display:flex}
+    .empty-toolbar{display:none}
+    .app[data-mode="empty"] .composer-options{align-self:center}
+    .app[data-mode="empty"] .empty-toolbar{display:none!important}
+    .app[data-mode="empty"] .empty-context{display:none}
+    @media(max-width:1440px){
+      :root{--chat:52%}
+      .workflow-rail{grid-template-columns:repeat(4,minmax(6rem,1fr));overflow:auto;padding-bottom:.15rem}
+      .metrics{grid-template-columns:repeat(4,minmax(0,1fr))}
+    }
+    @media(max-width:1180px){
+      .tri{grid-template-columns:1fr}
+      .app[data-mode="active"] .tri{
+        grid-template-columns:1fr;
+        grid-auto-rows:auto;
+        overflow:auto;
+      }
+      .split{display:none}
+      .app[data-mode="active"] .split{display:none}
+      .chat,.workspace{border-bottom:1px solid var(--line)}
+      .chat{min-height:min(58rem,calc(100vh - 10rem))}
+      .app[data-mode="active"] .chat{min-height:min(58rem,calc(100vh - 10rem))}
+      .workspace{min-height:auto}
+      .app[data-mode="active"] .workspace{
+        min-height:auto;
+        overflow:visible;
+      }
+      .app[data-mode="active"] .work-body{
+        min-height:auto;
+        overflow:visible;
+      }
+      .work-body{padding:1rem}
+      .workflow-rail:before{display:none}
+      .workflow-rail{grid-template-columns:repeat(2,minmax(0,1fr));gap:.8rem}
+      .node{justify-items:start;grid-template-columns:2.3rem minmax(0,1fr);grid-template-areas:"icon name" "icon desc";text-align:left}
+      .node-icon{grid-area:icon}
+      .node-name{grid-area:name}
+      .node-desc{grid-area:desc}
+    }
+    @media(max-width:860px){
+      :root{--sidebar:88px}
+      .topbar{height:4.4rem;padding:0 1.2rem}
+      .brand strong,.user div:last-child,.side-label > span,.nav-item span:last-child,.history-item span:last-child{display:none}
+      .shell{grid-template-columns:88px 1fr}
+      .sidebar{padding:1.4rem .75rem}
+      .nav-item,.history-item{justify-content:center;padding:0}
+      .page-head{align-items:flex-start;flex-direction:column;padding:.8rem 1rem}
+      .main{grid-template-rows:auto minmax(0,1fr)}
+      .page-actions{flex-wrap:wrap}
+      .workflow-strip,.chat-stream,.work-body{padding:.85rem}
+      .form,.metrics,.workflow-rail{grid-template-columns:1fr}
+      .diff-grid{grid-template-columns:1fr}
+      .bubble{max-width:95%}
+      .composer{grid-template-columns:2.4rem 1fr 2.55rem;margin:0 .85rem .85rem}
+      .composer button{width:2.4rem;height:2.4rem}
+      .composer textarea{min-height:2.4rem}
+      .card-actions{flex-wrap:wrap}
+      .btn{min-height:2.45rem}
+      .top-actions{gap:.35rem}
+      .app[data-mode="empty"] .chat-body{padding:1rem 1rem 7vh}
+      .app[data-mode="active"] .pane-head{padding:0 1rem}
+      .app[data-mode="active"] .workflow-strip{padding:.75rem 1rem}
+      .app[data-mode="active"] .chat-stream{padding:1rem 1rem 7.4rem}
+      .app[data-mode="active"] .input-shell{padding-top:1rem}
+      .app[data-mode="active"] .composer{margin:0 1rem 1rem}
+      .app[data-mode="active"] .work-body{padding:1rem}
+      .app[data-mode="active"] .version-meta{grid-template-columns:1fr}
+      .app[data-mode="empty"] .empty-state h3{font-size:1.55rem}
+      .app[data-mode="empty"] .composer{border-radius:1.25rem}
+      .app[data-mode="empty"] .starter-row button{max-width:100%}
+    }
+  </style>
+</head>
+<body>
+  <div class="app" id="app" data-mode="empty">
+    <header class="topbar">
+      <div class="brand">
+        <div class="brand-mark"><span class="material-symbols-outlined">rocket_launch</span></div>
+        <strong>Aniforce</strong>
+      </div>
+      <div class="top-actions">
+        <div class="user">
+          <div class="avatar">M</div>
+          <div><strong>MicoLinT</strong><span>test@animagus.com</span></div>
+        </div>
+        <button class="icon-button" type="button" aria-label="通知"><span class="material-symbols-outlined">notifications</span></button>
+        <button class="icon-button" type="button">中</button>
+        <button class="icon-button" type="button">EN</button>
+      </div>
+    </header>
+    <div class="shell">
+      <aside class="sidebar">
+        <div class="side-section">
+          <div class="side-label"><span>功能导航</span><button class="icon-button" id="sidebarToggle" type="button" aria-label="折叠侧边栏" aria-expanded="true"><span class="material-symbols-outlined">menu_open</span></button></div>
+          <div class="nav-list" id="mainNav"></div>
+        </div>
+        <div class="side-section">
+          <div class="side-label"><span>历史会话</span></div>
+          <div class="nav-list" id="historyNav"></div>
+        </div>
+      </aside>
+      <main class="main">
+        <header class="page-head">
+          <div class="page-title"><span class="material-symbols-outlined">view_column</span><span id="pageTitleText">新任务 · Chatbot</span></div>
+          <div class="page-actions">
+            <button class="btn soft" type="button" data-width="chat">对话优先</button>
+            <button class="btn soft" type="button" data-width="work">工作台优先</button>
+            <button class="btn primary" type="button">保存布局</button>
+          </div>
+        </header>
+        <section class="tri" id="tri">
+          <section class="chat">
+            <div class="pane-head">
+              <div><h2>Chatbot</h2><p id="chatSubhead">等待 prompt</p></div>
+              <span class="badge live">Agent 待命</span>
+            </div>
+            <section class="workflow-strip" id="workflowStrip">
+              <div class="workflow-rail" id="workflowRail"></div>
+            </section>
+            <div class="chat-body">
+              <div class="chat-stream" id="chatStream">
+                <div class="empty-state" id="emptyState">
+                  <div class="empty-prompt-shell">
+                    <h3>想创建什么投放任务？</h3>
+                  </div>
+                </div>
+                <div id="messageFeed"></div>
+                <div class="quick" id="quickPrompts" hidden></div>
+              </div>
+              <div class="input-shell">
+                <form class="composer" id="composer">
+                  <button class="attach" type="button" aria-label="添加附件"><span class="material-symbols-outlined">attach_file</span></button>
+                  <textarea id="promptInput" rows="1" placeholder="输入 prompt，生成任务"></textarea>
+                  <div class="composer-options"><span>超高</span><span class="material-symbols-outlined">expand_more</span></div>
+                  <button class="send" type="submit" aria-label="发送"><span class="material-symbols-outlined">arrow_upward</span></button>
+                </form>
+                <div class="empty-toolbar" aria-hidden="true"></div>
+              </div>
+            </div>
+          </section>
+          <div class="split" id="split"></div>
+          <section class="workspace" id="workspacePane">
+            <div class="pane-head">
+              <div><h2>Workspace</h2><p id="workspaceSubhead">SaaS 草稿</p></div>
+              <span class="badge" id="workspaceBadge">草稿</span>
+            </div>
+            <div class="work-body">
+              <section class="context-cards" id="contextCards" aria-live="polite"></section>
+              <article class="work-card" id="saasCard">
+                <div class="card-head">
+                  <div>
+                    <h3 id="campaignName">AUTO_US_REG_META_202606</h3>
+                    <div class="meta"><span id="metaType">Campaign + Ad Set</span><span id="metaPlatform">Meta</span><span id="metaEvent">CompleteRegistration</span></div>
+                  </div>
+                  <span class="badge live">可编辑</span>
+                </div>
+                <div class="tabs">
+                  <button class="tab active" type="button">基础</button>
+                  <button class="tab active" type="button">预算</button>
+                  <button class="tab" type="button">定向</button>
+                  <button class="tab" type="button">素材</button>
+                  <button class="tab" type="button">规则</button>
+                </div>
+                <div class="metrics">
+                  <div class="metric"><span>日预算</span><strong id="metricBudget">$800</strong></div>
+                  <div class="metric"><span>国家</span><strong id="metricCountry">US</strong></div>
+                  <div class="metric"><span>设备</span><strong id="metricDevice">iOS</strong></div>
+                  <div class="metric"><span>预估 CPI</span><strong id="metricCpi">$3.8</strong></div>
+                </div>
+                <div class="form">
+                  <div class="field"><label>广告账户</label><select id="accountField"><option>FunGame_Meta_US_iOS</option><option>FunGame_Meta_Global</option><option>FunGame_Meta_US_Android</option><option>FunGame_Meta_JP_Android</option></select></div>
+                  <div class="field"><label>优化事件</label><select id="eventField"><option>CompleteRegistration</option><option>AppInstall</option><option>Purchase</option></select></div>
+                  <div class="field"><label>日预算 USD</label><input id="budgetField" value="800"></div>
+                  <div class="field"><label>出价策略</label><select id="bidField"><option>Lowest cost</option><option>Cost cap</option></select></div>
+                  <div class="field full"><label>素材包</label><textarea id="materialsField">Video_A_winner, Playable_03, Endcard_US_Reg</textarea></div>
+                </div>
+                <div class="card-actions">
+                  <button class="btn soft" type="button" id="saveDraft">保存草稿</button>
+                  <button class="btn" type="button">生成预览</button>
+                  <button class="btn primary" type="button" id="publishBtn">校验并发布</button>
+                </div>
+              </article>
+              <section class="version-panel" aria-label="历史修改信息">
+                <div class="version-head">
+                  <h3>历史修改信息</h3>
+                  <span class="badge" id="versionCount">0 个修订版本</span>
+                </div>
+                <div class="version-list" id="versionList"></div>
+              </section>
+            </div>
+          </section>
+        </section>
+      </main>
+    </div>
+  </div>
+  <script>
+    const navItems=[["task","add_circle","新任务"],["dashboard","pie_chart","数据概览"],["projects","folder","项目管理"],["campaigns","ads_click","广告投放"],["materials","video_library","创意素材"],["reports","bar_chart","数据报表"],["settings","settings","账户设置"]];
+    const historyTemplates={daily:{label:"Candy Blast 注册",draft:{prefix:"CB",budget:800,country:"US",device:"iOS",event:"CompleteRegistration",bid:"Lowest cost",account:"FunGame_Meta_US_iOS",materials:["Video_A_winner","Playable_03","Endcard_US_Reg"],published:false},messages:[{role:"user",text:"帮我创建 Candy Blast 美国 Meta 注册计划，日预算 800 美元，先跑 iOS。"},{role:"agent",text:"已生成注册计划草稿，发布校验显示素材数量需要确认。"}],history:[{time:"现在",prompt:"帮我创建 Candy Blast 美国 Meta 注册计划，日预算 800 美元，先跑 iOS。",changes:["预算 $800","国家 US","设备 iOS"]}]},meta:{label:"Meta 计划创建",draft:{prefix:"FG",budget:1200,country:"US",device:"Android",event:"AppInstall",bid:"Lowest cost",account:"FunGame_Meta_US_Android",materials:["Video_A_winner","Video_B_variant","Playable_04","Endcard_US_Reg_B"],published:false},messages:[{role:"user",text:"创建美国 Android 安装计划，预算 1200，优化 AppInstall。"},{role:"agent",text:"计划草稿已生成，素材数量充足，发布校验可进入确认。"}],history:[{time:"现在",prompt:"创建美国 Android 安装计划，预算 1200，优化 AppInstall。",changes:["预算 $1200","设备 Android","优化事件 AppInstall"]}]},materials:{label:"素材投放测试",draft:{prefix:"MAT",budget:500,country:"JP",device:"Android",event:"AppInstall",bid:"Cost cap",account:"FunGame_Meta_JP_Android",materials:["Playable_04","Video_B_variant","Endcard_JP_A"],published:false},messages:[{role:"user",text:"做一组素材投放测试，先跑日本 Android，预算 500。"},{role:"agent",text:"已生成素材测试草稿，建议补充一条素材变体。"}],history:[{time:"现在",prompt:"做一组素材投放测试，先跑日本 Android，预算 500。",changes:["国家 JP","设备 Android","预算 $500"]}]}};
+    const $=id=>document.getElementById(id),root=document.documentElement,app=$("app"),tri=$("tri"),split=$("split"),promptInput=$("promptInput"),sidebarToggle=$("sidebarToggle");
+    const eventCode={CompleteRegistration:"REG",AppInstall:"INSTALL",Purchase:"PUR"};
+    const sessions={...historyTemplates};
+    let activeSession=null;
+    let state=emptyState();
+
+    $("mainNav").innerHTML=navItems.map(([id,icon,label])=>`<button class="nav-item ${id==="task"?"active":""}" type="button" data-nav="${id}"><span class="material-symbols-outlined">${icon}</span><span>${label}</span></button>`).join("");
+    renderHistoryNav();
+
+    const saved=localStorage.getItem("aniforce-tri-chat-v4");if(saved)root.style.setProperty("--chat",saved+"%");
+    function setChat(v){v=Math.max(46,Math.min(64,v));root.style.setProperty("--chat",v+"%");localStorage.setItem("aniforce-tri-chat-v4",Math.round(v));}
+    split.addEventListener("pointerdown",e=>{e.preventDefault();const move=ev=>{const r=tri.getBoundingClientRect();setChat((ev.clientX-r.left)/r.width*100)};const up=()=>{window.removeEventListener("pointermove",move);window.removeEventListener("pointerup",up)};window.addEventListener("pointermove",move);window.addEventListener("pointerup",up)});
+    document.querySelector('[data-width="chat"]').onclick=()=>setChat(62);
+    document.querySelector('[data-width="work"]').onclick=()=>setChat(48);
+    sidebarToggle.addEventListener("click",()=>{
+      const collapsed=app.classList.toggle("sidebar-collapsed");
+      sidebarToggle.setAttribute("aria-expanded",String(!collapsed));
+      sidebarToggle.setAttribute("aria-label",collapsed?"展开侧边栏":"折叠侧边栏");
+      sidebarToggle.querySelector(".material-symbols-outlined").textContent=collapsed?"menu":"menu_open";
+    });
+
+    function emptyState(){return{draft:null,messages:[],history:[],versions:[],activeVersionId:null};}
+    function clone(v){return JSON.parse(JSON.stringify(v));}
+    function blankDraft(){return{prefix:"AUTO",budget:800,country:"US",device:"iOS",event:"CompleteRegistration",bid:"Lowest cost",account:"FunGame_Meta_US_iOS",materials:["Video_A_winner","Playable_03","Endcard_US_Reg"],published:false};}
+    function setEmpty(){activeSession=null;state=emptyState();renderAll(false);promptInput.focus();}
+    function loadSession(id){activeSession=id;const tpl=normalizeSession(sessions[id]);state={draft:clone(tpl.draft),messages:clone(tpl.messages),history:clone(tpl.history),versions:clone(tpl.versions),activeVersionId:tpl.activeVersionId};renderAll(true,true);}
+    function nowLabel(){const d=new Date();return `${String(d.getHours()).padStart(2,"0")}:${String(d.getMinutes()).padStart(2,"0")}`;}
+    function safe(text){return String(text).replace(/[<>&]/g,m=>({"<":"&lt;",">":"&gt;","&":"&amp;"}[m]));}
+    function accountFor(d){if(d.country==="US"&&d.device==="iOS")return"FunGame_Meta_US_iOS";if(d.country==="US"&&d.device==="Android")return"FunGame_Meta_US_Android";if(d.country==="JP"&&d.device==="Android")return"FunGame_Meta_JP_Android";return"FunGame_Meta_Global";}
+    function countryFromPrompt(text){if(/加拿大|canada|\bca\b/i.test(text))return"CA";if(/英国|uk|united kingdom/i.test(text))return"UK";if(/日本|japan|\bjp\b/i.test(text))return"JP";if(/德国|germany|\bde\b/i.test(text))return"DE";if(/美国|us|united states/i.test(text))return"US";return null;}
+    function campaignName(d){return `${d.prefix}_${d.country}_${eventCode[d.event]||"REG"}_META_202606`;}
+    function cpi(d){let value=d.event==="Purchase"?9.6:d.event==="AppInstall"?2.4:3.8;if(d.device==="Android")value-=.4;if(d.budget>=1200)value-=.2;if(d.country==="JP")value+=.9;if(d.country==="UK")value+=.6;return Math.max(1.8,value).toFixed(1);}
+    function autoGrowPrompt(){promptInput.style.height="auto";promptInput.style.height=`${Math.min(promptInput.scrollHeight,180)}px`;}
+    function sessionLabel(text){const clean=text.replace(/\s+/g," ").trim();return clean.length>14?`${clean.slice(0,14)}...`:clean||"新的投放任务";}
+    function promptFieldDiff(prompt,draft){const fields=[{key:"campaign",label:"计划名称",value:campaignName(draft),matched:/(计划|campaign|投放|创建|新建)/i.test(prompt)},{key:"budget",label:"日预算",value:`$${draft.budget}`,matched:/(预算|日预算|budget|[$]\s*\d|\d+\s*(美元|美金|usd))/i.test(prompt)},{key:"country",label:"国家",value:draft.country,matched:!!countryFromPrompt(prompt)},{key:"device",label:"设备",value:draft.device,matched:/(ios|iphone|苹果|android|安卓)/i.test(prompt)},{key:"event",label:"优化事件",value:draft.event,matched:/(注册|registration|completeregistration|安装|appinstall|install|付费|purchase|pay)/i.test(prompt)},{key:"bid",label:"出价策略",value:draft.bid,matched:/(出价|策略|lowest cost|最低成本|cost cap|成本上限|出价上限)/i.test(prompt)},{key:"account",label:"广告账户",value:draft.account,matched:/(账户|account|广告账户)/i.test(prompt)},{key:"materials",label:"素材包",value:draft.materials.join(", "),matched:/(素材|creative|material|video|playable|endcard|视频)/i.test(prompt)}];const matched=fields.filter(item=>item.matched);const missing=fields.filter(item=>!item.matched);return{matched,missing,score:Math.round(matched.length/fields.length*100)};}
+    function promptDiffHtml(prompt,draft){const diff=promptFieldDiff(prompt,draft);const matched=diff.matched.length?diff.matched.map(item=>`<div class="diff-item"><span>${safe(item.label)}</span><strong>${safe(item.value)}</strong></div>`).join(""):`<div class="diff-item"><span>识别结果</span><strong>未识别到明确字段</strong></div>`;const missing=diff.missing.length?diff.missing.map(item=>`<span class="missing-pill">${safe(item.label)}</span>`).join(""):`<span class="missing-pill empty">字段完整</span>`;return`<div class="prompt-diff"><header><span>Prompt 字段识别</span><span class="diff-score">${diff.score}% 已匹配</span></header><section class="diff-section"><div class="diff-section-title">已识别并写入表单</div><div class="diff-grid">${matched}</div></section><section class="diff-section"><div class="diff-section-title">缺失 / 需确认字段</div><div class="diff-missing">${missing}</div></section></div>`;}
+    function latestPrompt(){return state.history.at(-1)?.prompt||state.messages.filter(item=>item.role==="user").at(-1)?.text||"";}
+    function workspaceIntent(text){
+      if(/数据|分析|报表|复盘|趋势|消耗|转化|成效|roas|cpa|cpi|dashboard|analysis|report/i.test(text))return"analysis";
+      if(/素材|创意|creative|material|video|playable|endcard|视频|图片|文案|预览/i.test(text))return"material";
+      if(/项目|project|立项|新项目|游戏|应用|app/i.test(text))return"project";
+      return"plan";
+    }
+    function materialType(name){if(/playable/i.test(name))return"Playable";if(/endcard/i.test(name))return"Endcard";if(/video|视频/i.test(name))return"Video";return"Creative";}
+    function renderProjectContext(d){return`<article class="context-card project-card"><header><div><h3>项目 / 计划工作台</h3><p>根据最新 prompt 生成投放计划，并保留可编辑 SaaS 表单。</p></div><span class="badge live">计划视图</span></header><div class="context-grid"><div class="context-metric"><span>项目</span><strong>${safe(campaignName(d))}</strong></div><div class="context-metric"><span>投放市场</span><strong>${safe(d.country)} / ${safe(d.device)}</strong></div><div class="context-metric"><span>目标事件</span><strong>${safe(d.event)}</strong></div></div><div class="context-note">项目创建信息已同步到下方表单，可继续补充预算、账户和素材。</div></article>`;}
+    function renderMaterialContext(d){const rows=d.materials.map((item,index)=>`<div class="material-row"><div><strong>${safe(item)}</strong><span>${materialType(item)} · 素材 ${index+1}</span></div><span class="badge">${/video/i.test(item)?"主素材":"待测试"}</span></div>`).join("");return`<article class="context-card material-card"><header><div><h3>素材工作台</h3><p>已按素材相关 prompt 聚焦素材包、素材类型和补充建议。</p></div><span class="badge live">${d.materials.length} 条素材</span></header><div class="material-list">${rows}</div><div class="context-grid"><div class="context-metric"><span>关联计划</span><strong>${safe(campaignName(d))}</strong></div><div class="context-metric"><span>投放市场</span><strong>${safe(d.country)} / ${safe(d.device)}</strong></div><div class="context-metric"><span>素材状态</span><strong>${d.materials.length<4?"建议补充":"可进入测试"}</strong></div></div><div class="context-note">${d.materials.length<4?"素材偏少，建议补充 2 条变体后再发布校验。":"素材数量充足，可生成预览并进入发布校验。"}</div></article>`;}
+    function renderAnalysisContext(d){return`<article class="context-card analysis-card"><header><div><h3>数据分析概览</h3><p>根据数据分析类 prompt 切换为账户表现、渠道效率和趋势判断。</p></div><span class="badge live">近 7 天</span></header><div class="context-grid"><div class="context-metric"><span>Spend / Day</span><strong>$${Math.max(800,Math.round(d.budget*2.8)).toLocaleString()}</strong></div><div class="context-metric"><span>ROAS</span><strong>${d.event==="Purchase"?"2.4x":"3.6x"}</strong></div><div class="context-metric"><span>CPA</span><strong>$${(Number(cpi(d))*5.05).toFixed(2)}</strong></div></div><table class="analysis-table"><thead><tr><th>渠道</th><th>Spend</th><th>Conv</th><th>Signal</th></tr></thead><tbody><tr><td>Meta</td><td>42%</td><td>68%</td><td class="signal-up">↑ Scale</td></tr><tr><td>Google</td><td>46%</td><td>20%</td><td class="signal-warn">↓ 调整出价</td></tr><tr><td>TikTok</td><td>12%</td><td>12%</td><td class="signal-up">↑ 小预算测试</td></tr></tbody></table><div class="context-note">当前计划可作为 Meta 放量候选，建议同步观察 CPI 与素材疲劳。</div></article>`;}
+    function normalizeSession(session){if(session.versions&&session.activeVersionId)return session;const version={id:"v1",number:1,time:"历史",prompt:session.history?.[0]?.prompt||session.label,changes:session.history?.[0]?.changes||["初始草稿"],draft:clone(session.draft)};session.versions=[version];session.activeVersionId=version.id;return session;}
+    function bindHistoryNav(){$("historyNav").querySelectorAll(".history-item").forEach(button=>button.addEventListener("click",()=>loadSession(button.dataset.session)));}
+    function renderHistoryNav(){$("historyNav").innerHTML=Object.entries(sessions).map(([id,item])=>`<button class="history-item" type="button" data-session="${id}"><span class="material-symbols-outlined">chat</span><span>${safe(item.label)}</span></button>`).join("");bindHistoryNav();}
+    function createSessionFromState(prompt){const id=`session-${Date.now()}-${Math.random().toString(36).slice(2,7)}`;sessions[id]={label:sessionLabel(prompt),draft:clone(state.draft),messages:clone(state.messages),history:clone(state.history),versions:clone(state.versions),activeVersionId:state.activeVersionId};activeSession=id;renderHistoryNav();}
+    function syncActiveSession(){if(!activeSession||!sessions[activeSession])return;sessions[activeSession]={...sessions[activeSession],draft:clone(state.draft),messages:clone(state.messages),history:clone(state.history),versions:clone(state.versions),activeVersionId:state.activeVersionId};}
+    function appendWorkspaceVersion(prompt,changes,draft){const nextNumber=state.versions.length+1;const version={id:`v${nextNumber}-${Date.now()}`,number:nextNumber,time:nowLabel(),prompt,changes:clone(changes),draft:clone(draft)};state.versions.push(version);state.activeVersionId=version.id;state.draft=clone(version.draft);return version;}
+    function setActiveVersion(id){const version=state.versions.find(item=>item.id===id);if(!version)return;state.activeVersionId=id;state.draft=clone(version.draft);syncActiveSession();renderAll(false,true);}
+    function rollbackVersion(id){setActiveVersion(id);const version=state.versions.find(item=>item.id===id);if(!version)return;state.messages.push({role:"agent",text:`已回溯到 Workspace V${version.number}：${version.prompt}`});syncActiveSession();renderAll(true,true);}
+    function applyPromptToDraft(text,d){const changes=[];if(/candy|candy blast/i.test(text))d.prefix="CB";if(/素材|creative|material/i.test(text)&&d.prefix==="AUTO")d.prefix="MAT";const budget=text.match(/(?:预算|日预算|budget|提高到|改到|改为|改成|[$])\D*(\d{2,6})/i);if(budget){d.budget=Number(budget[1]);changes.push(`预算 $${d.budget}`)}const country=countryFromPrompt(text);if(country){d.country=country;changes.push(`国家 ${country}`)}if(/android|安卓/i.test(text)){d.device="Android";changes.push("设备 Android")}if(/\bios\b|iphone|苹果/i.test(text)){d.device="iOS";changes.push("设备 iOS")}if(/安装|appinstall|install/i.test(text)){d.event="AppInstall";changes.push("优化事件 AppInstall")}if(/注册|registration|completeregistration/i.test(text)){d.event="CompleteRegistration";changes.push("优化事件 CompleteRegistration")}if(/付费|purchase|pay/i.test(text)){d.event="Purchase";changes.push("优化事件 Purchase")}if(/cost cap|成本上限|出价上限/i.test(text)){d.bid="Cost cap";changes.push("出价 Cost cap")}if(/lowest cost|最低成本/i.test(text)){d.bid="Lowest cost";changes.push("出价 Lowest cost")}if(/只保留视频|仅保留视频|video only/i.test(text)){d.materials=d.materials.filter(item=>/video/i.test(item));if(!d.materials.length)d.materials=["Video_A_winner"];changes.push("素材仅保留视频")}if(/补充|增加|新增|add/i.test(text)){["Video_B_variant","Playable_04","Endcard_US_Reg_B"].forEach(item=>{if(!d.materials.includes(item))d.materials.push(item)});changes.push("素材补充变体")}d.account=accountFor(d);d.published=false;return changes.length?changes:["记录 prompt，SaaS 信息保持不变"];}
+    function validation(){if(!state.draft)return[];const d=state.draft;const items=[{type:"ok",text:"平台权限通过"},{type:"ok",text:`${d.event} 可优化`}];if(d.materials.length<4)items.push({type:"warn",text:"素材偏少，建议补 2 条"});else items.push({type:"ok",text:`素材 ${d.materials.length} 条`});if(d.budget<500)items.push({type:"warn",text:"预算偏低"});return items;}
+    function validationMessage(){const items=validation();if(!items.length)return"";const auth=items.find(item=>item.text==="平台权限通过")?.text||"平台权限通过";const rest=items.filter(item=>item.text!=="平台权限通过").map(item=>item.text);return `鉴权结果：${auth}。${rest.length?`发布校验：${rest.join("；")}。`:""}`;}
+    function workflowState(){if(!state.draft)return 0;if(state.draft.published)return 3;if(hasWarn())return 2;return 1;}
+    function hasWarn(){return validation().some(item=>item.type==="warn");}
+    function versionSummary(d){return [`$${d.budget}`,d.country,d.device,d.event].join(" · ");}
+    function renderShell(){const active=!!state.draft;app.dataset.mode=active?"active":"empty";$("pageTitleText").textContent=active?(activeSession?`历史会话 · ${sessions[activeSession].label}`:"新任务 · 工作中"):"新任务 · Chatbot";$("chatSubhead").textContent=active?"任务上下文已生成":"等待 prompt";$("emptyState").style.display=active?"none":"grid";$("messageFeed").style.display=active?"grid":"none";$("quickPrompts").style.display="none";document.querySelectorAll(".history-item").forEach(button=>button.classList.toggle("active",button.dataset.session===activeSession));document.querySelectorAll(".nav-item").forEach(button=>button.classList.toggle("active",button.dataset.nav==="task"&&!activeSession));}
+    function renderSaas(){const d=state.draft;if(!d)return;const version=state.versions.find(item=>item.id===state.activeVersionId)||state.versions.at(-1);$("campaignName").textContent=campaignName(d);$("metaEvent").textContent=d.event;$("metricBudget").textContent=`$${d.budget}`;$("metricCountry").textContent=d.country;$("metricDevice").textContent=d.device;$("metricCpi").textContent=`$${cpi(d)}`;$("budgetField").value=d.budget;$("accountField").value=d.account;$("eventField").value=d.event;$("bidField").value=d.bid;$("materialsField").value=d.materials.join(", ");$("workspaceSubhead").textContent=`${campaignName(d)} · ${d.country} / ${d.device}`;$("workspaceBadge").textContent=version?`V${version.number} · 草稿`:"草稿";}
+    function renderWorkspaceContext(){const d=state.draft,context=$("contextCards"),saas=$("saasCard");if(!d||!context||!saas)return;const kind=workspaceIntent(latestPrompt());const version=state.versions.find(item=>item.id===state.activeVersionId)||state.versions.at(-1);const labels={project:"项目工作台",plan:"计划工作台",material:"素材工作台",analysis:"数据分析"};$("workspaceSubhead").textContent=`${labels[kind]} · ${campaignName(d)} · ${d.country} / ${d.device}`;$("workspaceBadge").textContent=version?`V${version.number} · ${kind==="analysis"?"分析":kind==="material"?"素材":"草稿"}`:"草稿";if(kind==="analysis"){saas.style.display="none";context.innerHTML=renderAnalysisContext(d);return}if(kind==="material"){saas.style.display="none";context.innerHTML=renderMaterialContext(d);return}saas.style.display="";context.innerHTML=renderProjectContext(d);}
+    function renderVersions(){const list=$("versionList");const versions=[...state.versions].reverse();$("versionCount").textContent=`${state.versions.length} 个修订版本`;$("workspaceBadge").textContent=state.activeVersionId&&state.versions.find(item=>item.id===state.activeVersionId)?`V${state.versions.find(item=>item.id===state.activeVersionId).number} · 草稿`:"草稿";list.innerHTML=versions.map(version=>{const active=version.id===state.activeVersionId;return`<article class="version-card ${active?"active":""}" ${active?'aria-current="true"':""}><header><div class="version-title"><strong>修订版本 V${version.number}</strong><span>${safe(version.time)} · ${safe(sessionLabel(version.prompt))}</span></div><span class="badge ${active?"ok":""}">${active?"当前修订":"历史修订"}</span></header><p class="version-prompt">${safe(version.prompt)}</p><div class="version-meta"><div class="version-stat"><span>预算</span><strong>$${safe(String(version.draft.budget))}</strong></div><div class="version-stat"><span>国家 / 设备</span><strong>${safe(version.draft.country)} / ${safe(version.draft.device)}</strong></div><div class="version-stat"><span>事件</span><strong>${safe(version.draft.event)}</strong></div></div><div class="version-diff">${version.changes.map(change=>`<span class="diff-pill">${safe(change)}</span>`).join("")}</div><div class="version-actions"><button type="button" data-rollback-version="${version.id}" ${active?"disabled":""}>${active?"当前版本":"回溯此修订"}</button></div></article>`}).join("");list.querySelectorAll("[data-rollback-version]").forEach(button=>button.addEventListener("click",()=>rollbackVersion(button.dataset.rollbackVersion)));}
+    function renderWorkflow(){if(!state.draft)return;const warn=hasWarn(),d=state.draft;const current=workflowState();const states=[{name:"Prompt 解析",desc:"完成",icon:"check"},{name:"SaaS 草稿",desc:"已生成",icon:"edit_square"},{name:"发布校验",desc:warn?"待确认":"通过",icon:"fact_check"},{name:"同步平台",desc:d.published?"已同步":"等待",icon:"cloud_sync"}];$("workflowRail").innerHTML=states.map((step,index)=>{const cls=index===current?`current ${index===2&&warn?"warn":""}`:"dim";return`<div class="node ${cls}"><span class="node-icon material-symbols-outlined">${step.icon}</span><span class="node-name">${step.name}</span><span class="node-desc">${step.desc}</span></div>`}).join("");}
+    function renderMessages(){if(!state.draft){$("messageFeed").innerHTML="";return}$("messageFeed").innerHTML=state.messages.filter(item=>item.role!=="tool").map(item=>item.role==="user"?`<article class="msg user"><div class="bubble">${safe(item.text)}</div></article>`:`<article class="msg"><div class="agent-meta">Agent Engine 4.8</div><div class="bubble">${item.html||safe(item.text)}</div></article>`).join("");}
+    function showCurrentSaasInWorkspace(){const body=document.querySelector(".work-body");if(!body)return;requestAnimationFrame(()=>{body.scrollTo({top:0,behavior:"auto"});});}
+    function renderAll(scroll,showSaas){renderShell();renderVersions();renderSaas();renderWorkspaceContext();renderWorkflow();renderMessages();autoGrowPrompt();if(showSaas)showCurrentSaasInWorkspace();if(scroll){const s=$("chatStream");requestAnimationFrame(()=>s.scrollTop=s.scrollHeight)}}
+    function submitPrompt(text){const clean=text.trim();if(!clean)return;const isNewSession=!state.draft;if(isNewSession){state.draft=blankDraft();state.messages=[];state.history=[];state.versions=[];state.activeVersionId=null}state.messages.push({role:"user",text:clean});const nextDraft=clone(state.draft);const changes=applyPromptToDraft(clean,nextDraft);state.draft=nextDraft;state.history.push({time:nowLabel(),prompt:clean,changes});const summary=`已根据 prompt 生成并刷新 Workspace：${changes.join("、")}。当前 ${campaignName(state.draft)}，日预算 $${state.draft.budget}，${state.draft.country} / ${state.draft.device}。${validationMessage()}`;state.messages.push({role:"agent",text:summary,html:`${safe(summary)}${promptDiffHtml(clean,state.draft)}`});appendWorkspaceVersion(clean,changes,nextDraft);if(isNewSession){createSessionFromState(clean)}else{syncActiveSession()}renderAll(true,true);}
+
+    document.querySelectorAll(".nav-item").forEach(button=>button.addEventListener("click",()=>{if(button.dataset.nav==="task")setEmpty()}));
+    promptInput.addEventListener("input",autoGrowPrompt);
+    promptInput.addEventListener("keydown",e=>{if(e.key==="Enter"&&!e.shiftKey){e.preventDefault();$("composer").requestSubmit();}});
+    $("composer").addEventListener("submit",e=>{e.preventDefault();submitPrompt(promptInput.value);promptInput.value="";autoGrowPrompt();});
+    ["budgetField","accountField","eventField","bidField","materialsField"].forEach(id=>$(id).addEventListener("change",()=>{if(!state.draft)return;state.draft.budget=Number($("budgetField").value)||state.draft.budget;state.draft.account=$("accountField").value;state.draft.event=$("eventField").value;state.draft.bid=$("bidField").value;state.draft.materials=$("materialsField").value.split(",").map(item=>item.trim()).filter(Boolean);state.draft.account=accountFor(state.draft);state.draft.published=false;renderAll(false,true)}));
+    $("saveDraft").addEventListener("click",()=>{if(!state.draft)return;state.messages.push({role:"agent",text:"草稿已保存。"});renderAll(true,true)});
+    $("publishBtn").addEventListener("click",()=>{if(!state.draft)return;if(hasWarn()){state.messages.push({role:"agent",text:`${validationMessage()}发布校验仍有待确认项，建议先补充素材或人工确认。`})}else{state.draft.published=true;state.messages.push({role:"agent",text:`${validationMessage()}发布校验通过，任务已进入同步平台节点。`})}renderAll(true,true)});
+    renderAll(false);
+  </script>
+</body>
+</html>

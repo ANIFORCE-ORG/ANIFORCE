@@ -1,0 +1,542 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Agent UI 设计优化对比 - ANIFORCE</title>
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Poppins', -apple-system, BlinkMacSystemFont, sans-serif;
+      background: #f8fafc;
+      color: #1e293b;
+      padding: 40px 20px;
+    }
+    .container { max-width: 1400px; margin: 0 auto; }
+    h1 {
+      font-size: 32px;
+      font-weight: 700;
+      margin-bottom: 12px;
+      color: #0f172a;
+    }
+    .subtitle {
+      font-size: 16px;
+      color: #64748b;
+      margin-bottom: 40px;
+    }
+    .comparison {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 24px;
+      margin-bottom: 48px;
+    }
+    .panel {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .panel h2 {
+      font-size: 18px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .badge {
+      font-size: 11px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      font-weight: 500;
+    }
+    .badge-before { background: #fee2e2; color: #dc2626; }
+    .badge-after { background: #d1fae5; color: #059669; }
+
+    /* 聊天消息样式 */
+    .chat-demo {
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+      margin-top: 20px;
+    }
+    
+    /* 用户消息 - Before */
+    .user-message-before {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .user-bubble-before {
+      max-width: 85%;
+      background: linear-gradient(135deg, #eff6ff 0%, #e0f2fe 100%);
+      border: 1px solid rgba(59, 130, 246, 0.15);
+      border-radius: 18px;
+      padding: 12px 16px;
+      font-size: 14.5px;
+      line-height: 1.5;
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08), 0 1px 3px rgba(0, 0, 0, 0.05);
+      transition: all 0.2s;
+    }
+    .user-bubble-before:hover {
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.12), 0 2px 4px rgba(0, 0, 0, 0.08);
+      transform: translateY(-1px);
+    }
+
+    /* 用户消息 - After */
+    .user-message-after {
+      display: flex;
+      flex-direction: column;
+      align-items: flex-end;
+    }
+    .user-bubble-after {
+      max-width: 85%;
+      background: #eff6ff;
+      border: 1px solid #dbeafe;
+      border-radius: 12px;
+      padding: 12px 16px;
+      font-size: 14.5px;
+      line-height: 1.5;
+      color: #1e293b;
+      box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+      transition: all 0.15s ease;
+    }
+    .user-bubble-after:hover {
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.08);
+    }
+
+    /* Assistant 消息 */
+    .assistant-message {
+      background: white;
+      border-radius: 12px;
+      padding: 16px;
+      border: 1px solid #e2e8f0;
+    }
+
+    /* Blockquote - Before */
+    .blockquote-before {
+      margin: 12px 0;
+      border-left: 3px solid #cbd5e1;
+      padding: 4px 14px;
+      color: #64748b;
+      background: rgba(100, 116, 139, 0.04);
+      border-radius: 0 6px 6px 0;
+      font-size: 14px;
+    }
+
+    /* Blockquote - After */
+    .blockquote-after {
+      margin: 12px 0;
+      border: 1px solid #e2e8f0;
+      padding: 12px 14px;
+      color: #64748b;
+      background: #f8fafc;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+
+    /* Tool Activity - Before */
+    .tool-before {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid rgba(148, 163, 184, 0.12);
+      border-radius: 12px;
+      padding: 8px 12px;
+      background: rgba(248, 250, 252, 0.6);
+      backdrop-filter: blur(8px);
+      font-size: 12px;
+    }
+
+    /* Tool Activity - After */
+    .tool-after {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      border: 1px solid #e2e8f0;
+      border-radius: 12px;
+      padding: 8px 12px;
+      background: #f8fafc;
+      font-size: 12px;
+    }
+
+    /* Status Dots */
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+    .status-running-before {
+      background: #3b82f6;
+      animation: pulse-old 2s infinite;
+    }
+    .status-running-after {
+      background: #137fec;
+    }
+    .status-completed-before {
+      background: #059669;
+    }
+    .status-completed-after {
+      background: #10b981;
+    }
+
+    @keyframes pulse-old {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.5; }
+    }
+
+    .tool-title {
+      font-weight: 600;
+      color: #0f172a;
+    }
+    .tool-name {
+      margin-left: auto;
+      font-size: 11px;
+      color: #94a3b8;
+      font-family: 'SF Mono', Monaco, monospace;
+    }
+
+    /* Activity Card - Before */
+    .activity-before {
+      padding: 12px 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .activity-before:hover {
+      border-color: rgba(59, 130, 246, 0.3);
+    }
+
+    /* Activity Card - After */
+    .activity-after {
+      padding: 12px 16px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 16px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .activity-after:hover {
+      border-color: rgba(19, 127, 236, 0.3);
+    }
+
+    .activity-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: #0f172a;
+    }
+
+    /* 改进列表 */
+    .improvements {
+      background: white;
+      border-radius: 16px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+    }
+    .improvements h2 {
+      font-size: 20px;
+      font-weight: 600;
+      margin-bottom: 16px;
+      color: #0f172a;
+    }
+    .improvement-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+      gap: 16px;
+    }
+    .improvement-item {
+      padding: 16px;
+      background: #f8fafc;
+      border-radius: 12px;
+      border: 1px solid #e2e8f0;
+    }
+    .improvement-item h3 {
+      font-size: 14px;
+      font-weight: 600;
+      margin-bottom: 8px;
+      color: #0f172a;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .improvement-item p {
+      font-size: 13px;
+      color: #64748b;
+      line-height: 1.6;
+    }
+    .check-icon {
+      color: #10b981;
+      font-size: 18px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🎨 Agent UI 设计优化对比</h1>
+    <p class="subtitle">基于 impeccable critique 评审的视觉改进 - 2026-06-18</p>
+
+    <!-- 用户消息气泡对比 -->
+    <div class="comparison">
+      <div class="panel">
+        <h2>
+          <span class="badge badge-before">优化前</span>
+          用户消息气泡
+        </h2>
+        <div class="chat-demo">
+          <div class="user-message-before">
+            <div class="user-bubble-before">
+              帮我分析一下 RPG 游戏市场趋势
+            </div>
+          </div>
+          <ul style="font-size: 13px; color: #64748b; list-style: none; margin-top: 12px; line-height: 1.8;">
+            <li>❌ 18px 过大圆角</li>
+            <li>❌ 蓝色渐变背景</li>
+            <li>❌ 双层阴影</li>
+            <li>❌ transform 动画</li>
+            <li>❌ 典型 AI 聊天模板</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          <span class="badge badge-after">优化后</span>
+          用户消息气泡
+        </h2>
+        <div class="chat-demo">
+          <div class="user-message-after">
+            <div class="user-bubble-after">
+              帮我分析一下 RPG 游戏市场趋势
+            </div>
+          </div>
+          <ul style="font-size: 13px; color: #64748b; list-style: none; margin-top: 12px; line-height: 1.8;">
+            <li>✅ 12px 适度圆角</li>
+            <li>✅ 纯色背景</li>
+            <li>✅ 单层轻微阴影</li>
+            <li>✅ 简化动画</li>
+            <li>✅ 专业工具感</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Blockquote 对比 -->
+    <div class="comparison">
+      <div class="panel">
+        <h2>
+          <span class="badge badge-before">优化前</span>
+          Blockquote（引用块）
+        </h2>
+        <div class="assistant-message">
+          <p style="font-size: 14px; margin-bottom: 8px;">AI 回复：</p>
+          <div class="blockquote-before">
+            这是一段引用文本，展示了侧边条纹的效果。
+          </div>
+          <ul style="font-size: 13px; color: #64748b; list-style: none; margin-top: 12px; line-height: 1.8;">
+            <li>❌ <strong>3px 侧边粗条纹</strong></li>
+            <li>❌ 最典型的 AI 生成特征</li>
+            <li>❌ 不对称圆角</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          <span class="badge badge-after">优化后</span>
+          Blockquote（引用块）
+        </h2>
+        <div class="assistant-message">
+          <p style="font-size: 14px; margin-bottom: 8px;">AI 回复：</p>
+          <div class="blockquote-after">
+            这是一段引用文本，使用全边框和浅色背景。
+          </div>
+          <ul style="font-size: 13px; color: #64748b; list-style: none; margin-top: 12px; line-height: 1.8;">
+            <li>✅ <strong>全边框设计</strong></li>
+            <li>✅ 去掉 AI 特征</li>
+            <li>✅ 对称圆角</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 工具执行卡片对比 -->
+    <div class="comparison">
+      <div class="panel">
+        <h2>
+          <span class="badge badge-before">优化前</span>
+          工具执行指示器
+        </h2>
+        <div class="chat-demo">
+          <div class="tool-before">
+            <span class="status-dot status-running-before"></span>
+            <span class="tool-title">分析市场趋势</span>
+            <span class="tool-name">analyze_market</span>
+          </div>
+          <div class="tool-before" style="margin-top: 12px;">
+            <span class="status-dot status-completed-before"></span>
+            <span class="tool-title">生成报告</span>
+            <span class="tool-name">generate_report</span>
+          </div>
+          <ul style="font-size: 13px; color: #64748b; list-style: none; margin-top: 12px; line-height: 1.8;">
+            <li>❌ backdrop-filter: blur(8px)</li>
+            <li>❌ 装饰性毛玻璃</li>
+            <li>❌ 半透明背景</li>
+            <li>❌ 多种蓝色混用 (#3b82f6)</li>
+            <li>❌ 脉动动画过度使用</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          <span class="badge badge-after">优化后</span>
+          工具执行指示器
+        </h2>
+        <div class="chat-demo">
+          <div class="tool-after">
+            <span class="status-dot status-running-after"></span>
+            <span class="tool-title">分析市场趋势</span>
+            <span class="tool-name">analyze_market</span>
+          </div>
+          <div class="tool-after" style="margin-top: 12px;">
+            <span class="status-dot status-completed-after"></span>
+            <span class="tool-title">生成报告</span>
+            <span class="tool-name">generate_report</span>
+          </div>
+          <ul style="font-size: 13px; color: #64748b; list-style: none; margin-top: 12px; line-height: 1.8;">
+            <li>✅ 纯色背景（无模糊）</li>
+            <li>✅ 不透明设计</li>
+            <li>✅ 提升性能</li>
+            <li>✅ 统一主色 (#137fec)</li>
+            <li>✅ 移除脉动动画</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- Activity 卡片对比 -->
+    <div class="comparison">
+      <div class="panel">
+        <h2>
+          <span class="badge badge-before">优化前</span>
+          活动卡片
+        </h2>
+        <div class="chat-demo">
+          <div class="activity-before">
+            <span class="status-dot status-running-before"></span>
+            <span class="activity-title">正在调用工具...</span>
+          </div>
+          <ul style="font-size: 13px; color: #64748b; list-style: none; margin-top: 12px; line-height: 1.8;">
+            <li>❌ hover 变色到 #3b82f6</li>
+            <li>❌ 脉动动画</li>
+          </ul>
+        </div>
+      </div>
+
+      <div class="panel">
+        <h2>
+          <span class="badge badge-after">优化后</span>
+          活动卡片
+        </h2>
+        <div class="chat-demo">
+          <div class="activity-after">
+            <span class="status-dot status-running-after"></span>
+            <span class="activity-title">正在调用工具...</span>
+          </div>
+          <ul style="font-size: 13px; color: #64748b; list-style: none; margin-top: 12px; line-height: 1.8;">
+            <li>✅ hover 变色到 #137fec</li>
+            <li>✅ 静态显示</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+    <!-- 改进总结 -->
+    <div class="improvements">
+      <h2>✨ 核心改进总结</h2>
+      <div class="improvement-list">
+        <div class="improvement-item">
+          <h3>
+            <span class="material-symbols-outlined check-icon">check_circle</span>
+            移除 AI 特征
+          </h3>
+          <p>去掉侧边 3px 粗条纹、18px 圆角、渐变背景等典型 AI 生成界面标志。</p>
+        </div>
+
+        <div class="improvement-item">
+          <h3>
+            <span class="material-symbols-outlined check-icon">check_circle</span>
+            统一色彩系统
+          </h3>
+          <p>主色统一为 #137fec，成功绿 #10b981，错误红 #ef4444，不再混用多种蓝色。</p>
+        </div>
+
+        <div class="improvement-item">
+          <h3>
+            <span class="material-symbols-outlined check-icon">check_circle</span>
+            移除装饰效果
+          </h3>
+          <p>去掉 backdrop-filter 毛玻璃、双层阴影、transform 动画等装饰性效果。</p>
+        </div>
+
+        <div class="improvement-item">
+          <h3>
+            <span class="material-symbols-outlined check-icon">check_circle</span>
+            减少视觉噪音
+          </h3>
+          <p>移除状态点脉动动画，只保留必要的状态指示，降低认知负担。</p>
+        </div>
+
+        <div class="improvement-item">
+          <h3>
+            <span class="material-symbols-outlined check-icon">check_circle</span>
+            无障碍支持
+          </h3>
+          <p>添加 @media (prefers-reduced-motion: reduce)，尊重用户的动效偏好设置。</p>
+        </div>
+
+        <div class="improvement-item">
+          <h3>
+            <span class="material-symbols-outlined check-icon">check_circle</span>
+            性能优化
+          </h3>
+          <p>移除 GPU 密集的 backdrop-filter，减少不必要的动画，提升渲染性能。</p>
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 40px; padding: 24px; background: #eff6ff; border-radius: 16px; border: 1px solid #dbeafe;">
+      <h3 style="font-size: 16px; font-weight: 600; margin-bottom: 12px; color: #0f172a;">📊 设计评分变化</h3>
+      <div style="display: flex; gap: 40px; align-items: center;">
+        <div>
+          <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">优化前</div>
+          <div style="font-size: 32px; font-weight: 700; color: #ef4444;">21<span style="font-size: 16px; color: #94a3b8;">/40</span></div>
+        </div>
+        <div style="font-size: 24px; color: #94a3b8;">→</div>
+        <div>
+          <div style="font-size: 12px; color: #64748b; margin-bottom: 4px;">优化后（预估）</div>
+          <div style="font-size: 32px; font-weight: 700; color: #10b981;">26<span style="font-size: 16px; color: #94a3b8;">/40</span></div>
+        </div>
+        <div style="flex: 1; font-size: 13px; color: #64748b; line-height: 1.6;">
+          主要提升：<br>
+          • Consistency +2（色彩统一）<br>
+          • Aesthetic +2（去 AI 感）<br>
+          • Accessibility +1（reduced motion）
+        </div>
+      </div>
+    </div>
+
+    <div style="margin-top: 24px; text-align: center; font-size: 13px; color: #94a3b8;">
+      <p>完整评审报告：<code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px;">/.impeccable/critique/260618_01_home_and_agent_chat.md</code></p>
+      <p style="margin-top: 8px;">优化日志：<code style="background: #f1f5f9; padding: 4px 8px; border-radius: 4px;">/docs/design/260618_04_ui_optimization_log.md</code></p>
+    </div>
+  </div>
+</body>
+</html>
