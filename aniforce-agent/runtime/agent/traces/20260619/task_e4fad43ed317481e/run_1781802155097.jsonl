@@ -1,0 +1,2 @@
+{"event": "trace.start", "trace_id": "task_e4fad43ed317481e:run_1781802155097", "task_id": "task_e4fad43ed317481e", "run_id": "run_1781802155097", "user_id": "user_test_001", "task_type": "conversation", "timestamp": "2026-06-19T01:02:35.097416"}
+{"event": "trace.end", "duration_ms": 85, "timestamp": "2026-06-19T01:02:35.182490", "trace_id": "task_e4fad43ed317481e:run_1781802155097"}
