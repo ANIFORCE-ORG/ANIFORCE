@@ -18,6 +18,10 @@ from googleapiclient.discovery import build
 from googleapiclient.errors import HttpError
 from google.ads.googleads.client import GoogleAdsClient
 from google.ads.googleads.errors import GoogleAdsException
+from facebook_business.api import FacebookAdsApi
+from facebook_business.adobjects.user import User
+from facebook_business.adobjects.adaccount import AdAccount
+from facebook_business.exceptions import FacebookRequestError
 
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
@@ -1301,7 +1305,7 @@ async def sync_meta_ad_accounts(
 ):
     """
     同步 Meta 广告账户
-    调用 Meta API 获取 adaccounts 并写入 sub_account_bindings
+    使用 Facebook Business SDK 获取 adaccounts 并写入 sub_account_bindings
     """
     try:
         user_id = current_user["id"]
@@ -1323,83 +1327,105 @@ async def sync_meta_ad_accounts(
         if connection.status != "active":
             raise HTTPException(status_code=400, detail="连接未授权，请先完成授权")
         
-        # 调用 Meta API 获取广告账户
+        # 使用 Facebook Business SDK 获取广告账户
         access_token = connection.access_token
-        async with httpx.AsyncClient(timeout=30.0, verify=False) as client:
-            try:
-                logger.info(f"Fetching ad accounts from Meta API for connection: {connection_id}")
-                ad_accounts_response = await client.get(
-                    "https://graph.facebook.com/v25.0/me/adaccounts",
-                    params={
-                        "fields": "id,name,account_status,currency,business_id,spend_cap,timezone_name",
-                        "access_token": access_token
-                    }
+        
+        # 从配置中获取 Meta App 信息
+        meta_app_id = settings.META_APP_ID
+        meta_app_secret = settings.META_APP_SECRET
+        
+        if not meta_app_id or not meta_app_secret:
+            logger.error("Meta App ID or App Secret not configured")
+            raise HTTPException(status_code=500, detail="Meta 应用配置缺失")
+        
+        try:
+            logger.info(f"Fetching ad accounts from Meta API for connection: {connection_id}")
+            
+            # 初始化 Facebook Ads API
+            FacebookAdsApi.init(
+                app_id=meta_app_id,
+                app_secret=meta_app_secret,
+                access_token=access_token
+            )
+            
+            # 获取当前用户
+            me = User(fbid='me')
+            
+            # 获取用户的广告账户
+            ad_accounts = me.get_ad_accounts(fields=[
+                AdAccount.Field.id,
+                AdAccount.Field.name,
+                AdAccount.Field.account_id,
+                AdAccount.Field.account_status,
+                AdAccount.Field.currency,
+                AdAccount.Field.timezone_name,
+                AdAccount.Field.business,
+            ])
+            
+            # 转换为列表（SDK 返回的是迭代器）
+            accounts_list = list(ad_accounts)
+            
+            logger.info(f"Fetched {len(accounts_list)} ad accounts from Meta API")
+            
+            # 状态映射
+            status_mapping = {
+                1: "active",        # 正常可投放
+                2: "disabled",      # 被封/禁用
+                3: "pending_review", # 待审核
+                7: "payment_required", # 需充值/付款
+                9: "suspended"      # 暂停
+            }
+            
+            # 删除现有的子账号绑定（重新同步）
+            stmt = select(SubAccountBinding).where(
+                SubAccountBinding.parent_connection_id == connection_id
+            )
+            result = await db.execute(stmt)
+            existing_bindings = result.scalars().all()
+            for binding in existing_bindings:
+                await db.delete(binding)
+            
+            # 创建新的子账号绑定
+            synced_count = 0
+            for ad_account in accounts_list:
+                account_id = ad_account.get('id', '')
+                account_name = ad_account.get('name', '')
+                account_status = ad_account.get('account_status')
+                
+                # 映射状态（SDK 返回的是整数）
+                mapped_status = status_mapping.get(account_status, "unknown")
+                
+                # 创建子账号绑定
+                binding = SubAccountBinding(
+                    parent_connection_id=connection_id,
+                    sub_account_name=account_name,
+                    sub_account_id=account_id,
+                    status=mapped_status
                 )
+                db.add(binding)
+                synced_count += 1
                 
-                if ad_accounts_response.status_code != 200:
-                    logger.error(f"Failed to fetch ad accounts: status={ad_accounts_response.status_code}, response={ad_accounts_response.text}")
-                    raise HTTPException(status_code=500, detail="获取广告账户失败")
-                
-                ad_accounts_data = ad_accounts_response.json()
-                ad_accounts = ad_accounts_data.get("data", [])
-                
-                logger.info(f"Fetched {len(ad_accounts)} ad accounts from Meta API")
-                
-                # 状态映射
-                status_mapping = {
-                    "1": "active",        # 正常可投放
-                    "2": "disabled",      # 被封/禁用
-                    "3": "pending_review", # 待审核
-                    "7": "payment_required", # 需充值/付款
-                    "9": "suspended"      # 暂停
-                }
-                
-                # 删除现有的子账号绑定（重新同步）
-                stmt = select(SubAccountBinding).where(
-                    SubAccountBinding.parent_connection_id == connection_id
-                )
-                result = await db.execute(stmt)
-                existing_bindings = result.scalars().all()
-                for binding in existing_bindings:
-                    await db.delete(binding)
-                
-                # 创建新的子账号绑定
-                synced_count = 0
-                for ad_account in ad_accounts:
-                    account_id = ad_account.get("id", "")
-                    account_name = ad_account.get("name", "")
-                    account_status = str(ad_account.get("account_status", ""))
-                    
-                    # 映射状态
-                    mapped_status = status_mapping.get(account_status, "unknown")
-                    
-                    # 创建子账号绑定
-                    binding = SubAccountBinding(
-                        parent_connection_id=connection_id,
-                        sub_account_name=account_name,
-                        sub_account_id=account_id,
-                        status=mapped_status
-                    )
-                    db.add(binding)
-                    synced_count += 1
-                    
-                    logger.info(f"Synced ad account: id={account_id}, name={account_name}, status={mapped_status}")
-                
-                await db.commit()
-                
-                logger.info(f"Successfully synced {synced_count} ad accounts for connection: {connection_id}")
-                
-                return {
-                    "message": f"成功同步 {synced_count} 个广告账户",
-                    "synced_count": synced_count
-                }
-                
-            except httpx.TimeoutException as e:
-                logger.error(f"Timeout while fetching ad accounts: {e}")
-                raise HTTPException(status_code=500, detail="请求超时")
-            except httpx.HTTPError as e:
-                logger.error(f"HTTP error while fetching ad accounts: {e}")
-                raise HTTPException(status_code=500, detail="网络错误")
+                logger.info(f"Synced ad account: id={account_id}, name={account_name}, status={mapped_status}")
+            
+            await db.commit()
+            
+            logger.info(f"Successfully synced {synced_count} ad accounts for connection: {connection_id}")
+            
+            return {
+                "message": f"成功同步 {synced_count} 个广告账户",
+                "synced_count": synced_count
+            }
+            
+        except FacebookRequestError as e:
+            logger.error(f"Facebook API error: code={e.api_error_code()}, type={e.api_error_type()}, message={e.api_error_message()}")
+            
+            error_code = e.api_error_code()
+            if error_code == 190:
+                raise HTTPException(status_code=401, detail="Access Token 无效或已过期，请重新授权")
+            elif error_code == 200:
+                raise HTTPException(status_code=403, detail="缺少必要权限，请确保已授予 ads_read 权限")
+            else:
+                raise HTTPException(status_code=500, detail=f"Meta API 错误: {e.api_error_message()}")
         
     except HTTPException:
         raise
