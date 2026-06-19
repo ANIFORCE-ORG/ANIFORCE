@@ -1,10 +1,11 @@
-import { http } from './http'
-
 export interface AgentSession {
   id: string
+  session_id?: string
   title: string
+  status?: string
   created_at: string
-  updated_at: string
+  updated_at?: string
+  archived_at?: string | null
 }
 
 export interface AgentUsage {
@@ -56,20 +57,58 @@ export interface AgentStreamEvent {
   data: Record<string, unknown>
 }
 
+function normalizeAgentSession(raw: any): AgentSession {
+  const id = String(raw?.id || raw?.session_id || '')
+  return {
+    ...raw,
+    id,
+    session_id: raw?.session_id || id,
+    title: raw?.title || id || '新对话',
+    created_at: raw?.created_at || new Date().toISOString(),
+    updated_at: raw?.updated_at,
+  }
+}
+
+async function agentJson<T>(path: string, options: RequestInit = {}): Promise<T> {
+  const token = localStorage.getItem('animagus_token')
+  const response = await fetch(`/api/agent${path}`, {
+    ...options,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      ...(options.headers || {}),
+    },
+  })
+
+  if (!response.ok) {
+    const text = await response.text().catch(() => '')
+    throw new Error(text || `Agent request failed: ${response.status}`)
+  }
+
+  return response.json()
+}
+
 export async function createAgentSession(payload: { title?: string } = {}): Promise<AgentSession> {
-  return http.post<AgentSession>('/agent/chat/sessions', payload)
+  const session = await agentJson<any>('/sessions', {
+    method: 'POST',
+    body: JSON.stringify(payload),
+  })
+  return normalizeAgentSession(session)
 }
 
 export async function listAgentSessions(): Promise<AgentSession[]> {
-  return http.get<AgentSession[]>('/agent/chat/sessions')
+  const sessions = await agentJson<any[]>('/sessions')
+  return sessions.map(normalizeAgentSession)
 }
 
 export async function getAgentSession(sessionId: string): Promise<{ session: AgentSession; messages: AgentMessage[] }> {
-  return http.get(`/agent/chat/sessions/${encodeURIComponent(sessionId)}`)
+  const sessions = await listAgentSessions()
+  const session = sessions.find(item => item.id === sessionId) || normalizeAgentSession({ session_id: sessionId, title: sessionId })
+  return { session, messages: [] }
 }
 
 export async function listAgentModels(): Promise<{ models: AgentModel[] }> {
-  const health = await http.get<{ provider: string; model: string }>('/agent/health')
+  const health = await agentJson<{ provider?: string; model: string }>('/health')
   return {
     models: [
       {
@@ -82,16 +121,16 @@ export async function listAgentModels(): Promise<{ models: AgentModel[] }> {
   }
 }
 
-export async function* streamAgentMessage(sessionId: string, message: string): AsyncGenerator<AgentStreamEvent, void, unknown> {
+export async function* streamAgentMessage(sessionId: string, message: string, taskType = 'conversation'): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const token = localStorage.getItem('animagus_token')
-  const response = await fetch(`/api/v1/agent/chat/sessions/${encodeURIComponent(sessionId)}/stream`, {
+  const response = await fetch('/api/agent/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ message }),
+    body: JSON.stringify({ prompt: message, session_id: sessionId, task_type: taskType }),
   })
 
   if (!response.ok) {
