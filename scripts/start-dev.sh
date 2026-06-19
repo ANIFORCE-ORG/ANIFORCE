@@ -13,6 +13,7 @@ HOST="${HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-8010}"
 AGENT_PORT="${AGENT_PORT:-8020}"
 FRONTEND_PORT="${FRONTEND_PORT:-3010}"
+LOCAL_NO_PROXY="localhost,127.0.0.1,0.0.0.0,::1,${HOST}"
 BACKEND_RELOAD=0
 SKIP_INSTALL=0
 CLEAR_PORTS=1
@@ -57,6 +58,9 @@ while [[ $# -gt 0 ]]; do
     *) echo "Unknown argument: $1" >&2; usage; exit 1 ;;
   esac
 done
+
+export NO_PROXY="${LOCAL_NO_PROXY}${NO_PROXY:+,${NO_PROXY}}"
+export no_proxy="${LOCAL_NO_PROXY}${no_proxy:+,${no_proxy}}"
 
 mkdir -p "${LOG_DIR}" "${BACKEND_DIR}/uv_cache" "${AGENT_DIR}/uv_cache" "${ROOT_DIR}/npm_cache"
 : > "${PID_FILE}"
@@ -167,7 +171,7 @@ wait_http() {
   local url="$1"
   local name="$2"
   for _ in $(seq 1 60); do
-    if curl -fsS "${url}" >/dev/null 2>&1; then
+    if curl --noproxy '*' -fsS "${url}" >/dev/null 2>&1; then
       echo "${name} ready: ${url}"
       return 0
     fi

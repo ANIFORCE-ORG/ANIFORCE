@@ -10,6 +10,7 @@ pydantic-settings>=2.6.0
 python-jose[cryptography]>=3.3.0
 passlib>=1.7.4
 argon2-cffi>=21.3.0
+bcrypt>=4.0.0,<5.0.0
 python-multipart>=0.0.9
 pyOpenSSL>=23.2.0
 cryptography>=41.0.4
