@@ -1,8 +1,11 @@
 """项目管理 API"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from app.repositories.protocols import ProjectRepository
 from app.repositories.factory import get_project_repo
+from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
+from app.services.session_state_mutation import record_entity_change
+from app.services.idempotency_service import IDEMPOTENCY_HEADER, IdempotencyService
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -57,23 +60,45 @@ async def get_project(
 
 @router.post("")
 async def create_project(
-    request: CreateProjectRequest,
+    request: Request,
+    payload: CreateProjectRequest,
     current_user: dict = Depends(get_current_user),
     project_repo: ProjectRepository = Depends(get_project_repo),
 ):
     """创建新项目"""
+    idempotency_key = request.headers.get(IDEMPOTENCY_HEADER)
+    idempotency = IdempotencyService(project_repo.session)
+    cached = await idempotency.get_response(current_user["id"], idempotency_key)
+    if cached is not None:
+        return cached
+
     project = await project_repo.create(
         user_id=current_user["id"],
-        name=request.name,
-        total_budget=request.total_budget,
-        description=request.description,
-        game_type=request.game_type,
-        target_market=request.target_market,
-        tags=request.tags,
-        manager=request.manager,
-        start_date=request.start_date,
-        end_date=request.end_date,
+        name=payload.name,
+        total_budget=payload.total_budget,
+        description=payload.description,
+        game_type=payload.game_type,
+        target_market=payload.target_market,
+        tags=payload.tags,
+        manager=payload.manager,
+        start_date=payload.start_date,
+        end_date=payload.end_date,
     )
+    session_id = request.headers.get("X-Agent-Session-Id")
+    if session_id:
+        await record_entity_change(
+            repo=SqliteSessionStateRepository(project_repo.session),
+            session_id=session_id,
+            user_id=current_user["id"],
+            entity_type="project",
+            entity_id=project["id"],
+            action="created",
+            new_value={"name": project["name"], "total_budget": project["total_budget"]},
+            run_id=request.headers.get("X-Agent-Run-Id"),
+            tool_call_id=request.headers.get("X-Agent-Tool-Call-Id"),
+            linked_entity_updates={"project_id": project["id"]},
+        )
+    await idempotency.save_response(current_user["id"], idempotency_key, request.method, str(request.url.path), project)
     # 提交事务以确保数据持久化
     await project_repo.session.commit()
     return project

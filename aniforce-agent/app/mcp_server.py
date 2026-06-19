@@ -10,6 +10,8 @@ Agent 通过 MCPServerStreamableHttp 连本进程的 /mcp 端点。
 - 每次 MCP 调用独立带 token，天然按请求隔离，多用户并发不串号
 """
 
+import hashlib
+import json
 from typing import Optional
 
 from loguru import logger
@@ -22,25 +24,57 @@ from app.backend_client import backend_client
 mcp = FastMCP("ANIFORCE Tools")
 
 
-def _get_token(ctx) -> str:
-    """从 MCP Context 的 request_context.meta 读 JWT token"""
+def _get_meta(ctx) -> dict:
+    """从 MCP Context 的 request_context.meta 读元信息"""
     try:
         meta = ctx.request_context.meta
-        token = ""
-
         if isinstance(meta, dict):
-            token = meta.get("jwt_token", "")
-        elif hasattr(meta, "model_dump"):
-            token = (meta.model_dump() or {}).get("jwt_token", "")
-        elif meta is not None:
-            token = getattr(meta, "jwt_token", "") or ""
-
-        if not token:
-            logger.warning("[MCP] request_context.meta 无 jwt_token")
-        return token
+            return meta
+        if hasattr(meta, "model_dump"):
+            return meta.model_dump() or {}
+        if meta is not None:
+            return {
+                "jwt_token": getattr(meta, "jwt_token", "") or "",
+                "session_id": getattr(meta, "session_id", "") or "",
+                "run_id": getattr(meta, "run_id", "") or "",
+            }
     except Exception as e:
-        logger.warning(f"[MCP] 读取 token 失败: {e}")
-        return ""
+        logger.warning(f"[MCP] 读取 meta 失败: {e}")
+    return {}
+
+
+def _get_token(ctx) -> str:
+    """从 MCP Context 的 request_context.meta 读 JWT token"""
+    token = _get_meta(ctx).get("jwt_token", "")
+    if not token:
+        logger.warning("[MCP] request_context.meta 无 jwt_token")
+    return token
+
+
+def _make_tool_call_id(ctx, tool_name: str, arguments: dict) -> str | None:
+    meta = _get_meta(ctx)
+    session_id = meta.get("session_id")
+    run_id = meta.get("run_id")
+    if not session_id or not run_id:
+        return None
+    raw = json.dumps(arguments, ensure_ascii=False, sort_keys=True, default=str)
+    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
+    return f"{session_id}:{run_id}:{tool_name}:{digest}"
+
+
+def _get_backend_headers(ctx, tool_name: str | None = None, arguments: dict | None = None) -> dict[str, str]:
+    meta = _get_meta(ctx)
+    headers: dict[str, str] = {}
+    if meta.get("session_id"):
+        headers["X-Agent-Session-Id"] = str(meta["session_id"])
+    if meta.get("run_id"):
+        headers["X-Agent-Run-Id"] = str(meta["run_id"])
+    if tool_name and arguments is not None:
+        tool_call_id = _make_tool_call_id(ctx, tool_name, arguments)
+        if tool_call_id:
+            headers["X-Agent-Tool-Call-Id"] = tool_call_id
+            headers["Idempotency-Key"] = tool_call_id
+    return headers
 
 
 # ============ Project 工具 ============
@@ -102,7 +136,11 @@ async def create_project(
         "game_type": game_type or None,
         "target_market": target_market or None,
     }
-    return await backend_client.create_project(token=token, data=data)
+    return await backend_client.create_project(
+        token=token,
+        data=data,
+        extra_headers=_get_backend_headers(ctx, "create_project", data),
+    )
 
 
 # ============ Campaign 工具 ============
@@ -166,7 +204,11 @@ async def create_campaign(
         "budget": budget,
         "platform": platform,
     }
-    return await backend_client.create_campaign(token=token, data=data)
+    return await backend_client.create_campaign(
+        token=token,
+        data=data,
+        extra_headers=_get_backend_headers(ctx, "create_campaign", data),
+    )
 
 
 @mcp.tool()
@@ -182,7 +224,10 @@ async def update_campaign_status(ctx: Context, campaign_id: str, status: str) ->
     """
     token = _get_token(ctx)
     return await backend_client.update_campaign_status(
-        token=token, campaign_id=campaign_id, status=status
+        token=token,
+        campaign_id=campaign_id,
+        status=status,
+        extra_headers=_get_backend_headers(ctx, "update_campaign_status", {"campaign_id": campaign_id, "status": status}),
     )
 
 

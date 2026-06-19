@@ -38,6 +38,12 @@ async def run_agent(
     session_id = body.get("session_id")
     task_type = body.get("task_type", "conversation")
     context = body.get("context", {})
+    business_context_summary = body.get("business_context_summary", "")
+    run_meta = body.get("run_meta", {})
+    if business_context_summary:
+        context["business_context_summary"] = business_context_summary
+    if run_meta:
+        context["run_meta"] = run_meta
 
     # 传递 JWT token 给 MCP
     if "token" in user and "auth_token" not in context:

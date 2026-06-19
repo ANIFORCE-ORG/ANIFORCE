@@ -1769,3 +1769,987 @@ A: Session State 是 user_id + session_id 隔离的。多人协作需要引入 w
 Session State Manager 不是简单的三层转发，而是业务上下文的抽象层和状态管理者。它连接 Layer 0（权威数据）、Layer 1（业务上下文持久化）、Layer 2（LLM 对话缓存）、Layer 3（前端临时状态），为 Agent 提供结构化的业务语义，为前端提供 Act-driven 的投影数据。
 
 开发时记住：**抽象业务语义，不是堆数据**。
+
+---
+
+# v2.1 补充：真实场景兼容与工程化设计
+
+> 本节修正 v2.0 过度聚焦"结构化长程任务"的问题。真实产品不是只有 Act 1-10 的投放全流程，用户还会闲聊、查资料、试用素材生成、单点查询、中途切换目标、失败后恢复、跨页面继续工作。本系统必须以可扩展的 Session Runtime 兼容这些场景。
+
+---
+
+## 0. 真实场景分类与兼容原则
+
+### 0.1 真实用户场景
+
+| 场景 | 示例 | 是否需要 Act | 是否需要业务实体 | 是否产生 side_effect |
+|---|---|---:|---:|---:|
+| 闲聊探索 | "你能帮我做什么？" | 否 | 否 | 可选 recommendation |
+| 产品/投放咨询 | "RPG 游戏适合投 Meta 还是 Google？" | 否 | 可选 | 可选 recommendation |
+| 资料查询 | "帮我查一下上个月 Meta 花了多少钱" | 否 | 可选 | data.query_result |
+| 单点生成 | "给我写 5 条 Facebook 广告文案" | 可选 | 可选 | content.generated |
+| 结构化任务 | "创建项目、配计划、生成素材、上线" | 是 | 是 | act.* |
+| 中途切换 | "先别建项目了，看看老项目 ROI" | 可变 | 可变 | mode.switched + data.* |
+| 已有工作区继续 | "继续上次那个预算调整" | 是 | 是 | act.* |
+| 回滚/重跑 | "撤回刚才预算调整，换个方案" | 是 | 是 | act.rolled_back / act.replayed |
+| 体验型试用 | "生成几张素材看看效果" | 可选 | 可选 | content.preview_generated |
+| 故障恢复 | "刚才断了，继续" | 是/否 | 可选 | runtime.resumed |
+
+### 0.2 核心兼容原则
+
+1. **不预设用户一定在完成长程任务**：默认是 `exploratory`，只有识别到明确业务目标时才进入结构化模式。
+2. **Act 是可选编排单元，不是所有 session 都必须有 Act**。
+3. **Panel 是投影建议，不是 Agent 控制 UI 的命令**。
+4. **side_effect 是语义事件，不局限于 act.*，还包括 data.*、content.*、recommendation.*、runtime.*。**
+5. **Session State 是可扩展 envelope，核心字段稳定，业务扩展放入 typed payload。**
+6. **Agent 服务保持运行时纯粹：编排、工具、Skill、沙箱在 agent-service；业务事实和 Session State 在 backend。**
+
+---
+
+## 1. Session Runtime 抽象升级
+
+### 1.1 Session Mode
+
+新增 `SessionMode`，不要把所有会话都塞进结构化 Act：
+
+```python
+class SessionMode(str, Enum):
+    EXPLORATORY = "exploratory"          # 闲聊、探索、问能做什么
+    CONSULTATION = "consultation"        # 策略咨询、资料解释、建议
+    QUICK_ACTION = "quick_action"        # 单点操作：查询、生成、修改
+    STRUCTURED_TASK = "structured_task"  # 多步长程任务，有 Act/DAG
+    RECOVERY = "recovery"                # 断线恢复、失败恢复、继续上次任务
+```
+
+### 1.2 Intent Recognition
+
+每轮 run 前 backend 先做轻量 intent 判断；一期可以规则实现，二期可让 Agent 自判断并回写。
+
+```python
+class SessionIntent(BaseModel):
+    mode: SessionMode
+    intent_type: str                 # chat | query | generate | optimize | create | update | recover
+    confidence: float
+    target_entities: list[dict] = [] # 用户明确提到的 project/campaign/material
+    suggested_panels: list[str] = [] # context/creative/analysis/budget/audit
+    requires_business_context: bool = False
+    requires_hitl: bool = False
+```
+
+规则示例：
+
+```text
+"你能做什么" / "介绍一下" → EXPLORATORY / chat
+"查一下" / "多少" / "ROI" → QUICK_ACTION / query
+"生成" / "写几条" / "素材" → QUICK_ACTION / generate
+"创建项目" / "配计划" / "上线" → STRUCTURED_TASK / create
+"继续" / "刚才" / "断了" → RECOVERY / recover
+```
+
+### 1.3 SessionState Schema 升级
+
+Session State 必须支持多场景，而不是只支持项目/计划/素材。
+
+```python
+class SessionState(BaseModel):
+    session_id: str
+    user_id: str
+
+    # 会话模式和意图
+    mode: SessionMode = SessionMode.EXPLORATORY
+    intent: Optional[SessionIntent] = None
+
+    # Layer 1 业务上下文 envelope
+    context: BusinessContext = Field(default_factory=BusinessContext)
+
+    # 结构化任务才使用 execution；闲聊/查询可以为空
+    execution: Optional[ExecutionState] = None
+
+    # 变更历史和事件历史
+    changelog: list[ChangelogEntry] = Field(default_factory=list)
+    side_effect_log: list[SideEffectEvent] = Field(default_factory=list)
+
+    # LLM 历史压缩摘要
+    conversation_summary: Optional[str] = None
+
+    # 前端临时状态快照
+    ui_snapshot: Optional[dict] = None
+
+    # 工程字段
+    version: int = 1                  # 乐观锁
+    status: str = "active"           # active/archived/recovering/error
+    last_error: Optional[dict] = None
+    created_at: str
+    updated_at: str
+```
+
+### 1.4 BusinessContext 升级
+
+```python
+class BusinessContext(BaseModel):
+    # 业务实体引用，不保存完整权威数据
+    project_id: Optional[str] = None
+    campaign_ids: list[str] = Field(default_factory=list)
+    material_ids: list[str] = Field(default_factory=list)
+
+    # 查询/分析型上下文
+    query_context: dict = Field(default_factory=dict)
+    # 例：{"time_range": "last_month", "platform": "Meta", "metrics": ["spend", "roi"]}
+
+    # 生成型上下文
+    generation_context: dict = Field(default_factory=dict)
+    # 例：{"content_type": "ad_copy", "platform": "Facebook", "tone": "casual"}
+
+    # 咨询型上下文
+    consultation_context: dict = Field(default_factory=dict)
+    # 例：{"topic": "channel_strategy", "game_type": "RPG", "market": "US"}
+
+    # active_entities 是摘要缓存，不是事实源
+    active_entities: dict = Field(default_factory=dict)
+```
+
+---
+
+## 2. 多场景上下文构建策略
+
+### 2.1 Context Abstractor 不再只有一种输出
+
+`BusinessContextAbstractor` 需要按 `SessionMode + intent_type` 选择策略：
+
+```python
+class BusinessContextAbstractor:
+    async def abstract_context(self, state: SessionState, user_id: str) -> BusinessContextSummary:
+        if state.mode == SessionMode.EXPLORATORY:
+            return await self._abstract_exploratory(state, user_id)
+        if state.mode == SessionMode.CONSULTATION:
+            return await self._abstract_consultation(state, user_id)
+        if state.mode == SessionMode.QUICK_ACTION:
+            return await self._abstract_quick_action(state, user_id)
+        if state.mode == SessionMode.STRUCTURED_TASK:
+            return await self._abstract_structured_task(state, user_id)
+        if state.mode == SessionMode.RECOVERY:
+            return await self._abstract_recovery(state, user_id)
+```
+
+### 2.2 输出不只是纯文本
+
+```python
+class BusinessContextSummary(BaseModel):
+    mode: SessionMode
+    text: str                         # 注入 Agent prompt 的文本摘要
+    entity_refs: list[dict] = []       # project/campaign/material 引用
+    constraints: list[str] = []        # 约束：预算不能超、写操作需 HITL
+    recommended_tools: list[str] = []  # 可提示 Agent 优先用哪些工具
+    recommended_skills: list[str] = [] # 可提示 Agent 加载哪些 Skill
+    panel_hints: list[str] = []        # 给前端的投影建议
+```
+
+### 2.3 场景策略
+
+#### 闲聊探索
+
+```text
+输入：用户问"你能做什么？"
+上下文：
+- 不强行关联项目
+- 可读取用户最近活跃项目摘要，但不塞完整数据
+- 推荐能力范围：建项目、配计划、生素材、查数据、调预算
+side_effect：recommendation.explore（可选）
+```
+
+#### 资料查询
+
+```text
+输入："查一下上个月 Meta 花了多少钱"
+上下文：
+- query_context.time_range = last_month
+- query_context.platform = Meta
+- 查询 backend performance/campaign 聚合接口
+side_effect：data.query_result
+panel：analysis
+```
+
+#### 单点生成
+
+```text
+输入："给我写 5 条 Facebook 广告文案"
+上下文：
+- generation_context.content_type = ad_copy
+- generation_context.platform = Facebook
+- 若没有 project_id，允许生成 preview，不落正式素材库
+side_effect：content.preview_generated 或 content.generated
+panel：creative
+```
+
+#### 结构化任务
+
+```text
+输入："创建项目并配两个计划"
+上下文：
+- mode = STRUCTURED_TASK
+- execution.current_act = project_creation
+- execution.plan_dag = [...]
+side_effect：act.project_created / act.campaign_created
+panel：context
+```
+
+#### 中途切换
+
+```text
+输入："先别生成素材了，看看 ROI"
+处理：
+- mode 可从 STRUCTURED_TASK 临时切到 QUICK_ACTION
+- execution 暂停当前 Act，不丢弃
+- context.query_context 写入 ROI 查询条件
+side_effect：mode.switched + data.query_result
+```
+
+---
+
+## 3. Frontend 状态管理设计
+
+### 3.1 前端不是事实源，但必须有稳定状态机
+
+前端三类状态：
+
+| 状态 | 来源 | 存储 | 刷新策略 |
+|---|---|---|---|
+| 权威业务数据 | backend API | Pinia/组件状态缓存 | side_effect 后重新拉取 |
+| Session 投影状态 | backend Session State | Pinia agent store | session 切换/重连时拉取 |
+| 本地临时状态 | 用户操作 | Pinia/local component | context_snapshot 上报 |
+
+### 3.2 推荐 Store 拆分
+
+```text
+src/store/agent.ts
+  - sessions
+  - currentSessionId
+  - streamStatus: idle/connecting/streaming/reconnecting/error
+  - messages
+  - runtimeEvents
+  - sideEffects
+
+src/store/workspace.ts
+  - activePanel
+  - activeProjectId
+  - activeCampaignId
+  - panelDataCache
+  - highlightedEntities
+  - stalePanels
+
+src/store/draft.ts
+  - draftEdits
+  - conflictDrafts
+  - dirtyFields
+
+src/store/sse.ts 或 composable
+  - connectionId
+  - lastEventId
+  - reconnectCount
+  - missedEventRecoveryRequired
+```
+
+### 3.3 数据刷新原则
+
+1. `side_effect` 不直接修改复杂本地实体，只标记 panel stale。
+2. stale panel 通过 backend API 重新拉取权威数据。
+3. 本地草稿不被 side_effect 静默覆盖。
+4. 如果 side_effect 修改了用户正在编辑的字段，进入 conflict 状态。
+
+```typescript
+function handleSideEffect(event: SideEffectEvent) {
+  workspaceStore.recordSideEffect(event)
+
+  for (const panel of event.recommendation?.refresh_panels || []) {
+    workspaceStore.markPanelStale(panel)
+  }
+
+  const conflicts = draftStore.detectConflicts(event.entities_affected)
+  if (conflicts.length) {
+    draftStore.markConflicts(conflicts)
+    notifyUser('Agent 修改了你正在编辑的数据，请确认保留草稿还是使用最新结果')
+    return
+  }
+
+  workspaceStore.refreshStalePanels()
+}
+```
+
+### 3.4 SSE 断线重连
+
+前端必须维护 `last_event_id`：
+
+```text
+正常：SSE event id 单调递增
+断线：前端记录 last_event_id
+重连：GET /api/v1/agent/sessions/{id}/events?after=last_event_id
+恢复：补齐 missed side_effect，再继续 stream
+```
+
+一期可以简化：断线后重新拉 Layer 0 + Layer 1 重建视图，不补事件流。
+
+### 3.5 多 Tab 同步
+
+使用 `BroadcastChannel`：
+
+```typescript
+const channel = new BroadcastChannel('aniforce-agent-session')
+
+channel.postMessage({ type: 'side_effect', sessionId, event })
+channel.postMessage({ type: 'session_switched', sessionId })
+channel.postMessage({ type: 'draft_updated', draftKey })
+```
+
+同 session 多 tab 同时发送消息时，前端必须提示：
+
+```text
+当前 Session 正在另一个窗口执行任务，请等待完成或新建 Session。
+```
+
+---
+
+## 4. Agent 端编排设计
+
+### 4.1 Agent-Service 职责边界
+
+agent-service 负责：
+
+```text
+- LLM runtime
+- OpenAI Agents SDK 调用
+- MCP 工具注册和执行
+- Skill 加载
+- sandbox 文件隔离
+- SQLiteSession 对话历史
+- 同 session run 串行锁
+```
+
+agent-service 不负责：
+
+```text
+- 权威业务状态
+- 用户权限最终判断
+- Session State Layer 1
+- 前端 UI 控制
+```
+
+### 4.2 编排模式
+
+Agent 需要支持三种编排：
+
+| 编排模式 | 适用场景 | 机制 |
+|---|---|---|
+| Freeform | 闲聊、咨询 | 直接模型回复，少量工具 |
+| Quick Tool | 查询、生成、单点操作 | intent → 选工具 → 执行 → 解释结果 |
+| Structured DAG | 长程任务 | plan_dag → act → tool steps → HITL → side_effect |
+
+### 4.3 Act DAG，而不是固定线性剧本
+
+```python
+class ActNode(BaseModel):
+    act_id: str
+    type: str                         # project_creation/campaign_creation/material_generation/analysis/budget_adjustment
+    status: str                       # pending/running/waiting_hitl/completed/failed/skipped
+    depends_on: list[str] = []
+    panel: Optional[str] = None
+    required_tools: list[str] = []
+    required_hitl: bool = False
+    retry_policy: Optional[dict] = None
+```
+
+### 4.4 HITL 中断/恢复
+
+```text
+Agent 工具准备写操作
+  → 创建 pending_hitl
+  → SSE: hitl.confirmation_required
+  → runtime 暂停，不继续执行后续 Act
+用户确认
+  → POST /api/v1/agent/hitl/{operation_id}/confirm
+  → backend 更新 Session State
+  → agent-service resume run
+用户拒绝
+  → operation status = rejected
+  → Agent 解释影响并询问替代方案
+```
+
+### 4.5 长任务异步化
+
+素材生成、批量分析等长任务不能阻塞单个 SSE 过久。
+
+```text
+Agent 调工具 submit_generation_job
+  → backend 创建 job
+  → 返回 job_id
+  → SSE: runtime.job_submitted
+  → 前端显示进度
+  → Agent/前端轮询或订阅 job status
+  → 完成后 side_effect: content.generated
+```
+
+---
+
+## 5. 工具、Skill、沙箱联调设计
+
+### 5.1 工具分层
+
+| 层 | 位置 | 职责 |
+|---|---|---|
+| MCP Tool Schema | agent-service FastMCP | 定义 LLM 可见工具 |
+| Tool Adapter | agent-service | 参数校验、调用 backend_client |
+| Backend REST | backend | 权限、业务校验、DB 写入、Session State 更新 |
+| Side Effect Producer | backend | 生成语义事件 |
+
+### 5.2 工具规范
+
+每个工具必须定义：
+
+```text
+- name：稳定，不随文案变化
+- description：告诉 Agent 何时用，不要过宽泛
+- input_schema：严格类型，字段有默认值和枚举
+- idempotency_key：写操作必须支持
+- required_permission：需要的权限
+- hitl_policy：是否必须人工确认
+- side_effect_type：成功后可能产生的语义事件
+- timeout_seconds：工具级超时
+- retry_policy：可重试/不可重试
+```
+
+### 5.3 工具错误格式
+
+```python
+class ToolError(BaseModel):
+    code: str                         # VALIDATION_ERROR / AUTH_ERROR / RATE_LIMIT / BACKEND_UNAVAILABLE
+    message: str
+    retryable: bool
+    user_message: str                 # 给用户看的解释
+    debug: dict = {}                  # 不包含密钥
+```
+
+### 5.4 Skill 设计
+
+Skill 不是工具本身，而是工具组合和领域策略。
+
+```text
+campaign-planning skill:
+  - 何时触发：用户要建项目/计划/预算
+  - 使用工具：create_project, create_campaign, update_budget
+  - 业务约束：预算不超过项目总预算，写操作 HITL
+
+creative-generation skill:
+  - 何时触发：生成素材/文案/创意建议
+  - 使用工具：generate_material, create_material
+  - 支持 preview 模式：未绑定项目时不落正式库
+```
+
+### 5.5 沙箱边界
+
+```text
+sandbox 隔离：
+- 文件系统：runtime/agent/sandbox/{session_id}
+- 临时脚本、生成文件、分析结果都落 sandbox
+- 不允许写 backend/data、项目源码、系统路径
+
+不由 sandbox 隔离：
+- backend REST 写数据库
+- 权限由 JWT + backend 鉴权控制
+- 幂等由 backend 保证
+```
+
+### 5.6 新增工具联调流程
+
+```text
+1. 定义 MCP tool schema
+2. 实现 agent-service Tool Adapter
+3. 确认 backend REST API 已存在或新增
+4. backend REST 写入 side_effect producer
+5. 写工具级测试：直接调用 MCP tool
+6. 写 agent run 测试：自然语言触发工具
+7. 写端到端测试：frontend 收到 side_effect 并刷新 panel
+```
+
+---
+
+## 6. 并发与一致性设计
+
+### 6.1 并发场景
+
+| 场景 | 风险 | 策略 |
+|---|---|---|
+| 同 session 双 run | 对话历史、sandbox、Session State 竞态 | session 级锁 |
+| 多工具并发写 Session State | changelog 丢失 | 乐观锁 version + retry |
+| 前端手动修改 + Agent 修改 | 草稿冲突 | conflict detection |
+| backend 多实例 | 内存锁失效 | Redis/DB lock（二期） |
+| SSE 断线 | 事件丢失 | event log + 重拉状态 |
+
+### 6.2 Session 级锁
+
+backend 和 agent-service 都需要 session 级串行：
+
+```python
+class SessionLockManager:
+    async def acquire(self, session_id: str): ...
+    async def release(self, session_id: str): ...
+```
+
+一期：进程内 `asyncio.Lock`。  
+二期：Redis lock，支持多 backend 实例。
+
+### 6.3 乐观锁
+
+Session State 更新带 version：
+
+```sql
+UPDATE session_states
+SET context_json=?, changelog_json=?, version=version+1
+WHERE session_id=? AND user_id=? AND version=?
+```
+
+如果更新行数为 0，说明并发冲突：重新读取、merge、最多重试 3 次。
+
+### 6.4 幂等性
+
+所有写工具必须带 `idempotency_key`：
+
+```text
+idempotency_key = session_id + run_id + tool_call_id
+```
+
+backend 记录：
+
+```sql
+CREATE TABLE tool_idempotency_keys (
+  key TEXT PRIMARY KEY,
+  user_id TEXT NOT NULL,
+  tool_name TEXT NOT NULL,
+  result_json TEXT,
+  created_at TEXT NOT NULL
+)
+```
+
+重复请求直接返回第一次结果，不重复创建项目/计划/素材。
+
+---
+
+## 7. 异常兜底与恢复
+
+### 7.1 错误分类
+
+| 错误 | 示例 | 用户提示 | 系统行为 |
+|---|---|---|---|
+| AUTH_ERROR | token 过期 | 请重新登录 | 停止 run |
+| VALIDATION_ERROR | 参数非法 | 说明字段问题 | 不重试 |
+| BACKEND_UNAVAILABLE | backend API 失败 | 服务暂时不可用 | 可重试 |
+| AGENT_UNAVAILABLE | agent-service 挂 | AI 服务暂不可用 | 降级 |
+| TOOL_TIMEOUT | 素材生成超时 | 任务仍在处理中 | 转异步 job |
+| RATE_LIMIT | 模型 429 | 当前请求过多 | 指数退避 |
+| STATE_CONFLICT | 版本冲突 | 数据已变化，请确认 | 拉最新状态 |
+| SSE_DISCONNECTED | 网络断开 | 正在尝试恢复 | 重连/重拉状态 |
+
+### 7.2 backend → agent-service 失败
+
+```text
+1. 连接失败：返回 503 + AGENT_UNAVAILABLE
+2. 超时：返回 504 + AGENT_TIMEOUT
+3. SSE 中途断：记录 run status = interrupted
+4. 前端提示"AI 服务连接中断，可点击继续"
+```
+
+### 7.3 agent-service → backend 工具失败
+
+Agent 工具调用 backend REST 失败时：
+
+```text
+- 4xx：不可重试，Agent 解释原因
+- 401/403：停止，提示权限问题
+- 409：状态冲突，Agent 重新读取上下文后再建议
+- 429/503/504：按 retry_policy 重试
+```
+
+### 7.4 断点恢复
+
+```text
+run interrupted:
+  - backend Session State.status = recovering
+  - 记录 last_successful_side_effect_id
+  - 前端重新连接后拉取 Session State
+  - 用户点击"继续"
+  - backend 发送 recovery_context 给 agent-service
+  - Agent 从最近上下文继续
+```
+
+---
+
+## 8. 重试策略
+
+### 8.1 默认重试策略
+
+```python
+DEFAULT_RETRY_POLICY = {
+    "max_attempts": 3,
+    "base_delay_ms": 500,
+    "max_delay_ms": 5000,
+    "backoff": "exponential",
+    "jitter": True,
+    "retryable_codes": ["BACKEND_UNAVAILABLE", "RATE_LIMIT", "TOOL_TIMEOUT"],
+}
+```
+
+### 8.2 哪些不能重试
+
+```text
+- 已经成功的写操作但没有 idempotency_key
+- HITL 被拒绝
+- 权限错误
+- 参数校验错误
+- 预算/业务规则冲突
+```
+
+### 8.3 部分失败
+
+批量任务必须返回部分成功结果：
+
+```python
+class BatchToolResult(BaseModel):
+    success_count: int
+    failed_count: int
+    succeeded: list[dict]
+    failed: list[dict]
+    retryable_failed: list[dict]
+```
+
+Agent 应解释："10 条素材中 7 条生成成功，3 条失败，可重试失败项。"
+
+---
+
+## 9. 部署架构
+
+### 9.1 开发环境
+
+```text
+frontend 3010 → backend 8010 → agent-service 8020
+agent-service → backend 8010 /api/v1/*
+agent-service FastMCP: /mcp
+```
+
+### 9.2 生产推荐拓扑
+
+```text
+公网：
+  browser → CDN/nginx → frontend static
+  browser → HTTPS API Gateway → backend
+
+内网：
+  backend → agent-service
+  agent-service → backend internal API
+
+数据：
+  backend DB: PostgreSQL（生产推荐）
+  Session State: PostgreSQL JSONB / Redis（二期可拆）
+  agent SQLiteSession: 初期本地盘；多实例时迁移中心化 session store
+```
+
+### 9.3 多实例注意
+
+| 服务 | 多实例问题 | 方案 |
+|---|---|---|
+| frontend | 无状态 | CDN/静态部署 |
+| backend | session lock / SSE | Redis lock + event log |
+| agent-service | SQLiteSession 本地状态 | sticky session 或中心化 session store |
+| SSE | 长连接负载均衡 | sticky session / gateway timeout 配置 |
+
+### 9.4 配置项
+
+```text
+BACKEND_BASE_URL=http://127.0.0.1:8010
+AGENT_SERVICE_URL=http://127.0.0.1:8020
+AGENT_SERVICE_INTERNAL_TOKEN=...
+SESSION_STATE_DB_URL=...
+SSE_HEARTBEAT_INTERVAL_SECONDS=15
+AGENT_RUN_TIMEOUT_SECONDS=300
+TOOL_TIMEOUT_SECONDS=60
+SESSION_LOCK_TIMEOUT_SECONDS=600
+```
+
+---
+
+## 10. 监控、日志、审计
+
+### 10.1 必须记录的日志
+
+```text
+backend:
+- run_id, session_id, user_id
+- intent recognition 结果
+- business_context 构建耗时
+- agent-service 请求耗时
+- side_effect 事件
+- Session State version 更新
+- 工具调用写操作审计
+
+agent-service:
+- run_id, session_id
+- model, token usage, cost
+- tool_call start/end/error
+- sandbox path
+- SQLiteSession message count
+- compaction 触发记录
+
+frontend:
+- SSE connect/disconnect/reconnect
+- last_event_id
+- side_effect handling
+- panel refresh result
+- draft conflict
+```
+
+### 10.2 指标
+
+```text
+- run 成功率 / 失败率
+- TTFT（首 token 延迟）
+- 工具调用成功率
+- side_effect 处理成功率
+- SSE 断线率
+- Session State 冲突率
+- compaction 触发次数
+- 平均 token/cost
+```
+
+### 10.3 审计
+
+所有写操作必须可审计：
+
+```text
+who: user_id
+when: timestamp
+where: session_id/run_id/tool_call_id
+what: entity_type/entity_id/field old→new
+why: act_id / user prompt summary
+rollbackable: true/false
+```
+
+---
+
+## 11. 测试矩阵升级
+
+原 Block 1-7 是功能路径测试，还必须补充工程测试：
+
+| Block | 新增工程测试 |
+|---|---|
+| Block 1 | 乐观锁冲突、并发更新、version retry |
+| Block 2 | 多 mode 上下文抽象：闲聊/查询/生成/结构化 |
+| Block 3 | agent-service 挂掉、超时、SSE 中断 |
+| Block 4 | context_snapshot 缺字段、超大草稿、tab 切换 |
+| Block 5 | side_effect replay、事件丢失后重建视图、draft conflict |
+| Block 6 | compaction 后恢复、重复 compaction、summary 累积 |
+| Block 7 | frontend 断线重连、多 tab、用户+Agent 并发修改 |
+
+新增 Block：
+
+```text
+Block 8: Concurrency & Idempotency
+  - 同 session 双 run 串行
+  - 幂等 key 防重复创建
+  - version conflict retry
+
+Block 9: Failure Recovery
+  - agent-service unavailable
+  - backend tool 503
+  - SSE disconnected
+  - run resume
+
+Block 10: Deployment Smoke
+  - 三端健康检查
+  - 内网 URL 配置
+  - CORS / auth / timeout
+
+Block 11: Observability & Audit
+  - run_id 全链路串联
+  - tool audit log
+  - side_effect log
+```
+
+---
+
+## 12. 更新后的完整 Block 清单
+
+| Block | 交付物 | 重点 |
+|---|---|---|
+| 0 | Intent Recognition | 多场景入口，不预设长程任务 |
+| 1 | Session State Model + Repository | Layer 1 envelope、version、event log |
+| 2 | Business Context Abstraction | 多 mode 上下文摘要 |
+| 3 | Backend Agent Gateway + Context Injection | backend 是状态管理者，不是 proxy |
+| 4 | context_snapshot 传输 | Layer 3 → Layer 1，草稿/选中/路由 |
+| 5 | Side Effect 语义事件系统 | act/data/content/recommendation/runtime |
+| 6 | LLM Context Compaction | Layer 2 压缩到 Layer 1 |
+| 7 | Frontend 状态管理集成 | Store、SSE、Panel stale、冲突处理 |
+| 8 | Tool/Skill/Sandbox 联调 | 工具规范、Skill 策略、sandbox 边界 |
+| 9 | Concurrency & Idempotency | session lock、version、idempotency key |
+| 10 | Failure Recovery & Retry | 超时、重试、恢复、降级 |
+| 11 | Deployment & Observability | 部署拓扑、日志、指标、审计 |
+| 12 | Full E2E Real Scenarios | 闲聊/查询/生成/结构化/恢复全场景 |
+
+---
+
+## 13. Full E2E 真实场景验收
+
+最终不是只跑 campaign 全流程，还要跑以下真实 case：
+
+### Case A：闲聊探索
+
+```text
+用户：你能帮我做什么？
+期望：
+- mode = exploratory
+- 不强制创建 project/session act
+- Agent 介绍能力
+- 可 side_effect: recommendation.explore
+```
+
+### Case B：资料查询
+
+```text
+用户：查一下我上个月 Meta 花了多少钱
+期望：
+- mode = quick_action
+- query_context 正确
+- 调 backend 查询/聚合接口
+- side_effect: data.query_result
+- panel hint = analysis
+```
+
+### Case C：素材体验
+
+```text
+用户：给我写 5 条 Facebook 广告文案，轻松一点
+期望：
+- mode = quick_action
+- generation_context 正确
+- 若无 project_id，生成 preview，不落正式素材库
+- side_effect: content.preview_generated
+- panel hint = creative
+```
+
+### Case D：结构化任务
+
+```text
+用户：创建一个 RPG 项目，预算 50000，再配两个计划
+期望：
+- mode = structured_task
+- execution.plan_dag 生成
+- HITL 触发
+- 工具按依赖顺序执行
+- side_effect: act.project_created / act.campaign_created
+```
+
+### Case E：中途切换
+
+```text
+用户：先别生成素材了，看看这两个计划 ROI
+期望：
+- 当前 Act 暂停
+- mode 临时 quick_action
+- data.query_result 返回
+- 之后可继续原 Act
+```
+
+### Case F：断线恢复
+
+```text
+执行中断开 SSE
+期望：
+- frontend streamStatus = reconnecting/error
+- backend run status = interrupted/recovering
+- 重新进入 session 后重建 Layer 0 + Layer 1 视图
+- 用户点击继续后 runtime.resumed
+```
+
+### Case G：并发冲突
+
+```text
+用户正在编辑 campaign A 预算
+Agent 同时调整 campaign A 预算
+期望：
+- 前端检测 draft conflict
+- 不静默覆盖草稿
+- 用户选择保留草稿或使用 Agent 修改
+```
+
+### Case H：工具失败重试
+
+```text
+create_campaign 第一次 503，第二次成功
+期望：
+- idempotency_key 不变
+- 最多创建一个 campaign
+- changelog 只有一条成功记录
+```
+
+---
+
+## 14. 开发顺序修订
+
+不要直接从 Gateway 开始。正确顺序：
+
+```text
+Phase 0：补模型抽象
+  Block 0 Intent Recognition
+  Block 1 Session State envelope + version + event log
+
+Phase 1：补上下文能力
+  Block 2 多 mode Business Context Abstractor
+  Block 4 context_snapshot
+
+Phase 2：打通运行链路
+  Block 3 Backend Gateway + Agent context injection
+  Block 8 Tool/Skill/Sandbox 联调
+
+Phase 3：打通投影链路
+  Block 5 Side Effect 事件
+  Block 7 Frontend Store + SSE + Panel stale
+
+Phase 4：工程安全
+  Block 9 并发与幂等
+  Block 10 异常恢复与重试
+  Block 6 compaction（也可提前基础版）
+
+Phase 5：上线准备
+  Block 11 部署与观测
+  Block 12 全真实场景 E2E
+```
+
+---
+
+## 15. 重要结论
+
+Session State Manager 不是"为了 campaign 全流程演示"写的，它是 ANIFORCE Agent 产品的运行时底座。它必须兼容：
+
+```text
+- 无任务闲聊
+- 查询分析
+- 素材体验
+- 单点工具动作
+- 结构化长程任务
+- 中途切换
+- 回滚重跑
+- 断线恢复
+- 并发冲突
+- 生产部署
+```
+
+因此开发时不能把 Act、Panel、Project 当成硬编码主线。正确抽象是：
+
+```text
+Session Runtime
+  → Intent
+  → Mode
+  → Business Context Summary
+  → Agent Orchestration
+  → Tool/Skill/Sandbox Execution
+  → Session State Mutation
+  → Semantic Side Effect
+  → Frontend Projection
+```
+

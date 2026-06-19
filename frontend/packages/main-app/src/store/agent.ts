@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { AgentSession, AgentMessage, AgentModel } from '@/api/agent'
+import type { AgentSession, AgentMessage, AgentModel, SideEffectEvent } from '@/api/agent'
 import type { AgentTimelineBlock, AgentPhase } from '@/composables/useHomeAgentSession'
 
 export const useAgentStore = defineStore('agent', () => {
@@ -10,6 +10,8 @@ export const useAgentStore = defineStore('agent', () => {
   const messagesBySession = ref<Map<string, AgentMessage[]>>(new Map())
   const timelineBySession = ref<Map<string, AgentTimelineBlock[]>>(new Map())
   const workspaceBySession = ref<Map<string, Array<{ id: string; name: string; result?: unknown }>>>(new Map())
+  const sideEffectsBySession = ref<Map<string, SideEffectEvent[]>>(new Map())
+  const stalePanelsBySession = ref<Map<string, Set<string>>>(new Map())
   
   // UI 状态
   const models = ref<AgentModel[]>([])
@@ -39,6 +41,16 @@ export const useAgentStore = defineStore('agent', () => {
   const workspaceToolResults = computed(() => {
     if (!activeSessionId.value) return []
     return workspaceBySession.value.get(activeSessionId.value) || []
+  })
+
+  const sideEffects = computed(() => {
+    if (!activeSessionId.value) return []
+    return sideEffectsBySession.value.get(activeSessionId.value) || []
+  })
+
+  const stalePanels = computed(() => {
+    if (!activeSessionId.value) return []
+    return Array.from(stalePanelsBySession.value.get(activeSessionId.value) || new Set())
   })
   
   // 持久化
@@ -117,6 +129,21 @@ export const useAgentStore = defineStore('agent', () => {
     workspaceBySession.value.set(sessionId, results)
     persistToLocalStorage(sessionId)
   }
+
+  function recordSideEffect(sessionId: string, event: SideEffectEvent): void {
+    const current = sideEffectsBySession.value.get(sessionId) || []
+    sideEffectsBySession.value.set(sessionId, [...current, event].slice(-100))
+    const panels = stalePanelsBySession.value.get(sessionId) || new Set<string>()
+    for (const panel of event.refresh_panels || []) panels.add(String(panel))
+    stalePanelsBySession.value.set(sessionId, panels)
+  }
+
+  function clearStalePanel(sessionId: string, panel: string): void {
+    const panels = stalePanelsBySession.value.get(sessionId)
+    if (!panels) return
+    panels.delete(panel)
+    stalePanelsBySession.value.set(sessionId, new Set(panels))
+  }
   
   return {
     // State (直接暴露 ref，外部可以直接修改)
@@ -125,6 +152,8 @@ export const useAgentStore = defineStore('agent', () => {
     messagesBySession,
     timelineBySession,
     workspaceBySession,
+    sideEffectsBySession,
+    stalePanelsBySession,
     models,
     selectedModel,
     loading,
@@ -138,6 +167,8 @@ export const useAgentStore = defineStore('agent', () => {
     messages,
     timelineBlocks,
     workspaceToolResults,
+    sideEffects,
+    stalePanels,
     
     // Actions
     restoreFromLocalStorage,
@@ -147,5 +178,7 @@ export const useAgentStore = defineStore('agent', () => {
     upsertActivityMessage,  // AG-UI: activity 消息插入/更新
     upsertTimelineBlock,
     setWorkspace,
+    recordSideEffect,
+    clearStalePanel,
   }
 })

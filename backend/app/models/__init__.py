@@ -9,6 +9,8 @@ from app.models.sub_account_binding import SubAccountBinding
 from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.models.contact_info import ContactInfo
+from app.models.session_state import SessionState
+from app.models.idempotency import IdempotencyRecord
 
 __all__ = [
     "User",
@@ -24,4 +26,6 @@ __all__ = [
     "Organization",
     "OrganizationMember",
     "ContactInfo",
+    "SessionState",
+    "IdempotencyRecord",
 ]

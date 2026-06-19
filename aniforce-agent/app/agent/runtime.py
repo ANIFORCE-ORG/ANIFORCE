@@ -56,12 +56,18 @@ class AgentRuntime:
         settings = get_settings()
         mcp_url = f"http://127.0.0.1:{settings.PORT}/mcp"
         jwt_token = (task.context or {}).get("auth_token", "")
+        run_meta = (task.context or {}).get("run_meta", {}) or {}
 
         def _meta_resolver(ctx: MCPToolMetaContext) -> dict[str, str] | None:
-            """每次 MCP 工具调用前注入 jwt_token"""
-            if not jwt_token:
-                return None
-            return {"jwt_token": jwt_token}
+            """每次 MCP 工具调用前注入 jwt_token 和 run/session 元信息"""
+            meta: dict[str, str] = {}
+            if jwt_token:
+                meta["jwt_token"] = jwt_token
+            if task.session_id:
+                meta["session_id"] = task.session_id
+            if run_meta.get("run_id"):
+                meta["run_id"] = str(run_meta["run_id"])
+            return meta or None
 
         mcp_server = None
         mcp_servers = []
@@ -148,7 +154,7 @@ class AgentRuntime:
                 # 5. 创建 Agent（带 MCP 服务 + session 级 sandbox）
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",
-                    instructions=self._get_system_prompt(task.task_type),
+                    instructions=self._get_system_prompt(task),
                     mcp_servers=mcp_servers,
                     session_id=task.session_id,
                 )
@@ -287,8 +293,8 @@ class AgentRuntime:
             if trace_ctx:
                 trace_ctx.__exit__(None, None, None)
     
-    def _get_system_prompt(self, task_type: str) -> str:
-        """根据任务类型返回 system prompt"""
+    def _get_system_prompt(self, task: AgentTask) -> str:
+        """根据任务和 backend 业务上下文返回 system prompt"""
         
         # 获取 MCP Tools 列表（从 adapter 中获取）
         # TODO: 实现动态获取 MCP Tools
@@ -306,9 +312,21 @@ class AgentRuntime:
         ]
         
         # 使用 Plan-Execute 模式的 System Prompt
-        return SystemPromptManager.get_plan_execute_prompt(
+        base_prompt = SystemPromptManager.get_plan_execute_prompt(
             skills_dir=self.adapter.skills_dir,
             available_mcp_tools=available_mcp_tools
+        )
+        business_context_summary = (task.context or {}).get("business_context_summary", "")
+        if not business_context_summary:
+            return base_prompt
+        return (
+            f"{base_prompt}\n\n"
+            "---\n"
+            "# Backend Business Context\n"
+            "以下内容由 backend Session State Manager 构建，用于说明当前业务现场。"
+            "backend DB 是业务事实源；如需修改业务数据，必须通过 MCP 工具调用 backend REST。\n\n"
+            f"{business_context_summary}\n"
+            "---"
         )
 
     async def _detect_and_extract_plan(

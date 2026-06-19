@@ -2,15 +2,18 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+unset VIRTUAL_ENV
 BACKEND_DIR="${ROOT_DIR}/backend"
+AGENT_DIR="${ROOT_DIR}/aniforce-agent"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
 LOG_DIR="${ROOT_DIR}/logs"
 PID_FILE="${LOG_DIR}/aniforce_dev.pids"
 
 HOST="${HOST:-127.0.0.1}"
-BACKEND_PORT="${BACKEND_PORT:-18003}"
-FRONTEND_PORT="${FRONTEND_PORT:-13003}"
-BACKEND_RELOAD=1
+BACKEND_PORT="${BACKEND_PORT:-8010}"
+AGENT_PORT="${AGENT_PORT:-8020}"
+FRONTEND_PORT="${FRONTEND_PORT:-3010}"
+BACKEND_RELOAD=0
 SKIP_INSTALL=0
 CLEAR_PORTS=1
 LOG_TO_FILE=1  # 默认写入文件
@@ -22,9 +25,10 @@ Usage:
 
 Options:
   --host HOST             Default: 127.0.0.1
-  --backend-port PORT     Default: 18003
-  --frontend-port PORT    Default: 13003
-  --no-backend-reload     Disable uvicorn reload
+  --backend-port PORT     Default: 8010
+  --agent-port PORT       Default: 8020
+  --frontend-port PORT    Default: 3010
+  --reload                Enable backend/agent uvicorn reload
   --skip-install          Skip dependency installation
   --no-clear-ports        Do not clear selected ports
   --log-to-file           Write logs to files instead of console
@@ -33,6 +37,7 @@ Options:
 URLs:
   Frontend:       http://HOST:FRONTEND_PORT
   Backend health: http://HOST:BACKEND_PORT/health
+  Agent health:   http://HOST:AGENT_PORT/health
   API docs:       http://HOST:BACKEND_PORT/docs
 EOF
 }
@@ -41,7 +46,9 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --host) HOST="$2"; shift 2 ;;
     --backend-port) BACKEND_PORT="$2"; shift 2 ;;
+    --agent-port) AGENT_PORT="$2"; shift 2 ;;
     --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
+    --reload) BACKEND_RELOAD=1; shift 1 ;;
     --no-backend-reload) BACKEND_RELOAD=0; shift 1 ;;
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
     --no-clear-ports) CLEAR_PORTS=0; shift 1 ;;
@@ -51,14 +58,18 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 
-mkdir -p "${LOG_DIR}" "${BACKEND_DIR}/uv_cache" "${ROOT_DIR}/npm_cache"
+mkdir -p "${LOG_DIR}" "${BACKEND_DIR}/uv_cache" "${AGENT_DIR}/uv_cache" "${ROOT_DIR}/npm_cache"
 : > "${PID_FILE}"
+: > "${LOG_DIR}/agent-dev.log"
+: > "${LOG_DIR}/backend-dev.log"
+: > "${LOG_DIR}/frontend-dev.log"
 
 DISPLAY_HOST="${HOST}"
 if [[ "${HOST}" == "0.0.0.0" ]]; then
   DISPLAY_HOST="$(hostname -I | tr ' ' '\n' | grep -E '^[0-9]' | head -1)"
 fi
 
+AGENT_PID=""
 BACKEND_PID=""
 FRONTEND_PID=""
 
@@ -143,7 +154,7 @@ check_port_free() {
 }
 
 cleanup() {
-  for pid in "${BACKEND_PID}" "${FRONTEND_PID}"; do
+  for pid in "${AGENT_PID}" "${BACKEND_PID}" "${FRONTEND_PID}"; do
     if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
       pkill -TERM -P "${pid}" >/dev/null 2>&1 || true
       kill -TERM "${pid}" >/dev/null 2>&1 || true
@@ -173,6 +184,20 @@ check_command() {
   }
 }
 
+ensure_uv_venv() {
+  local name="$1"
+  if [[ -d ".venv" ]]; then
+    if [[ -L ".venv/bin/python" && ! -e ".venv/bin/python" ]] || [[ -L ".venv/bin/python3" && ! -e ".venv/bin/python3" ]]; then
+      echo "${name} .venv is broken; recreating..."
+      rm -rf .venv
+    fi
+  fi
+
+  if [[ ! -d ".venv" ]]; then
+    UV_CACHE_DIR=./uv_cache uv venv --python 3.11
+  fi
+}
+
 check_command ss
 check_command curl
 check_command uv
@@ -181,18 +206,23 @@ check_command npx
 
 if [[ "${CLEAR_PORTS}" -eq 1 ]]; then
   clear_port "${BACKEND_PORT}" "backend"
+  clear_port "${AGENT_PORT}" "agent"
   clear_port "${FRONTEND_PORT}" "frontend"
 else
   check_port_free "${BACKEND_PORT}" "backend"
+  check_port_free "${AGENT_PORT}" "agent"
   check_port_free "${FRONTEND_PORT}" "frontend"
 fi
 
 if [[ "${SKIP_INSTALL}" -eq 0 ]]; then
   echo "Preparing backend uv environment..."
   cd "${BACKEND_DIR}"
-  if [[ ! -d ".venv" ]]; then
-    UV_CACHE_DIR=./uv_cache uv venv --python 3.11
-  fi
+  ensure_uv_venv "backend"
+  UV_CACHE_DIR=./uv_cache uv pip install -r requirements.txt
+
+  echo "Preparing agent uv environment..."
+  cd "${AGENT_DIR}"
+  ensure_uv_venv "agent"
   UV_CACHE_DIR=./uv_cache uv pip install -r requirements.txt
 
   echo "Preparing frontend pnpm environment..."
@@ -200,28 +230,48 @@ if [[ "${SKIP_INSTALL}" -eq 0 ]]; then
   npm_config_cache="${ROOT_DIR}/npm_cache" npx pnpm install
 fi
 
-cd "${BACKEND_DIR}"
-BACKEND_RELOAD_ARGS=()
+RELOAD_ARGS=()
 if [[ "${BACKEND_RELOAD}" -eq 1 ]]; then
-  BACKEND_RELOAD_ARGS=(--reload)
+  RELOAD_ARGS=(--reload)
 fi
 
+cd "${AGENT_DIR}"
+echo "Starting agent service on ${HOST}:${AGENT_PORT}..."
+UV_CACHE_DIR=./uv_cache \
+HOST="${HOST}" \
+PORT="${AGENT_PORT}" \
+BACKEND_BASE_URL="http://${HOST}:${BACKEND_PORT}" \
+uv run python -m uvicorn app.main:app \
+  --host "${HOST}" \
+  --port "${AGENT_PORT}" \
+  "${RELOAD_ARGS[@]}" \
+  > "${LOG_DIR}/agent-dev.log" 2>&1 &
+AGENT_PID="$!"
+echo "${AGENT_PID}" >> "${PID_FILE}"
+echo "Agent logs: ${LOG_DIR}/agent-dev.log"
+
+wait_http "http://${HOST}:${AGENT_PORT}/health" "Agent"
+
+cd "${BACKEND_DIR}"
 echo "Starting backend on ${HOST}:${BACKEND_PORT}..."
 if [[ "${LOG_TO_FILE}" -eq 1 ]]; then
-  # 写入文件
-  UV_CACHE_DIR=./uv_cache uv run python -m uvicorn app.main:app \
+  UV_CACHE_DIR=./uv_cache \
+  AGENT_SERVICE_URL="http://${HOST}:${AGENT_PORT}" \
+  uv run python -m uvicorn app.main:app \
     --host "${HOST}" \
     --port "${BACKEND_PORT}" \
-    "${BACKEND_RELOAD_ARGS[@]}" \
+    "${RELOAD_ARGS[@]}" \
     > "${LOG_DIR}/backend-dev.log" 2>&1 &
   BACKEND_PID="$!"
   echo "Backend logs: ${LOG_DIR}/backend-dev.log"
 else
-  # 直接输出到控制台
-  UV_CACHE_DIR=./uv_cache LOG_LEVEL=DEBUG uv run python -m uvicorn app.main:app \
+  UV_CACHE_DIR=./uv_cache \
+  LOG_LEVEL=DEBUG \
+  AGENT_SERVICE_URL="http://${HOST}:${AGENT_PORT}" \
+  uv run python -m uvicorn app.main:app \
     --host "${HOST}" \
     --port "${BACKEND_PORT}" \
-    "${BACKEND_RELOAD_ARGS[@]}" &
+    "${RELOAD_ARGS[@]}" &
   BACKEND_PID="$!"
   echo "Backend logs: console (PID ${BACKEND_PID})"
 fi
@@ -250,6 +300,8 @@ ANIFORCE dev stack is running
 ========================================
 Frontend:       http://${DISPLAY_HOST}:${FRONTEND_PORT}
 Backend health: http://${DISPLAY_HOST}:${BACKEND_PORT}/health
+Agent health:   http://${DISPLAY_HOST}:${AGENT_PORT}/health
+Agent runs API: http://${DISPLAY_HOST}:${AGENT_PORT}/api/agent/runs
 API docs:       http://${DISPLAY_HOST}:${BACKEND_PORT}/docs
 
 Bind host:      ${HOST}
@@ -259,18 +311,21 @@ Logs:
 EOF
 
 if [[ "${LOG_TO_FILE}" -eq 1 ]]; then
+  echo "  Agent:    ${LOG_DIR}/agent-dev.log"
   echo "  Backend:  ${LOG_DIR}/backend-dev.log"
   echo "  Frontend: ${LOG_DIR}/frontend-dev.log"
   echo ""
   echo "To view logs:"
+  echo "  tail -f ${LOG_DIR}/agent-dev.log"
   echo "  tail -f ${LOG_DIR}/backend-dev.log"
   echo "  tail -f ${LOG_DIR}/frontend-dev.log"
 else
+  echo "  Agent:    ${LOG_DIR}/agent-dev.log"
   echo "  Backend:  console (below)"
   echo "  Frontend: ${LOG_DIR}/frontend-dev.log"
   echo ""
   echo "Backend logs will appear below."
-  echo "Agent tracing: runtime/agent/traces/YYYYMMDD/*.jsonl"
+  echo "Agent tracing: aniforce-agent/runtime/agent/traces/YYYYMMDD/*.jsonl"
 fi
 
 echo ""

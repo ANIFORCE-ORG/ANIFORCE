@@ -57,6 +57,26 @@ export interface AgentStreamEvent {
   data: Record<string, unknown>
 }
 
+export interface AgentContextSnapshot {
+  route: string
+  activePanel?: 'context' | 'creative' | 'analysis' | 'budget' | 'audit'
+  activeProjectId?: string | null
+  activeCampaignId?: string | null
+  selectedEntities?: Array<{ type: 'project' | 'campaign' | 'material'; id: string; name?: string }>
+  draftEdits?: Record<string, unknown>
+}
+
+export interface SideEffectEvent {
+  id?: string
+  type: 'entity_changed' | 'content_ready' | 'data_ready' | 'action_required' | 'run_status' | string
+  domain?: string | null
+  action?: string | null
+  message?: string
+  affected_entities?: Array<{ type?: string; id?: string; name?: string }>
+  refresh_panels?: Array<'context' | 'creative' | 'analysis' | 'budget' | 'audit' | string>
+  created_at?: string
+}
+
 function normalizeAgentSession(raw: any): AgentSession {
   const id = String(raw?.id || raw?.session_id || '')
   return {
@@ -71,7 +91,7 @@ function normalizeAgentSession(raw: any): AgentSession {
 
 async function agentJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('animagus_token')
-  const response = await fetch(`/api/agent${path}`, {
+  const response = await fetch(`/api/v1/agent${path}`, {
     ...options,
     headers: {
       'Content-Type': 'application/json',
@@ -121,16 +141,16 @@ export async function listAgentModels(): Promise<{ models: AgentModel[] }> {
   }
 }
 
-export async function* streamAgentMessage(sessionId: string, message: string, taskType = 'conversation'): AsyncGenerator<AgentStreamEvent, void, unknown> {
+export async function* streamAgentMessage(sessionId: string, message: string, taskType = 'conversation', contextSnapshot?: AgentContextSnapshot): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const token = localStorage.getItem('animagus_token')
-  const response = await fetch('/api/agent/runs', {
+  const response = await fetch('/api/v1/agent/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ prompt: message, session_id: sessionId, task_type: taskType }),
+    body: JSON.stringify({ prompt: message, session_id: sessionId, task_type: taskType, context_snapshot: contextSnapshot }),
   })
 
   if (!response.ok) {

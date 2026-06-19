@@ -24,12 +24,15 @@ class BackendClient:
         json: dict | None = None,
         params: dict | None = None,
         timeout: float = 30.0,
+        extra_headers: dict | None = None,
     ) -> dict:
         """发起 backend 请求"""
         url = f"{self.base_url}{path}"
         headers = {"Content-Type": "application/json"}
         if token:
             headers["Authorization"] = f"Bearer {token}"
+        if extra_headers:
+            headers.update(extra_headers)
 
         logger.debug(f"[BACKEND] {method} {url}")
 
@@ -59,8 +62,8 @@ class BackendClient:
     async def get_project(self, token: str, project_id: str) -> dict:
         return await self._request("GET", f"/api/v1/projects/{project_id}", token=token)
 
-    async def create_project(self, token: str, data: dict) -> dict:
-        return await self._request("POST", "/api/v1/projects", token=token, json=data)
+    async def create_project(self, token: str, data: dict, extra_headers: dict | None = None) -> dict:
+        return await self._request("POST", "/api/v1/projects", token=token, json=data, extra_headers=extra_headers)
 
     # ---- Campaigns ----
 
@@ -73,11 +76,11 @@ class BackendClient:
     async def get_campaign(self, token: str, campaign_id: str) -> dict:
         return await self._request("GET", f"/api/v1/campaigns/{campaign_id}", token=token)
 
-    async def create_campaign(self, token: str, data: dict) -> dict:
-        return await self._request("POST", "/api/v1/campaigns", token=token, json=data)
+    async def create_campaign(self, token: str, data: dict, extra_headers: dict | None = None) -> dict:
+        return await self._request("POST", "/api/v1/campaigns", token=token, json=data, extra_headers=extra_headers)
 
-    async def update_campaign_status(self, token: str, campaign_id: str, status: str) -> dict:
-        return await self._request("PUT", f"/api/v1/campaigns/{campaign_id}/status", token=token, json={"status": status})
+    async def update_campaign_status(self, token: str, campaign_id: str, status: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("PUT", f"/api/v1/campaigns/{campaign_id}/status", token=token, json={"status": status}, extra_headers=extra_headers)
 
     # ---- Materials ----
 

@@ -5,8 +5,6 @@ import { resolve } from 'path'
 export default defineConfig(() => {
   const backendPort = process.env.VITE_BACKEND_PORT || '8010'
   const backendHost = process.env.VITE_BACKEND_HOST || '127.0.0.1'
-  const agentPort = process.env.VITE_AGENT_PORT || '8020'
-  const agentHost = process.env.VITE_AGENT_HOST || '127.0.0.1'
   return {
     plugins: [vue()],
     resolve: {
@@ -24,15 +22,6 @@ export default defineConfig(() => {
         'aniforce.cc',
       ],
       proxy: {
-        '/api/agent/health': {
-          target: `http://${agentHost}:${agentPort}`,
-          changeOrigin: true,
-          rewrite: () => '/health',
-        },
-        '/api/agent': {
-          target: `http://${agentHost}:${agentPort}`,
-          changeOrigin: true,
-        },
         '/api': {
           target: `http://${backendHost}:${backendPort}`,
           changeOrigin: true,

@@ -1,4 +1,5 @@
 import { computed, onUnmounted, ref } from 'vue'
+import { useRoute } from 'vue-router'
 import {
   createAgentSession,
   getAgentSession,
@@ -8,6 +9,8 @@ import {
   type AgentMessage,
   type AgentModel,
   type AgentSession,
+  type AgentContextSnapshot,
+  type SideEffectEvent,
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
 
@@ -111,6 +114,7 @@ export type AgentTimelineBlock =
 
 export function useHomeAgentSession() {
   const store = useAgentStore()
+  const route = useRoute()
   
   // 从 store 读取全局状态（这些是 computed，只读）
   const sessions = computed(() => store.sessions)
@@ -283,7 +287,8 @@ export function useHomeAgentSession() {
     store.streamingMessage = assistant
 
     try {
-      for await (const event of streamAgentMessage(sessionId, text, _route?.task_type || 'conversation')) {
+      const contextSnapshot = collectContextSnapshot(_route)
+      for await (const event of streamAgentMessage(sessionId, text, _route?.task_type || 'conversation', contextSnapshot)) {
         if (event.event === 'runtime.started') {
           currentRunId = String(event.data.task_id || event.data.run_id || `run_${Date.now()}`)
           store.agentPhase = { kind: 'waiting_model' }
@@ -357,6 +362,10 @@ export function useHomeAgentSession() {
           handleCustomEvent({ subtype: event.event, ...event.data })
         }
 
+        if (event.event === 'side_effect') {
+          handleSideEffect(event.data as unknown as SideEffectEvent)
+        }
+
         if (event.event === 'runtime.completed') {
           markRunningToolsCompleted()
         }
@@ -380,6 +389,35 @@ export function useHomeAgentSession() {
       store.agentPhase = null
       markRunningToolsCompleted()
     }
+  }
+
+  function collectContextSnapshot(routeContext?: AgentRouteContext): AgentContextSnapshot {
+    const activePanel = routeContext?.workspace_type || new URLSearchParams(window.location.search).get('panel') || undefined
+    return {
+      route: route.fullPath,
+      activePanel: isAgentPanel(activePanel) ? activePanel : undefined,
+      activeProjectId: readRouteParam('projectId') || readRouteParam('id'),
+      activeCampaignId: readRouteParam('campaignId'),
+      selectedEntities: [],
+      draftEdits: {},
+    }
+  }
+
+  function handleSideEffect(event: SideEffectEvent): void {
+    if (!activeSession.value) return
+    store.recordSideEffect(activeSession.value.id, event)
+    const panels = event.refresh_panels?.length ? event.refresh_panels.join(', ') : 'workspace'
+    commandStatus.value = event.message || `业务数据已更新，待刷新：${panels}`
+  }
+
+  function isAgentPanel(value: unknown): value is AgentContextSnapshot['activePanel'] {
+    return value === 'context' || value === 'creative' || value === 'analysis' || value === 'budget' || value === 'audit'
+  }
+
+  function readRouteParam(key: string): string | null {
+    const value = route.params[key]
+    if (Array.isArray(value)) return value[0] || null
+    return typeof value === 'string' ? value : null
   }
 
   function abort(): void {
