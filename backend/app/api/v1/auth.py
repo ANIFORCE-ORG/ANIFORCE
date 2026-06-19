@@ -1,11 +1,14 @@
 from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timedelta
 from jose import jwt
+from passlib.context import CryptContext
 from app.config.settings import get_settings
-from app.core.security import hash_password, verify_password
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UpdateNameRequest, UpdatePasswordRequest
 from app.schemas.base import ResponseBase
 from app.repositories.factory import get_user_repo
+
+# 使用 argon2 替代 bcrypt，更现代且更安全
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -36,7 +39,7 @@ async def login(
         raise HTTPException(status_code=404, detail="该邮箱尚未注册")
     
     # 验证密码
-    if not verify_password(req.password, user["password_hash"]):
+    if not pwd_context.verify(req.password, user["password_hash"]):
         raise HTTPException(status_code=401, detail="密码错误")
     
     # 生成 token
@@ -44,7 +47,12 @@ async def login(
     
     return ResponseBase(
         data=TokenResponse(
-            user=UserResponse(id=user["id"], email=user["email"], name=user["name"]),
+            user=UserResponse(
+                id=user["id"], 
+                email=user["email"], 
+                name=user["name"],
+                system_role=user.get("system_role", "USER")
+            ),
             access_token=access_token,
             refresh_token=refresh_token,
         )
@@ -93,7 +101,7 @@ async def register(
     
     # 3. 加密密码
     try:
-        password_hash = hash_password(request.password)
+        password_hash = pwd_context.hash(request.password)
         print(f"[DEBUG] 密码加密成功")
     except Exception as e:
         print(f"[DEBUG] 密码加密失败: {type(e).__name__}: {e}")
@@ -111,7 +119,12 @@ async def register(
     
     return ResponseBase(
         data=TokenResponse(
-            user=UserResponse(id=user["id"], email=user["email"], name=user["name"]),
+            user=UserResponse(
+                id=user["id"], 
+                email=user["email"], 
+                name=user["name"],
+                system_role=user.get("system_role", "USER")
+            ),
             access_token=access_token,
             refresh_token=refresh_token,
         )

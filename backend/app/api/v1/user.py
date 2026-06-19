@@ -1,10 +1,12 @@
 """用户信息管理相关接口"""
 from fastapi import APIRouter, Depends, HTTPException
-from app.core.security import hash_password, verify_password
+from passlib.context import CryptContext
 from app.schemas.auth import UserResponse, UpdateNameRequest, UpdatePasswordRequest
 from app.schemas.base import ResponseBase
 from app.repositories.factory import get_user_repo
 from app.api.deps import get_current_user
+
+pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
 
 router = APIRouter(prefix="/user", tags=["用户管理"])
 
@@ -57,11 +59,11 @@ async def update_password(
         raise HTTPException(status_code=404, detail="用户不存在")
     
     # 验证当前密码
-    if not verify_password(request.current_password, user["password_hash"]):
+    if not pwd_context.verify(request.current_password, user["password_hash"]):
         raise HTTPException(status_code=400, detail="当前密码错误")
     
     # 加密新密码
-    new_password_hash = hash_password(request.new_password)
+    new_password_hash = pwd_context.hash(request.new_password)
     
     # 更新密码
     await user_repo.update(

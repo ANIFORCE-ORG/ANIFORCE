@@ -1,2 +1,0 @@
-{"event": "trace.start", "trace_id": "thread-e2e-001:run_1781434716441", "task_id": "thread-e2e-001", "run_id": "run_1781434716441", "user_id": "user_test_001", "task_type": "conversation", "timestamp": "2026-06-14T18:58:36.441803"}
-{"event": "trace.end", "duration_ms": 88, "timestamp": "2026-06-14T18:58:36.530654", "trace_id": "thread-e2e-001:run_1781434716441"}

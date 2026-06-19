@@ -16,6 +16,7 @@ class UserResponse(BaseModel):
     id: str
     email: str
     name: str
+    system_role: str = "USER"
 
 
 class TokenResponse(BaseModel):

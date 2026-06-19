@@ -1,3 +1,0 @@
-{"event": "trace.start", "trace_id": "test_plan_13419232:run_1781359934066", "task_id": "test_plan_13419232", "run_id": "run_1781359934066", "user_id": "test_user", "task_type": "conversation", "timestamp": "2026-06-13T22:12:14.067209"}
-{"event": "sdk.call", "method": "run_streamed", "agent_name": "ANIFORCE Assistant", "input_text": "请帮我完成以下任务：\n1. 分析数据分析 Skill 包含哪些工作流\n2. 列出每个工作流的主要功能\n3. 给出使用建议\n\n请先制定执行计划，然后逐步完成。", "session_id": "session_9bb6860d4fb047d1", "timestamp": "2026-06-13T22:12:14.120204", "trace_id": "test_plan_13419232:run_1781359934066"}
-{"event": "trace.end", "duration_ms": 144, "timestamp": "2026-06-13T22:12:14.212156", "trace_id": "test_plan_13419232:run_1781359934066"}

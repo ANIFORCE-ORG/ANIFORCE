@@ -1,5 +1,0 @@
-{"event": "trace.start", "trace_id": "task_78fce024a0654f09_1781264559061", "task_id": "task_78fce024a0654f09", "user_id": "user_test_001", "task_type": "conversation", "timestamp": "2026-06-12T19:42:39.061851"}
-{"event": "sdk.call", "method": "run_streamed", "agent_name": "ANIFORCE Assistant", "input_text": "现在有哪些项目？", "session_id": "session_ab93f3797e86443a", "timestamp": "2026-06-12T19:42:39.090565", "trace_id": "task_78fce024a0654f09_1781264559061"}
-{"event": "sdk.event", "event_type": "agent_updated_stream_event", "data": {"raw_event": "AgentUpdatedStreamEvent"}, "timestamp": "2026-06-12T19:42:39.957892", "trace_id": "task_78fce024a0654f09_1781264559061"}
-{"event": "agent.event", "event_type": "handoff", "payload": {"agent_name": "ANIFORCE Assistant"}, "sequence": 1, "timestamp": "2026-06-12T19:42:39.958084", "trace_id": "task_78fce024a0654f09_1781264559061"}
-{"event": "trace.end", "duration_ms": 939, "timestamp": "2026-06-12T19:42:40.001254", "trace_id": "task_78fce024a0654f09_1781264559061"}

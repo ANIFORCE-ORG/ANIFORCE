@@ -24,6 +24,7 @@ class SqliteUserRepository:
             "email": user.email,
             "password_hash": user.password_hash,
             "name": user.name,
+            "system_role": user.system_role.value if user.system_role else "USER",
             "created_at": user.created_at.isoformat(),
             "updated_at": user.updated_at.isoformat(),
         }
@@ -42,6 +43,7 @@ class SqliteUserRepository:
             "email": user.email,
             "password_hash": user.password_hash,
             "name": user.name,
+            "system_role": user.system_role.value if user.system_role else "USER",
             "created_at": user.created_at.isoformat(),
             "updated_at": user.updated_at.isoformat(),
         }
@@ -61,6 +63,7 @@ class SqliteUserRepository:
             "email": user.email,
             "password_hash": user.password_hash,
             "name": user.name,
+            "system_role": user.system_role.value if user.system_role else "USER",
             "created_at": user.created_at.isoformat(),
             "updated_at": user.updated_at.isoformat(),
         }
@@ -85,6 +88,7 @@ class SqliteUserRepository:
             "email": user.email,
             "password_hash": user.password_hash,
             "name": user.name,
+            "system_role": user.system_role.value if user.system_role else "USER",
             "created_at": user.created_at.isoformat(),
             "updated_at": user.updated_at.isoformat(),
         }

@@ -27,9 +27,17 @@ class Settings(BaseSettings):
 
     # 外部服务
     OPENAI_API_KEY: str = ""
-    OPENAI_BASE_URL: str = ""
-    OPENAI_AGENTS_MODEL: str = "gpt-4.1-mini"
-    OPENAI_AGENTS_API: str = "chat_completions"
+    
+    # Meta OAuth 配置
+    META_APP_ID: str = ""
+    META_APP_SECRET: str = ""
+    META_SCOPES: str = ""
+    
+    # Google OAuth 配置
+    GOOGLE_CLIENT_ID: str = ""
+    GOOGLE_CLIENT_SECRET: str = ""
+    GOOGLE_SCOPES: str = "https://www.googleapis.com/auth/adwords,profile,email,openid"
+    GOOGLE_DEVELOPER_TOKEN: str = ""  # Google Ads API Developer Token
     
     # 服务地址配置（根据运行模式自动切换）
     # Local 模式: http://localhost:3010 / http://localhost:8010
@@ -44,12 +52,6 @@ class Settings(BaseSettings):
     # 日志配置
     LOG_LEVEL: str = "INFO"
     LOG_FILE: str = ""  # 日志文件路径，为空则不写入文件
-    
-    # Agent 配置
-    AGENT_TRACING_ENABLED: bool = True  # 启用本地 tracing
-    AGENT_SESSION_DB: str = "runtime/agent/sessions.db"  # Session 数据库路径
-    SKILLS_DIR: str = "backend/runtime/skills"  # Skills 目录路径
-    SANDBOX_DIR: str = "backend/runtime/agent/sandbox"  # 沙箱目录路径
 
     class Config:
         env_file = ".env"

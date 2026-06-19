@@ -8,9 +8,6 @@ from app.config.settings import get_settings
 from app.config.logging import setup_logging
 from app.api.v1.router import api_router
 from app.schemas.base import ErrorResponse, ErrorDetail
-from app.api.exception_handlers import app_error_handler, general_exception_handler
-from app.agent_platform.errors import AppError
-from app.middleware.context import RequestContextMiddleware
 
 settings = get_settings()
 
@@ -38,9 +35,6 @@ app = FastAPI(
     redoc_url="/redoc" if settings.DEBUG else None,
 )
 
-# 请求上下文中间件（必须在最外层）
-app.add_middleware(RequestContextMiddleware)
-
 # CORS
 app.add_middleware(
     CORSMiddleware,
@@ -50,10 +44,6 @@ app.add_middleware(
     allow_headers=["*"],
     expose_headers=["*"],
 )
-
-# 异常处理器
-app.add_exception_handler(AppError, app_error_handler)
-app.add_exception_handler(Exception, general_exception_handler)
 
 # 路由
 app.include_router(api_router)
@@ -68,7 +58,15 @@ async def health_check():
     }
 
 
-# 全局异常处理器已在上面注册
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    logger.error(f"Unhandled exception: {exc}")
+    return JSONResponse(
+        status_code=500,
+        content=ErrorResponse(
+            error=ErrorDetail(code="INTERNAL_ERROR", message=str(exc))
+        ).model_dump(),
+    )
 
 
 if __name__ == "__main__":
