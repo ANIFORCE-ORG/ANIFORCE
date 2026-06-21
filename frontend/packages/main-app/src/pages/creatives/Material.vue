@@ -5,13 +5,13 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
-import { getMaterials, getMaterialImage, type Material } from '@/api/materials'
+import { getMaterials, getMaterialImage, uploadMaterials, type Material } from '@/api/materials'
 import { navItems } from '@/config/navigation'
 import { useToast } from '@/composables/useToast'
 
 const router = useRouter()
 const auth = useAuthStore()
-const { success, error: showError, info } = useToast()
+const { success, error: showError } = useToast()
 
 const activeSession = ref('sess_g001')
 const chatInput = ref('')
@@ -75,7 +75,7 @@ onMounted(async () => {
     for (const material of data) {
       try {
         const imageData = await getMaterialImage(material.id, true)
-        materialImages.value.set(material.id, imageData.data)
+        materialImages.value.set(material.id, imageData.url || imageData.data || '')
       } catch (err) {
         console.error('加载素材图像失败:', material.id, err)
       }
@@ -89,8 +89,8 @@ onMounted(async () => {
 })
 
 // 获取素材图像
-const getMaterialImageSrc = (materialId: string): string | undefined => {
-  return materialImages.value.get(materialId)
+const getMaterialImageSrc = (material: Material): string | undefined => {
+  return materialImages.value.get(material.id) || material.thumbnail_url || material.url
 }
 
 // Mock素材库数据（保留作为后备）
@@ -531,7 +531,7 @@ const refreshMaterials = async () => {
       if (!materialImages.value.has(material.id)) {
         try {
           const imageData = await getMaterialImage(material.id, true)
-          materialImages.value.set(material.id, imageData.data)
+          materialImages.value.set(material.id, imageData.url || imageData.data || '')
         } catch (err) {
           console.error('加载素材图像失败:', material.id, err)
         }
@@ -550,30 +550,23 @@ const completeUpload = async () => {
     showError('请先选择要上传的文件')
     return
   }
-  
-  // 后端 API 未对接，显示提示信息
-  info('上传功能待开发完善！')
-  console.log('待上传文件:', uploadFiles.value)
-  
-  // TODO: 实际的后端 API 调用
-  // uploading.value = true
-  // uploadProgress.value.clear()
-  // 
-  // try {
-  //   const formData = new FormData()
-  //   uploadFiles.value.forEach(file => formData.append('files', file))
-  //   await uploadMaterials(formData)
-  //   
-  //   success(`成功上传 ${uploadFiles.value.length} 个文件`)
-  //   await refreshMaterials()
-  //   closeUploadModal()
-  // } catch (err: any) {
-  //   console.error('上传失败:', err)
-  //   showError(err.message || '上传失败，请稍后重试')
-  // } finally {
-  //   uploading.value = false
-  //   uploadProgress.value.clear()
-  // }
+
+  uploading.value = true
+  uploadProgress.value.clear()
+  try {
+    for (const file of uploadFiles.value) uploadProgress.value.set(file.name, 0)
+    await uploadMaterials(uploadFiles.value)
+    for (const file of uploadFiles.value) uploadProgress.value.set(file.name, 100)
+    success(`成功上传 ${uploadFiles.value.length} 个文件`)
+    await refreshMaterials()
+    closeUploadModal()
+  } catch (err: any) {
+    console.error('上传失败:', err)
+    showError(err.message || '上传失败，请稍后重试')
+  } finally {
+    uploading.value = false
+    uploadProgress.value.clear()
+  }
 }
 </script>
 
@@ -680,8 +673,8 @@ const completeUpload = async () => {
               <!-- 缩略图 - 竖向比例 9:16 -->
               <div class="aspect-[9/16] bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
                 <img 
-                  v-if="getMaterialImageSrc(creative.id)"
-                  :src="getMaterialImageSrc(creative.id)" 
+                  v-if="getMaterialImageSrc(creative)"
+                  :src="getMaterialImageSrc(creative)" 
                   :alt="creative.name"
                   class="w-full h-full object-cover"
                 />

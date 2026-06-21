@@ -27,6 +27,14 @@ class Settings(BaseSettings):
 
     # 外部服务
     OPENAI_API_KEY: str = ""
+
+    # Aliyun OSS
+    OSS_ACCESS_KEY_ID: str = ""
+    OSS_ACCESS_KEY_SECRET: str = ""
+    OSS_REGION: str = ""
+    OSS_ENDPOINT: str = ""
+    OSS_BUCKET: str = ""
+    OSS_PUBLIC_BASE_URL: str = ""
     
     # Meta OAuth 配置
     META_APP_ID: str = ""

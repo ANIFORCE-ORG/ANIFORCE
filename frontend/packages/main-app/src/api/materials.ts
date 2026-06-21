@@ -26,7 +26,8 @@ export interface MaterialImage {
   filename: string
   mime_type: string
   size: number
-  data: string // Base64 encoded data URL
+  data: string // Base64 encoded data URL; empty when url is provided
+  url?: string // Signed/private object URL
 }
 
 export interface AvailableImage {
@@ -41,6 +42,10 @@ interface MaterialsResponse {
 
 interface ImagesResponse {
   images: AvailableImage[]
+}
+
+interface UploadMaterialsResponse {
+  materials: Material[]
 }
 
 /**
@@ -110,6 +115,31 @@ export async function createMaterial(data: {
   ctr_estimate?: number
 }): Promise<Material> {
   return http.post<Material>('/materials', data)
+}
+
+/**
+ * 上传素材文件
+ */
+export async function uploadMaterials(files: File[]): Promise<Material[]> {
+  const token = localStorage.getItem('animagus_token')
+  const formData = new FormData()
+  files.forEach(file => formData.append('files', file))
+
+  const response = await fetch('/api/v1/materials/upload', {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}`)
+  }
+
+  const data = await response.json() as UploadMaterialsResponse
+  return data.materials
 }
 
 /**

@@ -2,12 +2,13 @@
 import os
 import base64
 from pathlib import Path
+from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File
-from fastapi.responses import JSONResponse
 from app.repositories.protocols import MaterialRepository
 from app.repositories.factory import get_material_repo
 from app.api.deps import get_current_user
 from app.config.settings import get_settings
+from app.services.object_storage import AliyunOssStorageService, ObjectStorageError
 
 router = APIRouter(prefix="/materials", tags=["materials"])
 settings = get_settings()
@@ -77,6 +78,19 @@ async def get_material_image(
     if not image_url:
         raise HTTPException(status_code=404, detail="Image not found")
     
+    storage = AliyunOssStorageService()
+    object_key = storage.object_key_from_url(image_url)
+    if object_key:
+        filename = os.path.basename(object_key)
+        return {
+            "material_id": material_id,
+            "filename": filename,
+            "mime_type": "image/jpeg",
+            "size": material.get("file_size") or 0,
+            "data": "",
+            "url": storage.signed_url(object_key),
+        }
+
     # 从URL中提取文件名
     filename = os.path.basename(image_url)
     image_path = IMAGES_DIR / filename
@@ -132,6 +146,43 @@ async def list_available_images(
             })
     
     return {"images": images}
+
+
+@router.post("/upload")
+async def upload_materials(
+    files: Annotated[list[UploadFile], File(description="素材文件，支持图片和视频")],
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """上传素材文件到 OSS，并创建素材记录。"""
+    if not files:
+        raise HTTPException(status_code=400, detail="No files uploaded")
+
+    storage = AliyunOssStorageService()
+    materials = []
+    for file in files:
+        _validate_upload_file(file)
+        try:
+            uploaded = await storage.upload_material(file, current_user["id"])
+        except ObjectStorageError as exc:
+            raise HTTPException(status_code=502, detail=str(exc)) from exc
+        except Exception as exc:
+            raise HTTPException(status_code=500, detail=f"Upload failed: {exc}") from exc
+
+        material = await material_repo.create(
+            user_id=current_user["id"],
+            name=Path(file.filename or uploaded.object_key).stem,
+            type=_material_type_from_content_type(uploaded.content_type),
+            url=uploaded.url,
+            thumbnail_url=uploaded.url if uploaded.content_type.startswith("image/") else None,
+            project_ids=[],
+            campaign_ids=[],
+            tags=["uploaded"],
+            file_size=uploaded.size,
+        )
+        materials.append(material)
+
+    return {"materials": materials}
 
 
 @router.post("")
@@ -198,6 +249,30 @@ async def remove_material_from_project(
     
     await material_repo.remove_from_project(material_id, project_id)
     return {"message": "Material removed from project successfully"}
+
+
+def _validate_upload_file(file: UploadFile) -> None:
+    allowed_types = {
+        "image/jpeg",
+        "image/png",
+        "image/gif",
+        "image/webp",
+        "video/mp4",
+        "video/quicktime",
+    }
+    max_size = 100 * 1024 * 1024
+    content_type = file.content_type or ""
+    if content_type not in allowed_types:
+        raise HTTPException(status_code=400, detail=f"Unsupported file type: {content_type or 'unknown'}")
+    size = getattr(file, "size", None)
+    if size is not None and size > max_size:
+        raise HTTPException(status_code=400, detail="File exceeds 100MB limit")
+
+
+def _material_type_from_content_type(content_type: str) -> str:
+    if content_type.startswith("video/"):
+        return "full_video"
+    return "a_segment"
 
 
 @router.delete("/{material_id}")
