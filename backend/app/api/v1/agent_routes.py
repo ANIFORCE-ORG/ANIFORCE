@@ -182,7 +182,8 @@ async def create_agent_session(
     state_repo: SqliteSessionStateRepository = Depends(get_session_state_repo),
 ):
     try:
-        session = await gateway.create_session(_authorization(request))
+        body = await request.json() if request.headers.get("content-length") else {}
+        session = await gateway.create_session(_authorization(request), body)
     except AgentGatewayError as exc:
         raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
@@ -194,6 +195,33 @@ async def create_agent_session(
     if not existing:
         await state_repo.create(session_id=session_id, user_id=current_user["id"])
     return session
+
+
+@router.patch("/sessions/{session_id}")
+async def update_agent_session(
+    session_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    gateway: AgentGatewayService = Depends(get_agent_gateway),
+):
+    try:
+        body = await request.json()
+        return await gateway.update_session(_authorization(request), session_id, body)
+    except AgentGatewayError as exc:
+        raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+
+
+@router.delete("/sessions/{session_id}")
+async def delete_agent_session(
+    session_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    gateway: AgentGatewayService = Depends(get_agent_gateway),
+):
+    try:
+        return await gateway.delete_session(_authorization(request), session_id)
+    except AgentGatewayError as exc:
+        raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
 
 @router.post("/tasks/{task_id}/cancel")

@@ -33,11 +33,12 @@ class AgentGatewayService:
         except httpx.HTTPError as exc:
             raise AgentGatewayError("AGENT_UNAVAILABLE", f"Agent service unavailable: {exc}", True) from exc
 
-    async def create_session(self, authorization: str | None) -> dict[str, Any]:
+    async def create_session(self, authorization: str | None, payload: dict[str, Any] | None = None) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
                 response = await client.post(
                     f"{self.base_url}/api/agent/sessions",
+                    json=payload or {},
                     headers=self._headers(authorization),
                 )
                 response.raise_for_status()
@@ -70,6 +71,33 @@ class AgentGatewayService:
                 return data if isinstance(data, dict) else {}
         except httpx.HTTPError as exc:
             raise AgentGatewayError("AGENT_UNAVAILABLE", f"Get agent session failed: {exc}", True) from exc
+
+    async def update_session(self, authorization: str | None, session_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+                response = await client.patch(
+                    f"{self.base_url}/api/agent/sessions/{session_id}",
+                    json=payload,
+                    headers=self._headers(authorization),
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data if isinstance(data, dict) else {}
+        except httpx.HTTPError as exc:
+            raise AgentGatewayError("AGENT_UNAVAILABLE", f"Update agent session failed: {exc}", True) from exc
+
+    async def delete_session(self, authorization: str | None, session_id: str) -> dict[str, Any]:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+                response = await client.delete(
+                    f"{self.base_url}/api/agent/sessions/{session_id}",
+                    headers=self._headers(authorization),
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data if isinstance(data, dict) else {}
+        except httpx.HTTPError as exc:
+            raise AgentGatewayError("AGENT_UNAVAILABLE", f"Delete agent session failed: {exc}", True) from exc
 
     async def cancel_task(self, authorization: str | None, task_id: str) -> dict[str, Any]:
         try:

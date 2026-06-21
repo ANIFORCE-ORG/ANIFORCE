@@ -31,6 +31,18 @@ class AgentTaskService:
         self._repo = repo
         self._runtime = runtime
         self._session_locks: dict[str, asyncio.Lock] = {}
+
+    @staticmethod
+    def _is_default_session_title(title: str | None) -> bool:
+        return not title or title == "新对话" or title.startswith("Agent Session ")
+
+    async def _display_session(self, user_id: str, session: AgentSession) -> AgentSession:
+        if not self._is_default_session_title(session.title):
+            return session
+        first_title = await self._repo.get_first_session_task_title(user_id, session.session_id)
+        if first_title:
+            session.title = first_title[:50]
+        return session
     
     async def create_session(
         self,
@@ -57,9 +69,9 @@ class AgentTaskService:
     ) -> list[AgentSession]:
         """列出用户会话。"""
         sessions = await self._repo.list_user_sessions(user_id, limit=limit, offset=offset)
-        if include_archived:
-            return sessions
-        return [s for s in sessions if s.status == AgentSessionStatus.ACTIVE]
+        if not include_archived:
+            sessions = [s for s in sessions if s.status == AgentSessionStatus.ACTIVE]
+        return [await self._display_session(user_id, session) for session in sessions]
 
     async def get_active_session(self, user_id: str, session_id: str) -> AgentSession:
         """获取 active session，并校验归属。"""
@@ -70,6 +82,27 @@ class AgentTaskService:
                 message="Session not found or access denied",
                 category=ErrorCategory.TASK_ERROR,
             )
+        return session
+
+    async def rename_session(self, user_id: str, session_id: str, title: str) -> AgentSession:
+        """重命名用户会话。"""
+        title = title.strip()[:80]
+        if not title:
+            raise AppError(
+                code=AgentErrorCode.TASK_STATUS_INVALID,
+                message="Session title cannot be empty",
+                category=ErrorCategory.VALIDATION_ERROR,
+            )
+        await self.get_active_session(user_id, session_id)
+        updated = await self._repo.update_user_session_title(user_id, session_id, title)
+        if not updated:
+            raise AppError(
+                code=AgentErrorCode.TASK_NOT_FOUND,
+                message="Session not found or access denied",
+                category=ErrorCategory.TASK_ERROR,
+            )
+        session = await self.get_active_session(user_id, session_id)
+        logger.bind(session_id=session_id, user_id=user_id).info("Session renamed")
         return session
 
     async def archive_session(self, user_id: str, session_id: str) -> None:

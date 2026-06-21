@@ -8,6 +8,8 @@ import {
   startAgentRun,
   streamAgentRunEvents,
   cancelAgentTask,
+  updateAgentSession,
+  deleteAgentSession,
   type AgentMessage,
   type AgentModel,
   type AgentSession,
@@ -205,12 +207,21 @@ export function useHomeAgentSession() {
     store.sessions = await listAgentSessions()
   }
 
+  function isDefaultSessionTitle(title?: string): boolean {
+    return !title || title === '新对话' || title.startsWith('Agent Session ')
+  }
+
+  function titleFromMessage(message: string): string {
+    const normalized = message.replace(/\s+/g, ' ').trim()
+    return normalized.length > 50 ? `${normalized.slice(0, 50)}…` : normalized
+  }
+
   async function createSession(route?: AgentRouteContext | Event): Promise<void> {
     store.loading = true
     store.error = null
     try {
       const normalizedRoute = route instanceof Event ? undefined : route
-      const session = await createAgentSession({ title: normalizedRoute?.title || `Agent Session ${sessions.value.length + 1}` })
+      const session = await createAgentSession({ title: normalizedRoute?.title || '新对话' })
       store.sessions = [session, ...sessions.value.filter(item => item.id !== session.id)]
       store.setMessages(session.id, [])
       await selectSession(session)
@@ -247,14 +258,20 @@ export function useHomeAgentSession() {
   }
 
   async function renameSession(sessionId: string, title: string): Promise<void> {
-    store.sessions = sessions.value.map(item => item.id === sessionId ? { ...item, title } : item)
+    const normalizedTitle = title.trim()
+    if (!normalizedTitle) return
+    const updated = await updateAgentSession(sessionId, { title: normalizedTitle })
+    store.sessions = sessions.value.map(item => item.id === sessionId ? { ...item, title: updated.title } : item)
   }
 
   async function deleteSession(sessionId: string): Promise<void> {
+    await deleteAgentSession(sessionId)
     store.sessions = sessions.value.filter(item => item.id !== sessionId)
+    store.removeSessionCache(sessionId)
     if (store.activeSessionId === sessionId) {
       store.activeSessionId = null
-      if (sessions.value.length) await selectSession(sessions.value[0])
+      const nextSession = store.sessions[0]
+      if (nextSession) await selectSession(nextSession)
       else await createSession()
     }
   }
@@ -273,6 +290,14 @@ export function useHomeAgentSession() {
     const perfMs = () => Math.round(performance.now() - perfStart)
 
     const sessionId = activeSession.value.id
+    const shouldAutoTitle = isDefaultSessionTitle(activeSession.value.title) && messages.value.length === 0
+    if (shouldAutoTitle) {
+      const title = titleFromMessage(text)
+      store.sessions = sessions.value.map(item => item.id === sessionId ? { ...item, title } : item)
+      updateAgentSession(sessionId, { title }).catch(err => {
+        console.warn('[agent] failed to auto-title session', err)
+      })
+    }
     store.error = null
     store.agentRunning = true
     store.agentPhase = { kind: 'waiting_model' }

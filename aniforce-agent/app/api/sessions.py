@@ -1,6 +1,6 @@
 """Session 管理 API"""
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 
 from app.auth import get_current_user
 from app.services.agent_task_service import AgentTaskService
@@ -35,11 +35,14 @@ async def list_sessions(
 
 @router.post("")
 async def create_session(
+    request: Request,
     user: dict = Depends(get_current_user),
     service: AgentTaskService = Depends(get_service),
 ):
     """创建新 session"""
-    session = await service.create_session(user_id=user["id"], title="新对话")
+    body = await request.json() if request.headers.get("content-length") else {}
+    title = str(body.get("title") or "新对话")
+    session = await service.create_session(user_id=user["id"], title=title)
     return {
         "session_id": session.session_id,
         "title": session.title,
@@ -73,6 +76,37 @@ async def get_session_detail(
         "archived_at": session.archived_at,
         "messages": messages,
     }
+
+
+@router.patch("/{session_id}")
+async def rename_session(
+    session_id: str,
+    request: Request,
+    user: dict = Depends(get_current_user),
+    service: AgentTaskService = Depends(get_service),
+):
+    """重命名 session"""
+    body = await request.json()
+    session = await service.rename_session(user_id=user["id"], session_id=session_id, title=str(body.get("title") or ""))
+    return {
+        "session_id": session.session_id,
+        "title": session.title,
+        "status": session.status,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+        "archived_at": session.archived_at,
+    }
+
+
+@router.delete("/{session_id}")
+async def delete_session(
+    session_id: str,
+    user: dict = Depends(get_current_user),
+    service: AgentTaskService = Depends(get_service),
+):
+    """删除/归档 session"""
+    await service.archive_session(user_id=user["id"], session_id=session_id)
+    return {"status": "archived", "session_id": session_id}
 
 
 @router.post("/{session_id}/archive")

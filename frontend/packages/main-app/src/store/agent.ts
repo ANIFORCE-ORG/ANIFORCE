@@ -101,6 +101,16 @@ export const useAgentStore = defineStore('agent', () => {
       console.warn('[agent-store] persist failed', e)
     }
   }
+
+  function removeSessionCache(sessionId: string): void {
+    messagesBySession.value.delete(sessionId)
+    timelineBySession.value.delete(sessionId)
+    workspaceBySession.value.delete(sessionId)
+    sideEffectsBySession.value.delete(sessionId)
+    stalePanelsBySession.value.delete(sessionId)
+    localStorage.removeItem(`aniforce_timeline_${sessionId}`)
+    localStorage.removeItem(`aniforce_workspace_${sessionId}`)
+  }
   
   // Actions
   function setMessages(sessionId: string, msgs: AgentMessage[]): void {
@@ -340,6 +350,7 @@ export const useAgentStore = defineStore('agent', () => {
     // Actions
     restoreFromLocalStorage,
     persistToLocalStorage,
+    removeSessionCache,
     setMessages,
     appendMessage,
     upsertActivityMessage,  // AG-UI: activity 消息插入/更新

@@ -149,6 +149,18 @@ export async function getAgentSession(sessionId: string): Promise<{ session: Age
   return { session, messages }
 }
 
+export async function updateAgentSession(sessionId: string, payload: { title: string }): Promise<AgentSession> {
+  const session = await agentJson<any>(`/sessions/${encodeURIComponent(sessionId)}`, {
+    method: 'PATCH',
+    body: JSON.stringify(payload),
+  })
+  return normalizeAgentSession(session)
+}
+
+export async function deleteAgentSession(sessionId: string): Promise<void> {
+  await agentJson(`/sessions/${encodeURIComponent(sessionId)}`, { method: 'DELETE' })
+}
+
 export async function listAgentModels(): Promise<{ models: AgentModel[] }> {
   const health = await agentJson<{ provider?: string; model: string }>('/health')
   return {

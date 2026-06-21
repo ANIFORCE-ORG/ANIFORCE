@@ -109,6 +109,16 @@ class AgentTaskRepository(ABC):
         pass
     
     @abstractmethod
+    async def update_user_session_title(self, user_id: str, session_id: str, title: str) -> bool:
+        """更新用户 session 标题（含权限校验）"""
+        pass
+
+    @abstractmethod
+    async def get_first_session_task_title(self, user_id: str, session_id: str) -> Optional[str]:
+        """获取 session 最早任务标题，用于默认标题展示"""
+        pass
+
+    @abstractmethod
     async def count_user_tasks(
         self, 
         user_id: str,

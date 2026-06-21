@@ -28,10 +28,11 @@ from agents import (
 )
 from agents.run import RunResult
 from agents.sandbox import SandboxAgent, Manifest, SandboxRunConfig
-from agents.sandbox.capabilities import Capabilities, Skills, LocalDirLazySkillSource
+from agents.sandbox.capabilities import Capabilities, Skills, LocalDirLazySkillSource, Shell
 from agents.sandbox.entries import LocalDir
 from agents.sandbox.sandboxes.unix_local import UnixLocalSandboxClient
 from agents.models.openai_responses import OpenAIResponsesModel  # 添加 Responses API
+from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 
 from app.models.agent_platform_models import AgentTaskEvent, EventType
 from app.core.errors import AppError, AgentErrorCode, ErrorCategory
@@ -53,6 +54,7 @@ class OpenAISDKAdapter:
         enable_tracing: bool = True,
         skills_dir: Optional[str] = None,
         sandbox_dir: Optional[str] = None,
+        api_mode: Optional[str] = None,
     ):
         self.model = model
         self.api_key = api_key
@@ -66,8 +68,13 @@ class OpenAISDKAdapter:
         # 创建沙箱目录
         Path(self.sandbox_dir).mkdir(parents=True, exist_ok=True)
         
-        # 使用 Responses API（支持 SandboxAgent 的 Hosted Tools）
-        set_default_openai_api("responses")
+        self.api_mode = (api_mode or os.environ.get("OPENAI_AGENTS_API") or "responses").strip().lower()
+        if self.api_mode in {"chat", "chat_completions", "chat-completions"}:
+            self.api_mode = "chat_completions"
+        else:
+            self.api_mode = "responses"
+
+        set_default_openai_api(self.api_mode)
         # 项目使用本地 JSONL tracing，禁用 OpenAI 官方 trace export。
         set_tracing_disabled(True)
         if api_key:
@@ -84,7 +91,7 @@ class OpenAISDKAdapter:
         self.openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         set_default_openai_client(self.openai_client, use_for_tracing=False)
         
-        logger.info(f"OpenAI SDK Adapter initialized: {model} | tracing={enable_tracing}")
+        logger.info(f"OpenAI SDK Adapter initialized: {model} | api={self.api_mode} | tracing={enable_tracing}")
     
     def _generate_skills_index(self) -> str:
         """生成 Skills 索引（用于注入到 System Prompt）"""
@@ -159,41 +166,52 @@ class OpenAISDKAdapter:
         skills_path = Path(self.skills_dir)
         has_skills = enable_skills and skills_path.exists()
         
-        # 创建 Responses API 模型（支持 Hosted Tools）
-        responses_model = OpenAIResponsesModel(
-            model=self.model,
-            openai_client=self.openai_client,
-        )
+        if self.api_mode == "chat_completions":
+            sdk_model = OpenAIChatCompletionsModel(
+                model=self.model,
+                openai_client=self.openai_client,
+            )
+        else:
+            sdk_model = OpenAIResponsesModel(
+                model=self.model,
+                openai_client=self.openai_client,
+            )
         
         if has_skills:
             # 使用 SandboxAgent（支持 Skills + Sandbox 工具）
             # 显式使用 session 级 workspace，保证隔离、可观察、可清理、可 resume。
             workspace_dir = self._sandbox_workspace_for_session(session_id)
+            skills_capability = Skills(
+                lazy_from=LocalDirLazySkillSource(
+                    source=LocalDir(src=self.skills_dir)
+                )
+            )
+            if self.api_mode == "chat_completions":
+                capabilities = [Shell(), skills_capability]
+                capability_label = "ChatCompletions-compatible Shell + Skills"
+            else:
+                capabilities = Capabilities.default() + [skills_capability]
+                capability_label = "Responses default capabilities + Skills"
+
             agent = SandboxAgent(
                 name=name,
                 instructions=instructions,
-                model=responses_model,  # 使用 Responses API
+                model=sdk_model,
                 mcp_servers=mcp_servers or [],
                 default_manifest=Manifest(root=workspace_dir),
-                capabilities=Capabilities.default() + [
-                    Skills(
-                        lazy_from=LocalDirLazySkillSource(
-                            source=LocalDir(src=self.skills_dir)
-                        )
-                    )
-                ]
+                capabilities=capabilities,
             )
-            logger.info(f"[SDK] Created SandboxAgent with Responses API + Skills: {self.skills_dir}")
+            logger.info(f"[SDK] Created SandboxAgent with {self.api_mode} + {capability_label}: {self.skills_dir}")
             logger.info(f"[SDK] Sandbox workspace: {workspace_dir}")
         else:
             # 使用普通 Agent（向后兼容）
             agent = Agent(
                 name=name,
                 instructions=instructions,
-                model=responses_model,  # 使用 Responses API
+                model=sdk_model,
                 mcp_servers=mcp_servers or [],
             )
-            logger.info(f"[SDK] Created Agent with Responses API (skills disabled)")
+            logger.info(f"[SDK] Created Agent with {self.api_mode} (skills disabled)")
         
         logger.debug(f"[SDK] Agent '{name}' with {len(mcp_servers or [])} MCP servers")
         return agent
@@ -206,7 +224,10 @@ class OpenAISDKAdapter:
             session_id: Session ID
             db_path: SQLite 数据库路径
         """
-        return SQLiteSession(session_id, db_path=db_path)
+        sdk_session_id = session_id
+        if self.api_mode == "chat_completions":
+            sdk_session_id = f"chat_completions:{session_id}"
+        return SQLiteSession(sdk_session_id, db_path=db_path)
     
     async def run_streamed(
         self,

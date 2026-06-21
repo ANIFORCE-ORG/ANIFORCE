@@ -42,6 +42,7 @@ async def lifespan(app: FastAPI):
         enable_tracing=settings.AGENT_TRACING_ENABLED,
         skills_dir=settings.SKILLS_DIR,
         sandbox_dir=settings.SANDBOX_DIR,
+        api_mode=settings.OPENAI_AGENTS_API,
     )
 
     _repo = SQLiteAgentTaskRepository(db_path=settings.AGENT_TASK_DB)
@@ -57,6 +58,7 @@ async def lifespan(app: FastAPI):
 
     logger.info(f"OpenAI Agent Service started on {settings.HOST}:{settings.PORT}")
     logger.info(f"Model: {settings.OPENAI_AGENTS_MODEL}")
+    logger.info(f"Agent API: {settings.OPENAI_AGENTS_API}")
 
     async with AsyncExitStack() as stack:
         await stack.enter_async_context(mcp.session_manager.run())
@@ -99,6 +101,7 @@ async def health():
         "status": "healthy",
         "service": "openai-agent-service",
         "model": settings.OPENAI_AGENTS_MODEL,
+        "api": settings.OPENAI_AGENTS_API,
     }
 
 

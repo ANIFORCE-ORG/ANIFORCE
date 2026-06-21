@@ -317,6 +317,49 @@ class SQLiteAgentTaskRepository(AgentTaskRepository):
         return await self._touch_session_sync(user_id, session_id)
 
     @async_to_sync
+    def _update_user_session_title_sync(self, user_id: str, session_id: str, title: str) -> bool:
+        conn = self._get_conn()
+        try:
+            now = datetime.utcnow().isoformat()
+            cursor = conn.execute(
+                """
+                UPDATE sessions
+                SET title = ?, updated_at = ?
+                WHERE session_id = ? AND user_id = ?
+                """,
+                (title, now, session_id, user_id),
+            )
+            conn.commit()
+            return cursor.rowcount > 0
+        finally:
+            conn.close()
+
+    async def update_user_session_title(self, user_id: str, session_id: str, title: str) -> bool:
+        return await self._update_user_session_title_sync(user_id, session_id, title)
+
+    @async_to_sync
+    def _get_first_session_task_title_sync(self, user_id: str, session_id: str) -> Optional[str]:
+        conn = self._get_conn()
+        try:
+            row = conn.execute(
+                """
+                SELECT title FROM tasks
+                WHERE user_id = ? AND session_id = ?
+                ORDER BY created_at ASC
+                LIMIT 1
+                """,
+                (user_id, session_id),
+            ).fetchone()
+            if not row:
+                return None
+            return row["title"]
+        finally:
+            conn.close()
+
+    async def get_first_session_task_title(self, user_id: str, session_id: str) -> Optional[str]:
+        return await self._get_first_session_task_title_sync(user_id, session_id)
+
+    @async_to_sync
     def _session_exists_sync(self, user_id: str, session_id: str) -> bool:
         conn = self._get_conn()
         try:
