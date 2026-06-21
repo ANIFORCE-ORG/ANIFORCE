@@ -226,6 +226,7 @@ class AgentRuntime:
                 # 7. 流式推送事件（增加 Plan 检测）
                 message_buffer = []  # 缓存消息内容用于 Plan 检测
                 first_event_seen = False
+                first_thinking_delta_seen = False
                 first_delta_seen = False
                 first_delta_persisted_logged = False
                 stream_events_start = perf_counter()
@@ -238,6 +239,14 @@ class AgentRuntime:
                             _elapsed_ms(task_start),
                             _elapsed_ms(stream_events_start),
                             event.event_type,
+                        )
+                    if not first_thinking_delta_seen and event.event_type == EventType.THINKING_UPDATED:
+                        first_thinking_delta_seen = True
+                        task_logger.info(
+                            "[PERF][agent_first_token] runtime.first_thinking_delta total_ms={} stream_events_wait_ms={} sequence={}",
+                            _elapsed_ms(task_start),
+                            _elapsed_ms(stream_events_start),
+                            event.sequence,
                         )
                     if not first_delta_seen and event.event_type == EventType.MESSAGE_UPDATED:
                         first_delta_seen = True

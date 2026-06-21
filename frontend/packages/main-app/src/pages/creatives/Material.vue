@@ -3,7 +3,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import ChatPanel from '@/components/layout/ChatPanel.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { getMaterials, getMaterialImage, uploadMaterials, type Material } from '@/api/materials'
 import { navItems } from '@/config/navigation'
@@ -14,7 +13,6 @@ const auth = useAuthStore()
 const { success, error: showError } = useToast()
 
 const activeSession = ref('sess_g001')
-const chatInput = ref('')
 const filterTab = ref('all')
 const searchQuery = ref('')
 const loading = ref(false)
@@ -37,23 +35,6 @@ const sessions = ref([
   { id: 'sess_g002', name: '素材优化建议', active: false },
   { id: 'sess_g003', name: '东南亚市场拓展', active: false },
 ])
-
-// 聊天消息
-const messages = ref([
-  {
-    role: 'ai',
-    author: ' ANIFORCE助手',
-    time: '刚刚',
-    content: '您好！我可以帮您分析热门素材、生成创意变体或AI生成新素材。请问需要什么帮助？'
-  }
-])
-
-// 快捷提示
-const quickHints = [
-  '分析热门素材趋势',
-  '生成素材变体',
-  'AI生成新素材'
-]
 
 // 初始化：加载素材数据
 onMounted(async () => {
@@ -444,21 +425,6 @@ const switchSession = (session: any) => {
   sessions.value.forEach(s => s.active = s.id === session.id)
 }
 
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  messages.value.push({
-    role: 'user',
-    author: '用户',
-    time: '刚刚',
-    content: message
-  })
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
-}
-
 const handleFeatureClick = (featureId: string) => {
   console.log('点击功能卡片:', featureId)
 }
@@ -783,15 +749,6 @@ const completeUpload = async () => {
       </div>
     </main>
 
-    <!-- 右侧对话区 -->
-    <ChatPanel
-      :messages="messages"
-      :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
-    />
 
     <!-- 上传素材对话框 -->
     <div

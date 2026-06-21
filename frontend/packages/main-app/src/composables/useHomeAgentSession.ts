@@ -268,6 +268,7 @@ export function useHomeAgentSession() {
     const perfStart = performance.now()
     let firstSseEventLogged = false
     let firstRuntimeStartedLogged = false
+    let firstThinkingDeltaLogged = false
     let firstMessageDeltaLogged = false
     const perfMs = () => Math.round(performance.now() - perfStart)
 
@@ -367,6 +368,15 @@ export function useHomeAgentSession() {
           }
           const delta = event.data.delta
           if (typeof delta === 'string') {
+            if (!firstThinkingDeltaLogged) {
+              firstThinkingDeltaLogged = true
+              console.info('[PERF][agent_first_token][frontend] first_thinking_delta', {
+                elapsedMs: perfMs(),
+                runId: store.currentRunId,
+                sessionId,
+                deltaChars: delta.length,
+              })
+            }
             store.appendDeltaToStreaming('thinking', 'thinking', delta)
           }
         }

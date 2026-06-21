@@ -344,6 +344,7 @@ async def _consume_agent_run_background(
         return
 
     first_agent_chunk_logged = False
+    first_thinking_logged = False
     first_message_logged = False
     upstream_bytes = 0
     stream_buffer = ""
@@ -386,6 +387,14 @@ async def _consume_agent_run_background(
                     stream_buffer += chunk.decode("utf-8", errors="ignore")
                     events, stream_buffer = _parse_sse_events(stream_buffer)
                     for event_name, data in events:
+                        if not first_thinking_logged and event_name == "thinking.updated":
+                            first_thinking_logged = True
+                            perf_log.info(
+                                "[PERF][agent_first_token] backend.first_thinking_delta total_ms={} gateway_wait_ms={} upstream_bytes_before_first_thinking={}",
+                                _elapsed_ms(perf_start),
+                                _elapsed_ms(gateway_start),
+                                upstream_bytes,
+                            )
                         await agent_run_event_bus.publish(run_id, event_name, data)
 
                 # Flush any final event if upstream did not end with a blank line.

@@ -289,6 +289,7 @@ class OpenAISDKAdapter:
         stream_start = perf_counter()
         first_raw_logged = False
         first_transformed_logged = False
+        first_thinking_delta_logged = False
         first_text_delta_logged = False
         raw_event_count = 0
         transformed_event_count = 0
@@ -353,6 +354,15 @@ class OpenAISDKAdapter:
                             _elapsed_ms(stream_start),
                             raw_event_count,
                             agent_event.event_type,
+                        )
+                    if not first_thinking_delta_logged and agent_event.event_type == EventType.THINKING_UPDATED:
+                        first_thinking_delta_logged = True
+                        logger.info(
+                            "[PERF][agent_first_token] sdk.first_thinking_delta elapsed_ms={} raw_events={} transformed_events={} pre_delta_raw_counts={}",
+                            _elapsed_ms(stream_start),
+                            raw_event_count,
+                            transformed_event_count,
+                            pre_delta_raw_counts,
                         )
                     if not first_text_delta_logged and agent_event.event_type == EventType.MESSAGE_UPDATED:
                         first_text_delta_logged = True

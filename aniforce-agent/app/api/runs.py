@@ -94,6 +94,7 @@ async def run_agent(
     async def event_generator():
         stream_start = perf_counter()
         first_event_logged = False
+        first_thinking_delta_logged = False
         first_delta_logged = False
         try:
             async for event in service.run_task(
@@ -119,6 +120,15 @@ async def run_agent(
                         event.sequence,
                     )
                 if event.event_type == "thinking.updated":
+                    if not first_thinking_delta_logged:
+                        first_thinking_delta_logged = True
+                        perf_log.info(
+                            "[PERF][agent_first_token] agent_api.first_thinking_delta total_ms={} stream_wait_ms={} sequence={} delta_chars={}",
+                            _elapsed_ms(request_start),
+                            _elapsed_ms(stream_start),
+                            event.sequence,
+                            len(str(event.payload.get("delta", ""))),
+                        )
                     perf_log.info(
                         "[PERF][agent_first_token] agent_api.thinking_delta seq={} delta_chars={}",
                         event.sequence,
