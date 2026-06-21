@@ -7,7 +7,6 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDea
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
-import LiveWorkspaceShell from '@/components/agent/workspace/LiveWorkspaceShell.vue'
 import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
@@ -611,34 +610,6 @@ onDeactivated(() => {
         </div>
       </div>
     </main>
-    <div
-      v-if="taskPanelVisible && !workspaceCollapsed"
-      class="hidden xl:flex w-1 shrink-0 cursor-col-resize items-stretch justify-center bg-slate-100 hover:bg-primary/20 dark:bg-slate-900 dark:hover:bg-primary/20"
-      @pointerdown="startWorkspaceResize"
-    >
-      <div class="my-5 w-px bg-slate-300 dark:bg-slate-700"></div>
-    </div>
-    <LiveWorkspaceShell
-      v-if="taskPanelVisible"
-      :visible="taskPanelVisible"
-      :collapsed="workspaceCollapsed"
-      :session-id="agent.activeSession.value?.id"
-      :style="workspaceStyle"
-      :title="currentSessionTitle"
-      :status="taskStatus"
-      :summary="taskSummary"
-      :tags="taskTags"
-      :steps="taskSteps"
-      :actions="taskActions"
-      :task-type-label="taskTypeLabel"
-      :phase-label="taskPhaseLabel"
-      :artifacts="taskArtifacts"
-      :tool-results="agent.workspaceToolResults.value"
-      @toggle-collapse="toggleWorkspaceCollapsed"
-      @action="handleTaskAction"
-      @analyze-project="analyzeProject"
-      @open-project="openProject"
-    />
   </div>
 </template>
 

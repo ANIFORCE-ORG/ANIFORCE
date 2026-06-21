@@ -21,6 +21,8 @@ const loading = ref(false)
 const error = ref('')
 const materials = ref<Material[]>([])
 const materialImages = ref<Map<string, string>>(new Map())
+const materialMimeTypes = ref<Map<string, string>>(new Map())
+const previewMaterial = ref<Material | null>(null)
 
 // 上传素材相关状态
 const showUploadModal = ref(false)
@@ -74,8 +76,7 @@ onMounted(async () => {
     // 加载素材图像（Base64）
     for (const material of data) {
       try {
-        const imageData = await getMaterialImage(material.id, true)
-        materialImages.value.set(material.id, imageData.url || imageData.data || '')
+        await loadMaterialPreviewSource(material)
       } catch (err) {
         console.error('加载素材图像失败:', material.id, err)
       }
@@ -88,9 +89,35 @@ onMounted(async () => {
   }
 })
 
-// 获取素材图像
+// 获取素材预览地址
 const getMaterialImageSrc = (material: Material): string | undefined => {
   return materialImages.value.get(material.id) || material.thumbnail_url || material.url
+}
+
+const isVideoMaterial = (material: Material): boolean => {
+  const mimeType = materialMimeTypes.value.get(material.id) || ''
+  const source = `${material.url || ''} ${material.thumbnail_url || ''}`.toLowerCase()
+  return mimeType.startsWith('video/') || /\.(mp4|mov)(\?|$)/.test(source)
+}
+
+const loadMaterialPreviewSource = async (material: Material) => {
+  try {
+    const previewData = await getMaterialImage(material.id, true)
+    materialImages.value.set(material.id, previewData.url || previewData.data || '')
+    materialMimeTypes.value.set(material.id, previewData.mime_type || '')
+  } catch (previewErr) {
+    const originalData = await getMaterialImage(material.id, false)
+    materialImages.value.set(material.id, originalData.url || originalData.data || '')
+    materialMimeTypes.value.set(material.id, originalData.mime_type || '')
+  }
+}
+
+const openMaterialPreview = (material: Material) => {
+  previewMaterial.value = material
+}
+
+const closeMaterialPreview = () => {
+  previewMaterial.value = null
 }
 
 // Mock素材库数据（保留作为后备）
@@ -530,8 +557,7 @@ const refreshMaterials = async () => {
     for (const material of data) {
       if (!materialImages.value.has(material.id)) {
         try {
-          const imageData = await getMaterialImage(material.id, true)
-          materialImages.value.set(material.id, imageData.url || imageData.data || '')
+          await loadMaterialPreviewSource(material)
         } catch (err) {
           console.error('加载素材图像失败:', material.id, err)
         }
@@ -669,18 +695,29 @@ const completeUpload = async () => {
               v-for="creative in filteredCreatives"
               :key="creative.id"
               class="group bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden hover:shadow-lg transition-all cursor-pointer"
+              @click="openMaterialPreview(creative)"
             >
               <!-- 缩略图 - 竖向比例 9:16 -->
               <div class="aspect-[9/16] bg-slate-100 dark:bg-slate-800 relative overflow-hidden">
+                <video
+                  v-if="isVideoMaterial(creative) && getMaterialImageSrc(creative)"
+                  :src="getMaterialImageSrc(creative)"
+                  class="w-full h-full object-cover"
+                  autoplay
+                  loop
+                  muted
+                  playsinline
+                  preload="metadata"
+                />
                 <img 
-                  v-if="getMaterialImageSrc(creative)"
+                  v-else-if="getMaterialImageSrc(creative)"
                   :src="getMaterialImageSrc(creative)" 
                   :alt="creative.name"
                   class="w-full h-full object-cover"
                 />
                 <div v-else class="w-full h-full bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800 flex items-center justify-center">
                   <span class="material-symbols-outlined text-[47px] text-slate-400 dark:text-slate-500">
-                    video_library
+                    {{ isVideoMaterial(creative) ? 'videocam' : 'image' }}
                   </span>
                 </div>
                 <!-- 状态标签 -->
@@ -700,7 +737,7 @@ const completeUpload = async () => {
                   </span>
                 </div>
                 <!-- 播放按钮 -->
-                <div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
+                <div class="pointer-events-none absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity bg-black/20">
                   <div class="w-[37px] h-[37px] rounded-full bg-white/90 backdrop-blur-sm flex items-center justify-center text-primary">
                     <span class="material-symbols-outlined text-[17px]">play_arrow</span>
                   </div>
@@ -859,6 +896,51 @@ const completeUpload = async () => {
             <span v-if="uploading" class="material-symbols-outlined animate-spin text-[11px]">progress_activity</span>
             <span>{{ uploading ? '上传中...' : `完成上传 (${uploadFiles.length})` }}</span>
           </button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 素材预览弹窗 -->
+  <div
+    v-if="previewMaterial"
+    class="fixed inset-0 bg-black/70 flex items-center justify-center z-50 p-[20px]"
+    @click.self="closeMaterialPreview"
+  >
+    <div class="w-full max-w-[900px] bg-white dark:bg-slate-900 rounded-2xl overflow-hidden shadow-2xl">
+      <div class="flex items-center justify-between px-[16px] py-[12px] border-b border-slate-200 dark:border-slate-700">
+        <div class="min-w-0">
+          <h2 class="text-[14px] font-bold text-slate-900 dark:text-white truncate">{{ previewMaterial.name }}</h2>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-[2px]">
+            {{ isVideoMaterial(previewMaterial) ? '视频素材' : '图片素材' }} · {{ previewMaterial.file_size ? (previewMaterial.file_size / 1024 / 1024).toFixed(2) + ' MB' : '未知大小' }}
+          </p>
+        </div>
+        <button
+          class="p-[6px] hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg transition-colors"
+          @click="closeMaterialPreview"
+        >
+          <span class="material-symbols-outlined text-[18px] text-slate-600 dark:text-slate-300">close</span>
+        </button>
+      </div>
+
+      <div class="bg-black flex items-center justify-center max-h-[75vh]">
+        <video
+          v-if="isVideoMaterial(previewMaterial) && getMaterialImageSrc(previewMaterial)"
+          :src="getMaterialImageSrc(previewMaterial)"
+          class="max-w-full max-h-[75vh]"
+          controls
+          autoplay
+          playsinline
+          preload="metadata"
+        />
+        <img
+          v-else-if="getMaterialImageSrc(previewMaterial)"
+          :src="getMaterialImageSrc(previewMaterial)"
+          :alt="previewMaterial.name"
+          class="max-w-full max-h-[75vh] object-contain"
+        />
+        <div v-else class="h-[360px] w-full flex items-center justify-center text-slate-400">
+          <span class="material-symbols-outlined text-[48px]">broken_image</span>
         </div>
       </div>
     </div>

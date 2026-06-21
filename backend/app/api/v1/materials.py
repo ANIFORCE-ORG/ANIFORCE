@@ -73,10 +73,12 @@ async def get_material_image(
     if material["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
     
-    # 获取图像路径
+    # 获取素材路径：缩略图不存在时回退原始素材，兼容视频 MVP 预览。
     image_url = material.get("thumbnail_url") if thumbnail else material.get("url")
     if not image_url:
-        raise HTTPException(status_code=404, detail="Image not found")
+        image_url = material.get("url")
+    if not image_url:
+        raise HTTPException(status_code=404, detail="Material file not found")
     
     storage = AliyunOssStorageService()
     object_key = storage.object_key_from_url(image_url)
@@ -85,7 +87,7 @@ async def get_material_image(
         return {
             "material_id": material_id,
             "filename": filename,
-            "mime_type": "image/jpeg",
+            "mime_type": _mime_type_from_filename(filename),
             "size": material.get("file_size") or 0,
             "data": "",
             "url": storage.signed_url(object_key),
@@ -105,14 +107,7 @@ async def get_material_image(
         
         # 获取文件扩展名以确定MIME类型
         ext = image_path.suffix.lower()
-        mime_types = {
-            ".jpg": "image/jpeg",
-            ".jpeg": "image/jpeg",
-            ".png": "image/png",
-            ".gif": "image/gif",
-            ".webp": "image/webp",
-        }
-        mime_type = mime_types.get(ext, "image/jpeg")
+        mime_type = _mime_type_from_filename(image_path.name)
         
         # Base64编码
         base64_data = base64.b64encode(image_data).decode("utf-8")
@@ -273,6 +268,20 @@ def _material_type_from_content_type(content_type: str) -> str:
     if content_type.startswith("video/"):
         return "full_video"
     return "a_segment"
+
+
+def _mime_type_from_filename(filename: str) -> str:
+    ext = Path(filename).suffix.lower()
+    mime_types = {
+        ".jpg": "image/jpeg",
+        ".jpeg": "image/jpeg",
+        ".png": "image/png",
+        ".gif": "image/gif",
+        ".webp": "image/webp",
+        ".mp4": "video/mp4",
+        ".mov": "video/quicktime",
+    }
+    return mime_types.get(ext, "application/octet-stream")
 
 
 @router.delete("/{material_id}")
