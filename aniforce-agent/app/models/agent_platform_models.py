@@ -102,6 +102,7 @@ class EventType:
     MESSAGE_STARTED = "message.started"
     MESSAGE_UPDATED = "message.updated"
     MESSAGE_COMPLETED = "message.completed"
+    THINKING_UPDATED = "thinking.updated"  # Reasoning/thinking delta
     
     # ==================== 内部工具调用事件 ====================
     TOOL_CALL_STARTED = "tool_call.started"

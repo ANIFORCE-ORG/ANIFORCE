@@ -58,6 +58,32 @@ class AgentGatewayService:
         except httpx.HTTPError as exc:
             raise AgentGatewayError("AGENT_UNAVAILABLE", f"List agent sessions failed: {exc}", True) from exc
 
+    async def get_session(self, authorization: str | None, session_id: str) -> dict[str, Any]:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/agent/sessions/{session_id}",
+                    headers=self._headers(authorization),
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data if isinstance(data, dict) else {}
+        except httpx.HTTPError as exc:
+            raise AgentGatewayError("AGENT_UNAVAILABLE", f"Get agent session failed: {exc}", True) from exc
+
+    async def cancel_task(self, authorization: str | None, task_id: str) -> dict[str, Any]:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
+                response = await client.post(
+                    f"{self.base_url}/api/agent/tasks/{task_id}/cancel",
+                    headers=self._headers(authorization),
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data if isinstance(data, dict) else {}
+        except httpx.HTTPError as exc:
+            raise AgentGatewayError("AGENT_UNAVAILABLE", f"Cancel agent task failed: {exc}", True) from exc
+
     async def stream_run(
         self,
         authorization: str | None,

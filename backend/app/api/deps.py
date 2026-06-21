@@ -1,19 +1,31 @@
+from time import perf_counter
+
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from jose import JWTError, jwt
+from loguru import logger
 from app.config.settings import get_settings
 
 security = HTTPBearer(auto_error=False)
+
+
+def _elapsed_ms(start: float) -> int:
+    return int((perf_counter() - start) * 1000)
 
 
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
     """获取当前用户 — Demo 模式或开发环境下返回固定用户"""
+    auth_start = perf_counter()
     settings = get_settings()
 
     # Demo 模式或没有提供认证信息时，返回测试用户（用于开发）
     if settings.DEMO_MODE or credentials is None:
+        logger.info(
+            "[PERF][agent_first_token] backend.auth total_ms={} mode=demo_or_missing_token",
+            _elapsed_ms(auth_start),
+        )
         return {
             "id": "user_test_001",
             "email": "test@animagus.com",
@@ -21,6 +33,7 @@ async def get_current_user(
         }
 
     try:
+        jwt_start = perf_counter()
         payload = jwt.decode(
             credentials.credentials,
             settings.JWT_SECRET,
@@ -32,6 +45,12 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="无效的认证信息",
             )
+        logger.info(
+            "[PERF][agent_first_token] backend.auth total_ms={} jwt_decode_ms={} user_id={}",
+            _elapsed_ms(auth_start),
+            _elapsed_ms(jwt_start),
+            user_id,
+        )
         return {
             "id": user_id,
             "email": payload.get("email", ""),

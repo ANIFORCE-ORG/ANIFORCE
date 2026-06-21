@@ -221,6 +221,164 @@ class AgentTaskService:
             after_sequence=after_sequence,
         )
     
+    async def get_session_history(
+        self,
+        user_id: str,
+        session_id: str,
+    ) -> List[dict]:
+        """
+        从 session 的事件流重建消息历史。
+
+        重建规则：
+        - 用户消息：每个 task 的 user_input（从 task 表取）
+        - assistant 消息：累积 MESSAGE_UPDATED delta + THINKING_UPDATED delta + TOOL_CALL 事件
+        - 按 task 创建时间排序
+        """
+        events = await self._repo.list_session_events(user_id, session_id)
+
+        messages: List[dict] = []
+        current_assistant: Optional[dict] = None
+        # 跟踪当前 block 的开始时间（用于计算 thinking duration）
+        current_block_start: Optional[str] = None
+        current_block_type: Optional[str] = None
+
+        def finalize_current_block():
+            """当前 block 结束时，如果是 thinking，计算 duration"""
+            nonlocal current_block_start, current_block_type
+            if current_block_start and current_block_type == "thinking" and current_assistant:
+                blocks = current_assistant.get("content", [])
+                if blocks and isinstance(blocks[-1], dict) and blocks[-1].get("type") == "thinking":
+                    # duration 由前端根据 timestamp 算，这里先存 start_ms
+                    pass
+            current_block_start = None
+            current_block_type = None
+
+        def ensure_assistant(created_at: str | None = None) -> dict:
+            nonlocal current_assistant
+            if not current_assistant:
+                current_assistant = {
+                    "role": "assistant",
+                    "content": [],
+                    "timestamp": created_at,
+                    "provider": "openai-compatible",
+                    "model": "deepseek/deepseek-v4-pro",
+                }
+            return current_assistant
+
+        def append_delta_block(block_type: str, field: str, delta: str, created_at: str | None = None) -> None:
+            nonlocal current_block_start, current_block_type
+            assistant = ensure_assistant(created_at)
+            blocks = assistant.setdefault("content", [])
+            if blocks and isinstance(blocks[-1], dict) and blocks[-1].get("type") == block_type:
+                blocks[-1][field] = str(blocks[-1].get(field, "")) + delta
+            else:
+                # 新 block 开始：先结算上一个 block
+                finalize_current_block()
+                new_block = {"type": block_type, field: delta}
+                if block_type == "thinking" and created_at:
+                    new_block["_start_at"] = created_at
+                blocks.append(new_block)
+                current_block_start = created_at
+                current_block_type = block_type
+
+        def flush_assistant():
+            nonlocal current_assistant, current_block_start, current_block_type
+            finalize_current_block()
+            if current_assistant:
+                # 计算 thinking block 的 duration（秒）
+                content = current_assistant.get("content", [])
+                for i, block in enumerate(content):
+                    if isinstance(block, dict) and block.get("type") == "thinking" and block.get("_start_at"):
+                        # duration = 下一个 block 的 timestamp - 本 block start
+                        # 或 message timestamp - start
+                        end_at = None
+                        if i + 1 < len(content) and isinstance(content[i + 1], dict):
+                            end_at = content[i + 1].get("_start_at") or current_assistant.get("timestamp")
+                        else:
+                            end_at = current_assistant.get("timestamp")
+                        if end_at:
+                            try:
+                                from datetime import datetime
+                                start_dt = datetime.fromisoformat(block["_start_at"].replace("Z", "+00:00"))
+                                end_dt = datetime.fromisoformat(end_at.replace("Z", "+00:00"))
+                                duration = int((end_dt - start_dt).total_seconds())
+                                if duration > 0:
+                                    block["duration"] = duration
+                            except Exception:
+                                pass
+                        block.pop("_start_at", None)
+                if content:
+                    messages.append(current_assistant)
+                current_assistant = None
+                current_block_start = None
+                current_block_type = None
+
+        for event in events:
+            et = event.event_type
+            payload = event.payload or {}
+
+            if et == EventType.RUNTIME_STARTED:
+                # 新 task 开始：先 flush 上一个 assistant，再加用户消息
+                flush_assistant()
+                user_input = payload.get("user_input") or payload.get("prompt") or ""
+                if user_input:
+                    messages.append({
+                        "role": "user",
+                        "content": user_input,
+                        "timestamp": event.created_at,
+                    })
+                current_assistant = {
+                    "role": "assistant",
+                    "content": [],
+                    "timestamp": event.created_at,
+                }
+
+            elif et == EventType.MESSAGE_UPDATED:
+                delta = payload.get("delta", "")
+                if delta:
+                    append_delta_block("text", "text", delta, event.created_at)
+
+            elif et == EventType.THINKING_UPDATED:
+                delta = payload.get("delta", "")
+                if delta:
+                    append_delta_block("thinking", "thinking", delta, event.created_at)
+
+            elif et == EventType.MESSAGE_COMPLETED:
+                assistant = ensure_assistant(event.created_at)
+                usage = payload.get("usage")
+                if usage:
+                    assistant["usage"] = usage
+                flush_assistant()
+
+            elif et == EventType.TOOL_CALL_STARTED:
+                assistant = ensure_assistant(event.created_at)
+                assistant.setdefault("content", []).append({
+                    "type": "toolCall",
+                    "toolCallId": payload.get("tool_call_id"),
+                    "toolName": payload.get("tool_name"),
+                    "input": payload.get("arguments", {}),
+                })
+
+            elif et == EventType.TOOL_CALL_COMPLETED:
+                if current_assistant:
+                    tool_call_id = payload.get("tool_call_id")
+                    for block in current_assistant.get("content", []):
+                        if isinstance(block, dict) and block.get("type") == "toolCall" and block.get("toolCallId") == tool_call_id:
+                            block["result"] = payload.get("result")
+                            break
+
+            elif et == EventType.RUNTIME_COMPLETED:
+                flush_assistant()
+
+        flush_assistant()
+        # 规范化时间戳：后端用的是 utcnow().isoformat()（naive，无时区），
+        # 前端 new Date() 会当本地时间解析导致时区错误。统一加 'Z' 后缀标记为 UTC。
+        for msg in messages:
+            ts = msg.get("timestamp")
+            if isinstance(ts, str) and not ts.endswith("Z") and not ts.endswith("+00:00"):
+                msg["timestamp"] = ts + "Z"
+        return messages
+
     async def run_task(
         self,
         user_id: str,

@@ -100,6 +100,15 @@ class AgentTaskRepository(ABC):
         pass
     
     @abstractmethod
+    async def list_session_events(
+        self,
+        user_id: str,
+        session_id: str,
+    ) -> List[AgentTaskEvent]:
+        """查询 session 全部事件（含权限校验）"""
+        pass
+    
+    @abstractmethod
     async def count_user_tasks(
         self, 
         user_id: str,

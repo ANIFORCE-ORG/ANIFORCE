@@ -552,6 +552,36 @@ class SQLiteAgentTaskRepository(AgentTaskRepository):
         return await self._list_user_task_events_sync(
             user_id, task_id, after_sequence, limit
         )
+
+    @async_to_sync
+    def _list_session_events_sync(
+        self,
+        user_id: str,
+        session_id: str,
+    ) -> List[AgentTaskEvent]:
+        """查询 session 下所有 task 的事件，按 task 创建时间 + sequence 排序"""
+        conn = self._get_conn()
+        try:
+            cursor = conn.execute(
+                """
+                SELECT e.* FROM events e
+                JOIN tasks t ON e.task_id = t.task_id
+                WHERE t.session_id = ? AND t.user_id = ?
+                ORDER BY t.created_at ASC, e.sequence ASC
+                """,
+                (session_id, user_id),
+            )
+            return [self._event_from_row(row) for row in cursor.fetchall()]
+        finally:
+            conn.close()
+
+    async def list_session_events(
+        self,
+        user_id: str,
+        session_id: str,
+    ) -> List[AgentTaskEvent]:
+        """查询 session 全部事件（含权限校验）"""
+        return await self._list_session_events_sync(user_id, session_id)
     
     @async_to_sync
     def _count_user_tasks_sync(

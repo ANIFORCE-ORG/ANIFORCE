@@ -1,5 +1,9 @@
+<script lang="ts">
+export default { name: 'Home' }
+</script>
+
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
@@ -383,10 +387,16 @@ function selectModel(model: { provider: string; id: string }) {
   void agent.changeModel(model.provider, model.id)
 }
 
+function handleVisibilityChange() {
+  if (document.hidden) agent.pauseTypewriter?.()
+  else agent.resumeTypewriter?.()
+}
+
 onMounted(async () => {
   workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
   await Promise.all([agent.refreshModels(), agent.refreshSessions()])
   const existing = agent.activeSession.value
   const savedSessionId = localStorage.getItem('aniforce.activeSessionId')
@@ -397,9 +407,25 @@ onMounted(async () => {
   else await createSessionForActiveMode()
 })
 
+onActivated(() => {
+  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
+  window.addEventListener('pointermove', handleWorkspacePointerMove)
+  window.addEventListener('pointerup', stopWorkspaceResize)
+  document.addEventListener('visibilitychange', handleVisibilityChange)
+  agent.resumeTypewriter?.()
+})
+
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+})
+
+onDeactivated(() => {
+  window.removeEventListener('pointermove', handleWorkspacePointerMove)
+  window.removeEventListener('pointerup', stopWorkspaceResize)
+  document.removeEventListener('visibilitychange', handleVisibilityChange)
+  agent.pauseTypewriter?.()
 })
 </script>
 

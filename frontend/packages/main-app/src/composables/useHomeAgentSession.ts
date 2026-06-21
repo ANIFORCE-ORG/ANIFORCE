@@ -5,11 +5,14 @@ import {
   getAgentSession,
   listAgentModels,
   listAgentSessions,
-  streamAgentMessage,
+  startAgentRun,
+  streamAgentRunEvents,
+  cancelAgentTask,
   type AgentMessage,
   type AgentModel,
   type AgentSession,
   type AgentContextSnapshot,
+  type AgentContentBlock,
   type SideEffectEvent,
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
@@ -126,9 +129,10 @@ export function useHomeAgentSession() {
   const selectedModel = computed(() => store.selectedModel)
   const loading = computed(() => store.loading)
   const error = computed(() => store.error)
-  const agentRunning = computed(() => store.agentRunning)
-  const agentPhase = computed(() => store.agentPhase)
-  const streamingMessage = computed(() => store.streamingMessage)
+  const showingActiveRun = computed(() => Boolean(store.agentRunning && activeSession.value?.id === store.activeRunSessionId))
+  const agentRunning = computed(() => showingActiveRun.value)
+  const agentPhase = computed(() => showingActiveRun.value ? store.agentPhase : null)
+  const streamingMessage = computed(() => showingActiveRun.value ? store.streamingMessage : null)
   
   // 本地临时状态（不需要跨页面持久化）
   const executionPlan = ref<{ id: string; todos: AgentExecutionTodo[] } | null>(null)
@@ -137,11 +141,9 @@ export function useHomeAgentSession() {
   const commandStatus = ref<string | null>(null)
   const contextUsage = ref<ContextUsage | null>(null)
   const currentTask = ref<AgentCurrentTask | null>(null)
-  
-  let currentRunId: string | undefined
-  let currentAssistantMessageId: string | undefined
-  let typewriterTimer: number | null = null
-  let typewriterBuffer = ''
+
+  // 流式运行时状态全部从 store 读写（不再用闭包变量）
+  // currentRunId / currentAbortController / typewriter 都在 store
 
   function restoreTimelineFromCache(): void {
     if (!activeSession.value) return
@@ -210,6 +212,7 @@ export function useHomeAgentSession() {
       const normalizedRoute = route instanceof Event ? undefined : route
       const session = await createAgentSession({ title: normalizedRoute?.title || `Agent Session ${sessions.value.length + 1}` })
       store.sessions = [session, ...sessions.value.filter(item => item.id !== session.id)]
+      store.setMessages(session.id, [])
       await selectSession(session)
     } finally {
       store.loading = false
@@ -217,21 +220,25 @@ export function useHomeAgentSession() {
   }
 
   async function selectSession(session: AgentSession): Promise<void> {
+    const selectingActiveRun = store.agentRunning && store.activeRunSessionId === session.id
     store.activeSessionId = session.id
     localStorage.setItem('aniforce.activeSessionId', session.id)
     store.loading = true
     store.error = null
-    store.streamingMessage = null
-    store.agentRunning = false
-    executionPlan.value = null
-    executionTools.value = []
-    currentRunId = undefined
-    currentAssistantMessageId = undefined
+    if (!selectingActiveRun && !store.agentRunning) {
+      store.streamingMessage = null
+      store.agentRunning = false
+      executionPlan.value = null
+      executionTools.value = []
+      store.clearStreamRuntime()
+    }
     try {
-      const detail = await getAgentSession(session.id)
-      store.setMessages(session.id, detail.messages)
-      restoreTimelineFromCache()
-      restoreWorkspaceFromCache()
+      if (!selectingActiveRun) {
+        const detail = await getAgentSession(session.id)
+        store.setMessages(session.id, detail.messages)
+        restoreTimelineFromCache()
+        restoreWorkspaceFromCache()
+      }
     } catch (err: any) {
       store.error = err?.message || '加载 Agent 会话失败'
     } finally {
@@ -254,9 +261,15 @@ export function useHomeAgentSession() {
 
   async function send(message: string, _images?: unknown, _route?: AgentRouteContext): Promise<void> {
     const text = message.trim()
-    if (!text || agentRunning.value) return
+    if (!text || store.agentRunning) return
     if (!activeSession.value) await createSession()
     if (!activeSession.value) return
+
+    const perfStart = performance.now()
+    let firstSseEventLogged = false
+    let firstRuntimeStartedLogged = false
+    let firstMessageDeltaLogged = false
+    const perfMs = () => Math.round(performance.now() - perfStart)
 
     const sessionId = activeSession.value.id
     store.error = null
@@ -264,10 +277,11 @@ export function useHomeAgentSession() {
     store.agentPhase = { kind: 'waiting_model' }
     executionPlan.value = null
     executionTools.value = []
-    currentRunId = `run_${Date.now()}`
-    currentAssistantMessageId = undefined
-    stopTypewriter()
-    typewriterBuffer = ''
+    // 初始用临时 runId，runtime.started 后替换为真实 task_id
+    const tempRunId = `run_${Date.now()}`
+    store.resetStreamRuntime(sessionId, tempRunId)
+    store.getAbortController()?.abort()
+    store.setAbortController(new AbortController())
 
     store.appendMessage(sessionId, {
       id: `local_user_${Date.now()}`,
@@ -286,31 +300,85 @@ export function useHomeAgentSession() {
     }
     store.streamingMessage = assistant
 
+    let streamCompletedSuccessfully = false
+
     try {
       const contextSnapshot = collectContextSnapshot(_route)
-      for await (const event of streamAgentMessage(sessionId, text, _route?.task_type || 'conversation', contextSnapshot)) {
+      console.info('[PERF][agent_first_token][frontend] send_start', {
+        sessionId,
+        promptChars: text.length,
+        route: contextSnapshot.route,
+      })
+      const run = await startAgentRun(sessionId, text, _route?.task_type || 'conversation', contextSnapshot, store.getAbortController()?.signal)
+      store.currentRunId = run.run_id
+      store.currentRunLastSequence = 0
+      for await (const event of streamAgentRunEvents(run.run_id, store.currentRunLastSequence, store.getAbortController()?.signal)) {
+        const sequence = Number(event.data.sequence || 0)
+        if (sequence > store.currentRunLastSequence) store.currentRunLastSequence = sequence
+        if (!firstSseEventLogged) {
+          firstSseEventLogged = true
+          console.info('[PERF][agent_first_token][frontend] first_sse_event', {
+            elapsedMs: perfMs(),
+            event: event.event,
+            sessionId,
+          })
+        }
+
         if (event.event === 'runtime.started') {
-          currentRunId = String(event.data.task_id || event.data.run_id || `run_${Date.now()}`)
+          store.currentRunId = String(event.data.task_id || event.data.run_id || `run_${Date.now()}`)
           store.agentPhase = { kind: 'waiting_model' }
+          if (!firstRuntimeStartedLogged) {
+            firstRuntimeStartedLogged = true
+            console.info('[PERF][agent_first_token][frontend] runtime_started', {
+              elapsedMs: perfMs(),
+              runId: store.currentRunId,
+              sessionId,
+            })
+          }
         }
 
         if (event.event === 'message.updated') {
-          if (!currentAssistantMessageId) {
+          if (!store.currentAssistantMessageId) {
             assistant.id = `msg_${Date.now()}`
-            currentAssistantMessageId = assistant.id
+            store.currentAssistantMessageId = assistant.id
             attachCurrentRunTimelineBlocks(assistant.id)
           }
           const delta = event.data.delta
-          if (typeof delta === 'string') enqueueTypewriter(delta)
+          if (typeof delta === 'string') {
+            if (!firstMessageDeltaLogged) {
+              firstMessageDeltaLogged = true
+              console.info('[PERF][agent_first_token][frontend] first_message_delta', {
+                elapsedMs: perfMs(),
+                runId: store.currentRunId,
+                sessionId,
+                deltaChars: delta.length,
+              })
+            }
+            enqueueTypewriter(delta)
+          }
+        }
+
+        if (event.event === 'thinking.updated') {
+          if (!streamingMessage.value) continue
+          if (!store.currentAssistantMessageId) {
+            streamingMessage.value.id = `msg_${Date.now()}`
+            store.currentAssistantMessageId = streamingMessage.value.id
+            attachCurrentRunTimelineBlocks(streamingMessage.value.id)
+          }
+          const delta = event.data.delta
+          if (typeof delta === 'string') {
+            store.appendDeltaToStreaming('thinking', 'thinking', delta)
+          }
         }
 
         if (event.event === 'message.completed') {
           drainTypewriter()
-          const content = event.data.content
-          if (typeof content === 'string' && content.trim()) assistant.content = content
+          // 不再从 message.completed 覆盖 content — typewriter 已轻累积了流式文本。
+          // 只更新 usage 和时间戳。
           const usage = event.data.usage
           if (usage && typeof usage === 'object') assistant.usage = usage as any
-          currentAssistantMessageId = assistant.id
+          if (event.data.timestamp) assistant.timestamp = event.data.timestamp as number | string
+          store.currentAssistantMessageId = assistant.id
           attachCurrentRunTimelineBlocks(assistant.id)
         }
 
@@ -325,6 +393,7 @@ export function useHomeAgentSession() {
             arguments: args,
           }
           executionTools.value = [...executionTools.value, tool].slice(-8)
+          store.appendToolCallToStreaming({ id: toolId, name: toolName, arguments: args })
           upsertTimelineTool({ id: toolId, toolName, status: 'running', arguments: args })
           store.agentPhase = {
             kind: 'running_tools',
@@ -349,6 +418,7 @@ export function useHomeAgentSession() {
             executionTools.value = [...executionTools.value]
           }
           if (toolName) {
+            if (toolId) store.updateToolCallResultInStreaming(toolId, result)
             upsertTimelineTool({ id: toolId || `${toolName}_${Date.now()}`, toolName, status: 'completed', result })
             appendBusinessResultBlock(toolId, toolName, result)
           }
@@ -363,7 +433,7 @@ export function useHomeAgentSession() {
         }
 
         if (event.event === 'side_effect') {
-          handleSideEffect(event.data as unknown as SideEffectEvent)
+          handleSideEffect(event.data as unknown as SideEffectEvent, sessionId)
         }
 
         if (event.event === 'runtime.completed') {
@@ -374,20 +444,53 @@ export function useHomeAgentSession() {
           throw new Error(String(event.data.message || 'Agent 流式响应错误'))
         }
       }
-      drainTypewriter()
-      store.appendMessage(sessionId, { ...assistant })
-      store.streamingMessage = null
+      streamCompletedSuccessfully = true
     } catch (err: any) {
-      store.error = err?.message || 'Agent 流式响应失败'
-      if (streamingMessage.value && !String(streamingMessage.value.content || '').trim()) {
-        streamingMessage.value.content = '抱歉，Agent 流式响应失败，请稍后重试。'
+      const aborted = err?.name === 'AbortError'
+      if (aborted) {
+        drainTypewriter()
+        if (streamingMessage.value) {
+          store.appendMessage(sessionId, { ...streamingMessage.value })
+          store.streamingMessage = null
+        }
+      } else {
+        store.error = err?.message || 'Agent 流式响应失败'
+        if (streamingMessage.value && !hasMessageContent(streamingMessage.value)) {
+          streamingMessage.value.content = '抱歉，Agent 流式响应失败，请稍后重试。'
+        }
       }
     } finally {
-      stopTypewriter()
-      typewriterBuffer = ''
-      store.agentRunning = false
-      store.agentPhase = null
-      markRunningToolsCompleted()
+      const finishSuccess = () => {
+        drainTypewriter(false)
+        console.info('[PERF][agent_first_token][frontend] stream_completed', {
+          elapsedMs: perfMs(),
+          runId: store.currentRunId,
+          sessionId,
+          firstDeltaSeen: firstMessageDeltaLogged,
+        })
+        if (store.streamingMessage) {
+          store.appendMessage(sessionId, { ...store.streamingMessage })
+          store.streamingMessage = null
+        }
+      }
+      const cleanup = () => {
+        store.setAbortController(null)
+        store.stopTypewriter()
+        store.setTypewriterBuffer('')
+        store.agentRunning = false
+        store.agentPhase = null
+        store.clearStreamRuntime()
+        markRunningToolsCompleted()
+      }
+      if (store.isTypewriterPaused() && store.streamingMessage) {
+        store.setDeferredStreamFinalizer(() => {
+          if (streamCompletedSuccessfully) finishSuccess()
+          cleanup()
+        })
+      } else {
+        if (streamCompletedSuccessfully) finishSuccess()
+        cleanup()
+      }
     }
   }
 
@@ -403,11 +506,13 @@ export function useHomeAgentSession() {
     }
   }
 
-  function handleSideEffect(event: SideEffectEvent): void {
-    if (!activeSession.value) return
-    store.recordSideEffect(activeSession.value.id, event)
-    const panels = event.refresh_panels?.length ? event.refresh_panels.join(', ') : 'workspace'
-    commandStatus.value = event.message || `业务数据已更新，待刷新：${panels}`
+  function handleSideEffect(event: SideEffectEvent, targetSessionId = activeSession.value?.id): void {
+    if (!targetSessionId) return
+    store.recordSideEffect(targetSessionId, event)
+    if (activeSession.value?.id === targetSessionId) {
+      const panels = event.refresh_panels?.length ? event.refresh_panels.join(', ') : 'workspace'
+      commandStatus.value = event.message || `业务数据已更新，待刷新：${panels}`
+    }
   }
 
   function isAgentPanel(value: unknown): value is AgentContextSnapshot['activePanel'] {
@@ -420,8 +525,28 @@ export function useHomeAgentSession() {
     return typeof value === 'string' ? value : null
   }
 
-  function abort(): void {
-    store.error = '当前最小版本暂未接入取消；刷新页面可停止前端等待。'
+  async function abort(): Promise<void> {
+    if (!store.agentRunning) return
+    const sessionId = activeSession.value?.id
+    const taskId = store.currentRunId
+    store.getAbortController()?.abort()
+    // 只有真实 task_id（非临时 run_ 前缀）才调后端 cancel
+    if (taskId && !taskId.startsWith('run_')) {
+      await cancelAgentTask(taskId, sessionId).catch((err) => {
+        console.warn('[agent] cancel task failed', err)
+      })
+    }
+    drainTypewriter()
+    if (streamingMessage.value) {
+      if (sessionId && hasMessageContent(streamingMessage.value)) {
+        store.appendMessage(sessionId, { ...streamingMessage.value })
+      }
+      store.streamingMessage = null
+    }
+    store.agentRunning = false
+    store.agentPhase = null
+    store.error = null
+    store.clearStreamRuntime()
   }
 
   function changeModel(provider: string, modelId: string): void {
@@ -451,6 +576,19 @@ export function useHomeAgentSession() {
     return value && typeof value === 'object' && !Array.isArray(value)
       ? value as Record<string, unknown>
       : undefined
+  }
+
+  function hasMessageContent(message: AgentMessage): boolean {
+    const content = message.content
+    if (typeof content === 'string') return content.trim().length > 0
+    if (!Array.isArray(content)) return false
+    return content.some(block => {
+      if (!block || typeof block !== 'object') return false
+      if (block.type === 'text') return String(block.text || '').trim().length > 0
+      if (block.type === 'thinking') return String(block.thinking || '').trim().length > 0
+      if (block.type === 'toolCall') return true
+      return false
+    })
   }
 
   function handleCustomEvent(data: Record<string, unknown>): void {
@@ -661,13 +799,13 @@ export function useHomeAgentSession() {
   }
 
   function attachCurrentRunTimelineBlocks(parentMessageId: string | undefined): void {
-    if (!parentMessageId || !currentRunId) return
+    if (!parentMessageId || !store.currentRunId) return
     if (!activeSession.value) return
     const sessionId = activeSession.value.id
     let changed = false
     const current = store.timelineBySession.get(sessionId) || []
     const updated = current.map(block => {
-      if (block.parentMessageId || block.runId !== currentRunId) return block
+      if (block.parentMessageId || block.runId !== store.currentRunId) return block
       changed = true
       return { ...block, parentMessageId, updatedAt: Date.now() }
     })
@@ -685,9 +823,9 @@ export function useHomeAgentSession() {
     now: number
   }): AgentTimelineMeta {
     return {
-      runId: input.existing?.runId || currentRunId,
+      runId: input.existing?.runId || store.currentRunId || undefined,
       messageId: input.existing?.messageId || input.id,
-      parentMessageId: input.existing?.parentMessageId || currentAssistantMessageId,
+      parentMessageId: input.existing?.parentMessageId || store.currentAssistantMessageId,
       toolCallId: input.existing?.toolCallId || input.toolCallId,
       activityType: input.activityType,
       createdAt: input.existing?.createdAt || input.now,
@@ -753,34 +891,54 @@ export function useHomeAgentSession() {
     store.timelineBySession.set(sessionId, updated)
   }
 
+  function appendTextToStreamMessage(text: string): void {
+    const msg = streamingMessage.value
+    if (!msg || !text) return
+    if (Array.isArray(msg.content)) {
+      // 找最后一个 text block，或新建一个
+      const blocks = msg.content as AgentContentBlock[]
+      let last = blocks[blocks.length - 1]
+      if (!last || typeof last !== 'object' || !('type' in last) || last.type !== 'text') {
+        last = { type: 'text', text: '' }
+        blocks.push(last)
+      }
+      ;(last as { type: 'text'; text: string }).text += text
+      msg.content = [...blocks]
+    } else {
+      msg.content = `${typeof msg.content === 'string' ? msg.content : ''}${text}`
+    }
+  }
+
   function enqueueTypewriter(delta: string): void {
     if (!delta) return
-    typewriterBuffer += delta
-    if (typewriterTimer) return
-    typewriterTimer = window.setInterval(() => {
-      if (!streamingMessage.value) return drainTypewriter()
-      const chunkSize = typewriterBuffer.length > 80 ? 6 : typewriterBuffer.length > 24 ? 3 : 1
-      const chunk = typewriterBuffer.slice(0, chunkSize)
-      typewriterBuffer = typewriterBuffer.slice(chunkSize)
-      streamingMessage.value.content = `${typeof streamingMessage.value.content === 'string' ? streamingMessage.value.content : ''}${chunk}`
-      if (!typewriterBuffer) stopTypewriter()
-    }, 24)
+    store.appendTypewriterBuffer(delta)
+    if (store.hasTypewriterTimer()) return
+    store.setTypewriterTick(() => {
+      if (!streamingMessage.value) { drainTypewriter(); return }
+      const buffer = store.getTypewriterBuffer()
+      const chunkSize = buffer.length > 80 ? 6 : buffer.length > 24 ? 3 : 1
+      const chunk = buffer.slice(0, chunkSize)
+      store.setTypewriterBuffer(buffer.slice(chunkSize))
+      appendTextToStreamMessage(chunk)
+      if (!store.getTypewriterBuffer()) {
+        store.stopTypewriter()
+        store.runDeferredStreamFinalizer()
+      }
+    })
   }
 
-  function drainTypewriter(): void {
-    if (typewriterBuffer && streamingMessage.value) {
-      streamingMessage.value.content = `${typeof streamingMessage.value.content === 'string' ? streamingMessage.value.content : ''}${typewriterBuffer}`
+  function drainTypewriter(runDeferredFinalizer = true): void {
+    const buffer = store.getTypewriterBuffer()
+    if (buffer && streamingMessage.value) {
+      appendTextToStreamMessage(buffer)
     }
-    typewriterBuffer = ''
-    stopTypewriter()
+    store.setTypewriterBuffer('')
+    store.stopTypewriter()
+    if (runDeferredFinalizer) store.runDeferredStreamFinalizer()
   }
 
-  function stopTypewriter(): void {
-    if (typewriterTimer) window.clearInterval(typewriterTimer)
-    typewriterTimer = null
-  }
-
-  onUnmounted(() => stopTypewriter())
+  // 注意：不再在 onUnmounted 里 abort。
+  // 流式状态现在在 store，切页面不丢；用户主动点“停止”才取消。
 
   return {
     sessions,
@@ -812,6 +970,8 @@ export function useHomeAgentSession() {
     deleteSession,
     send,
     abort,
+    pauseTypewriter: store.pauseTypewriter,
+    resumeTypewriter: store.resumeTypewriter,
     changeModel,
     handleTimelineAction,
   }

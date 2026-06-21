@@ -6,6 +6,7 @@ Agent Runtime
 """
 
 import asyncio
+from time import perf_counter
 from typing import AsyncIterator, Optional
 from uuid import uuid4
 from contextlib import asynccontextmanager
@@ -19,6 +20,10 @@ from app.core.errors import AppError, AgentErrorCode, ErrorCategory
 from app.core.tracing import get_tracer
 from app.agent.prompts import SystemPromptManager
 from app.agent.plan_parser import PlanParser
+
+
+def _elapsed_ms(start: float) -> int:
+    return int((perf_counter() - start) * 1000)
 
 
 class AgentRuntime:
@@ -71,6 +76,13 @@ class AgentRuntime:
 
         mcp_server = None
         mcp_servers = []
+        mcp_start = perf_counter()
+        perf_log = logger.bind(
+            task_id=task.task_id,
+            session_id=task.session_id,
+            user_id=task.user_id,
+            run_id=str(run_meta.get("run_id") or ""),
+        )
 
         try:
             mcp_server = MCPServerStreamableHttp(
@@ -86,6 +98,10 @@ class AgentRuntime:
             await mcp_server.__aenter__()
             mcp_servers.append(mcp_server)
             logger.debug(f"[RUNTIME] MCP server connected: {mcp_url} (jwt={'<present>' if jwt_token else '<missing>'})")
+            perf_log.info(
+                "[PERF][agent_first_token] runtime.mcp_connected mcp_connect_ms={}",
+                _elapsed_ms(mcp_start),
+            )
 
             yield mcp_servers
 
@@ -112,7 +128,14 @@ class AgentRuntime:
         Yields:
             AgentTaskEvent（实时事件流）
         """
-        task_logger = logger.bind(task_id=task.task_id, user_id=task.user_id)
+        task_start = perf_counter()
+        run_meta = (task.context or {}).get("run_meta", {}) or {}
+        task_logger = logger.bind(
+            task_id=task.task_id,
+            user_id=task.user_id,
+            session_id=task.session_id,
+            run_id=str(run_meta.get("run_id") or ""),
+        )
         
         # 开始 Trace
         trace_ctx = None
@@ -125,10 +148,14 @@ class AgentRuntime:
             self.current_plan = None
             
             # 1. 更新状态为 running
+            update_status_start = perf_counter()
             await self.repo.update_status(task.task_id, AgentTaskStatus.RUNNING)
+            update_status_ms = _elapsed_ms(update_status_start)
             
             # 2. 推送 runtime.started 事件
+            sequence_start = perf_counter()
             sequence = await self.repo.count_task_events(task.task_id)
+            sequence_ms = _elapsed_ms(sequence_start)
             started_event = AgentTaskEvent(
                 event_id=f"event_{task.task_id}_{sequence}",
                 task_id=task.task_id,
@@ -136,10 +163,20 @@ class AgentRuntime:
                 payload={"task_type": task.task_type, "user_input": user_input},
                 sequence=sequence,
             )
+            append_started_start = perf_counter()
             await self.repo.append_event(started_event)
+            append_started_ms = _elapsed_ms(append_started_start)
+            task_logger.info(
+                "[PERF][agent_first_token] runtime.started_ready total_ms={} update_status_ms={} count_events_ms={} append_started_ms={}",
+                _elapsed_ms(task_start),
+                update_status_ms,
+                sequence_ms,
+                append_started_ms,
+            )
             yield started_event
             
             # 3. 创建或复用 Session
+            session_start = perf_counter()
             if task.session_id:
                 session = self.adapter.create_session(task.session_id, self.session_db_path)
                 task_logger.info(f"[RUNTIME] Reusing session: {task.session_id}")
@@ -148,30 +185,78 @@ class AgentRuntime:
                 session = self.adapter.create_session(session_id, self.session_db_path)
                 task.session_id = session_id
                 task_logger.info(f"[RUNTIME] Created new session: {session_id}")
+            task_logger.info(
+                "[PERF][agent_first_token] runtime.session_ready total_ms={} session_create_ms={}",
+                _elapsed_ms(task_start),
+                _elapsed_ms(session_start),
+            )
 
             # 4. 使用 MCP 连接上下文管理器
             async with self._mcp_connection(task) as mcp_servers:
                 # 5. 创建 Agent（带 MCP 服务 + session 级 sandbox）
+                agent_create_start = perf_counter()
+                instructions = self._get_system_prompt(task)
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",
-                    instructions=self._get_system_prompt(task),
+                    instructions=instructions,
                     mcp_servers=mcp_servers,
                     session_id=task.session_id,
+                )
+                task_logger.info(
+                    "[PERF][agent_first_token] runtime.agent_ready total_ms={} agent_create_ms={} prompt_chars={}",
+                    _elapsed_ms(task_start),
+                    _elapsed_ms(agent_create_start),
+                    len(instructions),
                 )
                 
                 # 6. 执行 Agent
                 task_logger.info(f"[RUNTIME] Executing Agent...")
+                run_streamed_start = perf_counter()
                 result = await self.adapter.run_streamed(
                     agent=agent,
                     input_text=user_input,
                     session=session,
                 )
+                task_logger.info(
+                    "[PERF][agent_first_token] runtime.run_streamed_returned total_ms={} run_streamed_wait_ms={}",
+                    _elapsed_ms(task_start),
+                    _elapsed_ms(run_streamed_start),
+                )
                 
                 # 7. 流式推送事件（增加 Plan 检测）
                 message_buffer = []  # 缓存消息内容用于 Plan 检测
+                first_event_seen = False
+                first_delta_seen = False
+                first_delta_persisted_logged = False
+                stream_events_start = perf_counter()
                 
                 async for event in self.adapter.stream_events(result, task.task_id, start_sequence=sequence):
+                    if not first_event_seen:
+                        first_event_seen = True
+                        task_logger.info(
+                            "[PERF][agent_first_token] runtime.first_adapter_event total_ms={} stream_events_wait_ms={} event_type={}",
+                            _elapsed_ms(task_start),
+                            _elapsed_ms(stream_events_start),
+                            event.event_type,
+                        )
+                    if not first_delta_seen and event.event_type == EventType.MESSAGE_UPDATED:
+                        first_delta_seen = True
+                        task_logger.info(
+                            "[PERF][agent_first_token] runtime.first_message_delta total_ms={} stream_events_wait_ms={} sequence={}",
+                            _elapsed_ms(task_start),
+                            _elapsed_ms(stream_events_start),
+                            event.sequence,
+                        )
+                    append_event_start = perf_counter()
                     await self.repo.append_event(event)
+                    append_event_ms = _elapsed_ms(append_event_start)
+                    if not first_delta_persisted_logged and first_delta_seen and event.event_type == EventType.MESSAGE_UPDATED:
+                        first_delta_persisted_logged = True
+                        task_logger.info(
+                            "[PERF][agent_first_token] runtime.first_delta_persisted total_ms={} append_event_ms={}",
+                            _elapsed_ms(task_start),
+                            append_event_ms,
+                        )
                     yield event
                     sequence = event.sequence
                     

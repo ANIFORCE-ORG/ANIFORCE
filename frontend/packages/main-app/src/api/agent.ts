@@ -19,7 +19,8 @@ export interface AgentUsage {
 
 export interface TextContentBlock { type: 'text'; text: string }
 export interface ImageContentBlock { type: 'image'; data?: string; mimeType?: string; source?: Record<string, unknown> }
-export type AgentContentBlock = TextContentBlock | ImageContentBlock | Record<string, unknown>
+export interface ThinkingContentBlock { type: 'thinking'; thinking: string }
+export type AgentContentBlock = TextContentBlock | ImageContentBlock | ThinkingContentBlock | Record<string, unknown>
 
 export interface AgentMessage {
   id?: string
@@ -89,6 +90,27 @@ function normalizeAgentSession(raw: any): AgentSession {
   }
 }
 
+function clearInvalidAuth(): void {
+  localStorage.removeItem('animagus_token')
+  localStorage.removeItem('animagus_user')
+}
+
+function parseErrorMessage(text: string, fallback: string): string {
+  if (!text) return fallback
+  try {
+    const payload = JSON.parse(text)
+    return String(payload?.detail || payload?.error?.message || text)
+  } catch {
+    return text
+  }
+}
+
+async function throwAgentError(response: Response, fallback: string): Promise<never> {
+  const text = await response.text().catch(() => '')
+  if (response.status === 401) clearInvalidAuth()
+  throw new Error(parseErrorMessage(text, fallback))
+}
+
 async function agentJson<T>(path: string, options: RequestInit = {}): Promise<T> {
   const token = localStorage.getItem('animagus_token')
   const response = await fetch(`/api/v1/agent${path}`, {
@@ -101,8 +123,7 @@ async function agentJson<T>(path: string, options: RequestInit = {}): Promise<T>
   })
 
   if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new Error(text || `Agent request failed: ${response.status}`)
+    await throwAgentError(response, `Agent request failed: ${response.status}`)
   }
 
   return response.json()
@@ -122,9 +143,10 @@ export async function listAgentSessions(): Promise<AgentSession[]> {
 }
 
 export async function getAgentSession(sessionId: string): Promise<{ session: AgentSession; messages: AgentMessage[] }> {
-  const sessions = await listAgentSessions()
-  const session = sessions.find(item => item.id === sessionId) || normalizeAgentSession({ session_id: sessionId, title: sessionId })
-  return { session, messages: [] }
+  const detail = await agentJson<any>(`/sessions/${encodeURIComponent(sessionId)}`)
+  const session = normalizeAgentSession(detail)
+  const messages = Array.isArray(detail.messages) ? detail.messages as AgentMessage[] : []
+  return { session, messages }
 }
 
 export async function listAgentModels(): Promise<{ models: AgentModel[] }> {
@@ -141,25 +163,53 @@ export async function listAgentModels(): Promise<{ models: AgentModel[] }> {
   }
 }
 
-export async function* streamAgentMessage(sessionId: string, message: string, taskType = 'conversation', contextSnapshot?: AgentContextSnapshot): AsyncGenerator<AgentStreamEvent, void, unknown> {
+export async function cancelAgentTask(taskId: string, sessionId?: string): Promise<void> {
+  await agentJson(`/tasks/${encodeURIComponent(taskId)}/cancel`, {
+    method: 'POST',
+    body: JSON.stringify({ session_id: sessionId }),
+  })
+}
+
+export interface AgentRunStart {
+  run_id: string
+  session_id: string
+  status: string
+}
+
+export async function startAgentRun(sessionId: string, message: string, taskType = 'conversation', contextSnapshot?: AgentContextSnapshot, signal?: AbortSignal): Promise<AgentRunStart> {
   const token = localStorage.getItem('animagus_token')
   const response = await fetch('/api/v1/agent/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: JSON.stringify({ prompt: message, session_id: sessionId, task_type: taskType, context_snapshot: contextSnapshot }),
+    signal,
+  })
+  if (!response.ok) {
+    await throwAgentError(response, `Agent run failed: ${response.status}`)
+  }
+  return response.json()
+}
+
+export async function* streamAgentRunEvents(runId: string, afterSequence = 0, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent, void, unknown> {
+  const token = localStorage.getItem('animagus_token')
+  const response = await fetch(`/api/v1/agent/runs/${encodeURIComponent(runId)}/events?after_sequence=${afterSequence}`, {
+    method: 'GET',
+    headers: {
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    signal,
   })
 
   if (!response.ok) {
-    const text = await response.text().catch(() => '')
-    throw new Error(text || `Agent stream failed: ${response.status}`)
+    await throwAgentError(response, `Agent event stream failed: ${response.status}`)
   }
 
   const reader = response.body?.getReader()
-  if (!reader) throw new Error('Agent stream response is not readable')
+  if (!reader) throw new Error('Agent event stream response is not readable')
 
   const decoder = new TextDecoder()
   let buffer = ''
@@ -183,18 +233,33 @@ export async function* streamAgentMessage(sessionId: string, message: string, ta
   }
 }
 
+export async function* streamAgentMessage(sessionId: string, message: string, taskType = 'conversation', contextSnapshot?: AgentContextSnapshot, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent, void, unknown> {
+  const run = await startAgentRun(sessionId, message, taskType, contextSnapshot, signal)
+  yield { event: 'runtime.started', data: { run_id: run.run_id, task_id: run.run_id, session_id: run.session_id } }
+  let lastSequence = 0
+  for await (const event of streamAgentRunEvents(run.run_id, lastSequence, signal)) {
+    const sequence = Number((event.data as any)?.sequence || 0)
+    if (sequence > lastSequence) lastSequence = sequence
+    yield event
+  }
+}
+
 function parseSseEvent(raw: string): AgentStreamEvent | null {
   const lines = raw.split('\n')
   let event = 'message'
+  let id: number | null = null
   const dataLines: string[] = []
   for (const line of lines) {
+    if (line.startsWith('id:')) id = Number(line.slice(3).trim()) || null
     if (line.startsWith('event:')) event = line.slice(6).trim()
     if (line.startsWith('data:')) dataLines.push(line.slice(5).trimStart())
   }
   if (!dataLines.length) return null
   try {
-    return { event, data: JSON.parse(dataLines.join('\n')) }
+    const data = JSON.parse(dataLines.join('\n'))
+    if (id !== null && data && typeof data === 'object') data.sequence = id
+    return { event, data }
   } catch {
-    return { event, data: { text: dataLines.join('\n') } }
+    return { event, data: { text: dataLines.join('\n'), ...(id !== null ? { sequence: id } : {}) } }
   }
 }

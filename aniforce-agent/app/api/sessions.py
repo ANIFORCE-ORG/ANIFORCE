@@ -48,6 +48,33 @@ async def create_session(
     }
 
 
+@router.get("/{session_id}")
+async def get_session_detail(
+    session_id: str,
+    user: dict = Depends(get_current_user),
+    service: AgentTaskService = Depends(get_service),
+):
+    """获取 session 详情和消息历史"""
+    sessions = await service.list_sessions(user_id=user["id"])
+    session = next((s for s in sessions if s.session_id == session_id), None)
+    if not session:
+        return {
+            "session_id": session_id,
+            "title": session_id,
+            "messages": [],
+        }
+    messages = await service.get_session_history(user_id=user["id"], session_id=session_id)
+    return {
+        "session_id": session.session_id,
+        "title": session.title,
+        "status": session.status,
+        "created_at": session.created_at,
+        "updated_at": session.updated_at,
+        "archived_at": session.archived_at,
+        "messages": messages,
+    }
+
+
 @router.post("/{session_id}/archive")
 async def archive_session(
     session_id: str,
@@ -57,3 +84,4 @@ async def archive_session(
     """归档 session"""
     await service.archive_session(user_id=user["id"], session_id=session_id)
     return {"status": "archived", "session_id": session_id}
+

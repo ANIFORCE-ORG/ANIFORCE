@@ -10,6 +10,7 @@ OpenAI Agents SDK 适配器
 import json
 import os
 import re
+from time import perf_counter
 from typing import AsyncIterator, Optional
 from pathlib import Path
 from loguru import logger
@@ -35,6 +36,10 @@ from agents.models.openai_responses import OpenAIResponsesModel  # 添加 Respon
 from app.models.agent_platform_models import AgentTaskEvent, EventType
 from app.core.errors import AppError, AgentErrorCode, ErrorCategory
 from app.core.tracing import get_tracer
+
+
+def _elapsed_ms(start: float) -> int:
+    return int((perf_counter() - start) * 1000)
 
 
 class OpenAISDKAdapter:
@@ -281,9 +286,50 @@ class OpenAISDKAdapter:
         """
         sequence = start_sequence
         assistant_message_content = ""
+        stream_start = perf_counter()
+        first_raw_logged = False
+        first_transformed_logged = False
+        first_text_delta_logged = False
+        raw_event_count = 0
+        transformed_event_count = 0
+        pre_delta_raw_counts: dict[str, int] = {}
         
         try:
             async for event in result.stream_events():
+                raw_event_count += 1
+                raw_summary = self._describe_stream_event(event)
+                if not first_text_delta_logged:
+                    raw_key = raw_summary.get("key", raw_summary.get("raw_type", "unknown"))
+                    pre_delta_raw_counts[raw_key] = pre_delta_raw_counts.get(raw_key, 0) + 1
+                    # 特别记录 reasoning 文本内容
+                    if raw_summary.get("data_type") == "response.reasoning_text.delta":
+                        data = getattr(event, "data", None)
+                        delta_text = getattr(data, "delta", "") if data else ""
+                        logger.info(
+                            "[PERF][agent_first_token] sdk.reasoning_delta raw_index={} delta_text={!r}",
+                            raw_event_count,
+                            delta_text,
+                        )
+                    logger.info(
+                        "[PERF][agent_first_token] sdk.raw_before_delta elapsed_ms={} raw_index={} raw_type={} data_type={} item_name={} item_type={} delta_chars={} response_status={} output_index={} item_id={}",
+                        _elapsed_ms(stream_start),
+                        raw_event_count,
+                        raw_summary.get("raw_type"),
+                        raw_summary.get("data_type"),
+                        raw_summary.get("item_name"),
+                        raw_summary.get("item_type"),
+                        raw_summary.get("delta_chars"),
+                        raw_summary.get("response_status"),
+                        raw_summary.get("output_index"),
+                        raw_summary.get("item_id"),
+                    )
+                if not first_raw_logged:
+                    first_raw_logged = True
+                    logger.info(
+                        "[PERF][agent_first_token] sdk.first_raw_event elapsed_ms={} raw_type={}",
+                        _elapsed_ms(stream_start),
+                        getattr(event, "type", "unknown"),
+                    )
                 # Trace SDK 事件
                 if self.tracer:
                     self.tracer.log_sdk_event(
@@ -299,6 +345,24 @@ class OpenAISDKAdapter:
                 )
                 
                 for agent_event in agent_events:
+                    transformed_event_count += 1
+                    if not first_transformed_logged:
+                        first_transformed_logged = True
+                        logger.info(
+                            "[PERF][agent_first_token] sdk.first_transformed_event elapsed_ms={} raw_events={} event_type={}",
+                            _elapsed_ms(stream_start),
+                            raw_event_count,
+                            agent_event.event_type,
+                        )
+                    if not first_text_delta_logged and agent_event.event_type == EventType.MESSAGE_UPDATED:
+                        first_text_delta_logged = True
+                        logger.info(
+                            "[PERF][agent_first_token] sdk.first_text_delta elapsed_ms={} raw_events={} transformed_events={} pre_delta_raw_counts={}",
+                            _elapsed_ms(stream_start),
+                            raw_event_count,
+                            transformed_event_count,
+                            pre_delta_raw_counts,
+                        )
                     sequence += 1
                     agent_event.sequence = sequence
                     
@@ -320,6 +384,13 @@ class OpenAISDKAdapter:
             # 最终输出
             final_output = getattr(result, "final_output", None) or assistant_message_content
             usage = self._extract_usage(result)
+            logger.info(
+                "[PERF][agent_first_token] sdk.stream_done elapsed_ms={} raw_events={} transformed_events={} usage={}",
+                _elapsed_ms(stream_start),
+                raw_event_count,
+                transformed_event_count,
+                usage,
+            )
             
             # Trace LLM 响应
             if self.tracer:
@@ -366,6 +437,39 @@ class OpenAISDKAdapter:
                 sequence=sequence,
             )
     
+    def _describe_stream_event(self, sdk_event) -> dict:
+        """Return compact metadata for one SDK stream event without logging payload content."""
+        raw_type = getattr(sdk_event, "type", "unknown")
+        summary = {"raw_type": raw_type, "key": raw_type}
+
+        data = getattr(sdk_event, "data", None)
+        if data is not None:
+            data_type = getattr(data, "type", None)
+            summary["data_type"] = data_type
+            if data_type:
+                summary["key"] = f"{raw_type}:{data_type}"
+            delta = getattr(data, "delta", None)
+            if isinstance(delta, str):
+                summary["delta_chars"] = len(delta)
+            summary["response_status"] = getattr(data, "status", None)
+            summary["output_index"] = getattr(data, "output_index", None)
+            summary["item_id"] = getattr(data, "item_id", None) or getattr(data, "id", None)
+
+        item = getattr(sdk_event, "item", None)
+        if item is not None:
+            summary["item_name"] = getattr(sdk_event, "name", None)
+            summary["item_type"] = getattr(item, "type", None)
+            summary["item_id"] = getattr(item, "id", None) or summary.get("item_id")
+            if summary.get("item_name"):
+                summary["key"] = f"{raw_type}:{summary['item_name']}"
+
+        new_agent = getattr(sdk_event, "new_agent", None)
+        if new_agent is not None:
+            summary["item_name"] = getattr(new_agent, "name", None)
+            summary["key"] = f"{raw_type}:agent_updated"
+
+        return summary
+
     def _extract_usage(self, result: RunResult) -> dict:
         """提取并转换 SDK token usage 为前端兼容格式"""
         context_wrapper = getattr(result, "context_wrapper", None)
@@ -421,6 +525,18 @@ class OpenAISDKAdapter:
                             event_id=f"event_{task_id}_{sequence}",
                             task_id=task_id,
                             event_type=EventType.MESSAGE_UPDATED,
+                            payload={"delta": delta},
+                            sequence=sequence,
+                        ))
+                
+                # Reasoning/Thinking Delta Event
+                elif data_type == "response.reasoning_text.delta":
+                    delta = getattr(data, "delta", "")
+                    if delta:
+                        events.append(AgentTaskEvent(
+                            event_id=f"event_{task_id}_{sequence}",
+                            task_id=task_id,
+                            event_type=EventType.THINKING_UPDATED,
                             payload={"delta": delta},
                             sequence=sequence,
                         ))
