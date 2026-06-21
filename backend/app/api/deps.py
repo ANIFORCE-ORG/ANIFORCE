@@ -9,18 +9,18 @@ security = HTTPBearer(auto_error=False)
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(security),
 ) -> dict:
-    """获取当前用户 — Demo 模式或开发环境下返回固定用户"""
+    """获取当前用户，验证JWT token"""
     settings = get_settings()
 
-    # Demo 模式或没有提供认证信息时，返回测试用户（用于开发）
-    if settings.DEMO_MODE or credentials is None:
-        return {
-            "id": "user_test_001",
-            "email": "test@animagus.com",
-            "name": "测试用户",
-        }
+    # 验证是否提供了认证信息
+    if credentials is None:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="未提供认证信息",
+        )
 
     try:
+        # 解码并验证JWT token
         payload = jwt.decode(
             credentials.credentials,
             settings.JWT_SECRET,

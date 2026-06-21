@@ -1605,3 +1605,87 @@ async def sync_google_ads_accounts(
         await db.rollback()
         logger.error(f"Failed to sync Google Ads accounts: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e))
+
+
+# ==================== 广告账户查询 API ====================
+
+class AdAccountOption(BaseModel):
+    """广告账户选项"""
+    account_id: str
+    account_name: str
+    channel: str
+    
+    class Config:
+        from_attributes = True
+
+
+@router.get("/ad-accounts", response_model=List[AdAccountOption])
+async def get_ad_accounts(
+    channel: str = Query(..., description="投放渠道: Meta, Google, TikTok"),
+    db: AsyncSession = Depends(get_db),
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    获取指定渠道的广告账户列表
+    从 sub_account_bindings 表查询当前用户可用的广告账户
+    
+    安全性：通过JWT token验证用户身份，只返回当前用户的广告账户
+    
+    Args:
+        channel: 投放渠道 (Meta, Google, TikTok)
+        db: 数据库会话
+        current_user: 当前用户（从JWT token中提取）
+        
+    Returns:
+        List[AdAccountOption]: 广告账户列表
+    """
+    try:
+        user_id = current_user["id"]
+        logger.info(f"Fetching ad accounts for user: {user_id}, channel: {channel}")
+        
+        # 查询该用户在指定平台的所有连接
+        stmt = select(PlatformConnection).where(
+            PlatformConnection.user_id == user_id,
+            PlatformConnection.platform == channel,
+            PlatformConnection.status == "active"
+        )
+        result = await db.execute(stmt)
+        connections = result.scalars().all()
+        
+        if not connections:
+            logger.warning(f"No active {channel} connections found for user: {user_id}. User may need to configure platform connection first.")
+            return []
+        
+        logger.info(f"Found {len(connections)} active {channel} connection(s) for user: {user_id}")
+        
+        # 获取所有连接的 ID
+        connection_ids = [conn.id for conn in connections]
+        
+        # 从 sub_account_bindings 表查询所有子账户
+        stmt = select(SubAccountBinding).where(
+            SubAccountBinding.parent_connection_id.in_(connection_ids),
+            SubAccountBinding.status == "active"
+        ).order_by(SubAccountBinding.sub_account_name)
+        
+        result = await db.execute(stmt)
+        bindings = result.scalars().all()
+        
+        if not bindings:
+            logger.warning(f"No sub-accounts found for user: {user_id}, channel: {channel}. User may need to sync ad accounts first.")
+        
+        # 转换为响应格式
+        accounts = [
+            AdAccountOption(
+                account_id=binding.sub_account_id,
+                account_name=binding.sub_account_name,
+                channel=channel
+            )
+            for binding in bindings
+        ]
+        
+        logger.info(f"Successfully fetched {len(accounts)} {channel} ad accounts for user: {user_id}")
+        return accounts
+        
+    except Exception as e:
+        logger.error(f"Failed to get ad accounts for user: {current_user.get('id', 'unknown')}, channel: {channel}, error: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"获取广告账户失败: {str(e)}")
