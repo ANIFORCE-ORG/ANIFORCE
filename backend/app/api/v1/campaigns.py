@@ -23,6 +23,18 @@ class CreateCampaignRequest(BaseModel):
     budget: float
     status: str | None = "draft"
     material_ids: list[str] | None = None
+    # Meta Campaign 特定字段
+    account_id: str | None = None
+    objective: str | None = None
+    buying_type: str | None = None
+    special_ad_categories: str | None = None
+    ab_test: str | None = None
+    campaign_budget_optimization: str | None = None
+    budget_type: str | None = None
+    bid_strategy: str | None = None
+    spend_limit: float | None = None
+    start_date: str | None = None
+    end_date: str | None = None
 
 
 @router.get("")
@@ -112,6 +124,17 @@ async def create_campaign(
         budget=request.budget,
         status=request.status or "draft",
         material_ids=request.material_ids or [],
+        account_id=request.account_id,
+        objective=request.objective,
+        buying_type=request.buying_type,
+        special_ad_categories=request.special_ad_categories,
+        ab_test=request.ab_test,
+        campaign_budget_optimization=request.campaign_budget_optimization,
+        budget_type=request.budget_type,
+        bid_strategy=request.bid_strategy,
+        spend_limit=request.spend_limit,
+        start_date=request.start_date,
+        end_date=request.end_date,
     )
     
     # 提交事务以确保数据持久化

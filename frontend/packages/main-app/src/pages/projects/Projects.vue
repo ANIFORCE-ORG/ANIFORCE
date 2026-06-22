@@ -5,10 +5,12 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
+import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
 import ProjectCardCompact from '@/components/projects/ProjectCardCompact.vue'
 import ProjectCardDetailed from '@/components/projects/ProjectCardDetailed.vue'
 import Toast from '@/components/toasts/Toast.vue'
-import { getProjects, createProject, type Project } from '@/api/projects'
+import { getProjects, createProject, updateProject, type Project } from '@/api/projects'
+import { createCampaign } from '@/api/campaigns'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
@@ -32,12 +34,16 @@ const handleToastClose = () => {
 const activeSession = ref('sess_g001')
 const chatInput = ref('')
 const showCreateModal = ref(false)
+const showCampaignModal = ref(false)
+const editingProject = ref<Project | null>(null)
+const currentProjectId = ref<string | null>(null)
 const loading = ref(false)
 const error = ref<string | null>(null)
 const projects = ref<Project[]>([])
 const searchQuery = ref('')
 const filterStatus = ref('all')
 const createModalRef = ref<any>(null)
+const campaignModalRef = ref<any>(null)
 const cardViewType = ref<'compact' | 'detailed'>('compact')
 
 const sessions = ref([
@@ -73,7 +79,7 @@ const statusFilters = [
 ]
 
 // 加载项目数据
-onMounted(async () => {
+const loadProjects = async () => {
   loading.value = true
   error.value = null
   
@@ -88,6 +94,11 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 组件挂载时加载项目
+onMounted(async () => {
+  await loadProjects()
 })
 
 // 筛选后的项目列表
@@ -136,42 +147,84 @@ const handleSearch = () => {
 }
 
 const handleCreateProject = () => {
+  editingProject.value = null
   showCreateModal.value = true
+}
+
+const handleEditProject = (project: Project) => {
+  editingProject.value = project
+  showCreateModal.value = true
+}
+
+const handleCreateTask = (project: Project) => {
+  // 设置当前项目ID并打开Campaign模态框
+  currentProjectId.value = project.id
+  showCampaignModal.value = true
 }
 
 const handleCloseModal = () => {
   showCreateModal.value = false
+  editingProject.value = null
 }
 
 const handleSubmitProject = async (data: any) => {
   try {
-    console.log('=== 创建项目请求 ===')
-    console.log('原始表单数据:', JSON.stringify(data, null, 2))
-    
-    // 转换数据格式以匹配后端要求
-    const requestData = {
-      ...data,
-      total_budget: parseFloat(data.budget) || 0, // 添加 total_budget 字段
-      start_date: data.start, // Project 的 start_date 复用表单的 start
-      end_date: data.end, // Project 的 end_date 复用表单的 end
-      target_market: data.countries, // target_market 使用 countries 填充
-      manager: auth.user?.name || '未知', // manager 使用创建者名字
+    if (editingProject.value) {
+      // 编辑模式：更新现有项目
+      console.log('=== 更新项目请求 ===')
+      console.log('项目ID:', editingProject.value.id)
+      console.log('表单数据:', JSON.stringify(data, null, 2))
+      
+      const updatedProject = await updateProject(editingProject.value.id, data)
+      console.log('项目更新成功:', updatedProject)
+      
+      // 更新项目列表中的项目
+      const index = projects.value.findIndex(p => p.id === editingProject.value!.id)
+      if (index !== -1) {
+        projects.value[index] = updatedProject
+      }
+      
+      // 显示成功提示
+      showToastMessage('项目更新成功！', 'success')
+      
+      // 关闭弹窗并重置表单
+      showCreateModal.value = false
+      editingProject.value = null
+      createModalRef.value?.resetForm()
+    } else {
+      // 创建模式：创建新项目
+      console.log('=== 创建项目请求 ===')
+      console.log('表单数据:', JSON.stringify(data, null, 2))
+      
+      // 添加额外的后端必需字段
+      const requestData = {
+        ...data,  // 已包含: name, product, target_market, status, start_date, end_date, total_budget, description
+        manager: auth.user?.name || '未知',
+        game_type: data.product,  // 使用产品作为游戏类型
+        tags: []
+      }
+      
+      console.log('请求数据:', JSON.stringify(requestData, null, 2))
+      
+      const newProject = await createProject(requestData)
+      console.log('项目创建成功:', newProject)
+      
+      // 添加到项目列表
+      projects.value.unshift(newProject)
+      
+      // 关闭项目模态框
+      showCreateModal.value = false
+      
+      // 保存项目ID并打开Campaign模态框
+      currentProjectId.value = newProject.id
+      showCampaignModal.value = true
+      
+      // 显示成功提示
+      showToastMessage('项目创建成功！请继续创建 Campaign', 'success')
+      
+      // 重置表单
+      createModalRef.value?.resetForm()
     }
-    
-    console.log('转换后的请求数据:', JSON.stringify(requestData, null, 2))
-    
-    const newProject = await createProject(requestData)
-    console.log('项目创建成功:', newProject)
-    
-    // 添加到项目列表
-    projects.value.unshift(newProject)
-    
-    // 显示成功提示
-    showToastMessage('项目创建成功！', 'success')
-    
-    // 关闭弹窗并重置表单
-    showCreateModal.value = false
-    createModalRef.value?.resetForm()
   } catch (err: any) {
     console.error('=== 创建项目失败 ===')
     console.error('错误对象:', err)
@@ -206,6 +259,74 @@ const handleSubmitProject = async (data: any) => {
     showToastMessage(errorMessage, 'error')
   } finally {
     createModalRef.value?.setSubmitting(false)
+  }
+}
+
+const handleCloseCampaignModal = () => {
+  showCampaignModal.value = false
+  currentProjectId.value = null
+}
+
+const handleSubmitCampaign = async (data: any) => {
+  try {
+    console.log('=== 创建 Campaign 请求 ===')
+    console.log('Campaign 数据:', JSON.stringify(data, null, 2))
+    console.log('关联项目 ID:', currentProjectId.value)
+    
+    if (!currentProjectId.value) {
+      showToastMessage('项目 ID 缺失，无法创建 Campaign', 'error')
+      return
+    }
+    
+    // 添加 project_id（字段映射已在 CreateCampaignModal 中完成）
+    const requestData = {
+      project_id: currentProjectId.value,
+      ...data
+    }
+    
+    console.log('请求数据:', JSON.stringify(requestData, null, 2))
+    
+    const newCampaign = await createCampaign(requestData)
+    console.log('Campaign 创建成功:', newCampaign)
+    
+    // 显示成功提示
+    showToastMessage('Campaign 创建成功！', 'success')
+    
+    // 关闭 Campaign 模态框
+    showCampaignModal.value = false
+    currentProjectId.value = null
+    
+    // 刷新项目列表
+    await loadProjects()
+  } catch (err: any) {
+    console.error('=== 创建 Campaign 失败 ===', err)
+    
+    // 解析错误信息
+    let errorMessage = '创建 Campaign 失败，请重试'
+    if (err.response?.data?.detail) {
+      if (Array.isArray(err.response.data.detail)) {
+        const errors = err.response.data.detail.map((e: any) => 
+          `${e.loc.join('.')}: ${e.msg}`
+        ).join('; ')
+        errorMessage = `数据验证失败: ${errors}`
+      } else if (typeof err.response.data.detail === 'string') {
+        errorMessage = err.response.data.detail
+      }
+    } else if (err.message) {
+      errorMessage = err.message
+    }
+    
+    showToastMessage(errorMessage, 'error')
+    
+    // 重置提交状态
+    if (campaignModalRef.value) {
+      campaignModalRef.value.setSubmitting(false)
+    }
+  } finally {
+    // 确保提交状态被重置
+    if (campaignModalRef.value) {
+      campaignModalRef.value.setSubmitting(false)
+    }
   }
 }
 </script>
@@ -295,9 +416,9 @@ const handleSubmitProject = async (data: any) => {
             v-for="project in filteredProjects"
             :key="project.id"
             :project="project"
-            @edit="router.push(`/projects/${$event.id}`)"
+            @edit="handleEditProject"
+            @create-task="handleCreateTask"
             @view-tasks="console.log('View tasks:', $event)"
-            @create-task="console.log('Create task:', $event)"
             @select="console.log('Select:', $event)"
           />
         </div>
@@ -334,8 +455,18 @@ const handleSubmitProject = async (data: any) => {
     <CreateProjectModal
       ref="createModalRef"
       :show="showCreateModal"
+      :editing-project="editingProject"
       @close="handleCloseModal"
       @submit="handleSubmitProject"
+    />
+
+    <!-- 创建 Campaign 弹窗 -->
+    <CreateCampaignModal
+      ref="campaignModalRef"
+      :show="showCampaignModal"
+      :project-id="currentProjectId"
+      @close="handleCloseCampaignModal"
+      @submit="handleSubmitCampaign"
     />
 
     <!-- Toast 提示 -->

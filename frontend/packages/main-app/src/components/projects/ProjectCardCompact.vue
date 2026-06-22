@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useRouter } from 'vue-router'
 import type { Project } from '@/api/projects'
 
 interface Props {
@@ -13,11 +14,24 @@ const emit = defineEmits<{
   select: [project: Project, selected: boolean]
 }>()
 
+const router = useRouter()
+
+const getStatusColor = (status: string) => {
+  const colors: Record<string, string> = {
+    active: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
+    paused: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600',
+    completed: 'bg-slate-50 dark:bg-slate-900/30 text-slate-600',
+    draft: 'bg-blue-50 dark:bg-blue-900/30 text-blue-600'
+  }
+  return colors[status] || colors.active
+}
+
 const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
     active: '进行中',
     paused: '已暂停',
-    completed: '已完成'
+    completed: '已完成',
+    draft: '草稿'
   }
   return labels[status] || status
 }
@@ -25,6 +39,10 @@ const getStatusLabel = (status: string) => {
 const handleCheckboxChange = (event: Event) => {
   const target = event.target as HTMLInputElement
   emit('select', props.project, target.checked)
+}
+
+const handleViewDetail = () => {
+  router.push(`/projects/${props.project.id}`)
 }
 </script>
 
@@ -50,12 +68,18 @@ const handleCheckboxChange = (event: Event) => {
           {{ project.game_type }}<br>{{ project.target_market }}
         </p>
       </div>
+      <!-- Status Badge -->
+      <span
+        class="status-badge text-[10px] font-semibold px-[6px] py-[2px] rounded-full whitespace-nowrap"
+        :class="getStatusColor(project.status)"
+      >
+        {{ getStatusLabel(project.status) }}
+      </span>
     </div>
 
     <!-- Tags / Chips -->
     <div class="scope-list">
       <span class="chip">Meta Campaign</span>
-      <span class="chip">{{ getStatusLabel(project.status) }}</span>
       <span class="chip">{{ project.tags[0] || '支付计划' }}</span>
       <span class="chip">App promotion</span>
     </div>
@@ -70,7 +94,7 @@ const handleCheckboxChange = (event: Event) => {
         <span class="material-symbols-outlined text-[14px]">edit</span>
         编辑项目
       </button>
-      <button class="btn-ghost" type="button" @click="emit('viewTasks', project)">
+      <button class="btn-soft" type="button" @click="handleViewDetail">
         <span class="material-symbols-outlined text-[14px]">assignment</span>
         查看任务
       </button>
@@ -128,6 +152,11 @@ const handleCheckboxChange = (event: Event) => {
 .project-card-title {
   min-width: 0;
   flex: 1;
+}
+
+.status-badge {
+  flex-shrink: 0;
+  align-self: flex-start;
 }
 
 .project-card-title h3 {

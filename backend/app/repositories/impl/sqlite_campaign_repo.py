@@ -35,6 +35,8 @@ class SqliteCampaignRepository:
         self, project_id: str, name: str, platform: str, budget: float, **kwargs
     ) -> dict:
         """创建广告投放"""
+        from datetime import datetime
+        
         # 处理 material_ids
         material_ids = kwargs.pop("material_ids", None)
         if material_ids and isinstance(material_ids, list):
@@ -53,6 +55,21 @@ class SqliteCampaignRepository:
         # 处理 platform
         if isinstance(platform, str):
             platform = Platform(platform)
+        
+        # 处理日期字段：将字符串转换为 date 对象
+        start_date = kwargs.pop("start_date", None)
+        if start_date and isinstance(start_date, str):
+            try:
+                kwargs["start_date"] = datetime.fromisoformat(start_date.replace('Z', '+00:00')).date()
+            except (ValueError, AttributeError):
+                pass  # 如果转换失败，忽略该字段
+        
+        end_date = kwargs.pop("end_date", None)
+        if end_date and isinstance(end_date, str):
+            try:
+                kwargs["end_date"] = datetime.fromisoformat(end_date.replace('Z', '+00:00')).date()
+            except (ValueError, AttributeError):
+                pass  # 如果转换失败，忽略该字段
         
         campaign = Campaign(
             project_id=project_id,

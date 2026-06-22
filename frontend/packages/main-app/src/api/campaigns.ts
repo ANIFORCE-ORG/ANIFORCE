@@ -69,8 +69,17 @@ export async function createCampaign(data: {
   project_id: string
   name: string
   platform: string
-  budget: number
+  account_id: string
+  objective?: string
+  buying_type?: string
+  special_ad_categories?: string
+  ab_test?: string
+  campaign_budget_optimization?: string
   status?: string
+  budget_type?: string
+  budget: number
+  bid_strategy?: string
+  spend_limit?: string
   material_ids?: string[]
 }): Promise<Campaign> {
   return http.post<Campaign>('/campaigns', data)
