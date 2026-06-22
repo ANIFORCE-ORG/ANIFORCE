@@ -19,7 +19,7 @@ httpx>=0.27.0
 aiohttp>=3.9.0
 requests>=2.31.0
 httplib2>=0.22.0
-urllib3>=2.1.0
+urllib3>=2.2.2
 
 # ==================== 日志 ====================
 loguru>=0.7.2
@@ -46,3 +46,7 @@ google-auth-httplib2>=0.1.1
 google-api-python-client>=2.108.0
 # Google Ads API（用于获取广告账户列表、广告计划管理等）
 google-ads>=31.0.0
+
+# ==================== Facebook API（OAuth 认证 & 广告平台对接） ====================
+# Facebook Business SDK（支持 Meta API v21.0）
+facebook-business==25.0.2

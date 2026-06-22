@@ -25,30 +25,55 @@ class Platform(str, enum.Enum):
 
 
 class Campaign(Base):
+    """广告系列模型 - 对应 Meta Ad Set 层级"""
     __tablename__ = "campaigns"
     
-    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True)
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
-    description: Mapped[str | None] = mapped_column(Text, nullable=True)
+    # 主键和外键
+    id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), comment="广告系列唯一标识")
+    project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True, comment="所属项目ID")
     
-    # 投放配置
-    platform: Mapped[Platform] = mapped_column(Enum(Platform, native_enum=False), nullable=False, index=True)
-    budget: Mapped[float] = mapped_column(Float, nullable=False)
-    spent: Mapped[float] = mapped_column(Float, default=0.0)
-    status: Mapped[CampaignStatus] = mapped_column(Enum(CampaignStatus, native_enum=False), default=CampaignStatus.DRAFT, index=True)
+    # 基本信息
+    name: Mapped[str] = mapped_column(String(255), nullable=False, comment="广告系列名称，对应前端的Campaign名称字段")
+    description: Mapped[str | None] = mapped_column(Text, nullable=True, comment="广告系列描述")
     
-    # 素材管理
-    material_ids: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 数组
+    # 投放平台配置
+    platform: Mapped[Platform] = mapped_column(Enum(Platform, native_enum=False), nullable=False, index=True, comment="投放平台: TikTok, Google, Meta")
+    account_id: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="广告账户ID，对应 sub_account_bindings.sub_account_id")
+    platform_campaign_id: Mapped[str | None] = mapped_column(String(100), nullable=True, index=True, comment="平台广告系列ID，用于与Meta/Google/TikTok平台创建的Campaign ID进行绑定同步")
+    countries: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="投放国家，例如：美国 / 加拿大")
+    
+    # Meta广告特定字段（对应前端表单）
+    objective: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="广告目标，例如：App promotion, Conversions, Traffic")
+    buying_type: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="购买类型，例如：Auction, Reserved")
+    special_ad_categories: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="特殊广告类别，例如：None, Credit, Employment, Housing")
+    
+    # A/B测试和预算配置
+    ab_test: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="A/B测试开关：开启/关闭")
+    campaign_budget_optimization: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="Campaign预算优化开关：开启/关闭")
+    budget_type: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="预算类型：Daily budget / Lifetime budget")
+    budget: Mapped[float] = mapped_column(Float, nullable=False, comment="预算金额")
+    
+    # 出价策略
+    bid_strategy: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="出价策略：Lowest cost, Cost cap, Bid cap, ROAS goal")
+    spend_limit: Mapped[float | None] = mapped_column(Float, nullable=True, comment="花费限制金额")
     
     # 投放周期
-    start_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
-    end_date: Mapped[datetime | None] = mapped_column(Date, nullable=True)
+    start_date: Mapped[datetime | None] = mapped_column(Date, nullable=True, comment="投放开始日期")
+    end_date: Mapped[datetime | None] = mapped_column(Date, nullable=True, comment="投放结束日期")
     
-    # 配置
-    config: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+    # 状态和花费
+    spent: Mapped[float] = mapped_column(Float, default=0.0, comment="已花费金额")
+    status: Mapped[CampaignStatus] = mapped_column(Enum(CampaignStatus, native_enum=False), default=CampaignStatus.DRAFT, index=True, comment="广告系列状态: draft, running, review, paused, completed")
+    
+    # 素材管理
+    material_ids: Mapped[str | None] = mapped_column(Text, nullable=True, comment="关联的素材ID列表，JSON数组格式")
+    
+    # 扩展配置
+    config: Mapped[str | None] = mapped_column(Text, nullable=True, comment="其他配置信息，JSON格式")
+    
+    # 时间戳
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, comment="创建时间")
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, comment="更新时间")
     
     # 关系
     project: Mapped["Project"] = relationship(back_populates="campaigns")

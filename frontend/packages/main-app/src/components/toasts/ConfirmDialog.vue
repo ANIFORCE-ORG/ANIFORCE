@@ -51,27 +51,30 @@ const handleBackdropClick = (e: MouseEvent) => {
         <Transition name="scale">
           <div
             v-if="show"
-            class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl max-w-md w-full mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
+            class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
+            style="max-width: 358px;"
           >
             <!-- 内容 -->
-            <div class="px-8 py-6">
-              <h3 class="text-xl font-bold text-slate-900 dark:text-white mb-4">{{ title }}</h3>
-              <p class="text-slate-600 dark:text-slate-300 text-base leading-relaxed">{{ message }}</p>
+            <div class="px-6 py-5">
+              <h3 class="font-bold text-slate-900 dark:text-white mb-3" style="font-size: 16px;">{{ title }}</h3>
+              <p class="text-slate-600 dark:text-slate-300 leading-relaxed" style="font-size: 12.8px;">{{ message }}</p>
             </div>
 
             <!-- 按钮 -->
-            <div class="px-8 py-5 bg-slate-50 dark:bg-slate-900/30 flex items-center justify-end gap-3 border-t border-slate-200 dark:border-slate-700">
+            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900/30 flex items-center justify-end gap-2 border-t border-slate-200 dark:border-slate-700">
               <button
-                class="px-5 py-2.5 rounded-lg text-sm font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 transition-all duration-200 shadow-sm hover:shadow"
+                class="px-4 py-2 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 transition-all duration-200 shadow-sm hover:shadow"
+                style="font-size: 11.2px;"
                 @click="handleCancel"
               >
                 {{ cancelText }}
               </button>
               <button
                 :class="[
-                  'px-5 py-2.5 rounded-lg text-sm font-medium text-white transition-all duration-200 shadow-sm hover:shadow-md',
+                  'px-4 py-2 rounded-lg font-medium text-white transition-all duration-200 shadow-sm hover:shadow-md',
                   confirmButtonClass
                 ]"
+                style="font-size: 11.2px;"
                 @click="handleConfirm"
               >
                 {{ confirmText }}

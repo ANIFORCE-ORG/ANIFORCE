@@ -51,13 +51,35 @@ export async function getProjectDetail(projectId: string): Promise<Project> {
 }
 
 /**
- * 创建项目
+ * 创建项目（同时创建初始 Campaign）
  */
 export async function createProject(data: {
+  // Project 字段
   name: string
-  game_type: string
-  target_market: string
+  product?: string
   total_budget: number
+  start_date?: string
+  end_date?: string
+  
+  // Campaign 字段
+  channel: string
+  account: string
+  countries?: string
+  campaignName: string
+  objective?: string
+  buyingType?: string
+  specialAdCategories?: string
+  abTest?: string
+  campaignBudget?: string
+  campaignStatus?: string
+  budgetType?: string
+  budget?: string
+  bidStrategy?: string
+  spendLimit?: string
+  
+  // 旧字段（保持兼容）
+  game_type?: string
+  target_market?: string
   tags?: string[]
   manager?: string
 }): Promise<Project> {

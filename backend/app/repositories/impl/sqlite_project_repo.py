@@ -19,6 +19,7 @@ class SqliteProjectRepository:
             "id": project.id,
             "user_id": project.user_id,
             "name": project.name,
+            "product": project.product,
             "description": project.description,
             "game_type": project.game_type,
             "target_market": project.target_market,
