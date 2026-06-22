@@ -152,6 +152,10 @@ const handleSubmitProject = async (data: any) => {
     const requestData = {
       ...data,
       total_budget: parseFloat(data.budget) || 0, // 添加 total_budget 字段
+      start_date: data.start, // Project 的 start_date 复用表单的 start
+      end_date: data.end, // Project 的 end_date 复用表单的 end
+      target_market: data.countries, // target_market 使用 countries 填充
+      manager: auth.user?.name || '未知', // manager 使用创建者名字
     }
     
     console.log('转换后的请求数据:', JSON.stringify(requestData, null, 2))
