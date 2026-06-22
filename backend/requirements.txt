@@ -49,4 +49,4 @@ google-ads>=31.0.0
 
 # ==================== Facebook API（OAuth 认证 & 广告平台对接） ====================
 # Facebook Business SDK（支持 Meta API v21.0）
-facebook-business>=21.0.0
+facebook-business==25.0.2

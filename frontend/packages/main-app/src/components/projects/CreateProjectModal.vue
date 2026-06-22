@@ -40,6 +40,18 @@ interface AccountOption {
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+// 获取默认日期：开始日期为当前日期，结束日期为7天后
+const getDefaultStartDate = () => {
+  const now = new Date()
+  return now.toISOString().slice(0, 16) // 格式: YYYY-MM-DDTHH:mm
+}
+
+const getDefaultEndDate = () => {
+  const now = new Date()
+  const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
+  return sevenDaysLater.toISOString().slice(0, 16) // 格式: YYYY-MM-DDTHH:mm
+}
+
 const formData = ref<ProjectFormData>({
   channel: 'Meta',
   name: '',
@@ -57,8 +69,8 @@ const formData = ref<ProjectFormData>({
   budget: '',
   bidStrategy: 'Lowest cost',
   spendLimit: '',
-  start: '',
-  end: ''
+  start: getDefaultStartDate(),
+  end: getDefaultEndDate()
 })
 
 const accountOptions = ref<AccountOption[]>([])
@@ -225,8 +237,8 @@ const resetForm = () => {
     budget: '',
     bidStrategy: 'Lowest cost',
     spendLimit: '',
-    start: '',
-    end: ''
+    start: getDefaultStartDate(),
+    end: getDefaultEndDate()
   }
   errors.value = {}
   submitting.value = false
@@ -298,22 +310,6 @@ defineExpose({
             </div>
 
             <form @submit.prevent="handleSubmit" class="grid grid-cols-2 gap-x-[13px] gap-y-[13px]">
-              <!-- 投放渠道 -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  投放渠道
-                </label>
-                <select
-                  v-model="formData.channel"
-                  @change="handleChannelChange"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option v-for="channel in channelOptions" :key="channel" :value="channel" :disabled="channel === 'TikTok'" :class="{ 'text-slate-400': channel === 'TikTok' }">
-                    {{ channel }}{{ channel === 'TikTok' ? ' (暂未支持)' : '' }}
-                  </option>
-                </select>
-              </div>
-
               <!-- 项目名称 -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
@@ -357,6 +353,38 @@ defineExpose({
                   :class="{ 'border-red-500': errors.countries }"
                 />
                 <p v-if="errors.countries" class="mt-[3px] text-[9px] text-red-500">{{ errors.countries }}</p>
+              </div>
+
+              <!-- 状态 -->
+              <div>
+                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                  状态
+                </label>
+                <select
+                  v-model="formData.campaignStatus"
+                  disabled
+                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 opacity-60 cursor-not-allowed"
+                >
+                  <option v-for="status in campaignStatusOptions" :key="status" :value="status">
+                    {{ status }}
+                  </option>
+                </select>
+              </div>
+
+              <!-- 投放渠道 -->
+              <div>
+                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                  投放渠道
+                </label>
+                <select
+                  v-model="formData.channel"
+                  @change="handleChannelChange"
+                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                >
+                  <option v-for="channel in channelOptions" :key="channel" :value="channel" :disabled="channel === 'TikTok'" :class="{ 'text-slate-400': channel === 'TikTok' }">
+                    {{ channel }}{{ channel === 'TikTok' ? ' (暂未支持)' : '' }}
+                  </option>
+                </select>
               </div>
 
               <!-- 广告账户 -->
@@ -411,7 +439,7 @@ defineExpose({
               <!-- Buying type -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Buying type
+                  Buying Type
                 </label>
                 <select
                   v-model="formData.buyingType"
@@ -426,7 +454,7 @@ defineExpose({
               <!-- Special ad categories -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Special ad categories
+                  Special AD Categories
                 </label>
                 <select
                   v-model="formData.specialAdCategories"
@@ -441,7 +469,7 @@ defineExpose({
               <!-- A/B test -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  A/B test
+                  A/B Test
                 </label>
                 <select
                   v-model="formData.abTest"
@@ -455,7 +483,7 @@ defineExpose({
               <!-- Campaign budget 开关 -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Campaign budget 开关
+                  Campaign Budget 开关
                 </label>
                 <select
                   v-model="formData.campaignBudget"
@@ -466,26 +494,10 @@ defineExpose({
                 </select>
               </div>
 
-              <!-- 状态 -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  状态
-                </label>
-                <select
-                  v-model="formData.campaignStatus"
-                  disabled
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 opacity-60 cursor-not-allowed"
-                >
-                  <option v-for="status in campaignStatusOptions" :key="status" :value="status">
-                    {{ status }}
-                  </option>
-                </select>
-              </div>
-
               <!-- Budget type -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Budget type
+                  Budget Type
                 </label>
                 <select
                   v-model="formData.budgetType"
@@ -500,7 +512,7 @@ defineExpose({
               <!-- daily/lifetime budget -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  daily/lifetime budget
+                  Daily/Lifetime budget(USD)
                 </label>
                 <input
                   v-model="formData.budget"
@@ -513,7 +525,7 @@ defineExpose({
               <!-- bid strategy -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  bid strategy
+                  Bid Strategy
                 </label>
                 <select
                   v-model="formData.bidStrategy"
@@ -528,7 +540,7 @@ defineExpose({
               <!-- spend limit -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  spend limit
+                  Spend Limit
                 </label>
                 <input
                   v-model="formData.spendLimit"
@@ -541,7 +553,7 @@ defineExpose({
               <!-- start -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  start
+                  Start Date
                 </label>
                 <input
                   v-model="formData.start"
@@ -554,7 +566,7 @@ defineExpose({
               <!-- end -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  end
+                  End Date
                 </label>
                 <input
                   v-model="formData.end"

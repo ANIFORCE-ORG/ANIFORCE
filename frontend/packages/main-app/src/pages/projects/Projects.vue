@@ -7,11 +7,27 @@ import ChatPanel from '@/components/layout/ChatPanel.vue'
 import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
 import ProjectCardCompact from '@/components/projects/ProjectCardCompact.vue'
 import ProjectCardDetailed from '@/components/projects/ProjectCardDetailed.vue'
+import Toast from '@/components/toasts/Toast.vue'
 import { getProjects, createProject, type Project } from '@/api/projects'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 const auth = useAuthStore()
+
+// Toast 状态
+const showToast = ref(false)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error' | 'warning' | 'info'>('info')
+
+const showToastMessage = (message: string, type: 'success' | 'error' | 'warning' | 'info' = 'info') => {
+  toastMessage.value = message
+  toastType.value = type
+  showToast.value = true
+}
+
+const handleToastClose = () => {
+  showToast.value = false
+}
 
 const activeSession = ref('sess_g001')
 const chatInput = ref('')
@@ -129,19 +145,61 @@ const handleCloseModal = () => {
 
 const handleSubmitProject = async (data: any) => {
   try {
-    console.log('创建项目:', data)
-    const newProject = await createProject(data)
+    console.log('=== 创建项目请求 ===')
+    console.log('原始表单数据:', JSON.stringify(data, null, 2))
+    
+    // 转换数据格式以匹配后端要求
+    const requestData = {
+      ...data,
+      total_budget: parseFloat(data.budget) || 0, // 添加 total_budget 字段
+    }
+    
+    console.log('转换后的请求数据:', JSON.stringify(requestData, null, 2))
+    
+    const newProject = await createProject(requestData)
     console.log('项目创建成功:', newProject)
     
     // 添加到项目列表
     projects.value.unshift(newProject)
     
+    // 显示成功提示
+    showToastMessage('项目创建成功！', 'success')
+    
     // 关闭弹窗并重置表单
     showCreateModal.value = false
     createModalRef.value?.resetForm()
   } catch (err: any) {
-    console.error('创建项目失败:', err)
-    alert(err.message || '创建项目失败，请重试')
+    console.error('=== 创建项目失败 ===')
+    console.error('错误对象:', err)
+    console.error('错误响应:', err.response)
+    console.error('错误数据:', err.response?.data)
+    
+    // 解析错误信息
+    let errorMessage = '创建项目失败，请重试'
+    
+    if (err.response?.data?.detail) {
+      // FastAPI 返回的错误格式
+      if (Array.isArray(err.response.data.detail)) {
+        // Pydantic 验证错误格式
+        const errors = err.response.data.detail.map((e: any) => 
+          `${e.loc.join('.')}: ${e.msg}`
+        ).join('; ')
+        errorMessage = `数据验证失败: ${errors}`
+      } else if (typeof err.response.data.detail === 'string') {
+        errorMessage = err.response.data.detail
+      } else {
+        errorMessage = JSON.stringify(err.response.data.detail)
+      }
+    } else if (err.message) {
+      errorMessage = err.message
+    } else if (typeof err === 'string') {
+      errorMessage = err
+    }
+    
+    console.error('最终错误信息:', errorMessage)
+    
+    // 使用 Toast 显示错误
+    showToastMessage(errorMessage, 'error')
   } finally {
     createModalRef.value?.setSubmitting(false)
   }
@@ -274,6 +332,15 @@ const handleSubmitProject = async (data: any) => {
       :show="showCreateModal"
       @close="handleCloseModal"
       @submit="handleSubmitProject"
+    />
+
+    <!-- Toast 提示 -->
+    <Toast
+      :show="showToast"
+      :message="toastMessage"
+      :type="toastType"
+      :duration="5000"
+      @close="handleToastClose"
     />
   </div>
 </template>
