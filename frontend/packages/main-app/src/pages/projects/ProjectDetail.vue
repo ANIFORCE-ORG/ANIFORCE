@@ -302,7 +302,7 @@ const handleEditCampaign = (campaign: any) => {
         <!-- 广告计划列表 -->
         <div>
           <div class="flex items-center justify-between mb-[12px]">
-            <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white">广告计划 ({{ campaigns.length }})</h4>
+            <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white">广告 Campaigns ({{ campaigns.length }})</h4>
             <button
               class="flex items-center gap-[6px] px-[9px] py-[6px] rounded-md text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
               @click="handleCreateCampaign"

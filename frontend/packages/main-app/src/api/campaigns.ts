@@ -10,7 +10,16 @@ export interface Campaign {
   name: string
   description?: string
   platform: string
+  account_id?: string
+  objective?: string
+  buying_type?: string
+  special_ad_categories?: string
+  ab_test?: string
+  campaign_budget_optimization?: string
+  budget_type?: string
   budget: number
+  bid_strategy?: string
+  spend_limit?: number
   spent: number
   status: string
   material_ids: string[]

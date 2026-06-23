@@ -65,6 +65,11 @@ const router = createRouter({
       component: () => import('@/pages/campaigns/CreateCampaign.vue'),
     },
     {
+      path: '/campaigns/:campaignId/ad-units/create',
+      name: 'create-ad-unit',
+      component: () => import('@/pages/campaigns/CreateAdUnit.vue'),
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/pages/starting/Login.vue'),
