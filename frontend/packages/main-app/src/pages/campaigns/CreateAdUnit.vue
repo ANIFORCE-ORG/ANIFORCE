@@ -1,6 +1,8 @@
 <script setup lang="ts">
 import { ref, computed } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
+import SidebarNav from '@/components/layout/SidebarNav.vue'
+import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 const route = useRoute()
@@ -89,6 +91,13 @@ const validateForm = (): boolean => {
   return Object.keys(errors.value).length === 0
 }
 
+// 切换导航
+const switchPanel = (item: any) => {
+  if (item.path) {
+    router.push(item.path)
+  }
+}
+
 // 处理关闭
 const handleClose = () => {
   router.back()
@@ -121,23 +130,33 @@ const handleSave = async () => {
 </script>
 
 <template>
-  <div class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex items-center justify-center" @click.self="handleClose">
-    <!-- 弹窗容器 -->
-    <div class="bg-white dark:bg-slate-800 shadow-2xl w-full max-w-[720px] max-h-[90vh] overflow-hidden flex flex-col rounded-md">
-      <!-- 弹窗头部 -->
-      <div class="flex items-center justify-between px-[16px] py-[12px] border-b border-slate-200 dark:border-slate-700">
-        <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">创建广告单元 (Ad Set)</h3>
-        <button
-          class="p-[5px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-          @click="handleClose"
-          :disabled="submitting"
-        >
-          <span class="material-symbols-outlined text-[14px] text-slate-500">close</span>
-        </button>
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <!-- 左侧导航栏 -->
+    <SidebarNav
+      :nav-items="navItems"
+      active-id="campaigns"
+      @switch-panel="switchPanel"
+    />
+
+    <!-- 中间内容工作区 -->
+    <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+      <!-- Header -->
+      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+        <div class="flex items-center gap-[12px]">
+          <button
+            class="flex items-center gap-[6px] text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
+            @click="handleClose"
+          >
+            <span class="material-symbols-outlined text-[15px]">arrow_back</span>
+            <span class="text-[11px] font-medium">返回</span>
+          </button>
+          <div class="h-[19px] w-px bg-slate-200 dark:bg-slate-800"></div>
+          <h3 class="font-bold text-[13px] text-slate-900 dark:text-white">创建广告单元 (Ad Set)</h3>
+        </div>
       </div>
 
-      <!-- 弹窗内容 -->
-      <div class="flex-1 overflow-y-auto px-[16px] py-[12px]">
+      <!-- 内容区域 -->
+      <div class="flex-1 overflow-y-auto px-[19px] py-[15px]">
         <!-- 错误提示 -->
         <div v-if="errors.submit" class="mb-[12px] p-[10px] rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
           <div class="flex items-center gap-[6px]">
@@ -403,8 +422,8 @@ const handleSave = async () => {
         </form>
       </div>
 
-      <!-- 弹窗底部 -->
-      <div class="flex items-center justify-end gap-[8px] px-[16px] py-[12px] border-t border-slate-200 dark:border-slate-700">
+      <!-- 底部按钮栏 -->
+      <div class="h-[60px] border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-[8px] px-[19px] bg-white dark:bg-slate-900">
         <button
           type="button"
           class="px-[13px] py-[6px] text-[10px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
@@ -422,6 +441,6 @@ const handleSave = async () => {
           {{ submitting ? '创建中...' : '创建' }}
         </button>
       </div>
-    </div>
+    </main>
   </div>
 </template>

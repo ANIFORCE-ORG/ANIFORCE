@@ -20,11 +20,14 @@ interface CampaignFormData {
   objective: string
   buyingType: string
   specialAdCategories: string
+  specialAdCategoryCountry: string
+  promotedObject: string
   abTest: string
   campaignBudget: string
   campaignStatus: string
   budgetType: string
   budget: string
+  pacingType: string
   bidStrategy: string
   spendLimit: string
   start_date: string
@@ -50,11 +53,14 @@ const formData = ref<CampaignFormData>({
   objective: 'App promotion',
   buyingType: 'Auction',
   specialAdCategories: 'None',
+  specialAdCategoryCountry: '',
+  promotedObject: '',
   abTest: '关闭',
   campaignBudget: '开启',
   campaignStatus: 'draft',
   budgetType: 'Daily budget',
   budget: '',
+  pacingType: 'standard',
   bidStrategy: 'Lowest cost',
   spendLimit: '',
   start_date: new Date().toISOString().slice(0, 16),
@@ -103,6 +109,121 @@ const bidStrategyOptions = [
   'Bid cap',
   'Minimum ROAS'
 ]
+
+// 国家代码映射（基于 Facebook Business SDK SpecialAdCategoryCountry 枚举）
+const specialAdCategoryCountryOptions = [
+  { code: 'US', name: 'United States' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'NL', name: 'Netherlands' },
+  { code: 'SE', name: 'Sweden' },
+  { code: 'NO', name: 'Norway' },
+  { code: 'DK', name: 'Denmark' },
+  { code: 'FI', name: 'Finland' },
+  { code: 'BE', name: 'Belgium' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'AT', name: 'Austria' },
+  { code: 'IE', name: 'Ireland' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'KR', name: 'South Korea' },
+  { code: 'TW', name: 'Taiwan' },
+  { code: 'IN', name: 'India' },
+  { code: 'CN', name: 'China' },
+  { code: 'BR', name: 'Brazil' },
+  { code: 'MX', name: 'Mexico' },
+  { code: 'AR', name: 'Argentina' },
+  { code: 'CL', name: 'Chile' },
+  { code: 'CO', name: 'Colombia' },
+  { code: 'PE', name: 'Peru' },
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'EG', name: 'Egypt' },
+  { code: 'NG', name: 'Nigeria' },
+  { code: 'KE', name: 'Kenya' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'IL', name: 'Israel' },
+  { code: 'TR', name: 'Turkey' },
+  { code: 'PL', name: 'Poland' },
+  { code: 'CZ', name: 'Czech Republic' },
+  { code: 'HU', name: 'Hungary' },
+  { code: 'RO', name: 'Romania' },
+  { code: 'GR', name: 'Greece' },
+  { code: 'PT', name: 'Portugal' },
+  { code: 'RU', name: 'Russia' },
+  { code: 'UA', name: 'Ukraine' },
+  { code: 'TH', name: 'Thailand' },
+  { code: 'VN', name: 'Vietnam' },
+  { code: 'PH', name: 'Philippines' },
+  { code: 'ID', name: 'Indonesia' },
+  { code: 'MY', name: 'Malaysia' }
+]
+
+const pacingTypeOptions = [
+  'standard',
+  'day_parting'
+]
+
+// 日期格式转换函数：将后端日期格式转换为 datetime-local 格式
+const formatDateForInput = (dateStr: string | null | undefined): string => {
+  if (!dateStr) {
+    return new Date().toISOString().slice(0, 16)
+  }
+  
+  // 如果已经是 datetime-local 格式 (YYYY-MM-DDTHH:MM)，直接返回
+  if (dateStr.includes('T') && dateStr.length >= 16) {
+    return dateStr.slice(0, 16)
+  }
+  
+  // 如果是日期格式 (YYYY-MM-DD)，添加默认时间 00:00
+  if (dateStr.length === 10 && dateStr.includes('-')) {
+    return `${dateStr}T00:00`
+  }
+  
+  // 尝试解析为 Date 对象
+  try {
+    const date = new Date(dateStr)
+    if (!isNaN(date.getTime())) {
+      return date.toISOString().slice(0, 16)
+    }
+  } catch (e) {
+    console.error('日期格式转换失败:', dateStr, e)
+  }
+  
+  // 默认返回当前时间
+  return new Date().toISOString().slice(0, 16)
+}
+
+// 计算属性：根据 Buying Type 过滤 Objective 选项
+const filteredObjectiveOptions = computed(() => {
+  if (formData.value.buyingType === 'Reserved') {
+    // Reserved 仅支持 Awareness 和 Engagement
+    return objectiveOptions.filter(opt => opt === 'Awareness' || opt === 'Engagement')
+  }
+  // Auction 支持所有选项
+  return objectiveOptions
+})
+
+// 计算属性：是否需要显示 special_ad_category_country
+const showSpecialAdCategoryCountry = computed(() => {
+  return formData.value.specialAdCategories !== 'None'
+})
+
+// 监听 Buying Type 改变，自动调整 Objective
+watch(() => formData.value.buyingType, (newBuyingType) => {
+  const allowedObjectives = filteredObjectiveOptions.value
+  // 如果当前 Objective 不在允许的选项中，重置为第一个允许的选项
+  if (!allowedObjectives.includes(formData.value.objective)) {
+    formData.value.objective = allowedObjectives[0] || 'Awareness'
+  }
+})
 
 // 获取广告账户列表
 const fetchAccountOptions = async () => {
@@ -153,6 +274,20 @@ const validateForm = (): boolean => {
     errors.value.budget = '请输入有效的预算金额'
   }
   
+  // 验证 special_ad_category_country：当 special_ad_categories 不为 None 时必填
+  if (formData.value.specialAdCategories !== 'None' && !formData.value.specialAdCategoryCountry) {
+    errors.value.specialAdCategoryCountry = '请选择特殊广告类别国家'
+  }
+  
+  // 验证 promoted_object：如果填写了，必须是有效的 JSON
+  if (formData.value.promotedObject && formData.value.promotedObject.trim()) {
+    try {
+      JSON.parse(formData.value.promotedObject)
+    } catch (e) {
+      errors.value.promotedObject = '请输入有效的 JSON 格式'
+    }
+  }
+  
   return Object.keys(errors.value).length === 0
 }
 
@@ -165,11 +300,14 @@ const resetForm = () => {
     objective: 'App promotion',
     buyingType: 'Auction',
     specialAdCategories: 'None',
+    specialAdCategoryCountry: '',
+    promotedObject: '',
     abTest: '关闭',
     campaignBudget: '开启',
     campaignStatus: 'draft',
     budgetType: 'Daily budget',
     budget: '',
+    pacingType: 'standard',
     bidStrategy: 'Lowest cost',
     spendLimit: '',
     start_date: new Date().toISOString().slice(0, 16),
@@ -244,15 +382,18 @@ watch(() => props.initialData, (newData) => {
       objective: newData.objective || 'App promotion',
       buyingType: newData.buying_type || 'Auction',
       specialAdCategories: newData.special_ad_categories || 'None',
+      specialAdCategoryCountry: newData.special_ad_category_country || '',
+      promotedObject: newData.promoted_object || '',
       abTest: newData.ab_test || '关闭',
       campaignBudget: newData.campaign_budget_optimization || '开启',
       campaignStatus: newData.status || 'draft',
       budgetType: newData.budget_type || 'Daily budget',
       budget: newData.budget?.toString() || '',
+      pacingType: newData.pacing_type || 'standard',
       bidStrategy: newData.bid_strategy || 'Lowest cost',
       spendLimit: newData.spend_limit?.toString() || '',
-      start_date: newData.start_date || new Date().toISOString().slice(0, 16),
-      end_date: newData.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+      start_date: formatDateForInput(newData.start_date),
+      end_date: formatDateForInput(newData.end_date)
     }
   } else {
     resetForm()
@@ -373,7 +514,7 @@ defineExpose({
                     v-model="formData.objective"
                     class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   >
-                    <option v-for="opt in objectiveOptions" :key="opt" :value="opt">
+                    <option v-for="opt in filteredObjectiveOptions" :key="opt" :value="opt">
                       {{ opt }}
                     </option>
                   </select>
@@ -410,6 +551,26 @@ defineExpose({
                       {{ opt }}
                     </option>
                   </select>
+                </div>
+
+                <!-- Special Ad Category Country (始终显示，根据条件 enable/disable) -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    Special Ad Category Country
+                    <span v-if="showSpecialAdCategoryCountry" class="text-red-500">*</span>
+                  </label>
+                  <select
+                    v-model="formData.specialAdCategoryCountry"
+                    :disabled="!showSpecialAdCategoryCountry"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                    :class="{ 'border-red-500': errors.specialAdCategoryCountry }"
+                  >
+                    <option value="">Select Country</option>
+                    <option v-for="country in specialAdCategoryCountryOptions" :key="country.code" :value="country.code">
+                      {{ country.code }} ({{ country.name }})
+                    </option>
+                  </select>
+                  <p v-if="errors.specialAdCategoryCountry" class="mt-[3px] text-[9px] text-red-500">{{ errors.specialAdCategoryCountry }}</p>
                 </div>
 
                 <!-- A/B Test -->
@@ -518,6 +679,37 @@ defineExpose({
                     v-model="formData.spendLimit"
                     type="text"
                     placeholder="例如 18,000 USD"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+
+              <!-- 新增行：Pacing Type + Promoted Object -->
+              <div class="grid grid-cols-2 gap-[10px]">
+                <!-- Pacing Type -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    Pacing Type
+                  </label>
+                  <select
+                    v-model="formData.pacingType"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option v-for="type in pacingTypeOptions" :key="type" :value="type">
+                      {{ type }}
+                    </option>
+                  </select>
+                </div>
+
+                <!-- Promoted Object (JSON) -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    Promoted Object (JSON)
+                  </label>
+                  <input
+                    v-model="formData.promotedObject"
+                    type="text"
+                    placeholder='{"application_id": "123"}'
                     class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   />
                 </div>

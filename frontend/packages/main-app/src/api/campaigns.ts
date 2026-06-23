@@ -14,10 +14,14 @@ export interface Campaign {
   objective?: string
   buying_type?: string
   special_ad_categories?: string
+  special_ad_category_country?: string
+  promoted_object?: string
   ab_test?: string
   campaign_budget_optimization?: string
   budget_type?: string
   budget: number
+  budget_schedule_specs?: string
+  pacing_type?: string
   bid_strategy?: string
   spend_limit?: number
   spent: number

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import AdUnitCardDetailed from '@/components/campaigns/AdUnitCardDetailed.vue'
+import CreateAdUnitModal from '@/components/campaigns/CreateAdUnitModal.vue'
 import { getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
 import { getMaterialImage } from '@/api/materials'
 import { navItems } from '@/config/navigation'
@@ -21,6 +22,8 @@ const error = ref<string | null>(null)
 
 const campaign = ref<Campaign | null>(null)
 const adUnits = ref<any[]>([])
+const showCreateAdUnitModal = ref(false)
+const createAdUnitModalRef = ref<any>(null)
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -105,7 +108,36 @@ const handleBack = () => {
 }
 
 const handleAddAdUnit = () => {
-  router.push(`/campaigns/${campaignId.value}/ad-units/create`)
+  showCreateAdUnitModal.value = true
+}
+
+const handleCloseAdUnitModal = () => {
+  showCreateAdUnitModal.value = false
+}
+
+const handleSubmitAdUnit = async (data: any) => {
+  try {
+    // TODO: 调用 API 创建 Ad Unit
+    console.log('创建 Ad Unit:', data)
+    
+    // 模拟 API 调用
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    
+    // 成功后关闭弹窗并刷新列表
+    showCreateAdUnitModal.value = false
+    if (createAdUnitModalRef.value) {
+      createAdUnitModalRef.value.resetForm()
+    }
+    
+    // TODO: 刷新 Ad Units 列表
+    console.log('Ad Unit 创建成功')
+  } catch (err: any) {
+    console.error('创建 Ad Unit 失败:', err)
+  } finally {
+    if (createAdUnitModalRef.value) {
+      createAdUnitModalRef.value.setSubmitting(false)
+    }
+  }
 }
 
 const handleViewAdUnit = (adUnitId: string) => {
@@ -277,6 +309,15 @@ const formatDate = (dateString?: string) => {
       @send-message="handleSendMessage"
       @hint-click="handleHintClick"
       @update:chat-input="chatInput = $event"
+    />
+
+    <!-- 创建 Ad Unit 弹窗 -->
+    <CreateAdUnitModal
+      ref="createAdUnitModalRef"
+      :show="showCreateAdUnitModal"
+      :campaign-id="campaignId"
+      @close="handleCloseAdUnitModal"
+      @submit="handleSubmitAdUnit"
     />
   </div>
 </template>

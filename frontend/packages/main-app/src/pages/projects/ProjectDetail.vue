@@ -6,6 +6,7 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
 import CampaignCardDetailed from '@/components/campaigns/CampaignCardDetailed.vue'
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
+import Toast from '@/components/toasts/Toast.vue'
 import { getProjectDetail, getProjectCampaigns, type Project } from '@/api/projects'
 import { createCampaign, updateCampaign } from '@/api/campaigns'
 import { navItems } from '@/config/navigation'
@@ -25,6 +26,11 @@ const campaigns = ref<any[]>([])
 const showCampaignModal = ref(false)
 const campaignModalRef = ref<any>(null)
 const editingCampaign = ref<any>(null)
+
+// Toast 状态管理
+const showToast = ref(false)
+const toastMessage = ref('')
+const toastType = ref<'success' | 'error' | 'warning' | 'info'>('info')
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -50,16 +56,6 @@ const quickHints = [
   '创建新广告',
   '数据报表'
 ]
-
-/*
-const navItems = [
-  { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
-  { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
-  { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
-  { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
-  { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
-]
-  */
 
 onMounted(async () => {
   await loadProjectData()
@@ -129,13 +125,20 @@ const handleSubmitCampaign = async (data: any) => {
       console.log('Campaign ID:', data.id)
       result = await updateCampaign(data.id, data)
       console.log('Campaign 更新成功:', result)
-      alert('Campaign 更新成功！')
+      
+      // 显示成功提示
+      toastMessage.value = 'Campaign 更新成功！'
+      toastType.value = 'success'
+      showToast.value = true
     } else {
       // 创建模式：创建新 Campaign
       console.log('关联项目 ID:', projectId.value)
       
       if (!projectId.value) {
         console.error('项目 ID 缺失，无法创建 Campaign')
+        toastMessage.value = '项目 ID 缺失，无法创建 Campaign'
+        toastType.value = 'error'
+        showToast.value = true
         return
       }
       
@@ -148,7 +151,11 @@ const handleSubmitCampaign = async (data: any) => {
       console.log('请求数据:', JSON.stringify(requestData, null, 2))
       result = await createCampaign(requestData)
       console.log('Campaign 创建成功:', result)
-      alert('Campaign 创建成功！')
+      
+      // 显示成功提示
+      toastMessage.value = 'Campaign 创建成功！'
+      toastType.value = 'success'
+      showToast.value = true
     }
     
     // 关闭 Campaign 模态框
@@ -159,7 +166,11 @@ const handleSubmitCampaign = async (data: any) => {
     await loadCampaigns()
   } catch (err: any) {
     console.error(`=== ${data.id ? '更新' : '创建'} Campaign 失败 ===`, err)
-    alert(`${data.id ? '更新' : '创建'} Campaign 失败：${err.message || '未知错误'}`)
+    
+    // 显示错误提示
+    toastMessage.value = `${data.id ? '更新' : '创建'} Campaign 失败：${err.message || '未知错误'}`
+    toastType.value = 'error'
+    showToast.value = true
     
     // 重置提交状态
     if (campaignModalRef.value) {
@@ -195,6 +206,10 @@ const handleEditCampaign = (campaign: any) => {
   console.log('编辑 Campaign:', campaign)
   editingCampaign.value = campaign
   showCampaignModal.value = true
+}
+
+const handleCloseToast = () => {
+  showToast.value = false
 }
 </script>
 
@@ -356,6 +371,14 @@ const handleEditCampaign = (campaign: any) => {
       :initial-data="editingCampaign"
       @close="showCampaignModal = false; editingCampaign = null"
       @submit="handleSubmitCampaign"
+    />
+
+    <!-- Toast 提示组件 -->
+    <Toast
+      :show="showToast"
+      :message="toastMessage"
+      :type="toastType"
+      @close="handleCloseToast"
     />
   </div>
 </template>

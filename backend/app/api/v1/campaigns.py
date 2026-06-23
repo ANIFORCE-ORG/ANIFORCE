@@ -28,9 +28,13 @@ class CreateCampaignRequest(BaseModel):
     objective: str | None = None
     buying_type: str | None = None
     special_ad_categories: str | None = None
+    special_ad_category_country: str | None = None
+    promoted_object: str | None = None
     ab_test: str | None = None
     campaign_budget_optimization: str | None = None
     budget_type: str | None = None
+    budget_schedule_specs: str | None = None
+    pacing_type: str | None = None
     bid_strategy: str | None = None
     spend_limit: float | None = None
     start_date: str | None = None
@@ -49,9 +53,13 @@ class UpdateCampaignRequest(BaseModel):
     objective: str | None = None
     buying_type: str | None = None
     special_ad_categories: str | None = None
+    special_ad_category_country: str | None = None
+    promoted_object: str | None = None
     ab_test: str | None = None
     campaign_budget_optimization: str | None = None
     budget_type: str | None = None
+    budget_schedule_specs: str | None = None
+    pacing_type: str | None = None
     bid_strategy: str | None = None
     spend_limit: float | None = None
     start_date: str | None = None
