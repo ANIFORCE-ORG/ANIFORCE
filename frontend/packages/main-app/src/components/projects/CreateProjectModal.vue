@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { ref, watch } from 'vue'
+import type { Project } from '@/api/projects'
 
 interface Props {
   show: boolean
+  editingProject?: Project | null
 }
 
 interface Emits {
@@ -11,163 +13,127 @@ interface Emits {
 }
 
 interface ProjectFormData {
-  channel: string
   name: string
   product: string
   countries: string
-  account: string
-  campaignName: string
-  objective: string
-  buyingType: string
-  specialAdCategories: string
-  abTest: string
-  campaignBudget: string
-  campaignStatus: string
-  budgetType: string
-  budget: string
-  bidStrategy: string
-  spendLimit: string
+  status: string
   start: string
   end: string
-}
-
-interface AccountOption {
-  accountId: string
-  accountName: string
-  channel: string
+  total_budget: number
+  description: string
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
+// 判断是否为编辑模式
+const isEditMode = ref(false)
+
 // 获取默认日期：开始日期为当前日期，结束日期为7天后
 const getDefaultStartDate = () => {
   const now = new Date()
-  return now.toISOString().slice(0, 16) // 格式: YYYY-MM-DDTHH:mm
+  return now.toISOString().slice(0, 16)
 }
 
 const getDefaultEndDate = () => {
   const now = new Date()
   const sevenDaysLater = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000)
-  return sevenDaysLater.toISOString().slice(0, 16) // 格式: YYYY-MM-DDTHH:mm
+  return sevenDaysLater.toISOString().slice(0, 16)
+}
+
+// 格式化日期为 datetime-local input 所需格式
+const formatDateForInput = (dateString: string | undefined | null): string => {
+  if (!dateString) return getDefaultStartDate()
+  
+  try {
+    const date = new Date(dateString)
+    if (isNaN(date.getTime())) {
+      return getDefaultStartDate()
+    }
+    return date.toISOString().slice(0, 16)
+  } catch {
+    return getDefaultStartDate()
+  }
 }
 
 const formData = ref<ProjectFormData>({
-  channel: 'Meta',
   name: '',
   product: '',
   countries: '',
-  account: '',
-  campaignName: '',
-  objective: 'App promotion',
-  buyingType: 'Auction',
-  specialAdCategories: 'None',
-  abTest: '关闭',
-  campaignBudget: '开启',
-  campaignStatus: 'Draft',
-  budgetType: 'Daily budget',
-  budget: '',
-  bidStrategy: 'Lowest cost',
-  spendLimit: '',
+  status: 'active',
   start: getDefaultStartDate(),
-  end: getDefaultEndDate()
+  end: getDefaultEndDate(),
+  total_budget: 0,
+  description: ''
 })
-
-const accountOptions = ref<AccountOption[]>([])
-const loadingAccounts = ref(false)
 
 const errors = ref<Record<string, string>>({})
 const submitting = ref(false)
 
-// Meta Campaign 配置选项
-const channelOptions = ['Meta', 'Google', 'TikTok']
-
-const objectiveOptions = [
-  'App promotion',
-  'Sales',
-  'Leads',
-  'Traffic',
-  'Engagement',
-  'Awareness'
+// 国家代码映射（基于 Facebook Business SDK SpecialAdCategoryCountry 枚举）
+const countryOptions = [
+  { code: 'US', name: 'United States' },
+  { code: 'CA', name: 'Canada' },
+  { code: 'GB', name: 'United Kingdom' },
+  { code: 'AU', name: 'Australia' },
+  { code: 'DE', name: 'Germany' },
+  { code: 'FR', name: 'France' },
+  { code: 'IT', name: 'Italy' },
+  { code: 'ES', name: 'Spain' },
+  { code: 'NL', name: 'Netherlands' },
+  { code: 'SE', name: 'Sweden' },
+  { code: 'NO', name: 'Norway' },
+  { code: 'DK', name: 'Denmark' },
+  { code: 'FI', name: 'Finland' },
+  { code: 'BE', name: 'Belgium' },
+  { code: 'CH', name: 'Switzerland' },
+  { code: 'AT', name: 'Austria' },
+  { code: 'IE', name: 'Ireland' },
+  { code: 'NZ', name: 'New Zealand' },
+  { code: 'SG', name: 'Singapore' },
+  { code: 'HK', name: 'Hong Kong' },
+  { code: 'JP', name: 'Japan' },
+  { code: 'KR', name: 'South Korea' },
+  { code: 'TW', name: 'Taiwan' },
+  { code: 'IN', name: 'India' },
+  { code: 'CN', name: 'China' },
+  { code: 'BR', name: 'Brazil' },
+  { code: 'MX', name: 'Mexico' },
+  { code: 'AR', name: 'Argentina' },
+  { code: 'CL', name: 'Chile' },
+  { code: 'CO', name: 'Colombia' },
+  { code: 'PE', name: 'Peru' },
+  { code: 'ZA', name: 'South Africa' },
+  { code: 'EG', name: 'Egypt' },
+  { code: 'NG', name: 'Nigeria' },
+  { code: 'KE', name: 'Kenya' },
+  { code: 'AE', name: 'United Arab Emirates' },
+  { code: 'SA', name: 'Saudi Arabia' },
+  { code: 'IL', name: 'Israel' },
+  { code: 'TR', name: 'Turkey' },
+  { code: 'PL', name: 'Poland' },
+  { code: 'CZ', name: 'Czech Republic' },
+  { code: 'HU', name: 'Hungary' },
+  { code: 'RO', name: 'Romania' },
+  { code: 'GR', name: 'Greece' },
+  { code: 'PT', name: 'Portugal' },
+  { code: 'RU', name: 'Russia' },
+  { code: 'UA', name: 'Ukraine' },
+  { code: 'TH', name: 'Thailand' },
+  { code: 'VN', name: 'Vietnam' },
+  { code: 'PH', name: 'Philippines' },
+  { code: 'ID', name: 'Indonesia' },
+  { code: 'MY', name: 'Malaysia' },
 ]
 
-const buyingTypeOptions = ['Auction', 'Reservation']
-
-const specialAdCategoriesOptions = [
-  'None',
-  'Credit',
-  'Employment',
-  'Housing',
-  'Social issues, elections or politics'
+const statusOptions = [
+  { value: 'active', label: '进行中' },
+  { value: 'paused', label: '已暂停' },
+  { value: 'completed', label: '已完成' },
+  { value: 'draft', label: '草稿' }
 ]
 
-const campaignStatusOptions = ['Active', 'Paused', 'Draft']
-
-const budgetTypeOptions = ['Daily budget', 'Lifetime budget']
-
-const bidStrategyOptions = [
-  'Lowest cost',
-  'Cost cap',
-  'Bid cap',
-  'ROAS goal'
-]
-
-// 获取广告账户列表
-const fetchAccountOptions = async () => {
-  loadingAccounts.value = true
-  console.log('[fetchAccountOptions] 开始获取广告账户列表, channel:', formData.value.channel)
-  
-  try {
-    const token = localStorage.getItem('animagus_token')
-    console.log('[fetchAccountOptions] Token存在:', !!token)
-    
-    const url = `/api/v1/platform-auth/ad-accounts?channel=${formData.value.channel}`
-    console.log('[fetchAccountOptions] 请求URL:', url)
-    
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${token}`
-      }
-    })
-    
-    console.log('[fetchAccountOptions] 响应状态:', response.status, response.statusText)
-    
-    if (!response.ok) {
-      const errorText = await response.text()
-      console.error('[fetchAccountOptions] 请求失败:', errorText)
-      throw new Error(`HTTP error! status: ${response.status}, message: ${errorText}`)
-    }
-    
-    const data = await response.json()
-    console.log('[fetchAccountOptions] 接收到的数据:', data)
-    
-    accountOptions.value = data.map((account: any) => ({
-      accountId: account.account_id,
-      accountName: account.account_name,
-      channel: account.channel
-    }))
-    
-    console.log('[fetchAccountOptions] 转换后的账户选项:', accountOptions.value)
-  } catch (error) {
-    console.error('[fetchAccountOptions] 获取广告账户失败:', error)
-    accountOptions.value = []
-  } finally {
-    loadingAccounts.value = false
-    console.log('[fetchAccountOptions] 加载完成, 账户数量:', accountOptions.value.length)
-  }
-}
-
-// 监听渠道变化，重新获取账户列表
-const handleChannelChange = () => {
-  formData.value.account = ''
-  if (formData.value.channel !== 'TikTok') {
-    fetchAccountOptions()
-  }
-}
-
-// 表单验证
+// 验证表单
 const validateForm = (): boolean => {
   errors.value = {}
   
@@ -179,85 +145,84 @@ const validateForm = (): boolean => {
     errors.value.product = '请输入产品名称'
   }
   
-  if (!formData.value.countries.trim()) {
-    errors.value.countries = '请输入投放国家'
+  if (!formData.value.countries) {
+    errors.value.countries = '请选择投放国家'
   }
   
-  if (!formData.value.account.trim()) {
-    errors.value.account = '请输入广告账户 ID'
-  }
-  
-  if (!formData.value.campaignName.trim()) {
-    errors.value.campaignName = '请输入 Campaign 名称'
-  }
-  
-  if (formData.value.start && formData.value.end) {
-    if (new Date(formData.value.start) > new Date(formData.value.end)) {
-      errors.value.end = '结束时间不能早于开始时间'
-    }
+  if (!formData.value.total_budget || formData.value.total_budget <= 0) {
+    errors.value.total_budget = '总预算必须大于0'
   }
   
   return Object.keys(errors.value).length === 0
 }
 
-// 提交表单
-const handleSubmit = () => {
+// 重置表单
+const resetForm = () => {
+  formData.value = {
+    name: '',
+    product: '',
+    countries: '',
+    status: 'active',
+    start: getDefaultStartDate(),
+    end: getDefaultEndDate(),
+    total_budget: 0,
+    description: ''
+  }
+  errors.value = {}
+  isEditMode.value = false
+}
+
+// 处理关闭
+const handleClose = () => {
+  if (!submitting.value) {
+    resetForm()
+    emit('close')
+  }
+}
+
+// 处理保存
+const handleSave = () => {
   if (!validateForm()) {
     return
   }
   
   submitting.value = true
-  emit('submit', { ...formData.value })
-}
-
-// 关闭弹窗
-const handleClose = () => {
-  if (!submitting.value) {
-    emit('close')
-    resetForm()
+  
+  // 将前端表单字段映射到后端 API 字段
+  const submitData = {
+    name: formData.value.name,
+    product: formData.value.product,
+    target_market: formData.value.countries,  // countries -> target_market
+    status: isEditMode.value ? formData.value.status : 'active',  // 创建时默认为active
+    start_date: formData.value.start,  // start -> start_date
+    end_date: formData.value.end,  // end -> end_date
+    total_budget: formData.value.total_budget,
+    description: formData.value.description
   }
+  
+  emit('submit', submitData)
 }
 
-// 重置表单
-const resetForm = () => {
+// 从项目数据加载到表单（编辑模式）
+const loadProjectData = (project: Project) => {
   formData.value = {
-    channel: 'Meta',
-    name: '',
-    product: '',
-    countries: '',
-    account: '',
-    campaignName: '',
-    objective: 'App promotion',
-    buyingType: 'Auction',
-    specialAdCategories: 'None',
-    abTest: '关闭',
-    campaignBudget: '开启',
-    campaignStatus: 'Draft',
-    budgetType: 'Daily budget',
-    budget: '',
-    bidStrategy: 'Lowest cost',
-    spendLimit: '',
-    start: getDefaultStartDate(),
-    end: getDefaultEndDate()
-  }
-  errors.value = {}
-  submitting.value = false
-  accountOptions.value = []
-}
-
-// 初始化时获取账户列表
-const init = () => {
-  if (formData.value.channel !== 'TikTok') {
-    fetchAccountOptions()
+    name: project.name,
+    product: project.product || '',
+    countries: project.target_market || '',
+    status: project.status || 'active',
+    start: formatDateForInput(project.start_date),
+    end: formatDateForInput(project.end_date),
+    total_budget: project.total_budget || 0,
+    description: project.description || ''
   }
 }
 
-// 监听模态框打开，自动获取账户列表
+// 监听模态框打开
 watch(() => props.show, (newVal) => {
   if (newVal) {
-    // 模态框打开时，如果渠道不是TikTok，则获取账户列表
-    if (formData.value.channel !== 'TikTok') {
-      fetchAccountOptions()
+    isEditMode.value = !!props.editingProject
+    if (props.editingProject) {
+      loadProjectData(props.editingProject)
     }
   }
 })
@@ -267,8 +232,7 @@ defineExpose({
   resetForm,
   setSubmitting: (value: boolean) => {
     submitting.value = value
-  },
-  init
+  }
 })
 </script>
 
@@ -284,12 +248,13 @@ defineExpose({
       <Transition name="slide">
         <div
           v-if="show"
-          class="fixed right-0 top-0 h-full bg-white dark:bg-slate-800 shadow-2xl w-full max-w-[600px] overflow-hidden flex flex-col rounded-l-md
-          "
+          class="fixed right-0 top-0 h-full bg-white dark:bg-slate-800 shadow-2xl w-full max-w-[600px] overflow-hidden flex flex-col rounded-l-md"
         >
           <!-- 弹窗头部 -->
           <div class="flex items-center justify-between px-[15px] py-[10px] border-b border-slate-200 dark:border-slate-700">
-            <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">新建投放项目</h3>
+            <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">
+              {{ isEditMode ? '编辑项目' : '新建投放项目' }}
+            </h3>
             <button
               class="p-[4px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               @click="handleClose"
@@ -302,308 +267,160 @@ defineExpose({
           <!-- 弹窗内容 -->
           <div class="flex-1 overflow-y-auto px-[15px] py-[10px]">
             <!-- 说明文字 -->
-            <div class="mb-[13px] p-[10px] bg-slate-50 dark:bg-slate-700/30 rounded-md">
-              <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                <strong class="text-slate-700 dark:text-slate-300">Meta Campaign 框架</strong><br>
-                项目对应 Meta Campaign 层级；下层计划对应 Meta Ad Set，素材对应 Meta Ad 素材配置。这里配置项目归属与 Campaign 字段。
+            <div class="mb-[12px] p-[8px] bg-blue-50 dark:bg-blue-900/20 rounded-md">
+              <p class="text-[10px] text-blue-600 dark:text-blue-400">
+                填写项目基本信息，创建后可继续添加 Campaign
               </p>
             </div>
 
-            <form @submit.prevent="handleSubmit" class="grid grid-cols-2 gap-x-[13px] gap-y-[13px]">
-              <!-- 项目名称 -->
+            <!-- 表单 -->
+            <form @submit.prevent="handleSave" class="space-y-[10px]">
+              <!-- 第一行：项目名称 -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  项目名称
+                  项目名称 *
                 </label>
                 <input
                   v-model="formData.name"
                   type="text"
-                  placeholder="例如 CB_US_Meta_AppPromotion"
+                  placeholder="例如：Candy Blast 全球推广"
                   class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
                   :class="{ 'border-red-500': errors.name }"
                 />
                 <p v-if="errors.name" class="mt-[3px] text-[9px] text-red-500">{{ errors.name }}</p>
               </div>
 
-              <!-- 产品 -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  产品
-                </label>
-                <input
-                  v-model="formData.product"
-                  type="text"
-                  placeholder="例如 休闲消除手游"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  :class="{ 'border-red-500': errors.product }"
-                />
-                <p v-if="errors.product" class="mt-[3px] text-[9px] text-red-500">{{ errors.product }}</p>
+              <!-- 第二行：产品 + 投放国家 -->
+              <div class="grid grid-cols-2 gap-[10px]">
+                <!-- 产品 -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    产品 *
+                  </label>
+                  <input
+                    v-model="formData.product"
+                    type="text"
+                    placeholder="例如：休闲消除手游"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    :class="{ 'border-red-500': errors.product }"
+                  />
+                  <p v-if="errors.product" class="mt-[3px] text-[9px] text-red-500">{{ errors.product }}</p>
+                </div>
+
+                <!-- 投放国家 -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    投放国家/地区 *
+                  </label>
+                  <select
+                    v-model="formData.countries"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    :class="{ 'border-red-500': errors.countries }"
+                  >
+                    <option value="">请选择国家</option>
+                    <option v-for="country in countryOptions" :key="country.code" :value="country.code">
+                      {{ country.code }} ({{ country.name }})
+                    </option>
+                  </select>
+                  <p v-if="errors.countries" class="mt-[3px] text-[9px] text-red-500">{{ errors.countries }}</p>
+                </div>
               </div>
 
-              <!-- 投放国家 -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  投放国家
-                </label>
-                <input
-                  v-model="formData.countries"
-                  type="text"
-                  placeholder="例如 美国 / 加拿大"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  :class="{ 'border-red-500': errors.countries }"
-                />
-                <p v-if="errors.countries" class="mt-[3px] text-[9px] text-red-500">{{ errors.countries }}</p>
+              <!-- 第三行：开始日期 + 结束日期 -->
+              <div class="grid grid-cols-2 gap-[10px]">
+                <!-- 开始日期 -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    Start Date
+                  </label>
+                  <input
+                    v-model="formData.start"
+                    type="datetime-local"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+                <!-- 结束日期 -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    End Date
+                  </label>
+                  <input
+                    v-model="formData.end"
+                    type="datetime-local"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
               </div>
 
-              <!-- 状态 -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  状态
-                </label>
-                <select
-                  v-model="formData.campaignStatus"
-                  disabled
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 opacity-60 cursor-not-allowed"
-                >
-                  <option v-for="status in campaignStatusOptions" :key="status" :value="status">
-                    {{ status }}
-                  </option>
-                </select>
+              <!-- 第四行：总预算 + 状态（仅编辑模式） -->
+              <div class="grid grid-cols-2 gap-[10px]">
+                <!-- 总预算 -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    Total Budget(USD) *
+                  </label>
+                  <input
+                    v-model.number="formData.total_budget"
+                    type="number"
+                    min="1.0"
+                    step="1.0"
+                    placeholder="10.00"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    :class="{ 'border-red-500': errors.total_budget }"
+                  />
+                  <p v-if="errors.total_budget" class="mt-[3px] text-[9px] text-red-500">{{ errors.total_budget }}</p>
+                </div>
+
+                <!-- 状态（仅编辑模式显示） -->
+                <div v-if="isEditMode">
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    状态
+                  </label>
+                  <select
+                    v-model="formData.status"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option v-for="status in statusOptions" :key="status.value" :value="status.value">
+                      {{ status.label }}
+                    </option>
+                  </select>
+                </div>
               </div>
 
-              <!-- 投放渠道 -->
+              <!-- 第五行：项目描述 -->
               <div>
                 <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  投放渠道
+                  项目描述
                 </label>
-                <select
-                  v-model="formData.channel"
-                  @change="handleChannelChange"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option v-for="channel in channelOptions" :key="channel" :value="channel" :disabled="channel === 'TikTok'" :class="{ 'text-slate-400': channel === 'TikTok' }">
-                    {{ channel }}{{ channel === 'TikTok' ? ' (暂未支持)' : '' }}
-                  </option>
-                </select>
-              </div>
-
-              <!-- 广告账户 -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  广告账户
-                </label>
-                <select
-                  v-model="formData.account"
-                  :disabled="loadingAccounts || formData.channel === 'TikTok'"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
-                  :class="{ 'border-red-500': errors.account }"
-                >
-                  <option value="" disabled>{{ loadingAccounts ? '加载中...' : '请选择广告账户' }}</option>
-                  <option v-for="acc in accountOptions" :key="acc.accountId" :value="acc.accountId">
-                    {{ acc.accountName }} ({{ acc.accountId }})
-                  </option>
-                </select>
-                <p v-if="errors.account" class="mt-[3px] text-[9px] text-red-500">{{ errors.account }}</p>
-              </div>
-
-              <!-- Campaign 名称 -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Campaign 名称
-                </label>
-                <input
-                  v-model="formData.campaignName"
-                  type="text"
-                  placeholder="Meta Campaign Name"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  :class="{ 'border-red-500': errors.campaignName }"
-                />
-                <p v-if="errors.campaignName" class="mt-[3px] text-[9px] text-red-500">{{ errors.campaignName }}</p>
-              </div>
-
-              <!-- Objective -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Objective
-                </label>
-                <select
-                  v-model="formData.objective"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option v-for="opt in objectiveOptions" :key="opt" :value="opt">
-                    {{ opt }}
-                  </option>
-                </select>
-              </div>
-
-              <!-- Buying type -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Buying Type
-                </label>
-                <select
-                  v-model="formData.buyingType"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option v-for="opt in buyingTypeOptions" :key="opt" :value="opt">
-                    {{ opt }}
-                  </option>
-                </select>
-              </div>
-
-              <!-- Special ad categories -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Special AD Categories
-                </label>
-                <select
-                  v-model="formData.specialAdCategories"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option v-for="opt in specialAdCategoriesOptions" :key="opt" :value="opt">
-                    {{ opt }}
-                  </option>
-                </select>
-              </div>
-
-              <!-- A/B test -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  A/B Test
-                </label>
-                <select
-                  v-model="formData.abTest"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="关闭">关闭</option>
-                  <option value="开启">开启</option>
-                </select>
-              </div>
-
-              <!-- Campaign budget 开关 -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Campaign Budget 开关
-                </label>
-                <select
-                  v-model="formData.campaignBudget"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option value="开启">开启</option>
-                  <option value="关闭">关闭</option>
-                </select>
-              </div>
-
-              <!-- Budget type -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Budget Type
-                </label>
-                <select
-                  v-model="formData.budgetType"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option v-for="type in budgetTypeOptions" :key="type" :value="type">
-                    {{ type }}
-                  </option>
-                </select>
-              </div>
-
-              <!-- daily/lifetime budget -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Daily/Lifetime budget(USD)
-                </label>
-                <input
-                  v-model="formData.budget"
-                  type="text"
-                  placeholder="例如 800 USD"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <!-- bid strategy -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Bid Strategy
-                </label>
-                <select
-                  v-model="formData.bidStrategy"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                >
-                  <option v-for="strategy in bidStrategyOptions" :key="strategy" :value="strategy">
-                    {{ strategy }}
-                  </option>
-                </select>
-              </div>
-
-              <!-- spend limit -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Spend Limit
-                </label>
-                <input
-                  v-model="formData.spendLimit"
-                  type="text"
-                  placeholder="例如 18,000 USD"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <!-- start -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  Start Date
-                </label>
-                <input
-                  v-model="formData.start"
-                  type="datetime-local"
-                  placeholder="例如 2026-06-01 10:00"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                />
-              </div>
-
-              <!-- end -->
-              <div>
-                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                  End Date
-                </label>
-                <input
-                  v-model="formData.end"
-                  type="datetime-local"
-                  placeholder="例如 2026-06-30 23:00"
-                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  :class="{ 'border-red-500': errors.end }"
-                />
-                <p v-if="errors.end" class="mt-[3px] text-[9px] text-red-500">{{ errors.end }}</p>
+                <textarea
+                  v-model="formData.description"
+                  rows="3"
+                  placeholder="简要描述项目目标和内容..."
+                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 resize-none"
+                ></textarea>
               </div>
             </form>
           </div>
 
           <!-- 弹窗底部 -->
-          <div class="flex items-center justify-between px-[15px] py-[11px] border-t border-slate-200 dark:border-slate-700">
-            <span class="text-[10px] text-slate-500 dark:text-slate-400">
-              项目对应该渠道 Campaign 层级
-            </span>
-            <div class="flex items-center gap-[8px]">
-              <button
-                type="button"
-                class="px-[13px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 text-[10px] text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                @click="handleClose"
-                :disabled="submitting"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                class="px-[13px] py-[6px] rounded-md bg-blue-600 text-white text-[10px] hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-[5px]"
-                @click="handleSubmit"
-                :disabled="submitting"
-              >
-                <span v-if="submitting" class="material-symbols-outlined animate-spin text-[10px]">progress_activity</span>
-                <span>{{ submitting ? '保存中...' : '保存项目' }}</span>
-              </button>
-            </div>
+          <div class="flex items-center justify-end gap-[8px] px-[15px] py-[10px] border-t border-slate-200 dark:border-slate-700">
+            <button
+              type="button"
+              class="px-[12px] py-[6px] text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+              @click="handleClose"
+              :disabled="submitting"
+            >
+              取消
+            </button>
+            <button
+              type="button"
+              class="px-[12px] py-[6px] text-[11px] font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              @click="handleSave"
+              :disabled="submitting"
+            >
+              {{ submitting ? '保存中...' : '保存' }}
+            </button>
           </div>
         </div>
       </Transition>
@@ -614,7 +431,7 @@ defineExpose({
 <style scoped>
 .fade-enter-active,
 .fade-leave-active {
-  transition: opacity 0.3s ease;
+  transition: opacity 0.2s ease;
 }
 
 .fade-enter-from,

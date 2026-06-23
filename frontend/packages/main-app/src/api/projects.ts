@@ -51,37 +51,19 @@ export async function getProjectDetail(projectId: string): Promise<Project> {
 }
 
 /**
- * 创建项目（同时创建初始 Campaign）
+ * 创建项目
  */
 export async function createProject(data: {
-  // Project 字段
   name: string
   product?: string
-  total_budget: number
+  target_market?: string
+  status?: string
   start_date?: string
   end_date?: string
-  
-  // Campaign 字段
-  channel: string
-  account: string
-  countries?: string
-  campaignName: string
-  objective?: string
-  buyingType?: string
-  specialAdCategories?: string
-  abTest?: string
-  campaignBudget?: string
-  campaignStatus?: string
-  budgetType?: string
-  budget?: string
-  bidStrategy?: string
-  spendLimit?: string
-  
-  // 旧字段（保持兼容）
-  game_type?: string
-  target_market?: string
-  tags?: string[]
+  total_budget?: number
   manager?: string
+  game_type?: string
+  tags?: string[]
 }): Promise<Project> {
   return http.post<Project>('/projects', data)
 }
@@ -93,8 +75,12 @@ export async function updateProject(
   projectId: string,
   data: {
     name?: string
-    total_budget?: number
+    product?: string
+    target_market?: string
     status?: string
+    start_date?: string
+    end_date?: string
+    total_budget?: number
   }
 ): Promise<Project> {
   return http.put<Project>(`/projects/${projectId}`, data)

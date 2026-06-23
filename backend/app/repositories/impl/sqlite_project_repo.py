@@ -112,6 +112,13 @@ class SqliteProjectRepository:
         if "status" in kwargs and isinstance(kwargs["status"], str):
             kwargs["status"] = ProjectStatus(kwargs["status"])
         
+        # 处理日期字符串转换
+        if "start_date" in kwargs and isinstance(kwargs["start_date"], str):
+            kwargs["start_date"] = datetime.fromisoformat(kwargs["start_date"]).date()
+        
+        if "end_date" in kwargs and isinstance(kwargs["end_date"], str):
+            kwargs["end_date"] = datetime.fromisoformat(kwargs["end_date"]).date()
+        
         for key, value in kwargs.items():
             if hasattr(project, key):
                 setattr(project, key, value)

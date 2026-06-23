@@ -46,12 +46,16 @@ class Campaign(Base):
     objective: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="广告目标，例如：App promotion, Conversions, Traffic")
     buying_type: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="购买类型，例如：Auction, Reserved")
     special_ad_categories: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="特殊广告类别，例如：None, Credit, Employment, Housing")
+    special_ad_category_country: Mapped[str | None] = mapped_column(String(500), nullable=True, comment="特殊广告类别国家列表，JSON数组格式，例如：[\"US\", \"CA\"]")
+    promoted_object: Mapped[str | None] = mapped_column(Text, nullable=True, comment="推广对象配置，JSON格式，包含 application_id, pixel_id, page_id 等")
     
     # A/B测试和预算配置
     ab_test: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="A/B测试开关：开启/关闭")
     campaign_budget_optimization: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="Campaign预算优化开关：开启/关闭")
     budget_type: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="预算类型：Daily budget / Lifetime budget")
     budget: Mapped[float] = mapped_column(Float, nullable=False, comment="预算金额")
+    budget_schedule_specs: Mapped[str | None] = mapped_column(Text, nullable=True, comment="预算排期规格，JSON数组格式")
+    pacing_type: Mapped[str | None] = mapped_column(String(50), nullable=True, comment="投放节奏类型：standard, day_parting")
     
     # 出价策略
     bid_strategy: Mapped[str | None] = mapped_column(String(100), nullable=True, comment="出价策略：Lowest cost, Cost cap, Bid cap, ROAS goal")

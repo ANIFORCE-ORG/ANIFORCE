@@ -10,7 +10,20 @@ export interface Campaign {
   name: string
   description?: string
   platform: string
+  account_id?: string
+  objective?: string
+  buying_type?: string
+  special_ad_categories?: string
+  special_ad_category_country?: string
+  promoted_object?: string
+  ab_test?: string
+  campaign_budget_optimization?: string
+  budget_type?: string
   budget: number
+  budget_schedule_specs?: string
+  pacing_type?: string
+  bid_strategy?: string
+  spend_limit?: number
   spent: number
   status: string
   material_ids: string[]
@@ -69,11 +82,47 @@ export async function createCampaign(data: {
   project_id: string
   name: string
   platform: string
-  budget: number
+  account_id: string
+  objective?: string
+  buying_type?: string
+  special_ad_categories?: string
+  ab_test?: string
+  campaign_budget_optimization?: string
   status?: string
+  budget_type?: string
+  budget: number
+  bid_strategy?: string
+  spend_limit?: string
   material_ids?: string[]
 }): Promise<Campaign> {
   return http.post<Campaign>('/campaigns', data)
+}
+
+/**
+ * 更新广告投放
+ */
+export async function updateCampaign(
+  campaignId: string,
+  data: {
+    name?: string
+    platform?: string
+    account_id?: string
+    objective?: string
+    buying_type?: string
+    special_ad_categories?: string
+    ab_test?: string
+    campaign_budget_optimization?: string
+    status?: string
+    budget_type?: string
+    budget?: number
+    bid_strategy?: string
+    spend_limit?: number
+    start_date?: string
+    end_date?: string
+    material_ids?: string[]
+  }
+): Promise<Campaign> {
+  return http.put<Campaign>(`/campaigns/${campaignId}`, data)
 }
 
 /**

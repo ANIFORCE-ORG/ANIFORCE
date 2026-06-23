@@ -20,12 +20,22 @@ class SqliteCampaignRepository:
             "name": campaign.name,
             "description": campaign.description,
             "platform": campaign.platform.value,
+            "account_id": campaign.account_id,
             "budget": campaign.budget,
             "spent": campaign.spent,
             "status": campaign.status.value,
             "material_ids": campaign.get_material_ids(),
             "start_date": campaign.start_date.isoformat() if campaign.start_date else None,
             "end_date": campaign.end_date.isoformat() if campaign.end_date else None,
+            # Meta Campaign 特定字段
+            "objective": campaign.objective,
+            "buying_type": campaign.buying_type,
+            "special_ad_categories": campaign.special_ad_categories,
+            "ab_test": campaign.ab_test,
+            "campaign_budget_optimization": campaign.campaign_budget_optimization,
+            "budget_type": campaign.budget_type,
+            "bid_strategy": campaign.bid_strategy,
+            "spend_limit": campaign.spend_limit,
             "config": json.loads(campaign.config) if campaign.config else {},
             "created_at": campaign.created_at.isoformat(),
             "updated_at": campaign.updated_at.isoformat(),
@@ -35,6 +45,8 @@ class SqliteCampaignRepository:
         self, project_id: str, name: str, platform: str, budget: float, **kwargs
     ) -> dict:
         """创建广告投放"""
+        from datetime import datetime
+        
         # 处理 material_ids
         material_ids = kwargs.pop("material_ids", None)
         if material_ids and isinstance(material_ids, list):
@@ -53,6 +65,21 @@ class SqliteCampaignRepository:
         # 处理 platform
         if isinstance(platform, str):
             platform = Platform(platform)
+        
+        # 处理日期字段：将字符串转换为 date 对象
+        start_date = kwargs.pop("start_date", None)
+        if start_date and isinstance(start_date, str):
+            try:
+                kwargs["start_date"] = datetime.fromisoformat(start_date.replace('Z', '+00:00')).date()
+            except (ValueError, AttributeError):
+                pass  # 如果转换失败，忽略该字段
+        
+        end_date = kwargs.pop("end_date", None)
+        if end_date and isinstance(end_date, str):
+            try:
+                kwargs["end_date"] = datetime.fromisoformat(end_date.replace('Z', '+00:00')).date()
+            except (ValueError, AttributeError):
+                pass  # 如果转换失败，忽略该字段
         
         campaign = Campaign(
             project_id=project_id,
@@ -92,6 +119,60 @@ class SqliteCampaignRepository:
         campaigns = result.scalars().all()
         
         return [self._to_dict(c) for c in campaigns]
+    
+    async def update(self, campaign_id: str, **kwargs) -> dict:
+        """更新广告投放"""
+        from datetime import datetime
+        
+        result = await self.session.execute(
+            select(Campaign).where(Campaign.id == campaign_id)
+        )
+        campaign = result.scalar_one_or_none()
+        if not campaign:
+            raise ValueError(f"Campaign {campaign_id} not found")
+        
+        # 处理 material_ids
+        material_ids = kwargs.pop("material_ids", None)
+        if material_ids is not None and isinstance(material_ids, list):
+            kwargs["material_ids"] = json.dumps(material_ids)
+        
+        # 处理 config
+        config = kwargs.pop("config", None)
+        if config is not None and isinstance(config, dict):
+            kwargs["config"] = json.dumps(config)
+        
+        # 处理 status
+        status = kwargs.pop("status", None)
+        if status is not None and isinstance(status, str):
+            kwargs["status"] = CampaignStatus(status)
+        
+        # 处理 platform
+        platform = kwargs.pop("platform", None)
+        if platform is not None and isinstance(platform, str):
+            kwargs["platform"] = Platform(platform)
+        
+        # 处理日期字段：将字符串转换为 date 对象
+        start_date = kwargs.pop("start_date", None)
+        if start_date is not None and isinstance(start_date, str):
+            try:
+                kwargs["start_date"] = datetime.fromisoformat(start_date.replace('Z', '+00:00')).date()
+            except (ValueError, AttributeError):
+                pass  # 如果转换失败，忽略该字段
+        
+        end_date = kwargs.pop("end_date", None)
+        if end_date is not None and isinstance(end_date, str):
+            try:
+                kwargs["end_date"] = datetime.fromisoformat(end_date.replace('Z', '+00:00')).date()
+            except (ValueError, AttributeError):
+                pass  # 如果转换失败，忽略该字段
+        
+        # 更新字段
+        for key, value in kwargs.items():
+            if hasattr(campaign, key):
+                setattr(campaign, key, value)
+        
+        await self.session.flush()
+        return self._to_dict(campaign)
     
     async def update_status(self, campaign_id: str, status: str) -> None:
         """更新广告投放状态"""
