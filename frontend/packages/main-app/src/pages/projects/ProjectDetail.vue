@@ -4,7 +4,10 @@ import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ChatPanel from '@/components/layout/ChatPanel.vue'
+import CampaignCardDetailed from '@/components/campaigns/CampaignCardDetailed.vue'
+import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
 import { getProjectDetail, getProjectCampaigns, type Project } from '@/api/projects'
+import { createCampaign, updateCampaign } from '@/api/campaigns'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
@@ -19,6 +22,9 @@ const error = ref<string | null>(null)
 
 const project = ref<Project | null>(null)
 const campaigns = ref<any[]>([])
+const showCampaignModal = ref(false)
+const campaignModalRef = ref<any>(null)
+const editingCampaign = ref<any>(null)
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -108,10 +114,73 @@ const handleBack = () => {
 }
 
 const handleCreateCampaign = () => {
-  router.push({
-    path: '/campaigns/create',
-    query: { projectId: projectId.value }
-  })
+  showCampaignModal.value = true
+}
+
+const handleSubmitCampaign = async (data: any) => {
+  try {
+    const isEdit = !!data.id
+    console.log(`=== ${isEdit ? '更新' : '创建'} Campaign 请求 ===`)
+    console.log('Campaign 数据:', JSON.stringify(data, null, 2))
+    
+    let result
+    if (isEdit) {
+      // 编辑模式：更新 Campaign
+      console.log('Campaign ID:', data.id)
+      result = await updateCampaign(data.id, data)
+      console.log('Campaign 更新成功:', result)
+      alert('Campaign 更新成功！')
+    } else {
+      // 创建模式：创建新 Campaign
+      console.log('关联项目 ID:', projectId.value)
+      
+      if (!projectId.value) {
+        console.error('项目 ID 缺失，无法创建 Campaign')
+        return
+      }
+      
+      // 添加 project_id（字段映射已在 CreateCampaignModal 中完成）
+      const requestData = {
+        project_id: projectId.value,
+        ...data
+      }
+      
+      console.log('请求数据:', JSON.stringify(requestData, null, 2))
+      result = await createCampaign(requestData)
+      console.log('Campaign 创建成功:', result)
+      alert('Campaign 创建成功！')
+    }
+    
+    // 关闭 Campaign 模态框
+    showCampaignModal.value = false
+    editingCampaign.value = null
+    
+    // 刷新 Campaign 列表
+    await loadCampaigns()
+  } catch (err: any) {
+    console.error(`=== ${data.id ? '更新' : '创建'} Campaign 失败 ===`, err)
+    alert(`${data.id ? '更新' : '创建'} Campaign 失败：${err.message || '未知错误'}`)
+    
+    // 重置提交状态
+    if (campaignModalRef.value) {
+      campaignModalRef.value.setSubmitting(false)
+    }
+  } finally {
+    // 确保重置提交状态
+    if (campaignModalRef.value) {
+      campaignModalRef.value.setSubmitting(false)
+    }
+  }
+}
+
+const loadCampaigns = async () => {
+  try {
+    const data = await getProjectCampaigns(projectId.value)
+    campaigns.value = data
+    console.log('Campaign 列表加载成功:', data.length, '条')
+  } catch (err: any) {
+    console.error('加载 Campaign 列表失败:', err)
+  }
 }
 
 const handleViewCampaign = (campaignId: string) => {
@@ -122,13 +191,10 @@ const handleAddCreative = (campaignId: string) => {
   console.log('添加素材:', campaignId)
 }
 
-const getPlatformColor = (platform: string) => {
-  const colors: Record<string, string> = {
-    'Google': 'text-blue-600',
-    'TikTok': 'text-slate-900 dark:text-white',
-    'Meta': 'text-blue-500'
-  }
-  return colors[platform] || 'text-slate-600'
+const handleEditCampaign = (campaign: any) => {
+  console.log('编辑 Campaign:', campaign)
+  editingCampaign.value = campaign
+  showCampaignModal.value = true
 }
 </script>
 
@@ -156,66 +222,82 @@ const getPlatformColor = (platform: string) => {
             <span class="material-symbols-outlined text-[15px]">arrow_back</span>
             <span class="text-[11px] font-medium">返回项目列表</span>
           </button>
-          <div class="h-[19px] w-px bg-slate-200 dark:bg-slate-800"></div>
-          <h2 class="text-[17px] font-bold text-slate-900 dark:text-white mb-[6px]">{{ project?.name }}</h2>
         </div>
       </div>
 
       <!-- Content -->
       <div class="flex-1 overflow-y-auto p-[19px]">
         <!-- 项目详情信息 -->
-        <div class="mb-[19px] p-[16px] rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50">
-          <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white mb-[12px]">项目描述</h4>
-          <div class="grid grid-cols-2 gap-[12px]">
-            <div class="col-span-2">
-              <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-[12px]">{{ project?.description || '暂无描述' }}</p>
+        <aside class="mb-[15px] p-[16px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 shadow-sm">
+          <div class="flex items-center gap-[12px] mb-[6px]">
+            <h2 class="text-[17px] font-bold text-slate-900 dark:text-white">{{ project?.name }}</h2>
+            <div class="h-[19px] w-px bg-slate-200 dark:bg-slate-800"></div>
+            <div class="flex-1">
+              <h3 class="text-[14px] font-semibold text-slate-900 dark:text-white tracking-tight">项目信息</h3>
+              <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed mt-[4px]">{{ project?.description || '暂无描述' }}</p>
             </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">产品类型</div>
-              <div class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ project?.game_type }}</div>
+          </div>
+          
+          <div class="grid grid-cols-4 gap-[8px]">
+            <!-- 产品类型 -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">产品类型</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.game_type || '-' }}</strong>
             </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">目标市场</div>
-              <div class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ project?.target_market }}</div>
+            
+            <!-- 目标市场 -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">目标市场</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.target_market || '-' }}</strong>
             </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">总预算</div>
-              <div class="text-[11px] font-semibold text-slate-900 dark:text-white">${{ project?.total_budget.toLocaleString() }}</div>
+            
+            <!-- 总预算 -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">总预算</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">${{ project?.total_budget.toLocaleString() || '-' }}</strong>
             </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">已消耗</div>
-              <div class="text-[11px] font-semibold text-slate-900 dark:text-white">${{ project?.spent.toLocaleString() }}</div>
+            
+            <!-- 已消耗 -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">已消耗</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">${{ project?.spent.toLocaleString() || '-' }}</strong>
             </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">进度</div>
-              <div class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ project ? Math.round((project.spent / project.total_budget) * 100) : 0 }}%</div>
-            </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">标签</div>
-              <div class="flex gap-[4px] flex-wrap">
+
+            <!-- 标签 -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug mb-[5px]">标签</span>
+              <div class="flex gap-[5px] flex-wrap">
                 <span
                   v-for="tag in project?.tags || []"
                   :key="tag"
-                  class="text-[10px] px-[6px] py-[4px] rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+                  class="inline-flex items-center px-[6px] py-[2px] rounded-md text-[8px] font-medium text-slate-700 dark:text-slate-300 bg-slate-100 dark:bg-slate-700 border border-slate-200 dark:border-slate-600"
                 >
                   {{ tag }}
                 </span>
+                <span v-if="!project?.tags || project.tags.length === 0" class="text-[9px] text-slate-400 dark:text-slate-500">-</span>
               </div>
             </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">开始日期</div>
-              <div class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ project?.start_date }}</div>
+            
+            <!-- 开始/结束日期 -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">开始 / 结束</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.start_date || '-' }} / {{ project?.end_date || '-' }}</strong>
             </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">结束日期</div>
-              <div class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ project?.end_date }}</div>
+            
+            <!-- 负责人 -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">负责人</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.manager || '-' }}</strong>
             </div>
-            <div class="flex justify-between py-[6px] border-b border-slate-200 dark:border-slate-700">
-              <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">负责人</div>
-              <div class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ project?.manager }}</div>
+
+            <!-- 状态 -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">状态</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.status || '-' }}</strong>
             </div>
+            
           </div>
-        </div>
+        </aside>
 
         <!-- 广告计划列表 -->
         <div>
@@ -226,56 +308,19 @@ const getPlatformColor = (platform: string) => {
               @click="handleCreateCampaign"
             >
               <span class="material-symbols-outlined text-[15px]">add</span>
-              新建广告
+              创建广告任务
             </button>
           </div>
           
           <div class="space-y-[9px]">
-            <div
+            <CampaignCardDetailed
               v-for="campaign in campaigns"
               :key="campaign.id"
-              class="p-[12px] rounded-md border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-800/50 hover:border-primary/50 transition-all"
-            >
-              <!-- Campaign Header -->
-              <div class="flex items-center justify-between mb-[9px]">
-                <div class="flex-1">
-                  <div class="text-[12px] font-semibold text-slate-900 dark:text-white mb-[4px]">{{ campaign.name }}</div>
-                  <div class="text-[10px] font-medium" :class="getPlatformColor(campaign.platform)">{{ campaign.platform }}</div>
-                </div>
-              </div>
-
-              <!-- Campaign Stats -->
-              <div class="grid grid-cols-3 gap-[12px] mb-[9px]">
-                <div>
-                  <div class="text-[15px] font-bold text-slate-900 dark:text-white">${{ campaign.spent?.toLocaleString() || 0 }}</div>
-                  <div class="text-[10px] text-slate-500 dark:text-slate-400">消耗</div>
-                </div>
-                <div>
-                  <div class="text-[15px] font-bold text-slate-900 dark:text-white">${{ campaign.budget?.toLocaleString() || 0 }}</div>
-                  <div class="text-[10px] text-slate-500 dark:text-slate-400">预算</div>
-                </div>
-                <div>
-                  <div class="text-[15px] font-bold text-emerald-600">{{ campaign.status }}</div>
-                  <div class="text-[10px] text-slate-500 dark:text-slate-400">状态</div>
-                </div>
-              </div>
-
-              <!-- Campaign Actions -->
-              <div class="flex items-center gap-[6px]">
-                <button
-                  class="flex-1 px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
-                  @click="handleViewCampaign(campaign.id)"
-                >
-                  查看详情
-                </button>
-                <button
-                  class="px-[9px] py-[6px] text-[11px] font-medium text-primary hover:underline"
-                  @click="handleAddCreative(campaign.id)"
-                >
-                  添加素材
-                </button>
-              </div>
-            </div>
+              :campaign="campaign"
+              @view="handleViewCampaign"
+              @add-creative="handleAddCreative"
+              @edit="handleEditCampaign"
+            />
           </div>
 
           <!-- Empty State -->
@@ -287,7 +332,7 @@ const getPlatformColor = (platform: string) => {
               @click="handleCreateCampaign"
             >
               <span class="material-symbols-outlined text-[15px]">add</span>
-              <span class="text-[11px] font-medium">创建首个广告</span>
+              <span class="text-[11px] font-medium">创建首个广告任务</span>
             </button>
           </div>
         </div>
@@ -302,6 +347,15 @@ const getPlatformColor = (platform: string) => {
       @send-message="handleSendMessage"
       @hint-click="handleHintClick"
       @update:chat-input="chatInput = $event"
+    />
+
+    <!-- Campaign 创建/编辑模态框 -->
+    <CreateCampaignModal
+      ref="campaignModalRef"
+      :show="showCampaignModal"
+      :initial-data="editingCampaign"
+      @close="showCampaignModal = false; editingCampaign = null"
+      @submit="handleSubmitCampaign"
     />
   </div>
 </template>

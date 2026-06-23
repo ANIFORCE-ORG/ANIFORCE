@@ -1,10 +1,11 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, watch, computed } from 'vue'
 import { http } from '@/api/http'
 
 interface Props {
   show: boolean
   projectId?: string
+  initialData?: any
 }
 
 interface Emits {
@@ -38,6 +39,9 @@ interface AccountOption {
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
+
+// 是否为编辑模式
+const isEditMode = computed(() => !!props.initialData)
 
 const formData = ref<CampaignFormData>({
   channel: 'Meta',
@@ -191,7 +195,8 @@ const handleSave = () => {
   submitting.value = true
   
   // 将前端表单字段映射到后端 API 字段
-  const submitData = {
+  const submitData: any = {
+    id: props.initialData?.id,  // 编辑模式时包含 ID
     name: formData.value.campaignName,  // campaignName -> name
     platform: formData.value.channel,  // channel -> platform
     account_id: formData.value.account,  // account -> account_id
@@ -228,6 +233,32 @@ watch(() => props.show, (newVal) => {
   }
 })
 
+// 监听 initialData 变化，填充表单数据
+watch(() => props.initialData, (newData) => {
+  if (newData) {
+    console.log('编辑模式：填充表单数据', newData)
+    formData.value = {
+      channel: newData.platform || 'Meta',
+      account: newData.account_id || '',
+      campaignName: newData.name || '',
+      objective: newData.objective || 'App promotion',
+      buyingType: newData.buying_type || 'Auction',
+      specialAdCategories: newData.special_ad_categories || 'None',
+      abTest: newData.ab_test || '关闭',
+      campaignBudget: newData.campaign_budget_optimization || '开启',
+      campaignStatus: newData.status || 'draft',
+      budgetType: newData.budget_type || 'Daily budget',
+      budget: newData.budget?.toString() || '',
+      bidStrategy: newData.bid_strategy || 'Lowest cost',
+      spendLimit: newData.spend_limit?.toString() || '',
+      start_date: newData.start_date || new Date().toISOString().slice(0, 16),
+      end_date: newData.end_date || new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString().slice(0, 16)
+    }
+  } else {
+    resetForm()
+  }
+}, { immediate: true })
+
 // 监听提交完成
 defineExpose({
   resetForm,
@@ -255,7 +286,7 @@ defineExpose({
           <!-- 弹窗头部 -->
           <div class="flex items-center justify-between px-[15px] py-[10px] border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">
-              创建 Campaign
+              {{ isEditMode ? '编辑 Campaign' : '创建 Campaign' }}
             </h3>
             <button
               class="p-[4px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -537,7 +568,7 @@ defineExpose({
               @click="handleSave"
               :disabled="submitting"
             >
-              {{ submitting ? '创建中...' : '创建' }}
+              {{ submitting ? (isEditMode ? '保存中...' : '创建中...') : (isEditMode ? '保存' : '创建') }}
             </button>
           </div>
         </div>

@@ -37,6 +37,27 @@ class CreateCampaignRequest(BaseModel):
     end_date: str | None = None
 
 
+class UpdateCampaignRequest(BaseModel):
+    """更新广告计划请求模型"""
+    name: str | None = None
+    platform: str | None = None
+    budget: float | None = None
+    status: str | None = None
+    material_ids: list[str] | None = None
+    # Meta Campaign 特定字段
+    account_id: str | None = None
+    objective: str | None = None
+    buying_type: str | None = None
+    special_ad_categories: str | None = None
+    ab_test: str | None = None
+    campaign_budget_optimization: str | None = None
+    budget_type: str | None = None
+    bid_strategy: str | None = None
+    spend_limit: float | None = None
+    start_date: str | None = None
+    end_date: str | None = None
+
+
 @router.get("")
 async def list_campaigns(
     project_id: str | None = None,
@@ -141,6 +162,67 @@ async def create_campaign(
     await session.commit()
     
     return campaign
+
+
+@router.put("/{campaign_id}")
+async def update_campaign(
+    campaign_id: str,
+    request: UpdateCampaignRequest,
+    current_user: dict = Depends(get_current_user),
+    campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    """更新广告投放"""
+    campaign = await campaign_repo.get_by_id(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    # 验证权限
+    project = await project_repo.get_by_id(campaign["project_id"])
+    if not project or project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    
+    # 准备更新数据，只更新非 None 的字段
+    update_data = {}
+    if request.name is not None:
+        update_data["name"] = request.name
+    if request.platform is not None:
+        update_data["platform"] = request.platform
+    if request.budget is not None:
+        update_data["budget"] = request.budget
+    if request.status is not None:
+        update_data["status"] = request.status
+    if request.material_ids is not None:
+        update_data["material_ids"] = request.material_ids
+    if request.account_id is not None:
+        update_data["account_id"] = request.account_id
+    if request.objective is not None:
+        update_data["objective"] = request.objective
+    if request.buying_type is not None:
+        update_data["buying_type"] = request.buying_type
+    if request.special_ad_categories is not None:
+        update_data["special_ad_categories"] = request.special_ad_categories
+    if request.ab_test is not None:
+        update_data["ab_test"] = request.ab_test
+    if request.campaign_budget_optimization is not None:
+        update_data["campaign_budget_optimization"] = request.campaign_budget_optimization
+    if request.budget_type is not None:
+        update_data["budget_type"] = request.budget_type
+    if request.bid_strategy is not None:
+        update_data["bid_strategy"] = request.bid_strategy
+    if request.spend_limit is not None:
+        update_data["spend_limit"] = request.spend_limit
+    if request.start_date is not None:
+        update_data["start_date"] = request.start_date
+    if request.end_date is not None:
+        update_data["end_date"] = request.end_date
+    
+    # 调用 repository 更新方法
+    updated_campaign = await campaign_repo.update(campaign_id, **update_data)
+    await session.commit()
+    
+    return updated_campaign
 
 
 @router.put("/{campaign_id}/status")

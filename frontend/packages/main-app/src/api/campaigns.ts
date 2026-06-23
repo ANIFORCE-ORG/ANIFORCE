@@ -86,6 +86,33 @@ export async function createCampaign(data: {
 }
 
 /**
+ * 更新广告投放
+ */
+export async function updateCampaign(
+  campaignId: string,
+  data: {
+    name?: string
+    platform?: string
+    account_id?: string
+    objective?: string
+    buying_type?: string
+    special_ad_categories?: string
+    ab_test?: string
+    campaign_budget_optimization?: string
+    status?: string
+    budget_type?: string
+    budget?: number
+    bid_strategy?: string
+    spend_limit?: number
+    start_date?: string
+    end_date?: string
+    material_ids?: string[]
+  }
+): Promise<Campaign> {
+  return http.put<Campaign>(`/campaigns/${campaignId}`, data)
+}
+
+/**
  * 更新广告投放状态
  */
 export async function updateCampaignStatus(
