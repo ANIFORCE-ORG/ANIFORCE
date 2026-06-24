@@ -91,6 +91,10 @@ class AgentTaskService:
             )
         return session
 
+    async def session_exists(self, user_id: str, session_id: str) -> bool:
+        """兼容旧直连 API：检查 agent-service 本地是否仍有产品 session 记录。"""
+        return await self._repo.session_exists(user_id, session_id)
+
     async def rename_session(self, user_id: str, session_id: str, title: str) -> AgentSession:
         """重命名用户会话。"""
         title = title.strip()[:80]
@@ -461,7 +465,12 @@ class AgentTaskService:
                     yield event
             finally:
                 if task.session_id:
-                    await self._repo.touch_session(user_id, task.session_id)
+                    try:
+                        await self._repo.touch_session(user_id, task.session_id)
+                    except Exception as exc:
+                        logger.bind(session_id=task.session_id, user_id=user_id).warning(
+                            "Deprecated product session touch ignored: {}", exc
+                        )
     
     async def stream_task_events(
         self,

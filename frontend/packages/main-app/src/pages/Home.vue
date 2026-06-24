@@ -3,8 +3,8 @@ export default { name: 'Home' }
 </script>
 
 <script setup lang="ts">
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated } from 'vue'
-import { useRouter } from 'vue-router'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
@@ -14,6 +14,7 @@ import type { AgentMessage } from '@/api/agent'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
+const route = useRoute()
 const agent = useAgentSession()
 const inputText = ref('')
 const hasInteracted = ref(false)
@@ -378,6 +379,16 @@ const switchSession = (session: any) => {
   }
 }
 
+async function selectSessionFromRoute(): Promise<boolean> {
+  const querySessionId = typeof route.query.session_id === 'string' ? route.query.session_id : ''
+  if (!querySessionId) return false
+  const target = agent.sessions.value.find(session => session.id === querySessionId)
+  if (!target) return false
+  hasInteracted.value = true
+  await agent.selectSession(target)
+  return true
+}
+
 function openRenameSession(session: { id: string; name: string }) {
   renameDialog.value = session
   renameValue.value = session.name
@@ -422,6 +433,7 @@ onMounted(async () => {
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   await Promise.all([agent.refreshModels(), agent.refreshSessions()])
+  if (await selectSessionFromRoute()) return
   const existing = agent.activeSession.value
   const savedSessionId = localStorage.getItem('aniforce.activeSessionId')
   const saved = savedSessionId ? agent.sessions.value.find(session => session.id === savedSessionId) : null
@@ -437,6 +449,7 @@ onActivated(() => {
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   agent.resumeTypewriter?.()
+  void selectSessionFromRoute()
 })
 
 onBeforeUnmount(() => {
@@ -451,6 +464,13 @@ onDeactivated(() => {
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   agent.pauseTypewriter?.()
 })
+
+watch(
+  () => route.query.session_id,
+  () => {
+    void selectSessionFromRoute()
+  }
+)
 </script>
 
 <template>
@@ -460,8 +480,11 @@ onDeactivated(() => {
     <SidebarNav 
       :nav-items="navItems"
       :sessions="sidebarSessions"
+      session-actions
+      session-create
       @switch-panel="switchPanel"
       @switch-session="switchSession"
+      @create-session="createSessionForActiveMode"
       @rename-session="openRenameSession"
       @delete-session="openDeleteSession"
     />

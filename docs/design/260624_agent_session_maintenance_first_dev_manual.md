@@ -141,6 +141,9 @@ agent-service.SQLiteSession LLM replay cache
 
 ```text
 backend/app/models/agent_session.py
+backend/app/models/__init__.py
+backend/alembic/env.py
+backend/alembic/versions/<revision>_add_agent_sessions_table.py
 backend/app/repositories/impl/sqlite_agent_session_repo.py
 backend/app/services/agent_session_service.py
 ```
@@ -153,9 +156,9 @@ CREATE TABLE agent_sessions (
     user_id TEXT NOT NULL,
     title TEXT NOT NULL,
     status TEXT NOT NULL DEFAULT 'active',
-    created_at TEXT NOT NULL,
-    updated_at TEXT NOT NULL,
-    archived_at TEXT
+    created_at DATETIME NOT NULL,
+    updated_at DATETIME NOT NULL,
+    archived_at DATETIME
 );
 
 CREATE INDEX idx_agent_sessions_user_updated
@@ -173,6 +176,15 @@ archived
 ```
 
 不要把 `running/error` 放进 `agent_sessions.status`。运行态继续暂存在 `session_states.status`，后续再由 `agent_runs` 承接。
+
+实现约束：
+
+```text
+- ORM 使用 SQLAlchemy DateTime 字段，与 Alembic migration 保持一致。
+- 新模型必须加入 backend/app/models/__init__.py。
+- Alembic env.py 必须 import AgentSession，保证 target_metadata 包含新表。
+- migration 必须显式创建 agent_sessions 表和 user/status、user/updated_at 索引。
+```
 
 ### 2.2 Backend session API 改为本地实现
 
@@ -241,21 +253,24 @@ AgentGatewayService 删除或标记 deprecated：
 
 agent-service 的 `/api/agent/sessions` 不再作为产品事实源。
 
-第一阶段建议保留接口但标记 deprecated，避免旧前端或测试直接崩：
+第一阶段建议保留旧接口但标记 deprecated，避免既有 agent-service E2E 直接崩。注意：
+deprecated 兼容不是产品事实源，新 backend/frontend 代码禁止调用。
 
 ```text
 GET /api/agent/sessions
-- 返回 410 Gone 或空列表 + deprecation warning
+- 可短期保留旧行为，但 response header 或代码注释必须标记 deprecated
+- 不作为新代码依赖
 
 POST /api/agent/sessions
-- 返回 410 Gone，提示使用 backend /api/v1/agent/sessions
+- 可短期保留旧行为，或返回 410 Gone
+- 新代码必须使用 backend /api/v1/agent/sessions
 
 GET /api/agent/sessions/{session_id}
-- 不再返回产品 messages
-- 可选只返回 runtime cache 诊断信息，但默认不开放给前端
+- 可短期保留旧行为，或只返回 runtime/cache 诊断
+- 新代码禁止从这里读取产品 messages
 ```
 
-如果担心兼容测试，短期可保留旧接口，但必须在文档和代码注释明确：
+后续第二阶段再统一改成 410 Gone 或内部诊断接口。
 
 ```text
 仅 deprecated 兼容，不作为产品数据源。
@@ -283,10 +298,41 @@ def create_sdk_session(session_id: str) -> SQLiteSession:
 约束：
 
 ```text
-session_id 必须由 backend 生成或校验。
-agent-service 不生成产品 session_id。
+- backend_product_session_id 必须由 backend 生成或校验。
+- agent-service 不生成产品 session_id。
+- agent-service 的 task.session_id 保存 backend_product_session_id。
+- SDK SQLiteSession 内部 id 可按 api_mode/provider 加 namespace，
+  例如 chat_completions:{session_id}，但映射规则必须稳定。
+- 同一个 backend_product_session_id 连续 run 必须命中同一个 SDK replay cache。
 AGENT_SESSION_DB 只作为 runtime cache。
 清理 runtime/agent/sessions.db 不影响 backend agent_sessions。
+```
+
+### 2.6 Agent-Service run 入口解耦产品 session
+
+第一阶段最容易漏的是 agent-service `/api/agent/runs`。当前它会校验或创建
+`tasks.db.sessions`，这和 backend 作为事实源冲突。
+
+必须调整：
+
+```text
+aniforce-agent/app/api/runs.py
+- 要求 backend 传入 session_id
+- 新 backend 转发的 session_id 不依赖 tasks.db.sessions
+- 兼容旧直连调用：如果 tasks.db.sessions 里存在该 session，则继续校验归属和 active
+- 不再在缺省 session_id 时调用 AgentTaskService.create_session
+- 只创建 task，并把 backend 传入的 session_id 写入 task.session_id
+
+aniforce-agent/app/services/agent_task_service.py
+- run_task 结束后的 touch_session 不能成为产品 session 必需路径
+- 如果保留 deprecated tasks.db.sessions，touch_session 只能 best-effort
+```
+
+职责边界：
+
+```text
+backend 校验 session_id 是否存在、归属当前 user、是否 active。
+agent-service 信任 backend 的 session_id，只负责 runtime task/event 和 SDK cache。
 ```
 
 ---
@@ -327,6 +373,8 @@ Block S0: passed 4/4
 ```text
 backend/app/models/agent_session.py
 backend/app/models/__init__.py
+backend/alembic/env.py
+backend/alembic/versions/<revision>_add_agent_sessions_table.py
 backend/app/repositories/impl/sqlite_agent_session_repo.py
 backend/app/services/agent_session_service.py
 ```
@@ -340,6 +388,7 @@ backend/app/services/agent_session_service.py
 4. archive session 软删除
 5. archived 默认不出现在 list
 6. 非归属用户无法读取/修改/归档
+7. Alembic migration 可创建 agent_sessions 表和索引
 ```
 
 建议脚本：
@@ -351,7 +400,7 @@ backend/tests/e2e/session_refactor/block_s1_backend_agent_sessions.py
 验收：
 
 ```text
-Block S1: passed 6/6
+Block S1: passed 7/7
 ```
 
 ### Block S2：Backend session API 切本地
@@ -401,11 +450,12 @@ backend/app/services/agent_session_service.py
 
 ```text
 POST /api/v1/agent/runs
-- 如果 session_id 缺失：可选自动创建 backend session
+- 如果 session_id 缺失：必须通过 AgentSessionService 创建完整 backend session
 - 如果 session_id 存在：必须校验 user_id + active
 - session archived：返回 409 SESSION_ARCHIVED
 - session 不存在或非归属：返回 404 SESSION_NOT_FOUND
 - run 成功启动后 touch agent_sessions.updated_at
+- 禁止只创建 session_state 而不创建 agent_session
 ```
 
 验证点：
@@ -416,6 +466,7 @@ POST /api/v1/agent/runs
 3. 其他用户 session 拒绝 run
 4. run 后 agent_sessions.updated_at 更新
 5. agent_payload 传给 agent-service 的 session_id 等于 backend session_id
+6. 缺省 session_id 的 run 会同时创建 agent_sessions 和 session_states
 ```
 
 建议脚本：
@@ -427,7 +478,7 @@ backend/tests/e2e/session_refactor/block_s3_run_uses_backend_session.py
 验收：
 
 ```text
-Block S3: passed 5/5
+Block S3: passed 6/6
 ```
 
 ### Block S4：Agent-Service 只保留 SDK session cache
@@ -438,6 +489,8 @@ Block S3: passed 5/5
 
 ```text
 aniforce-agent/app/api/sessions.py
+aniforce-agent/app/api/runs.py
+aniforce-agent/app/services/agent_task_service.py
 aniforce-agent/app/agent/session_factory.py
 aniforce-agent/app/agent/runtime.py 或 openai_adapter.py
 ```
@@ -445,10 +498,12 @@ aniforce-agent/app/agent/runtime.py 或 openai_adapter.py
 验证点：
 
 ```text
-1. agent-service run 使用传入 session_id 创建 SQLiteSession
-2. 同一个 session_id 连续两轮有 LLM replay 记忆
-3. 删除 runtime/agent/sessions.db 后，backend session 列表不丢
-4. agent-service /api/agent/sessions 标记 deprecated 或不再被 backend 调用
+1. agent-service /api/agent/runs 不再要求 tasks.db.sessions 必须存在
+2. agent-service run 使用 backend 传入 session_id 创建 SQLiteSession
+3. 同一个 backend session_id 连续两轮有 LLM replay 记忆
+4. 删除 runtime/agent/sessions.db 后，backend session 列表不丢
+5. 删除 runtime/agent/tasks.db 后，backend session 列表不丢
+6. agent-service /api/agent/sessions 标记 deprecated 或不再被 backend 调用
 ```
 
 建议脚本：
@@ -460,7 +515,7 @@ aniforce-agent/tests/e2e_openai_refactor/block_s4_sdk_session_cache_only.py
 验收：
 
 ```text
-Block S4: passed 4/4
+Block S4: passed 6/6
 ```
 
 ### Block S5：Frontend session 入口确认
@@ -470,7 +525,8 @@ Block S4: passed 4/4
 修改：
 
 ```text
-frontend/packages/main-app/src/**
+通常无需修改。
+如 API contract 变化，仅调整 frontend/packages/main-app/src/api/agent.ts。
 ```
 
 验证点：
@@ -610,6 +666,8 @@ DELETE /api/v1/agent/sessions/{session_id}
 产品 session_id 只能由 backend 生成或校验。
 frontend 不生成最终 session_id。
 agent-service 不生成产品 session_id。
+agent-service 可以为 SDK replay cache 生成内部 namespace id，
+但不得把 namespace id 当成产品 session_id 返回给 backend/frontend。
 ```
 
 ### 5.2 user_id 归属
@@ -633,6 +691,17 @@ commit
 ```
 
 如果 `session_states` 已存在，create session 不应覆盖它。
+
+`POST /api/v1/agent/runs` 缺省 session_id 时也必须走同一创建路径：
+
+```text
+AgentSessionService.create_session(...)
+=> create agent_session
+=> get_or_create session_state
+=> commit
+```
+
+禁止在 run 路径直接生成 session_id 后只写 `session_states`。
 
 ### 5.4 SDK cache 清理
 
@@ -660,6 +729,18 @@ agent_sessions.archived_at = now
 
 不要主动删除 SDK SQLiteSession items。runtime cache 可由独立清理任务处理。
 
+### 5.6 agent-service run 信任边界
+
+```text
+backend 是产品 session 校验者。
+agent-service /api/agent/runs 不再要求 tasks.db.sessions 必须存在。
+如果 tasks.db.sessions 中仍有旧 session 记录，agent-service 可继续做旧归属校验。
+agent-service 至少检查请求中有 session_id，并将其用于 task.session_id 和 SDK cache。
+```
+
+如果 agent-service 被绕过直连，产品 session 归属不由 agent-service 保证。
+生产入口必须通过 backend。
+
 ---
 
 ## 6. 最小校验清单
@@ -670,6 +751,7 @@ agent_sessions.archived_at = now
 UV_CACHE_DIR=./uv_cache uv run python -m py_compile backend/app/api/v1/agent_routes.py
 UV_CACHE_DIR=./uv_cache uv run python -m py_compile backend/app/services/agent_gateway.py
 UV_CACHE_DIR=./uv_cache uv run python -m py_compile aniforce-agent/app/api/sessions.py
+UV_CACHE_DIR=./uv_cache uv run python -m py_compile aniforce-agent/app/api/runs.py
 ```
 
 涉及新增 backend 文件时补充：
@@ -679,6 +761,13 @@ UV_CACHE_DIR=./uv_cache uv run python -m py_compile \
   backend/app/models/agent_session.py \
   backend/app/repositories/impl/sqlite_agent_session_repo.py \
   backend/app/services/agent_session_service.py
+```
+
+涉及 Alembic 时补充：
+
+```bash
+UV_CACHE_DIR=./uv_cache uv run python -m py_compile backend/alembic/env.py
+UV_CACHE_DIR=./uv_cache uv run python -m py_compile backend/alembic/versions/<revision>_add_agent_sessions_table.py
 ```
 
 涉及前端时：
@@ -727,6 +816,16 @@ UV_CACHE_DIR=./uv_cache uv run python backend/tests/e2e/session_refactor/block_s
 ```text
 POST /runs 如果允许缺省 session_id，必须通过 AgentSessionService 创建完整 agent_session + session_state。
 不要只创建 session_state。
+```
+
+### 风险 3.1：agent-service run 继续依赖 tasks.db.sessions
+
+处理：
+
+```text
+S4 必须修改 aniforce-agent/app/api/runs.py。
+backend 切成本地 session 后，agent-service 的 tasks.db.sessions 不会有新 session。
+如果 agent-service 继续 get_active_session，会导致 backend 创建的 session 无法 run。
 ```
 
 ### 风险 4：agent-service tasks.db.sessions 旧数据迁移

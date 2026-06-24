@@ -21,6 +21,8 @@ interface Props {
   navItems?: NavItem[]
   sessions?: Session[]
   activePanel?: string
+  sessionActions?: boolean
+  sessionCreate?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -32,7 +34,9 @@ const props = withDefaults(defineProps<Props>(), {
     { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
   ],
   sessions: () => [],
-  activePanel: ''
+  activePanel: '',
+  sessionActions: false,
+  sessionCreate: false
 })
 
 const emit = defineEmits<{
@@ -40,6 +44,7 @@ const emit = defineEmits<{
   'switch-session': [session: Session]
   'rename-session': [session: Session]
   'delete-session': [session: Session]
+  'create-session': []
 }>()
 
 const router = useRouter()
@@ -84,10 +89,19 @@ const handleNavClick = (item: NavItem) => {
 }
 
 const handleSessionClick = (session: Session) => {
-  if (route.path !== '/') {
-    router.push('/')
+  if (route.path !== '/home') {
+    router.push({ path: '/home', query: { session_id: session.id } })
+    return
   }
   emit('switch-session', session)
+}
+
+const handleCreateSession = () => {
+  if (route.path !== '/home') {
+    router.push('/home')
+    return
+  }
+  emit('create-session')
 }
 
 onMounted(() => {
@@ -166,7 +180,17 @@ onMounted(() => {
       </div>
 
       <div v-if="displaySessions.length > 0 && !isCollapsed">
-        <div class="text-[10px] font-semibold text-slate-500 dark:text-slate-400 mb-[6px] px-[6px]">历史会话</div>
+        <div class="mb-[6px] flex items-center justify-between px-[6px]">
+          <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">历史会话</span>
+          <button
+            v-if="sessionCreate"
+            class="flex h-[22px] w-[22px] items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+            title="新建对话"
+            @click.stop="handleCreateSession"
+          >
+            <span class="material-symbols-outlined text-[14px]">add</span>
+          </button>
+        </div>
         <ul class="space-y-[4px]">
           <li
             v-for="session in displaySessions"
@@ -179,7 +203,7 @@ onMounted(() => {
           >
             <span class="material-symbols-outlined text-[11px]">chat</span>
             <span class="text-[11px] flex-1 truncate">{{ session.name }}</span>
-            <div class="opacity-0 group-hover:opacity-100 flex items-center gap-[4px]">
+            <div v-if="sessionActions" class="opacity-0 group-hover:opacity-100 flex items-center gap-[4px]">
               <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" title="重命名" @click.stop="emit('rename-session', session)">
                 <span class="material-symbols-outlined text-[10px]">edit</span>
               </button>

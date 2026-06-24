@@ -3,7 +3,7 @@
 import json
 from time import perf_counter
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
@@ -59,16 +59,14 @@ async def run_agent(
     if "token" in user and "auth_token" not in context:
         context["auth_token"] = user["token"]
 
-    # 创建或校验 session：生产环境不允许跨用户 resume 任意 session_id
+    # 产品 session 由 backend 校验和创建。兼容旧直连调用：如果
+    # tasks.db.sessions 里仍有该 session，则继续校验旧归属；如果没有，
+    # 视为 backend 已校验过的 runtime session_id。
     session_start = perf_counter()
-    if session_id:
+    if not session_id:
+        raise HTTPException(status_code=422, detail={"code": "SESSION_ID_REQUIRED", "message": "session_id is required"})
+    if await service.session_exists(user["id"], session_id):
         await service.get_active_session(user["id"], session_id)
-    else:
-        session = await service.create_session(
-            user_id=user["id"],
-            title=prompt[:50] if prompt else "新对话",
-        )
-        session_id = session.session_id
     session_ms = _elapsed_ms(session_start)
 
     # 创建 task（一次 run/turn 对应一个 task）

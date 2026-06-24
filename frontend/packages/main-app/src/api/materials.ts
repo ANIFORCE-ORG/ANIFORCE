@@ -19,6 +19,47 @@ export interface Material {
   duration?: number
   file_size?: number
   created_at: string
+  media_kind?: 'image' | 'video'
+  format?: string
+  width?: number
+  height?: number
+  ratio?: string
+  original_url?: string
+  preview_url?: string
+  poster_url?: string
+  source?: string
+  creator?: string
+  rights?: string
+  platforms?: string[]
+  review_status?: string
+  source_account?: string
+  placements?: string[]
+  score?: number
+  fatigue?: number
+  last_used_at?: string
+  processing_status?: string
+  processing_error?: string
+}
+
+export interface UploadMaterialMetadata {
+  name: string
+  status?: string
+  tags?: string[]
+  ctr_estimate?: number
+  duration?: number
+  width?: number
+  height?: number
+  ratio?: string
+  format?: string
+  media_kind?: 'image' | 'video'
+  source?: string
+  creator?: string
+  rights?: string
+  platforms?: string[]
+  review_status?: string
+  source_account?: string
+  placements?: string[]
+  campaign_ids?: string[]
 }
 
 export interface MaterialImage {
@@ -78,7 +119,7 @@ export async function getMaterialDetail(materialId: string): Promise<Material> {
 }
 
 /**
- * 获取素材图像（Base64编码）
+ * 获取素材预览资源。OSS 素材优先返回签名 URL，本地素材返回 Base64 data URL。
  */
 export async function getMaterialImage(
   materialId: string,
@@ -118,6 +159,16 @@ export async function createMaterial(data: {
 }
 
 /**
+ * 更新素材基础信息
+ */
+export async function updateMaterial(
+  materialId: string,
+  data: Partial<Pick<Material, 'name' | 'status' | 'tags' | 'thumbnail_url' | 'ctr_estimate'>>
+): Promise<Material> {
+  return http.patch<Material>(`/materials/${materialId}`, data)
+}
+
+/**
  * 上传素材文件
  */
 export async function uploadMaterials(files: File[]): Promise<Material[]> {
@@ -140,6 +191,46 @@ export async function uploadMaterials(files: File[]): Promise<Material[]> {
 
   const data = await response.json() as UploadMaterialsResponse
   return data.materials
+}
+
+/**
+ * 上传单个素材并保存详情字段。
+ */
+export async function uploadMaterialWithMetadata(
+  file: File,
+  metadata: UploadMaterialMetadata,
+  poster?: Blob
+): Promise<Material> {
+  const token = localStorage.getItem('animagus_token')
+  const formData = new FormData()
+  formData.append('file', file)
+  if (poster) {
+    formData.append('poster', poster, `${file.name.replace(/\.[^.]+$/, '')}_poster.jpg`)
+  }
+
+  Object.entries(metadata).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return
+    if (Array.isArray(value)) {
+      formData.append(key, JSON.stringify(value))
+    } else {
+      formData.append(key, String(value))
+    }
+  })
+
+  const response = await fetch('/api/v1/materials/upload-with-metadata', {
+    method: 'POST',
+    headers: {
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: formData,
+  })
+
+  if (!response.ok) {
+    const errorData = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(errorData.detail || errorData.message || `HTTP ${response.status}`)
+  }
+
+  return response.json() as Promise<Material>
 }
 
 /**

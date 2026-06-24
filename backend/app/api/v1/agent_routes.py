@@ -8,14 +8,16 @@ from uuid import uuid4
 
 from loguru import logger
 
-from fastapi import APIRouter, Body, Depends, HTTPException, Request
+from fastapi import APIRouter, Body, Depends, HTTPException, Query, Request
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
 from app.config.database import get_db, get_session_maker
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
+from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
+from app.services.agent_session_service import AgentSessionError, AgentSessionService
 from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
 from app.services.agent_run_event_bus import agent_run_event_bus
 from app.services.business_context_builder import BusinessContextBuilder
@@ -70,6 +72,13 @@ def get_session_state_repo(session: AsyncSession = Depends(get_db)) -> SqliteSes
     return SqliteSessionStateRepository(session)
 
 
+def get_agent_session_service(session: AsyncSession = Depends(get_db)) -> AgentSessionService:
+    return AgentSessionService(
+        session_repo=SqliteAgentSessionRepository(session),
+        state_repo=SqliteSessionStateRepository(session),
+    )
+
+
 def get_business_context_builder(session: AsyncSession = Depends(get_db)) -> BusinessContextBuilder:
     return BusinessContextBuilder(
         project_repo=get_project_repo(session),
@@ -104,6 +113,36 @@ async def _get_or_create_session_state(session_id: str, user_id: str) -> dict:
             return state
         return await repo.create(session_id=session_id, user_id=user_id)
     return await _with_session(callback)
+
+
+async def _create_agent_session_short_tx(user_id: str, title: str | None = None) -> dict:
+    async def callback(session: AsyncSession):
+        service = AgentSessionService(
+            session_repo=SqliteAgentSessionRepository(session),
+            state_repo=SqliteSessionStateRepository(session),
+        )
+        return await service.create_session(user_id=user_id, title=title)
+    return await _with_session(callback)
+
+
+async def _require_active_agent_session_short_tx(session_id: str, user_id: str) -> dict:
+    async def callback(session: AsyncSession):
+        service = AgentSessionService(
+            session_repo=SqliteAgentSessionRepository(session),
+            state_repo=SqliteSessionStateRepository(session),
+        )
+        return await service.require_active(session_id=session_id, user_id=user_id)
+    return await _with_session(callback)
+
+
+async def _touch_agent_session_short_tx(session_id: str, user_id: str) -> None:
+    async def callback(session: AsyncSession):
+        service = AgentSessionService(
+            session_repo=SqliteAgentSessionRepository(session),
+            state_repo=SqliteSessionStateRepository(session),
+        )
+        await service.touch(session_id=session_id, user_id=user_id)
+    await _with_session(callback)
 
 
 async def _update_ui_snapshot_short_tx(session_id: str, user_id: str, version: int, snapshot: dict) -> dict:
@@ -151,50 +190,46 @@ async def agent_health(gateway: AgentGatewayService = Depends(get_agent_gateway)
 
 @router.get("/sessions")
 async def list_agent_sessions(
-    request: Request,
+    include_archived: bool = Query(False),
+    limit: int = Query(100, ge=1, le=200),
+    offset: int = Query(0, ge=0),
     current_user: dict = Depends(get_current_user),
-    gateway: AgentGatewayService = Depends(get_agent_gateway),
+    service: AgentSessionService = Depends(get_agent_session_service),
 ):
     try:
-        return await gateway.list_sessions(_authorization(request))
-    except AgentGatewayError as exc:
-        raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+        return await service.list_sessions(
+            user_id=current_user["id"],
+            include_archived=include_archived,
+            limit=limit,
+            offset=offset,
+        )
+    except AgentSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
 
 @router.get("/sessions/{session_id}")
 async def get_agent_session(
     session_id: str,
-    request: Request,
     current_user: dict = Depends(get_current_user),
-    gateway: AgentGatewayService = Depends(get_agent_gateway),
+    service: AgentSessionService = Depends(get_agent_session_service),
 ):
     try:
-        return await gateway.get_session(_authorization(request), session_id)
-    except AgentGatewayError as exc:
-        raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+        return await service.get_session_detail(session_id=session_id, user_id=current_user["id"])
+    except AgentSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
 
 @router.post("/sessions")
 async def create_agent_session(
     request: Request,
     current_user: dict = Depends(get_current_user),
-    gateway: AgentGatewayService = Depends(get_agent_gateway),
-    state_repo: SqliteSessionStateRepository = Depends(get_session_state_repo),
+    service: AgentSessionService = Depends(get_agent_session_service),
 ):
     try:
         body = await request.json() if request.headers.get("content-length") else {}
-        session = await gateway.create_session(_authorization(request), body)
-    except AgentGatewayError as exc:
-        raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
-
-    session_id = session.get("session_id") or session.get("id")
-    if not session_id:
-        raise HTTPException(status_code=502, detail=_error_payload("AGENT_BAD_RESPONSE", "Agent session response missing session_id", False))
-
-    existing = await state_repo.get(session_id, current_user["id"])
-    if not existing:
-        await state_repo.create(session_id=session_id, user_id=current_user["id"])
-    return session
+        return await service.create_session(user_id=current_user["id"], title=body.get("title"))
+    except AgentSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
 
 @router.patch("/sessions/{session_id}")
@@ -202,26 +237,37 @@ async def update_agent_session(
     session_id: str,
     request: Request,
     current_user: dict = Depends(get_current_user),
-    gateway: AgentGatewayService = Depends(get_agent_gateway),
+    service: AgentSessionService = Depends(get_agent_session_service),
 ):
     try:
         body = await request.json()
-        return await gateway.update_session(_authorization(request), session_id, body)
-    except AgentGatewayError as exc:
-        raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+        return await service.rename_session(session_id=session_id, user_id=current_user["id"], title=body.get("title"))
+    except AgentSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
 
 @router.delete("/sessions/{session_id}")
 async def delete_agent_session(
     session_id: str,
-    request: Request,
     current_user: dict = Depends(get_current_user),
-    gateway: AgentGatewayService = Depends(get_agent_gateway),
+    service: AgentSessionService = Depends(get_agent_session_service),
 ):
     try:
-        return await gateway.delete_session(_authorization(request), session_id)
-    except AgentGatewayError as exc:
-        raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+        return await service.archive_session(session_id=session_id, user_id=current_user["id"])
+    except AgentSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+
+
+@router.post("/sessions/{session_id}/archive")
+async def archive_agent_session(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    service: AgentSessionService = Depends(get_agent_session_service),
+):
+    try:
+        return await service.archive_session(session_id=session_id, user_id=current_user["id"])
+    except AgentSessionError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
 
 @router.post("/tasks/{task_id}/cancel")
@@ -259,12 +305,21 @@ async def run_agent(
     body = await request.json()
     body_parsed_ms = _elapsed_ms(request_start)
     prompt = body.get("prompt", "")
-    session_id = body.get("session_id") or f"sess_{uuid4().hex}"
+    requested_session_id = body.get("session_id")
     task_type = body.get("task_type", "conversation")
     context_snapshot = body.get("context_snapshot")
     run_id = f"run_{uuid4().hex}"
     user_id = current_user["id"]
     authorization = _authorization(request)
+    if requested_session_id:
+        try:
+            await _require_active_agent_session_short_tx(requested_session_id, user_id)
+        except AgentSessionError as exc:
+            raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+        session_id = requested_session_id
+    else:
+        created_session = await _create_agent_session_short_tx(user_id, prompt[:50] if prompt else "新对话")
+        session_id = created_session["session_id"]
     perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
 
     state_start = perf_counter()
@@ -302,6 +357,7 @@ async def run_agent(
     )
 
     await agent_run_event_bus.create_run(run_id=run_id, session_id=session_id, user_id=user_id)
+    await _touch_agent_session_short_tx(session_id, user_id)
 
     agent_payload = {
         "prompt": prompt,

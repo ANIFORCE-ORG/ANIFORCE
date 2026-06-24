@@ -10,6 +10,7 @@ from app.models.organization import Organization
 from app.models.organization_member import OrganizationMember
 from app.models.contact_info import ContactInfo
 from app.models.session_state import SessionState
+from app.models.agent_session import AgentSession, AgentSessionStatus
 from app.models.idempotency import IdempotencyRecord
 
 __all__ = [
@@ -27,5 +28,7 @@ __all__ = [
     "OrganizationMember",
     "ContactInfo",
     "SessionState",
+    "AgentSession",
+    "AgentSessionStatus",
     "IdempotencyRecord",
 ]
