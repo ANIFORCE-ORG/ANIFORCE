@@ -55,11 +55,15 @@ export async function getProjectDetail(projectId: string): Promise<Project> {
  */
 export async function createProject(data: {
   name: string
-  game_type: string
-  target_market: string
-  total_budget: number
-  tags?: string[]
+  product?: string
+  target_market?: string
+  status?: string
+  start_date?: string
+  end_date?: string
+  total_budget?: number
   manager?: string
+  game_type?: string
+  tags?: string[]
 }): Promise<Project> {
   return http.post<Project>('/projects', data)
 }
@@ -71,8 +75,12 @@ export async function updateProject(
   projectId: string,
   data: {
     name?: string
-    total_budget?: number
+    product?: string
+    target_market?: string
     status?: string
+    start_date?: string
+    end_date?: string
+    total_budget?: number
   }
 ): Promise<Project> {
   return http.put<Project>(`/projects/${projectId}`, data)

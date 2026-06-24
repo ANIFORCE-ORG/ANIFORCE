@@ -65,6 +65,11 @@ const router = createRouter({
       component: () => import('@/pages/campaigns/CreateCampaign.vue'),
     },
     {
+      path: '/campaigns/:campaignId/ad-units/create',
+      name: 'create-ad-unit',
+      component: () => import('@/pages/campaigns/CreateAdUnit.vue'),
+    },
+    {
       path: '/login',
       name: 'login',
       component: () => import('@/pages/starting/Login.vue'),
@@ -95,6 +100,11 @@ const router = createRouter({
       component: () => import('@/pages/settings/PlatformConnections.vue'),
     },
     {
+      path: '/system-admin',
+      name: 'system-admin',
+      component: () => import('@/pages/system/SystemAdmin.vue'),
+    },
+    {
       path: '/privacy',
       name: 'privacy-policy',
       component: () => import('@/pages/legal/PrivacyPolicy.vue'),
@@ -115,28 +125,28 @@ const router = createRouter({
 // 导航守卫 - 统一处理路由保护和重定向
 router.beforeEach((to, from, next) => {
   const auth = useAuthStore()
-  
+
   // 需要登录的页面列表
-  const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/account-config', '/ai-usage-config', '/platform-connections']
-  
+  const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/account-config', '/ai-usage-config', '/platform-connections', '/system-admin']
+
   // 已登录用户访问GetStart页面,重定向到/home
   if (to.path === '/' && auth.isLoggedIn) {
     next('/home')
     return
   }
-  
+
   // 未登录用户访问需要登录的页面,重定向到登录页
   if (requiresAuth.includes(to.path) && !auth.isLoggedIn) {
     next('/login')
     return
   }
-  
+
   // 已登录用户访问登录页,重定向到/home
   if (to.path === '/login' && auth.isLoggedIn) {
     next('/home')
     return
   }
-  
+
   next()
 })
 
