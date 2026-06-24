@@ -64,6 +64,9 @@ backend/data/sqlite/
 # ==== 日志/临时文件 =====
 log/
 logs/
+drafts/
+npm_cache/
+uv_cache/
 *.log
 .server_pids
 .server_ports
