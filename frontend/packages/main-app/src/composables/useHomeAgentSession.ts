@@ -208,7 +208,11 @@ export function useHomeAgentSession() {
   }
 
   function isDefaultSessionTitle(title?: string): boolean {
-    return !title || title === '新对话' || title.startsWith('Agent Session ')
+    if (!title) return true
+    return title === '新对话'
+      || title.startsWith('Agent Session ')
+      || /^日常对话\s*\d*$/.test(title)
+      || /^项目管理\s*\d*$/.test(title)
   }
 
   function titleFromMessage(message: string): string {

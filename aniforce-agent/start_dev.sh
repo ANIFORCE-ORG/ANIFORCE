@@ -2,13 +2,15 @@
 # OpenAI Agent Service 一键启动脚本
 # - 固定端口：8020
 # - 启动前释放端口
-# - 日志覆盖写入：logs/agent.log
+# - 日志覆盖写入：logs/YYYYMMDD.dev.agent.uvicorn.log
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
 PORT=8020
-LOG_FILE="logs/agent.log"
+LOG_DATE="$(date +%Y%m%d)"
+LOG_ENV="${LOG_ENV:-dev}"
+LOG_FILE="logs/${LOG_DATE}.${LOG_ENV}.agent.uvicorn.log"
 
 mkdir -p logs runtime/agent runtime/skills runtime/agent/sandbox uv_cache
 

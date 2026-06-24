@@ -9,7 +9,7 @@ interface Props {
 
 interface Emits {
   (e: 'close'): void
-  (e: 'submit', data: ProjectFormData): void
+  (e: 'submit', data: ProjectSubmitData): void
 }
 
 interface ProjectFormData {
@@ -19,6 +19,17 @@ interface ProjectFormData {
   status: string
   start: string
   end: string
+  total_budget: number
+  description: string
+}
+
+interface ProjectSubmitData {
+  name: string
+  product: string
+  target_market: string
+  status: string
+  start_date: string
+  end_date: string
   total_budget: number
   description: string
 }

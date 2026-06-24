@@ -172,14 +172,15 @@ mkdir -p "$LOG_DIR"
 
 # 生成日期标识
 LOG_DATE=$(date +%Y%m%d)
+LOG_ENV="$MODE"
 
 # 日志文件路径
 # 后端应用日志：使用 loguru 的时间占位符，支持自动按日期轮转
-BACKEND_APP_LOG="$LOG_DIR/backend_logs_{time:YYYYMMDD}.log"
+BACKEND_APP_LOG="$LOG_DIR/{time:YYYYMMDD}.${LOG_ENV}.backend.app.log"
 # 后端 uvicorn 日志：使用启动时的日期
-BACKEND_UVICORN_LOG="$LOG_DIR/uvicorn_logs_${LOG_DATE}.log"
+BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.uvicorn.log"
 # 前端日志：使用启动时的日期（Vite 不支持自动轮转）
-FRONTEND_LOG="$LOG_DIR/frontend_logs_${LOG_DATE}.log"
+FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
 
 info "日志配置: 目录=$LOG_DIR"
 info "后端应用日志: $BACKEND_APP_LOG"

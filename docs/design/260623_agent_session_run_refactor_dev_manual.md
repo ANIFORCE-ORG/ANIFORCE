@@ -49,7 +49,7 @@ OpenAI Agents SDK Session = LLM 对话缓存
 2. ✅ Task 降级为 Run execution log，不再做业务编排
 3. ✅ Act 暂不实现，用 tool timeline + changelog 替代
 4. ✅ SDK Session cache 短期保留本地 SQLite（性能考虑）
-5. ✅ HITL 先做 MVP（简单审批），不依赖 RunState 复杂序列化
+5. ✅ 当期优先保证已调试能力不退化；HITL / RunState 作为后续扩展，不进入第一阶段必做范围
 
 ---
 
@@ -123,7 +123,7 @@ ON agent_messages(session_id, sequence);
 
 - `content_json` 存前端展示结构，例如 text / thinking / toolCall blocks。
 - 不直接存 SDK `TResponseInputItem`，避免 UI 历史被 SDK 内部格式绑死。
-- thinking 是否长期保存可配置。默认开发环境保存，生产可根据隐私策略裁剪。
+- thinking 不作为长期事实源：dev 可保存 `thinking.content` 便于调试；prod 默认只保存 `thinking.summary` 或直接丢弃 thinking block，除非隐私与合规策略明确允许。
 
 ### 1.3 SDK Session Cache
 
@@ -200,6 +200,8 @@ ON agent_llm_items(session_id, id);
 
 Run 是一次用户 turn 的执行记录，不是业务编排对象。
 
+同一 `session_id` 同时只允许一个 `running` / `requires_action` run。当已有未完成 run 时，新建 run 直接返回 `409 SESSION_RUN_IN_PROGRESS`，第一版不做队列。前端重试、SSE 断开重连、网关超时重放必须通过 `idempotency_key` 幂等处理。
+
 建议表：
 
 ```sql
@@ -210,6 +212,7 @@ CREATE TABLE agent_runs (
     status TEXT NOT NULL,
     input_text TEXT NOT NULL,
     trace_id TEXT,
+    idempotency_key TEXT,
     usage_json TEXT,
     error_json TEXT,
     started_at TEXT NOT NULL,
@@ -218,6 +221,9 @@ CREATE TABLE agent_runs (
 
 CREATE INDEX idx_agent_runs_session_started
 ON agent_runs(session_id, started_at DESC);
+
+CREATE UNIQUE INDEX idx_agent_runs_idempotency
+ON agent_runs(user_id, session_id, idempotency_key);
 ```
 
 最小状态机：
@@ -300,6 +306,16 @@ pending_actions_json -> pending_approvals_json  # 语义更准确
   "materials": []
 }
 ```
+
+**SessionState mutation 约束**：
+
+所有 `linked_entities_json`、`changelog_json`、`summary`、`pending_approvals_json` 更新必须经过统一服务：
+
+```text
+backend/app/services/session_state_mutation.py
+```
+
+禁止业务 API 直接随手写 `session_states` 字段，避免 changelog 丢失、linked_entities 不一致、summary 未同步更新。
 
 **summary 用途**：
 
@@ -409,7 +425,8 @@ POST   /api/v1/agent/runs/{run_id}/cancel
     "route": "/projects",
     "activePanel": "context",
     "selected_entities": {}
-  }
+  },
+  "idempotency_key": "client_msg_20260623_001"
 }
 ```
 
@@ -639,7 +656,6 @@ agent_messages
     {
       "type": "thinking",
       "summary": "分析需求和参数",
-      "content": "用户要创建项目，需要确定项目名称、预算、目标市场...",
       "collapsed": true
     },
     {
@@ -661,14 +677,14 @@ agent_messages
 **Block 类型说明**：
 
 - `text`: 普通文本回复
-- `thinking`: 思考过程（开发环境保存完整，生产可配置只保存 summary）
-- `tool_call`: 工具调用记录（tool、args、status、result）
+- `thinking`: 思考摘要；开发环境可额外保存 `content`，生产默认不保存完整 thinking
+- `tool_call`: 用户可见执行过程（tool、args、status、result），可裁剪、折叠、脱敏，不作为审计事实源
 - `error`: 错误信息（仅在 run error 时写入）
 
 **注意**：
 - 不直接存 SDK `TResponseInputItem`，避免 UI 被 SDK 内部格式绑死。
-- thinking 长文本可配置是否保存（开发保存，生产按隐私策略裁剪）。
-- tool_call 包含完整参数和结果，便于前端渲染 timeline。
+- thinking 长文本仅 dev 默认保存；prod 默认只保存 summary 或不保存 thinking block。
+- tool_call 只服务前端 timeline 展示，允许裁剪、折叠、脱敏；业务审计以 `SessionState.changelog` 和 business DB 为准。
 
 ### 写入策略
 
@@ -693,12 +709,14 @@ class ChatEventAssembler:
         
         for event in events:
             if event["type"] == "thinking.updated":
-                blocks.append({
+                block = {
                     "type": "thinking",
                     "summary": self._summarize_thinking(event["content"]),
-                    "content": event["content"],
                     "collapsed": True
-                })
+                }
+                if self.save_full_thinking:
+                    block["content"] = event["content"]
+                blocks.append(block)
             elif event["type"] == "message.updated":
                 blocks.append({
                     "type": "text",
@@ -772,7 +790,7 @@ aniforce-agent/app/services/agent_task_service.py
 agent_runs
 ```
 
-字段以第 1.4 节为准。
+字段以第 1.4 节为准，必须包含 `idempotency_key`。
 
 ### 运行链路
 
@@ -803,6 +821,7 @@ aniforce-agent/tests/e2e_openai_refactor/block3_run_execution_log.py
 ### 验证点
 
 1. backend 创建 run_id。
+1.1 相同 `idempotency_key` 重试返回同一个 run，不重复创建业务执行。
 2. SSE 第一条包含 `runtime.started` 和 run_id。
 3. run 结束后 `agent_runs.status=completed`。
 4. token usage 写入 `usage_json`。
@@ -1094,39 +1113,60 @@ Block 6: passed 6/6
 
 ---
 
-## Block 7: HITL / Requires Action MVP
+## Block 7: HITL / Requires Action 后续扩展
 
 ### 目标
 
-实现最小可用的人工审批（Human-in-the-Loop），不依赖 SDK RunState 复杂序列化。
+如果后续确实需要人工审批，实现最小可用的 Human-in-the-Loop。当前改造首期不把它作为必达能力，避免影响已调试通路。
 
-### MVP 方案（推荐）
+### 推荐方案（可选）：SDK RunState pause / resume
 
-高风险工具调用前暂停，用户审批后重新 run，而不是 resume。
+真实 DeepSeek + ChatCompletions 基线已验证：
 
-**为什么不用 RunState？**
-- RunState JSON 很大（包含完整 agent graph、tool schemas、conversation history）
-- agent-service 版本升级后可能无法反序列化
-- 工具名、agent 名必须完全稳定
-- 序列化/反序列化很脆弱
+```text
+needs_approval=True -> ToolApprovalItem
+RunResult.to_state() -> RunState JSON
+RunState.approve(interruption)
+Runner.run(agent, state) -> 从审批点继续执行
+```
 
-**MVP 流程**：
+调试产物：
+
+```text
+drafts/260624/02_hitl_probe.py
+logs/drafts/hitl_probe_20260624_160623.jsonl
+```
+
+实测结果：
+
+```text
+interruptions_count = 1
+interruption.type = ToolApprovalItem
+tool_name = delete_project
+RunState JSON size ~= 8KB
+approve 后 resume 成功
+```
+
+**流程**：
 
 ```text
 1. Agent 调用高风险工具（如 delete_campaign）
-2. agent-service 检测到风险，返回 runtime.requires_action
-3. backend 保存待审批信息：
+2. SDK 产生 ToolApprovalItem，不执行工具
+3. agent-service 返回 runtime.requires_action
+4. backend 保存待审批信息和 RunState：
    {
      "tool": "delete_campaign",
      "args": {"campaign_id": "camp_xxx"},
-     "risk_reason": "删除操作不可逆"
+     "risk_reason": "删除操作不可逆",
+     "run_state": "{...}"
    }
-4. frontend 显示确认弹窗
-5. 用户点击 approve：
+5. frontend 显示确认弹窗
+6. 用户点击 approve：
    - backend 标记 approval
-   - 用户重新发送消息："继续删除 camp_xxx"
-   - agent 检查 approval，执行工具
-6. 用户点击 reject：
+   - agent-service 恢复 RunState
+   - RunState.approve(interruption)
+   - Runner.run(agent, state) 从审批点继续执行
+7. 用户点击 reject：
    - run 标记 cancelled
    - agent 返回"操作已取消"
 ```
@@ -1136,7 +1176,7 @@ Block 6: passed 6/6
 ```text
 backend/app/models/agent_run.py (增加 pending_approval 字段)
 backend/app/services/agent_run_service.py
-aniforce-agent/app/agent/risk_detector.py (新增)
+aniforce-agent/app/agent/run_state_store.py (新增或并入 runtime)
 aniforce-agent/app/api/runtime_runs.py
 ```
 
@@ -1146,6 +1186,7 @@ aniforce-agent/app/api/runtime_runs.py
 
 ```sql
 ALTER TABLE agent_runs ADD COLUMN pending_approval_json TEXT;
+ALTER TABLE agent_runs ADD COLUMN run_state_json TEXT;
 ```
 
 存储格式：
@@ -1155,6 +1196,11 @@ ALTER TABLE agent_runs ADD COLUMN pending_approval_json TEXT;
   "tool": "delete_campaign",
   "args": {"campaign_id": "camp_xxx"},
   "risk_reason": "删除操作不可逆",
+  "interruption": {
+    "type": "ToolApprovalItem",
+    "tool_name": "delete_campaign",
+    "call_id": "call_xxx"
+  },
   "requested_at": "2026-06-23T10:30:00Z"
 }
 ```
@@ -1172,11 +1218,9 @@ if (event.type === 'runtime.requires_action') {
   })
   
   if (approval) {
-    // 用户 approve：重新发送消息
-    await sendMessage(`继续执行：${event.tool}`)
+    await approveRun(runId)
   } else {
-    // 用户 reject：取消 run
-    await cancelRun(runId)
+    await rejectRun(runId)
   }
 }
 ```
@@ -1184,22 +1228,22 @@ if (event.type === 'runtime.requires_action') {
 ### E2E 脚本
 
 ```text
-aniforce-agent/tests/e2e_openai_refactor/block7_hitl_mvp.py
+aniforce-agent/tests/e2e_openai_refactor/block7_hitl_run_state.py
 ```
 
 ### 验证点
 
 1. 高风险工具（delete_campaign）触发 `runtime.requires_action`。
 2. backend `agent_runs.status=requires_action`。
-3. backend `pending_approval_json` 有内容。
-4. 用户 approve 后重新 run，工具成功执行。
+3. backend `pending_approval_json` 和 `run_state_json` 有内容。
+4. 用户 approve 后 resume，工具成功执行。
 5. 用户 reject 后 run 标记 cancelled。
 6. 非高风险工具不触发审批流程。
 
 ### 执行
 
 ```bash
-UV_CACHE_DIR=./uv_cache uv run python aniforce-agent/tests/e2e_openai_refactor/block7_hitl_mvp.py
+UV_CACHE_DIR=./uv_cache uv run python aniforce-agent/tests/e2e_openai_refactor/block7_hitl_run_state.py
 ```
 
 ### 验收标准
@@ -1210,9 +1254,16 @@ Block 7: passed 6/6
 
 ---
 
-### 完整 HITL 方案（后续扩展）
+### 降级方案
 
-如果 MVP 不够用，再引入 SDK RunState pause/resume。
+如果 RunState 反序列化失败或 agent/tool graph 版本不兼容，降级为"重新 run + approval flag"：
+
+```text
+1. 保存 {tool, args, risk_reason, approved=true}
+2. 用户重新发送继续执行请求
+3. agent 检查 approval flag 后执行工具
+4. 原 run 标记 failed_to_resume，新 run 记录实际执行
+```
 
 **何时需要？**
 - 一个 run 包含多步操作，中间需要多次审批
@@ -1330,7 +1381,7 @@ aniforce-agent/tests/e2e_openai_refactor/block9_concurrency_restart_safety.py
 
 ### 验证点
 
-1. 同用户同 session 并发 run 被串行化或明确拒绝。
+1. 同用户同 session 并发 run 返回 409 `SESSION_RUN_IN_PROGRESS`，第一版不做串行队列。
 2. 不同 session 可并发执行。
 3. 用户 A/B session、messages、runs 完全隔离。
 4. backend 重启后产品 session/messages/runs 不丢。
@@ -1432,14 +1483,14 @@ agent-service events 仍写旧 tasks.db
 backend 同时写 agent_messages / agent_runs
 ```
 
-双写只用于对账，不作为长期方案。
+双写只用于对账，不作为长期方案。若双写影响当前已调试好的消息流或 run 流，应优先保留现有可用路径，再逐步切换。
 
 ### 5.3 删除条件
 
 满足以下条件才删除旧 task API：
 
 ```text
-Block 1-10 全部通过
+Block 1-6、Block 8-10 通过；Block 7 仅在启用 HITL 时要求通过
 frontend 不再调用 /api/agent/tasks
 backend 不再依赖 agent-service session API
 历史消息读取全部来自 backend
@@ -1490,31 +1541,33 @@ backend 不再依赖 agent-service session API
 
 处理：
 
-- backend `session_lock` 串行化同 session run。
-- 或返回 409：`SESSION_RUN_IN_PROGRESS`。
+- 第一版直接返回 409：`SESSION_RUN_IN_PROGRESS`。
+- 暂不实现 `session_lock` 串行队列，避免引入排队超时、取消语义、消息顺序和 SSE 绑定复杂度。
 - agent-service 不负责产品级锁。
 
 ### 风险 5：HITL 审批流程的状态管理
 
 处理：
 
-**MVP 方案（Block 7 采用）**：
-- 不依赖 RunState 序列化，用"重新 run + approval flag"实现
-- 风险工具触发 requires_action，保存 `{tool, args, risk_reason}`
-- 用户 approve 后重新发送消息，agent 检查 approval 执行工具
-- 简单、可靠、不依赖复杂状态序列化
-
-**完整方案（后续扩展）**：
-- 如果需要"暂停后从断点恢复"，才引入 RunState
-- RunState JSON 保存 `schema_version` 和 `agent_version`
+**RunState 方案（已通过真实 DeepSeek 基线验证，后续可选实现）**：
+- `needs_approval=True` 能产生 `ToolApprovalItem`
+- `RunResult.to_state()` 能生成可保存的 RunState JSON
+- `RunState.approve(interruption)` 后 `Runner.run(agent, state)` 能从审批点继续执行
+- RunState JSON 保存 `schema_version`、`agent_version` 和过期时间
 - agent graph 名称、工具名必须保持稳定
-- 反序列化失败时降级为"请重新发起操作"
 - RunState 保存时长限制（24h），过期自动失效
 
+**降级方案**：
+- 如果 RunState 反序列化失败，降级为"重新 run + approval flag"
+- 风险工具触发 requires_action，保存 `{tool, args, risk_reason, approved}`
+- 用户 approve 后重新发送继续执行请求，agent 检查 approval flag 后执行工具
+- 原 run 标记 `failed_to_resume` 或 `cancelled`，新 run 记录实际执行
+
 **建议优先级**：
-1. 先实现 MVP（简单审批 + 重新 run）
-2. 观察真实业务复杂度
-3. 如果 MVP 不够用，再扩展 RunState resume
+1. 首期先完成 session/message/run/workspace 边界改造，确保现有能力不退化
+2. 观察真实业务是否需要审批
+3. 如果需要审批，优先实现 RunState resume
+4. 保留重新 run 作为兼容降级路径
 
 ---
 
@@ -1530,13 +1583,15 @@ backend 不再依赖 agent-service session API
 - agent-service 不再拥有产品 session/task 生命周期
 - workspace 状态由 backend SessionState + business DB 投影
 - Act 不再作为当前实现对象
+- HITL / RunState 作为可选扩展，不阻塞当前改造完成
 
 验证：
-- Block 0-10 E2E 全部通过
+- Block 0-6、Block 8-10 E2E 通过
 - 清空 aniforce-agent/runtime 不会丢产品 session/messages/runs
 - agent-service 重启不影响历史查看
 - backend 权限隔离通过
 - MCP tool 写入能更新 SessionState changelog
+- 现阶段已调试好的消息流、run 流、workspace 刷新流程保持可用
 
 代码：
 - 旧 /api/agent/tasks 不再被 frontend/backend 调用
@@ -1553,14 +1608,12 @@ backend/app/models/
   agent_session.py
   agent_message.py
   agent_run.py
-  agent_run_state.py
   session_state.py
 
 backend/app/repositories/impl/
   sqlite_agent_session_repo.py
   sqlite_agent_message_repo.py
   sqlite_agent_run_repo.py
-  sqlite_agent_run_state_repo.py
   sqlite_session_state_repo.py
 
 backend/app/services/
@@ -1579,7 +1632,6 @@ aniforce-agent/app/agent/
   runtime.py
   openai_adapter.py
   session_factory.py
-  backend_session.py
 
 aniforce-agent/tests/e2e_openai_refactor/
   README.md
@@ -1590,9 +1642,8 @@ aniforce-agent/tests/e2e_openai_refactor/
   block4_runtime_api_slim.py
   block5_sdk_session_cache_boundary.py
   block6_workspace_projection.py
-  block7_hitl_runstate_resume.py
+  block7_hitl_run_state.py  # 可选，启用 HITL 时再做
   block8_frontend_contract.py
   block9_concurrency_restart_safety.py
   block10_workspace_agentic_e2e.py
 ```
-

@@ -464,7 +464,7 @@ const handleSubmitCampaign = async (data: any) => {
     <CreateCampaignModal
       ref="campaignModalRef"
       :show="showCampaignModal"
-      :project-id="currentProjectId"
+      :project-id="currentProjectId || undefined"
       @close="handleCloseCampaignModal"
       @submit="handleSubmitCampaign"
     />

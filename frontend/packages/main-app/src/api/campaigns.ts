@@ -82,7 +82,7 @@ export async function createCampaign(data: {
   project_id: string
   name: string
   platform: string
-  account_id: string
+  account_id?: string
   objective?: string
   buying_type?: string
   special_ad_categories?: string

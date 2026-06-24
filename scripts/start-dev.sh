@@ -7,7 +7,13 @@ BACKEND_DIR="${ROOT_DIR}/backend"
 AGENT_DIR="${ROOT_DIR}/aniforce-agent"
 FRONTEND_DIR="${ROOT_DIR}/frontend"
 LOG_DIR="${ROOT_DIR}/logs"
-PID_FILE="${LOG_DIR}/aniforce_dev.pids"
+RUN_DIR="${LOG_DIR}/run"
+LOG_DATE="$(date +%Y%m%d)"
+LOG_ENV="${LOG_ENV:-dev}"
+AGENT_LOG="${LOG_DIR}/${LOG_DATE}.${LOG_ENV}.agent.uvicorn.log"
+BACKEND_LOG="${LOG_DIR}/${LOG_DATE}.${LOG_ENV}.backend.uvicorn.log"
+FRONTEND_LOG="${LOG_DIR}/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
+PID_FILE="${RUN_DIR}/${LOG_ENV}.stack.pids"
 
 HOST="${HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-8010}"
@@ -62,11 +68,11 @@ done
 export NO_PROXY="${LOCAL_NO_PROXY}${NO_PROXY:+,${NO_PROXY}}"
 export no_proxy="${LOCAL_NO_PROXY}${no_proxy:+,${no_proxy}}"
 
-mkdir -p "${LOG_DIR}" "${BACKEND_DIR}/uv_cache" "${AGENT_DIR}/uv_cache" "${ROOT_DIR}/npm_cache"
+mkdir -p "${LOG_DIR}" "${RUN_DIR}" "${BACKEND_DIR}/uv_cache" "${AGENT_DIR}/uv_cache" "${ROOT_DIR}/npm_cache"
 : > "${PID_FILE}"
-: > "${LOG_DIR}/agent-dev.log"
-: > "${LOG_DIR}/backend-dev.log"
-: > "${LOG_DIR}/frontend-dev.log"
+: > "${AGENT_LOG}"
+: > "${BACKEND_LOG}"
+: > "${FRONTEND_LOG}"
 
 DISPLAY_HOST="${HOST}"
 if [[ "${HOST}" == "0.0.0.0" ]]; then
@@ -249,10 +255,10 @@ uv run python -m uvicorn app.main:app \
   --host "${HOST}" \
   --port "${AGENT_PORT}" \
   "${RELOAD_ARGS[@]}" \
-  > "${LOG_DIR}/agent-dev.log" 2>&1 &
+  > "${AGENT_LOG}" 2>&1 &
 AGENT_PID="$!"
 echo "${AGENT_PID}" >> "${PID_FILE}"
-echo "Agent logs: ${LOG_DIR}/agent-dev.log"
+echo "Agent logs: ${AGENT_LOG}"
 
 wait_http "http://${HOST}:${AGENT_PORT}/health" "Agent"
 
@@ -265,9 +271,9 @@ if [[ "${LOG_TO_FILE}" -eq 1 ]]; then
     --host "${HOST}" \
     --port "${BACKEND_PORT}" \
     "${RELOAD_ARGS[@]}" \
-    > "${LOG_DIR}/backend-dev.log" 2>&1 &
+    > "${BACKEND_LOG}" 2>&1 &
   BACKEND_PID="$!"
-  echo "Backend logs: ${LOG_DIR}/backend-dev.log"
+  echo "Backend logs: ${BACKEND_LOG}"
 else
   UV_CACHE_DIR=./uv_cache \
   LOG_LEVEL=DEBUG \
@@ -291,7 +297,7 @@ VITE_BACKEND_PORT="${BACKEND_PORT}" \
 VITE_FRONTEND_PORT="${FRONTEND_PORT}" \
 npm_config_cache="${ROOT_DIR}/npm_cache" \
 npx pnpm --filter main-app dev --host "${HOST}" --port "${FRONTEND_PORT}" --strictPort \
-  > "${LOG_DIR}/frontend-dev.log" 2>&1 &
+  > "${FRONTEND_LOG}" 2>&1 &
 FRONTEND_PID="$!"
 echo "${FRONTEND_PID}" >> "${PID_FILE}"
 
@@ -315,18 +321,18 @@ Logs:
 EOF
 
 if [[ "${LOG_TO_FILE}" -eq 1 ]]; then
-  echo "  Agent:    ${LOG_DIR}/agent-dev.log"
-  echo "  Backend:  ${LOG_DIR}/backend-dev.log"
-  echo "  Frontend: ${LOG_DIR}/frontend-dev.log"
+  echo "  Agent:    ${AGENT_LOG}"
+  echo "  Backend:  ${BACKEND_LOG}"
+  echo "  Frontend: ${FRONTEND_LOG}"
   echo ""
   echo "To view logs:"
-  echo "  tail -f ${LOG_DIR}/agent-dev.log"
-  echo "  tail -f ${LOG_DIR}/backend-dev.log"
-  echo "  tail -f ${LOG_DIR}/frontend-dev.log"
+  echo "  tail -f ${AGENT_LOG}"
+  echo "  tail -f ${BACKEND_LOG}"
+  echo "  tail -f ${FRONTEND_LOG}"
 else
-  echo "  Agent:    ${LOG_DIR}/agent-dev.log"
+  echo "  Agent:    ${AGENT_LOG}"
   echo "  Backend:  console (below)"
-  echo "  Frontend: ${LOG_DIR}/frontend-dev.log"
+  echo "  Frontend: ${FRONTEND_LOG}"
   echo ""
   echo "Backend logs will appear below."
   echo "Agent tracing: aniforce-agent/runtime/agent/traces/YYYYMMDD/*.jsonl"

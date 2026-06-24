@@ -92,14 +92,38 @@ function normalizeAgentSession(raw: any): AgentSession {
 
 function clearInvalidAuth(): void {
   localStorage.removeItem('animagus_token')
+  localStorage.removeItem('animagus_auth')
   localStorage.removeItem('animagus_user')
+}
+
+function redirectToLogin(): void {
+  if (window.location.pathname !== '/login') window.location.href = '/login'
+}
+
+function isTokenExpired(token: string): boolean {
+  try {
+    const base64Url = token.split('.')[1]
+    if (!base64Url) return true
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/')
+    const payload = JSON.parse(decodeURIComponent(atob(base64).split('').map(char => `%${(`00${char.charCodeAt(0).toString(16)}`).slice(-2)}`).join('')))
+    return !payload.exp || Date.now() >= Number(payload.exp) * 1000
+  } catch {
+    return true
+  }
+}
+
+function stringifyErrorPayload(payload: unknown, fallback: string): string {
+  if (!payload) return fallback
+  if (typeof payload === 'string') return payload
+  if (typeof payload !== 'object') return String(payload)
+  const record = payload as Record<string, unknown>
+  return stringifyErrorPayload(record.detail || record.error || record.message || record.code, fallback)
 }
 
 function parseErrorMessage(text: string, fallback: string): string {
   if (!text) return fallback
   try {
-    const payload = JSON.parse(text)
-    return String(payload?.detail || payload?.error?.message || text)
+    return stringifyErrorPayload(JSON.parse(text), fallback)
   } catch {
     return text
   }
@@ -107,12 +131,26 @@ function parseErrorMessage(text: string, fallback: string): string {
 
 async function throwAgentError(response: Response, fallback: string): Promise<never> {
   const text = await response.text().catch(() => '')
-  if (response.status === 401) clearInvalidAuth()
-  throw new Error(parseErrorMessage(text, fallback))
+  const message = parseErrorMessage(text, fallback)
+  if (response.status === 401) {
+    clearInvalidAuth()
+    redirectToLogin()
+  }
+  throw new Error(message)
+}
+
+function getValidAgentToken(): string | null {
+  const token = localStorage.getItem('animagus_token')
+  if (token && isTokenExpired(token)) {
+    clearInvalidAuth()
+    redirectToLogin()
+    throw new Error('登录已过期，请重新登录')
+  }
+  return token
 }
 
 async function agentJson<T>(path: string, options: RequestInit = {}): Promise<T> {
-  const token = localStorage.getItem('animagus_token')
+  const token = getValidAgentToken()
   const response = await fetch(`/api/v1/agent${path}`, {
     ...options,
     headers: {
@@ -189,7 +227,7 @@ export interface AgentRunStart {
 }
 
 export async function startAgentRun(sessionId: string, message: string, taskType = 'conversation', contextSnapshot?: AgentContextSnapshot, signal?: AbortSignal): Promise<AgentRunStart> {
-  const token = localStorage.getItem('animagus_token')
+  const token = getValidAgentToken()
   const response = await fetch('/api/v1/agent/runs', {
     method: 'POST',
     headers: {
@@ -206,7 +244,7 @@ export async function startAgentRun(sessionId: string, message: string, taskType
 }
 
 export async function* streamAgentRunEvents(runId: string, afterSequence = 0, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent, void, unknown> {
-  const token = localStorage.getItem('animagus_token')
+  const token = getValidAgentToken()
   const response = await fetch(`/api/v1/agent/runs/${encodeURIComponent(runId)}/events?after_sequence=${afterSequence}`, {
     method: 'GET',
     headers: {

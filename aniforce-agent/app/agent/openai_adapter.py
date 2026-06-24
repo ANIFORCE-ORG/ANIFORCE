@@ -33,6 +33,7 @@ from agents.sandbox.entries import LocalDir
 from agents.sandbox.sandboxes.unix_local import UnixLocalSandboxClient
 from agents.models.openai_responses import OpenAIResponsesModel  # 添加 Responses API
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
+from agents.models.chatcmpl_converter import Converter
 
 from app.models.agent_platform_models import AgentTaskEvent, EventType
 from app.core.errors import AppError, AgentErrorCode, ErrorCategory
@@ -41,6 +42,72 @@ from app.core.tracing import get_tracer
 
 def _elapsed_ms(start: float) -> int:
     return int((perf_counter() - start) * 1000)
+
+
+_ORIGINAL_ITEMS_TO_MESSAGES = Converter.items_to_messages
+
+
+def _is_empty_assistant_output_message(item) -> bool:
+    """Return True for SDK's empty assistant placeholder after tool calls."""
+    if not isinstance(item, dict):
+        return False
+    if item.get("type") != "message" or item.get("role") != "assistant":
+        return False
+    content = item.get("content")
+    if not content:
+        return True
+    if not isinstance(content, list):
+        return False
+    for part in content:
+        if not isinstance(part, dict):
+            return False
+        if part.get("type") != "output_text":
+            return False
+        if str(part.get("text") or ""):
+            return False
+    return True
+
+
+def _sanitize_chat_completion_items(items):
+    """Remove SDK empty assistant placeholders that break ChatCompletions tool order."""
+    if isinstance(items, str):
+        return items
+
+    normalized = list(items)
+    sanitized = []
+    removed = 0
+
+    for index, item in enumerate(normalized):
+        if not _is_empty_assistant_output_message(item):
+            sanitized.append(item)
+            continue
+
+        previous_item = normalized[index - 1] if index > 0 else None
+        next_item = normalized[index + 1] if index + 1 < len(normalized) else None
+        previous_call_id = previous_item.get("call_id") if isinstance(previous_item, dict) and previous_item.get("type") == "function_call" else None
+        next_call_id = next_item.get("call_id") if isinstance(next_item, dict) and next_item.get("type") == "function_call_output" else None
+
+        if previous_call_id and previous_call_id == next_call_id:
+            removed += 1
+            continue
+
+        sanitized.append(item)
+
+    if removed:
+        logger.warning(
+            "[SDK] Removed {} empty assistant placeholder(s) between function_call and function_call_output for ChatCompletions compatibility",
+            removed,
+        )
+
+    return sanitized
+
+
+@classmethod
+def _patched_items_to_messages(cls, items, *args, **kwargs):
+    return _ORIGINAL_ITEMS_TO_MESSAGES(_sanitize_chat_completion_items(items), *args, **kwargs)
+
+
+Converter.items_to_messages = _patched_items_to_messages
 
 
 class OpenAISDKAdapter:

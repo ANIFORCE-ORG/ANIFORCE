@@ -7,6 +7,7 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDea
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
+import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
@@ -21,6 +22,9 @@ const activeIntentMode = ref<'chat' | 'project'>('chat')
 const workspaceCollapsed = ref(localStorage.getItem('aniforce.workspace.collapsed') === '1')
 const workspaceWidth = ref(Number(localStorage.getItem('aniforce.workspace.width') || 560))
 const workspaceDragging = ref(false)
+const renameDialog = ref<{ id: string; name: string } | null>(null)
+const renameValue = ref('')
+const deleteDialog = ref<{ id: string; name: string } | null>(null)
 
 const intentModes: Array<{
   key: 'chat' | 'project'
@@ -356,21 +360,14 @@ const switchPanel = (item: any) => {
 }
 
 async function createSessionForActiveMode() {
-  const mode = activeMode.value
-  await agent.createSession({
-    ...activeRoute.value,
-    title: `${mode.route.titlePrefix} ${agent.sessions.value.length + 1}`
-  })
+  await agent.createSession(activeRoute.value)
 }
 
 async function createChatSession() {
   activeIntentMode.value = 'chat'
   const chatMode = intentModes[0]
   const { titlePrefix: _titlePrefix, ...route } = chatMode.route
-  await agent.createSession({
-    ...route,
-    title: `${chatMode.route.titlePrefix} ${agent.sessions.value.length + 1}`
-  })
+  await agent.createSession(route)
 }
 
 const switchSession = (session: any) => {
@@ -379,6 +376,34 @@ const switchSession = (session: any) => {
     hasInteracted.value = true
     void agent.selectSession(target)
   }
+}
+
+function openRenameSession(session: { id: string; name: string }) {
+  renameDialog.value = session
+  renameValue.value = session.name
+  nextTick(() => document.querySelector<HTMLInputElement>('[data-session-rename-input]')?.focus())
+}
+
+async function confirmRenameSession() {
+  const session = renameDialog.value
+  const title = renameValue.value.trim()
+  if (!session || !title || title === session.name) {
+    renameDialog.value = null
+    return
+  }
+  await agent.renameSession(session.id, title)
+  renameDialog.value = null
+}
+
+function openDeleteSession(session: { id: string; name: string }) {
+  deleteDialog.value = session
+}
+
+async function confirmDeleteSession() {
+  const session = deleteDialog.value
+  if (!session) return
+  await agent.deleteSession(session.id)
+  deleteDialog.value = null
 }
 
 function selectModel(model: { provider: string; id: string }) {
@@ -430,83 +455,57 @@ onDeactivated(() => {
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="flex h-[calc(100vh-120px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航 -->
     <SidebarNav 
       :nav-items="navItems"
       :sessions="sidebarSessions"
       @switch-panel="switchPanel"
       @switch-session="switchSession"
+      @rename-session="openRenameSession"
+      @delete-session="openDeleteSession"
     />
 
     <!-- 中间核心工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-      <div class="h-11 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-4">
-        <div class="flex min-w-0 items-center gap-2">
-          <span class="material-symbols-outlined text-base text-slate-400">chat</span>
-          <h3 class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">{{ currentSessionTitle }}</h3>
-        </div>
-        <div class="flex items-center gap-1">
-          <button
-            class="inline-flex h-8 w-8 items-center justify-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
-            :disabled="agent.loading.value"
-            title="新任务"
-            @click="createSessionForActiveMode()"
-          >
-            <span class="material-symbols-outlined text-lg">add</span>
-          </button>
-        </div>
-      </div>
       <div class="flex-1 overflow-y-auto">
-        <div class="flex min-h-full flex-col items-center px-4 pb-8">
-    <div v-if="!hasContent" class="flex-1 min-h-[48px]"></div>
+        <div class="flex flex-col items-center px-4 pb-8">
+    <!-- Top spacer: pushes content to center when no output -->
+    <div v-if="!hasContent" class="flex-1 min-h-[94px]"></div>
 
-    <section
+    <!-- Greeting -->
+    <div
       v-if="!hasContent"
-      class="w-full max-w-[760px]"
+      class="max-w-[624px] w-full text-center space-y-[19px] mb-[37px]"
     >
-      <div class="flex items-center justify-between gap-4">
-        <div class="min-w-0">
-          <h1 class="text-xl font-semibold text-slate-950 dark:text-white">今天要推进什么？</h1>
+      <h1 class="text-slate-900 dark:text-white text-[28px] md:text-[34px] font-poppins font-semibold tracking-tight">
+        又见面啦！有新的投放计划吗？
+      </h1>
+      <p class="text-slate-500 dark:text-slate-400 text-[15px]">
+        利用 AI 驱动的见解和素材生成，快速启动您的下一个全球营销活动。
+      </p>
+    </div>
+
+    <!-- Output Content Area (above the input bar, only when has content) -->
+    <div v-if="hasContent" class="max-w-[842px] w-full px-[12px] space-y-[19px] mb-[19px]">
+      <!-- Loading State -->
+      <div v-if="agent.loading.value" class="flex items-center justify-center gap-[9px] py-[25px]">
+        <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+        <span class="text-slate-500 text-[11px]">AI 正在分析中，请稍候...</span>
+      </div>
+
+      <!-- Error State -->
+      <div v-else-if="agent.error.value" class="bg-white dark:bg-slate-900 rounded-2xl border border-red-200 dark:border-red-800 p-[19px] shadow-sm">
+        <div class="flex items-start gap-[9px]">
+          <div class="h-[25px] w-[25px] rounded-lg bg-red-100 dark:bg-red-900/30 flex items-center justify-center flex-shrink-0">
+            <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[11px]">error</span>
+          </div>
+          <p class="text-red-700 dark:text-red-300 text-[13px] leading-relaxed">{{ agent.error.value }}</p>
         </div>
-        <button
-          class="hidden h-8 items-center gap-2 rounded-md px-2.5 text-sm font-medium text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white sm:inline-flex"
-          @click="createSessionForActiveMode()"
-        >
-          <span class="material-symbols-outlined text-base">add</span>
-          新任务
-        </button>
-      </div>
-      <div class="mt-4 divide-y divide-slate-100 overflow-hidden rounded-md border border-slate-200 bg-white dark:divide-slate-800 dark:border-slate-800 dark:bg-slate-900">
-        <button
-          v-for="action in starterActions"
-          :key="action.label"
-          class="group flex min-h-[52px] w-full items-center gap-3 px-3 py-2.5 text-left transition-colors hover:bg-slate-50 dark:hover:bg-slate-800"
-          @click="runStarterAction(action)"
-        >
-          <span class="material-symbols-outlined text-lg text-slate-400 group-hover:text-primary">{{ action.icon }}</span>
-          <span class="min-w-0 flex-1">
-            <span class="block text-sm font-medium text-slate-900 dark:text-white">{{ action.label }}</span>
-            <span class="block truncate text-xs text-slate-500 dark:text-slate-400">{{ action.description }}</span>
-          </span>
-          <span class="material-symbols-outlined text-base text-slate-300 group-hover:text-slate-500">arrow_forward</span>
-        </button>
-      </div>
-    </section>
-
-    <!-- Agent conversation output -->
-    <div v-if="hasContent" class="agent-output max-w-[860px] w-full px-4 space-y-2 mb-6">
-      <div v-if="agent.loading.value" class="flex items-center justify-center gap-3 py-8">
-        <div class="h-5 w-5 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-        <span class="text-slate-500 text-sm">正在加载 Agent 会话...</span>
       </div>
 
-      <div v-else-if="agent.error.value" class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300">
-        {{ agent.error.value }}
-      </div>
-
+      <!-- Agent Messages -->
       <template v-else>
-        <!-- 消息列表：user / assistant / activity 都在这里 -->
         <template v-for="(message, index) in agent.visibleMessages.value" :key="message.id || `${message.role}-${message.timestamp}-${index}`">
           <MessageView
             :message="message"
@@ -516,7 +515,6 @@ onDeactivated(() => {
           />
         </template>
 
-        <!-- 流式消息 -->
         <MessageView
           v-if="agent.streamingMessage.value"
           :message="agent.streamingMessage.value"
@@ -525,84 +523,84 @@ onDeactivated(() => {
           :model-names="agent.modelNames.value"
         />
         
-        <!-- Agent 运行中提示 -->
-        <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="flex items-center gap-2 py-4 text-sm text-slate-500">
-          <div class="h-4 w-4 border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
-          <span>{{ phaseLabel(agent.agentPhase.value) }}</span>
+        <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="flex items-center justify-center gap-[9px] py-[19px]">
+          <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+          <span class="text-slate-500 text-[11px]">{{ phaseLabel(agent.agentPhase.value) }}</span>
         </div>
       </template>
     </div>
 
     <!-- Floating Command Bar (always below output content) -->
-    <div class="max-w-[860px] w-full px-4 mb-6">
+    <div class="max-w-[671px] w-full px-[12px] mb-[19px]">
       <div class="relative group">
+        <!-- Glow effect -->
+        <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-blue-400/20 rounded-full blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200"></div>
         <!-- Input bar -->
-        <div class="relative flex items-center rounded-lg border border-slate-200 bg-white p-2 shadow-sm shadow-slate-200/70 transition-all focus-within:border-slate-400 dark:border-slate-700 dark:bg-slate-900 dark:shadow-none dark:focus-within:border-slate-500">
-          <button class="flex items-center justify-center p-3 text-slate-400 hover:text-primary transition-colors" title="上传素材">
-            <span class="material-symbols-outlined">attach_file</span>
+        <div class="relative flex items-center bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-200/50 dark:shadow-none p-[6px] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
+          <button class="flex items-center justify-center p-[9px] text-slate-400 hover:text-primary transition-colors">
+            <span class="material-symbols-outlined text-[19px]">attach_file</span>
           </button>
           <input
             v-model="inputText"
             data-agent-input="home"
-            class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-base text-slate-800 dark:text-slate-200 placeholder:text-slate-400 py-3 px-2"
+            class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-[15px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 py-[9px] px-[6px]"
             placeholder="描述您的投放目标或上传素材..."
             type="text"
             @keydown.enter="handleSubmit"
           />
-          <div class="flex items-center gap-2 pr-2">
-            <button
-              v-if="agent.agentRunning.value"
-              class="inline-flex h-10 items-center gap-2 rounded-md border border-red-200 bg-red-50 px-3 text-sm font-medium text-red-600 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300"
-              @click="agent.abort()"
-            >
-              <span class="material-symbols-outlined text-base">stop</span>
-              停止
+          <div class="flex items-center gap-[6px] pr-[6px]">
+            <button class="flex items-center justify-center p-[9px] text-slate-400 hover:text-primary transition-colors">
+              <span class="material-symbols-outlined text-[19px]">mic</span>
             </button>
             <button
-              v-else
-              class="bg-primary text-white h-10 px-4 rounded-md flex items-center gap-2 justify-center hover:bg-primary/90 transition-all shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
+              class="bg-primary text-white h-[37px] w-[37px] rounded-full flex items-center justify-center hover:bg-primary/90 transition-all shadow-lg shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
               :disabled="agent.loading.value || agent.agentRunning.value || !inputText.trim()"
               @click="handleSubmit"
             >
-              <span class="text-sm font-medium">发送</span>
-              <span class="material-symbols-outlined text-base">arrow_forward</span>
+              <span v-if="agent.loading.value || agent.agentRunning.value" class="h-[16px] w-[16px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span v-else class="material-symbols-outlined text-[19px]">arrow_forward</span>
             </button>
           </div>
-        </div>
-        <div class="mt-2 flex items-center justify-between gap-3 px-1 text-xs text-slate-500 dark:text-slate-400">
-          <div class="relative">
-            <button
-              class="inline-flex h-7 items-center gap-1.5 rounded-md px-2 text-xs font-medium hover:bg-slate-100 hover:text-slate-900 disabled:opacity-50 dark:hover:bg-slate-800 dark:hover:text-white"
-              :disabled="agent.agentRunning.value || agent.models.value.length === 0"
-              @click="modelMenuOpen = !modelMenuOpen"
-            >
-              <span class="material-symbols-outlined text-sm">memory</span>
-              <span class="max-w-[180px] truncate">{{ currentModel?.name || '选择模型' }}</span>
-              <span class="material-symbols-outlined text-sm">expand_more</span>
-            </button>
-            <div
-              v-if="modelMenuOpen"
-              class="absolute bottom-full left-0 z-30 mb-2 w-72 overflow-hidden rounded-md border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900"
-            >
-              <button
-                v-for="model in agent.models.value"
-                :key="`${model.provider}:${model.id}`"
-                class="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left text-sm hover:bg-slate-50 dark:hover:bg-slate-800"
-                :class="currentModel?.provider === model.provider && currentModel?.id === model.id ? 'text-primary bg-primary/5' : 'text-slate-700 dark:text-slate-300'"
-                @click="selectModel(model)"
-              >
-                <span class="min-w-0">
-                  <span class="block truncate font-medium">{{ model.name }}</span>
-                  <span class="block truncate text-xs text-slate-500">{{ model.provider }}</span>
-                </span>
-                <span v-if="currentModel?.provider === model.provider && currentModel?.id === model.id" class="material-symbols-outlined text-base">check</span>
-              </button>
-            </div>
-          </div>
-          <span class="hidden sm:inline">系统会根据目标自动选择合适能力</span>
         </div>
       </div>
 
+      <!-- Quick Tags (hide after interaction) -->
+      <div v-if="!hasContent" class="flex flex-wrap justify-center gap-[9px] mt-[19px]">
+        <button
+          v-for="(mode, index) in intentModes"
+          :key="mode.key"
+          class="flex items-center gap-[6px] px-[16px] py-[6px] rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-primary hover:text-primary transition-all shadow-sm"
+          :class="activeIntentMode === mode.key ? 'border-primary text-primary' : ''"
+          @click="activeIntentMode = mode.key"
+        >
+          <span class="text-[15px]">{{ index === 0 ? '💬' : '📁' }}</span>
+          <span class="text-[11px] font-medium">{{ mode.label }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Tool Cards (only show when no content) -->
+    <div v-if="!hasContent && !hasInteracted" class="w-full max-w-[842px] mt-[25px]">
+      <div class="flex items-center justify-between px-[19px] mb-[19px]">
+        <h3 class="text-[15px] font-bold dark:text-white">快速开始</h3>
+      </div>
+      <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-[19px] px-[12px]">
+        <div
+          v-for="action in starterActions"
+          :key="action.label"
+          class="group bg-white dark:bg-slate-900 p-[19px] rounded-xl border border-slate-200 dark:border-slate-800 hover:border-primary/50 hover:shadow-lg hover:shadow-primary/5 transition-all cursor-pointer"
+          @click="runStarterAction(action)"
+        >
+          <div
+            class="h-[37px] w-[37px] rounded-lg flex items-center justify-center mb-[12px] group-hover:scale-110 transition-transform"
+            :class="action.mode === 'project' ? 'bg-purple-50 dark:bg-purple-900/30 text-purple-600 dark:text-purple-400' : 'bg-blue-50 dark:bg-blue-900/30 text-primary'"
+          >
+            <span class="material-symbols-outlined text-[19px]">{{ action.icon }}</span>
+          </div>
+          <h4 class="font-bold text-[13px] text-slate-900 dark:text-white mb-[6px]">{{ action.label }}</h4>
+          <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">{{ action.description }}</p>
+        </div>
+      </div>
     </div>
 
     <!-- Bottom spacer: pushes content to center when no output -->
@@ -611,173 +609,47 @@ onDeactivated(() => {
       </div>
     </main>
   </div>
+
+  <Teleport to="body">
+    <Transition name="fade">
+      <div
+        v-if="renameDialog"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
+        @click.self="renameDialog = null"
+      >
+        <div class="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
+          <div class="border-b border-slate-100 px-6 py-5 dark:border-slate-800">
+            <h3 class="text-base font-semibold text-slate-950 dark:text-white">重命名对话</h3>
+            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">为这条历史会话设置一个更容易识别的名称。</p>
+          </div>
+          <div class="px-6 py-5">
+            <input
+              v-model="renameValue"
+              data-session-rename-input
+              class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
+              maxlength="80"
+              placeholder="输入会话名称"
+              @keydown.enter.prevent="confirmRenameSession"
+              @keydown.esc.prevent="renameDialog = null"
+            />
+          </div>
+          <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/60">
+            <button class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" @click="renameDialog = null">取消</button>
+            <button class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50" :disabled="!renameValue.trim()" @click="confirmRenameSession">保存</button>
+          </div>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <ConfirmDialog
+    :show="Boolean(deleteDialog)"
+    title="删除对话"
+    :message="`确定删除对话「${deleteDialog?.name || ''}」吗？删除后会从历史列表移除。`"
+    confirm-text="删除"
+    cancel-text="取消"
+    confirm-button-class="bg-red-600 hover:bg-red-700"
+    @confirm="confirmDeleteSession"
+    @close="deleteDialog = null"
+  />
 </template>
-
-<style scoped>
-.agent-output {
-  --bg: #ffffff;
-  --surface: #ffffff;
-  --surface-container: #f8fafc;
-  --bg-panel: #f1f5f9;
-  --bg-hover: #f1f5f9;
-  --bg-selected: #eaf2ff;
-  --assistant-bg: transparent;
-  --user-bg: #f8fbff;
-  --border: #e2e8f0;
-  --outline: #cbd5e1;
-  --outline-variant: #e2e8f0;
-  --text: #0f172a;
-  --text-muted: #64748b;
-  --text-dim: #94a3b8;
-  --accent: #2563eb;
-  --success: #059669;
-  --warning: #d97706;
-  --error: #dc2626;
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-}
-
-/* 助手消息区域 - 移除左侧 border，增加间距 */
-.agent-output :deep(.assistant-message) {
-  margin-bottom: 32px;
-  padding: 0;
-}
-
-.agent-output :deep(.assistant-model-row) {
-  min-height: 18px;
-  margin-bottom: 8px;
-  color: #94a3b8;
-  font-size: 11px;
-}
-
-.agent-output :deep(.stream-stat),
-.agent-output :deep(.tps-badge) {
-  border-radius: 999px;
-  padding: 2px 8px;
-  background: #f1f5f9;
-  color: #64748b;
-  font-size: 10px;
-}
-
-.agent-output :deep(.assistant-block-list) {
-  gap: 12px;
-}
-
-.agent-output :deep(.markdown-body) {
-  color: #334155;
-  font-size: 15px;
-  line-height: 1.75;
-}
-
-.agent-output :deep(.user-bubble) {
-  max-width: min(72%, 620px);
-  border: 1px solid rgba(37, 99, 235, .12);
-  border-radius: 14px 14px 4px 14px;
-  background: #eff6ff;
-  color: #0f172a;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, .04);
-}
-
-.agent-output :deep(.thinking-block),
-.agent-output :deep(.tool-call-block) {
-  border-color: #dbeafe;
-  background: #f8fafc;
-  border-radius: 10px;
-}
-
-.agent-output :deep(.thinking-block > button),
-.agent-output :deep(.tool-call-block > button) {
-  padding: 7px 10px;
-}
-
-.agent-output :deep(.tool-name) {
-  color: #2563eb;
-}
-
-.agent-output :deep(.tool-status) {
-  border-radius: 999px;
-  padding: 1px 7px;
-  background: #e0f2fe;
-  color: #0369a1;
-}
-
-.agent-output :deep(.code-block) {
-  border-radius: 10px;
-  border-color: #e2e8f0;
-  background: #f8fafc;
-}
-
-.agent-output :deep(.assistant-footer) {
-  margin-top: 6px;
-  color: #94a3b8;
-}
-
-.agent-inline-timeline {
-  display: grid;
-  gap: 12px;
-  margin: 10px 0 18px 14px;
-}
-
-.timeline-flow-enter-active,
-.timeline-flow-leave-active,
-.timeline-flow-move {
-  transition: opacity .26s ease, transform .26s ease, filter .26s ease;
-}
-
-.timeline-flow-enter-from,
-.timeline-flow-leave-to {
-  opacity: 0;
-  filter: blur(4px);
-  transform: translateY(10px) scale(.985);
-}
-
-.timeline-flow-leave-active {
-  position: absolute;
-}
-
-@media (max-width: 640px) {
-  .agent-inline-timeline {
-    margin-left: 0;
-  }
-}
-
-:global(.dark) .agent-output {
-  --bg: #0f172a;
-  --surface: #0f172a;
-  --surface-container: #111827;
-  --bg-panel: #1e293b;
-  --bg-hover: #1e293b;
-  --bg-selected: rgba(37, 99, 235, .2);
-  --assistant-bg: transparent;
-  --user-bg: rgba(30, 41, 59, .72);
-  --border: #334155;
-  --outline: #475569;
-  --outline-variant: #334155;
-  --text: #f8fafc;
-  --text-muted: #cbd5e1;
-  --text-dim: #94a3b8;
-}
-
-:global(.dark) .agent-output :deep(.markdown-body) {
-  color: #e2e8f0;
-}
-
-:global(.dark) .agent-output :deep(.assistant-message) {
-  border-left-color: rgba(96, 165, 250, .24);
-}
-
-:global(.dark) .agent-output :deep(.user-bubble) {
-  border-color: rgba(96, 165, 250, .24);
-  background: rgba(37, 99, 235, .18);
-  color: #f8fafc;
-}
-
-:global(.dark) .agent-output :deep(.stream-stat),
-:global(.dark) .agent-output :deep(.tps-badge),
-:global(.dark) .agent-output :deep(.thinking-block),
-:global(.dark) .agent-output :deep(.tool-call-block),
-:global(.dark) .agent-output :deep(.code-block) {
-  background: rgba(15, 23, 42, .72);
-  border-color: #334155;
-}
-
-</style>

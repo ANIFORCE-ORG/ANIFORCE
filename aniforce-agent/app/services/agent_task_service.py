@@ -34,7 +34,14 @@ class AgentTaskService:
 
     @staticmethod
     def _is_default_session_title(title: str | None) -> bool:
-        return not title or title == "新对话" or title.startswith("Agent Session ")
+        if not title:
+            return True
+        return (
+            title == "新对话"
+            or title.startswith("Agent Session ")
+            or title.startswith("日常对话")
+            or title.startswith("项目管理")
+        )
 
     async def _display_session(self, user_id: str, session: AgentSession) -> AgentSession:
         if not self._is_default_session_title(session.title):
