@@ -15,6 +15,15 @@ settings = get_settings()
 
 # 图像存储路径
 IMAGES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "images"
+FRONTEND_CREATIVE_IMAGES_DIR = (
+    Path(__file__).resolve().parents[4]
+    / "frontend"
+    / "packages"
+    / "main-app"
+    / "public"
+    / "images"
+    / "creatives"
+)
 
 
 @router.get("")
@@ -80,24 +89,25 @@ async def get_material_image(
     if not image_url:
         raise HTTPException(status_code=404, detail="Material file not found")
     
-    storage = AliyunOssStorageService()
-    object_key = storage.object_key_from_url(image_url)
-    if object_key:
-        filename = os.path.basename(object_key)
-        return {
-            "material_id": material_id,
-            "filename": filename,
-            "mime_type": _mime_type_from_filename(filename),
-            "size": material.get("file_size") or 0,
-            "data": "",
-            "url": storage.signed_url(object_key),
-        }
+    storage = _try_create_storage()
+    if storage:
+        object_key = storage.object_key_from_url(image_url)
+        if object_key:
+            filename = os.path.basename(object_key)
+            return {
+                "material_id": material_id,
+                "filename": filename,
+                "mime_type": _mime_type_from_filename(filename),
+                "size": material.get("file_size") or 0,
+                "data": "",
+                "url": storage.signed_url(object_key),
+            }
 
     # 从URL中提取文件名
     filename = os.path.basename(image_url)
-    image_path = IMAGES_DIR / filename
+    image_path = _resolve_local_image_path(image_url)
     
-    if not image_path.exists():
+    if not image_path:
         raise HTTPException(status_code=404, detail="Image file not found")
     
     # 读取图像并转换为Base64
@@ -282,6 +292,28 @@ def _mime_type_from_filename(filename: str) -> str:
         ".mov": "video/quicktime",
     }
     return mime_types.get(ext, "application/octet-stream")
+
+
+def _try_create_storage() -> AliyunOssStorageService | None:
+    try:
+        return AliyunOssStorageService()
+    except ObjectStorageError:
+        return None
+
+
+def _resolve_local_image_path(image_url: str) -> Path | None:
+    filename = os.path.basename(image_url)
+    candidates = []
+    if image_url.startswith("/images/creatives/"):
+        candidates.append(FRONTEND_CREATIVE_IMAGES_DIR / filename)
+    candidates.extend([
+        IMAGES_DIR / filename,
+        FRONTEND_CREATIVE_IMAGES_DIR / filename,
+    ])
+    for candidate in candidates:
+        if candidate.exists() and candidate.is_file():
+            return candidate
+    return None
 
 
 @router.delete("/{material_id}")

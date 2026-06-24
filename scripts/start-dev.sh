@@ -240,6 +240,10 @@ if [[ "${SKIP_INSTALL}" -eq 0 ]]; then
   npm_config_cache="${ROOT_DIR}/npm_cache" npx pnpm install
 fi
 
+echo "Migrating backend database..."
+cd "${BACKEND_DIR}"
+UV_CACHE_DIR=./uv_cache uv run python -m alembic upgrade head
+
 RELOAD_ARGS=()
 if [[ "${BACKEND_RELOAD}" -eq 1 ]]; then
   RELOAD_ARGS=(--reload)
