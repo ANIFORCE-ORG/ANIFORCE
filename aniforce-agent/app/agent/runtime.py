@@ -308,6 +308,11 @@ class AgentRuntime:
                             yield todo_event
                             sequence = todo_event.sequence
             
+            latest_task = await self.repo.get_user_task(task.user_id, task.task_id)
+            if latest_task and latest_task.status == AgentTaskStatus.ABORTED:
+                task_logger.info("[RUNTIME] Task was cancelled before completion; skip completed event")
+                return
+
             # 8. 更新状态为 completed
             await self.repo.update_status(task.task_id, AgentTaskStatus.COMPLETED)
             

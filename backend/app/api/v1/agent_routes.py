@@ -16,11 +16,16 @@ from app.api.deps import get_current_user
 from app.config.database import get_db, get_session_maker
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
+from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
+from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
+from app.services.agent_message_service import AgentMessageService
+from app.services.agent_run_service import AgentRunError, AgentRunService
 from app.services.agent_session_service import AgentSessionError, AgentSessionService
 from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
 from app.services.agent_run_event_bus import agent_run_event_bus
 from app.services.business_context_builder import BusinessContextBuilder
+from app.services.chat_event_assembler import ChatEventAssembler
 from app.services.session_lock import SessionBusyError, session_lock_manager
 from app.services.side_effect_service import SideEffectService
 
@@ -76,6 +81,7 @@ def get_agent_session_service(session: AsyncSession = Depends(get_db)) -> AgentS
     return AgentSessionService(
         session_repo=SqliteAgentSessionRepository(session),
         state_repo=SqliteSessionStateRepository(session),
+        message_repo=SqliteAgentMessageRepository(session),
     )
 
 
@@ -120,6 +126,7 @@ async def _create_agent_session_short_tx(user_id: str, title: str | None = None)
         service = AgentSessionService(
             session_repo=SqliteAgentSessionRepository(session),
             state_repo=SqliteSessionStateRepository(session),
+            message_repo=SqliteAgentMessageRepository(session),
         )
         return await service.create_session(user_id=user_id, title=title)
     return await _with_session(callback)
@@ -130,6 +137,7 @@ async def _require_active_agent_session_short_tx(session_id: str, user_id: str) 
         service = AgentSessionService(
             session_repo=SqliteAgentSessionRepository(session),
             state_repo=SqliteSessionStateRepository(session),
+            message_repo=SqliteAgentMessageRepository(session),
         )
         return await service.require_active(session_id=session_id, user_id=user_id)
     return await _with_session(callback)
@@ -140,6 +148,7 @@ async def _touch_agent_session_short_tx(session_id: str, user_id: str) -> None:
         service = AgentSessionService(
             session_repo=SqliteAgentSessionRepository(session),
             state_repo=SqliteSessionStateRepository(session),
+            message_repo=SqliteAgentMessageRepository(session),
         )
         await service.touch(session_id=session_id, user_id=user_id)
     await _with_session(callback)
@@ -177,6 +186,70 @@ async def _build_business_context_short_tx(state: dict, user_id: str) -> str:
             material_repo=get_material_repo(session),
         )
         return await builder.build(state, user_id)
+    return await _with_session(callback)
+
+
+async def _create_or_reuse_run_short_tx(
+    *,
+    session_id: str,
+    user_id: str,
+    input_text: str,
+    idempotency_key: str | None,
+) -> tuple[dict, bool]:
+    async def callback(session: AsyncSession):
+        service = AgentRunService(SqliteAgentRunRepository(session))
+        return await service.create_or_reuse(
+            session_id=session_id,
+            user_id=user_id,
+            input_text=input_text,
+            idempotency_key=idempotency_key,
+        )
+    return await _with_session(callback)
+
+
+async def _get_run_short_tx(run_id: str, user_id: str) -> dict:
+    async def callback(session: AsyncSession):
+        return await AgentRunService(SqliteAgentRunRepository(session)).get(run_id, user_id)
+    return await _with_session(callback)
+
+
+async def _mark_run_status_short_tx(
+    run_id: str,
+    user_id: str,
+    status: str,
+    *,
+    usage: dict | None = None,
+    error: dict | None = None,
+) -> dict | None:
+    async def callback(session: AsyncSession):
+        service = AgentRunService(SqliteAgentRunRepository(session))
+        if status == "running":
+            return await service.mark_running(run_id, user_id)
+        if status == "completed":
+            return await service.mark_completed(run_id, user_id, usage=usage)
+        if status == "cancelled":
+            return await service.mark_cancelled(run_id, user_id)
+        return await service.mark_error(run_id, user_id, error or {})
+    return await _with_session(callback)
+
+
+async def _append_agent_message_short_tx(
+    *,
+    session_id: str,
+    user_id: str,
+    role: str,
+    content_json: dict,
+    run_id: str | None = None,
+) -> dict:
+    async def callback(session: AsyncSession):
+        service = AgentMessageService(SqliteAgentMessageRepository(session))
+        return await service.append(
+            session_id=session_id,
+            user_id=user_id,
+            role=role,
+            content_json=content_json,
+            run_id=run_id,
+        )
     return await _with_session(callback)
 
 
@@ -271,23 +344,56 @@ async def archive_agent_session(
 
 
 @router.post("/tasks/{task_id}/cancel")
-async def cancel_agent_task(
-    task_id: str,
-    request: Request,
-    body: dict = Body(default_factory=dict),
+async def cancel_agent_task(task_id: str, current_user: dict = Depends(get_current_user)):
+    raise HTTPException(
+        status_code=410,
+        detail=_error_payload(
+            "TASK_CANCEL_REMOVED",
+            "Task cancellation has moved to /api/v1/agent/runs/{run_id}/cancel",
+            retryable=False,
+            details={"task_id": task_id, "user_id": current_user["id"]},
+        ),
+    )
+
+
+@router.get("/runs/{run_id}")
+async def get_agent_run(
+    run_id: str,
     current_user: dict = Depends(get_current_user),
-    gateway: AgentGatewayService = Depends(get_agent_gateway),
+    session: AsyncSession = Depends(get_db),
 ):
     try:
-        result = await gateway.cancel_task(_authorization(request), task_id)
-        session_id = body.get("session_id")
-        if session_id:
-            current = await _get_session_state_short_tx(session_id, current_user["id"])
-            if current:
-                await _mark_active_short_tx(session_id, current_user["id"], current["version"])
-        return result or {"status": "cancelled"}
-    except AgentGatewayError as exc:
-        raise HTTPException(status_code=503, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+        return await AgentRunService(SqliteAgentRunRepository(session)).get(run_id, current_user["id"])
+    except AgentRunError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+
+
+@router.post("/runs/{run_id}/cancel")
+async def cancel_agent_run(
+    run_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+    gateway: AgentGatewayService = Depends(get_agent_gateway),
+):
+    service = AgentRunService(SqliteAgentRunRepository(session))
+    try:
+        run = await service.get(run_id, current_user["id"])
+    except AgentRunError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+
+    updated_run = await service.mark_cancelled(run_id, current_user["id"])
+    await session.commit()
+    current = await _get_session_state_short_tx(run["session_id"], current_user["id"])
+    if current:
+        await _mark_active_short_tx(run["session_id"], current_user["id"], current["version"])
+    if updated_run and updated_run["status"] == "cancelled":
+        try:
+            await gateway.cancel_run(_authorization(request), run_id)
+        except AgentGatewayError:
+            # Runtime cancellation is best-effort; backend run status is already cancelled.
+            pass
+    return {"run_id": run_id, "session_id": run["session_id"], "status": (updated_run or run)["status"]}
 
 
 @router.post("/runs")
@@ -308,9 +414,9 @@ async def run_agent(
     requested_session_id = body.get("session_id")
     task_type = body.get("task_type", "conversation")
     context_snapshot = body.get("context_snapshot")
-    run_id = f"run_{uuid4().hex}"
     user_id = current_user["id"]
     authorization = _authorization(request)
+    idempotency_key = body.get("idempotency_key") or request.headers.get("Idempotency-Key")
     if requested_session_id:
         try:
             await _require_active_agent_session_short_tx(requested_session_id, user_id)
@@ -320,20 +426,23 @@ async def run_agent(
     else:
         created_session = await _create_agent_session_short_tx(user_id, prompt[:50] if prompt else "新对话")
         session_id = created_session["session_id"]
+    try:
+        run, reused = await _create_or_reuse_run_short_tx(
+            session_id=session_id,
+            user_id=user_id,
+            input_text=prompt,
+            idempotency_key=idempotency_key,
+        )
+    except AgentRunError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable, {"run": exc.run})) from exc
+    run_id = run["run_id"]
     perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
+    if reused:
+        return {"run_id": run_id, "session_id": session_id, "status": run["status"], "reused": True}
 
     state_start = perf_counter()
     state = await _get_or_create_session_state(session_id, user_id)
     state_ms = _elapsed_ms(state_start)
-    if state.get("status") == "running":
-        perf_log.info(
-            "[PERF][agent_first_token] backend.reject_busy total_ms={} body_parse_ms={} state_ms={}",
-            _elapsed_ms(request_start),
-            body_parsed_ms,
-            state_ms,
-        )
-        raise HTTPException(status_code=409, detail=_error_payload("SESSION_BUSY", "当前会话正在执行，请稍后再试", True))
-
     changelog_start_index = len(state.get("changelog") or [])
 
     ui_snapshot_ms = 0
@@ -357,12 +466,22 @@ async def run_agent(
     )
 
     await agent_run_event_bus.create_run(run_id=run_id, session_id=session_id, user_id=user_id)
+    await _append_agent_message_short_tx(
+        session_id=session_id,
+        user_id=user_id,
+        role="user",
+        content_json=ChatEventAssembler().user_message(prompt),
+        run_id=run_id,
+    )
     await _touch_agent_session_short_tx(session_id, user_id)
 
     agent_payload = {
+        "run_id": run_id,
         "prompt": prompt,
         "session_id": session_id,
+        "user_id": user_id,
         "task_type": task_type,
+        "auth_token": authorization or "",
         "business_context_summary": business_context_summary,
         "run_meta": {"run_id": run_id, "user_id": user_id},
         "context": {"auth_token": (authorization or "").removeprefix("Bearer ")},
@@ -446,9 +565,22 @@ async def _consume_agent_run_background(
                 lock_wait_ms,
                 mark_running_ms,
             )
+            current_run = await _mark_run_status_short_tx(run_id, user_id, "running")
+            if current_run and current_run["status"] in {"completed", "error", "cancelled"}:
+                current = await _get_session_state_short_tx(session_id, user_id)
+                if current:
+                    await _mark_active_short_tx(session_id, user_id, current["version"])
+                await agent_run_event_bus.publish(
+                    run_id,
+                    "run_status",
+                    {"run_id": run_id, "session_id": session_id, "status": current_run["status"]},
+                    terminal=True,
+                )
+                return
             await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "session_id": session_id, "status": "running"})
 
             gateway_start = perf_counter()
+            persisted_events: list[tuple[str, dict]] = []
             try:
                 async for chunk in gateway.stream_run(authorization, agent_payload):
                     upstream_bytes += len(chunk)
@@ -479,11 +611,13 @@ async def _consume_agent_run_background(
                                 _elapsed_ms(gateway_start),
                                 upstream_bytes,
                             )
+                        persisted_events.append((event_name, data))
                         await agent_run_event_bus.publish(run_id, event_name, data)
 
                 # Flush any final event if upstream did not end with a blank line.
                 events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
                 for event_name, data in events:
+                    persisted_events.append((event_name, data))
                     await agent_run_event_bus.publish(run_id, event_name, data)
 
                 perf_log.info(
@@ -499,6 +633,27 @@ async def _consume_agent_run_background(
                     for side_effect in SideEffectService().from_changelog_entries(new_changelog):
                         await agent_run_event_bus.publish(run_id, "side_effect", side_effect.model_dump())
                     await _mark_active_short_tx(session_id, user_id, current["version"])
+
+                latest_run = await _get_run_short_tx(run_id, user_id)
+                if latest_run["status"] == "cancelled":
+                    await agent_run_event_bus.publish(
+                        run_id,
+                        "run_status",
+                        {"run_id": run_id, "session_id": session_id, "status": "cancelled"},
+                        terminal=True,
+                    )
+                    return
+
+                assistant_content = ChatEventAssembler().assemble_assistant_message(persisted_events)
+                if assistant_content.get("blocks"):
+                    await _append_agent_message_short_tx(
+                        session_id=session_id,
+                        user_id=user_id,
+                        role="assistant",
+                        content_json=assistant_content,
+                        run_id=run_id,
+                    )
+                await _mark_run_status_short_tx(run_id, user_id, "completed", usage=assistant_content.get("usage"))
                 await agent_run_event_bus.publish(
                     run_id,
                     "run_status",
@@ -514,8 +669,18 @@ async def _consume_agent_run_background(
                         current["version"],
                         {"code": exc.code, "message": exc.message, "retryable": exc.retryable, "at": datetime.utcnow().isoformat()},
                     )
+                error_payload = {"code": exc.code, "message": exc.message, "retryable": exc.retryable, "at": datetime.utcnow().isoformat()}
+                await _mark_run_status_short_tx(run_id, user_id, "error", error=error_payload)
+                await _append_agent_message_short_tx(
+                    session_id=session_id,
+                    user_id=user_id,
+                    role="assistant",
+                    content_json=ChatEventAssembler().error_message(exc.code, exc.message),
+                    run_id=run_id,
+                )
                 await agent_run_event_bus.publish(run_id, "error", _error_payload(exc.code, exc.message, exc.retryable), terminal=True)
     except SessionBusyError:
+        await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "SESSION_BUSY", "message": "当前会话正在执行，请稍后再试"})
         await agent_run_event_bus.publish(run_id, "error", _error_payload("SESSION_BUSY", "当前会话正在执行，请稍后再试", True), terminal=True)
     except Exception as exc:
         perf_log.exception("backend background run failed")
@@ -527,6 +692,7 @@ async def _consume_agent_run_background(
                 current["version"],
                 {"code": "RUN_FAILED", "message": str(exc), "retryable": True, "at": datetime.utcnow().isoformat()},
             )
+        await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "RUN_FAILED", "message": str(exc), "retryable": True, "at": datetime.utcnow().isoformat()})
         await agent_run_event_bus.publish(run_id, "error", _error_payload("RUN_FAILED", str(exc), True), terminal=True)
 
 

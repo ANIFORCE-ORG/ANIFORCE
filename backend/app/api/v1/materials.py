@@ -30,6 +30,17 @@ FRONTEND_CREATIVE_IMAGES_DIR = (
 )
 
 
+class CreateMaterialRequest(BaseModel):
+    name: str
+    type: str
+    url: str
+    thumbnail_url: str | None = None
+    project_ids: list[str] | None = None
+    campaign_ids: list[str] | None = None
+    tags: list[str] | None = None
+    ctr_estimate: float | None = None
+
+
 class UpdateMaterialRequest(BaseModel):
     name: str | None = None
     status: str | None = None
@@ -329,29 +340,25 @@ async def upload_material_with_metadata(
 
 @router.post("")
 async def create_material(
-    name: str,
-    type: str,
-    url: str,
-    thumbnail_url: str | None = None,
-    project_ids: list[str] | None = None,
-    campaign_ids: list[str] | None = None,
-    tags: list[str] | None = None,
-    ctr_estimate: float | None = None,
+    request: CreateMaterialRequest,
     current_user: dict = Depends(get_current_user),
     material_repo: MaterialRepository = Depends(get_material_repo),
 ):
     """创建新素材"""
-    material = await material_repo.create(
-        user_id=current_user["id"],
-        name=name,
-        type=type,
-        url=url,
-        thumbnail_url=thumbnail_url,
-        project_ids=project_ids or [],
-        campaign_ids=campaign_ids or [],
-        tags=tags or [],
-        ctr_estimate=ctr_estimate,
-    )
+    try:
+        material = await material_repo.create(
+            user_id=current_user["id"],
+            name=request.name,
+            type=request.type,
+            url=request.url,
+            thumbnail_url=request.thumbnail_url,
+            project_ids=request.project_ids or [],
+            campaign_ids=request.campaign_ids or [],
+            tags=request.tags or [],
+            ctr_estimate=request.ctr_estimate,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return material
 
 

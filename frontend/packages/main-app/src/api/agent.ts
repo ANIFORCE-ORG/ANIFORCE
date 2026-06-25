@@ -183,7 +183,7 @@ export async function listAgentSessions(): Promise<AgentSession[]> {
 export async function getAgentSession(sessionId: string): Promise<{ session: AgentSession; messages: AgentMessage[] }> {
   const detail = await agentJson<any>(`/sessions/${encodeURIComponent(sessionId)}`)
   const session = normalizeAgentSession(detail)
-  const messages = Array.isArray(detail.messages) ? detail.messages as AgentMessage[] : []
+  const messages = Array.isArray(detail.messages) ? detail.messages.map(normalizeAgentMessage) as AgentMessage[] : []
   return { session, messages }
 }
 
@@ -213,11 +213,8 @@ export async function listAgentModels(): Promise<{ models: AgentModel[] }> {
   }
 }
 
-export async function cancelAgentTask(taskId: string, sessionId?: string): Promise<void> {
-  await agentJson(`/tasks/${encodeURIComponent(taskId)}/cancel`, {
-    method: 'POST',
-    body: JSON.stringify({ session_id: sessionId }),
-  })
+export async function cancelAgentRun(runId: string): Promise<void> {
+  await agentJson(`/runs/${encodeURIComponent(runId)}/cancel`, { method: 'POST' })
 }
 
 export interface AgentRunStart {
@@ -228,19 +225,50 @@ export interface AgentRunStart {
 
 export async function startAgentRun(sessionId: string, message: string, taskType = 'conversation', contextSnapshot?: AgentContextSnapshot, signal?: AbortSignal): Promise<AgentRunStart> {
   const token = getValidAgentToken()
+  const idempotencyKey = `client_${sessionId}_${Date.now()}_${Math.random().toString(36).slice(2)}`
   const response = await fetch('/api/v1/agent/runs', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ prompt: message, session_id: sessionId, task_type: taskType, context_snapshot: contextSnapshot }),
+    body: JSON.stringify({ prompt: message, session_id: sessionId, task_type: taskType, context_snapshot: contextSnapshot, idempotency_key: idempotencyKey }),
     signal,
   })
   if (!response.ok) {
     await throwAgentError(response, `Agent run failed: ${response.status}`)
   }
   return response.json()
+}
+
+function normalizeAgentMessage(raw: any): AgentMessage {
+  const contentJson = raw?.content_json || raw?.content
+  const blocks = Array.isArray(contentJson?.blocks) ? contentJson.blocks : null
+  let content: AgentMessage['content'] = raw?.content
+  if (blocks) {
+    content = blocks.map((block: any) => {
+      if (block?.type === 'text') return { type: 'text', text: String(block.text || block.content || '') }
+      if (block?.type === 'thinking') return { type: 'thinking', thinking: String(block.thinking || block.content || block.summary || '') }
+      if (block?.type === 'tool_call') {
+        return {
+          type: 'toolCall',
+          toolCallId: block.toolCallId,
+          toolName: block.tool,
+          input: block.args,
+          result: block.result,
+          status: block.status,
+        }
+      }
+      if (block?.type === 'error') return { type: 'text', text: String(block.message || block.code || 'Run failed') }
+      return block
+    })
+  }
+  return {
+    ...raw,
+    id: raw?.id || raw?.message_id,
+    content,
+    timestamp: raw?.timestamp || raw?.created_at,
+  }
 }
 
 export async function* streamAgentRunEvents(runId: string, afterSequence = 0, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent, void, unknown> {

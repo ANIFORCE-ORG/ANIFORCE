@@ -7,7 +7,7 @@ import {
   listAgentSessions,
   startAgentRun,
   streamAgentRunEvents,
-  cancelAgentTask,
+  cancelAgentRun,
   updateAgentSession,
   deleteAgentSession,
   type AgentMessage,
@@ -307,7 +307,7 @@ export function useHomeAgentSession() {
     store.agentPhase = { kind: 'waiting_model' }
     executionPlan.value = null
     executionTools.value = []
-    // 初始用临时 runId，runtime.started 后替换为真实 task_id
+    // 初始用临时 runId，后续替换为 backend-owned run_id
     const tempRunId = `run_${Date.now()}`
     store.resetStreamRuntime(sessionId, tempRunId)
     store.getAbortController()?.abort()
@@ -355,13 +355,14 @@ export function useHomeAgentSession() {
         }
 
         if (event.event === 'runtime.started') {
-          store.currentRunId = String(event.data.task_id || event.data.run_id || `run_${Date.now()}`)
+          store.currentRunId = run.run_id
           store.agentPhase = { kind: 'waiting_model' }
           if (!firstRuntimeStartedLogged) {
             firstRuntimeStartedLogged = true
             console.info('[PERF][agent_first_token][frontend] runtime_started', {
               elapsedMs: perfMs(),
               runId: store.currentRunId,
+              taskId: event.data.task_id,
               sessionId,
             })
           }
@@ -567,12 +568,11 @@ export function useHomeAgentSession() {
   async function abort(): Promise<void> {
     if (!store.agentRunning) return
     const sessionId = activeSession.value?.id
-    const taskId = store.currentRunId
+    const runId = store.currentRunId
     store.getAbortController()?.abort()
-    // 只有真实 task_id（非临时 run_ 前缀）才调后端 cancel
-    if (taskId && !taskId.startsWith('run_')) {
-      await cancelAgentTask(taskId, sessionId).catch((err) => {
-        console.warn('[agent] cancel task failed', err)
+    if (runId) {
+      await cancelAgentRun(runId).catch((err) => {
+        console.warn('[agent] cancel run failed', err)
       })
     }
     drainTypewriter()

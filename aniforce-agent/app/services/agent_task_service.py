@@ -462,7 +462,19 @@ class AgentTaskService:
         async with lock:
             try:
                 async for event in self._runtime.run_task(task, user_input):
+                    latest = await self._repo.get_user_task(user_id, task_id)
+                    if latest and latest.status == AgentTaskStatus.ABORTED:
+                        logger.bind(task_id=task_id, user_id=user_id).info(
+                            "Task stream stopped after cancellation"
+                        )
+                        break
                     yield event
+                    latest = await self._repo.get_user_task(user_id, task_id)
+                    if latest and latest.status == AgentTaskStatus.ABORTED:
+                        logger.bind(task_id=task_id, user_id=user_id).info(
+                            "Task stream stopped after cancellation"
+                        )
+                        break
             finally:
                 if task.session_id:
                     try:
