@@ -34,6 +34,7 @@ const copy = {
       <div class="flex items-center gap-5 text-left">
         <span class="text-[10px] text-slate-500">{{ copy[language].copyright }}</span>
         <a class="text-[10px] text-slate-500 hover:text-primary" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">粤ICP备2026067584号-1</a>
+        <a class="text-[10px] text-slate-500 hover:text-primary" href="https://beian.mps.gov.cn/#/query/webSearch?code=44010602016311"" target="_blank" rel="noreferrer">粤公网安备44010602016311号</a>
       </div>
 
       <!-- 右侧：网站链接 + 备案 + 导航链接 -->
