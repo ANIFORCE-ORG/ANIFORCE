@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch } from 'vue'
+import { ref, computed } from 'vue'
 
 interface Props {
   show: boolean
@@ -12,412 +12,708 @@ interface Emits {
 }
 
 interface FormData {
-  taskName: string
   adsetName: string
-  conversionLocation: string
-  pixelAppPage: string
-  conversionEvent: string
-  performanceGoal: string
-  attribution: string
-  budget: string
-  schedule: string
-  targeting: string
-  placements: string
+  optimizationGoal: string
+  billingEvent: string
+  destinationType: string
   status: string
-  adName: string
-  adFormat: string
-  material: string
-  copy: string
-  adStatus: string
-  owner: string
+  budgetType: 'daily' | 'lifetime'
+  dailyBudget: number | null
+  lifetimeBudget: number | null
+  bidStrategy: string
+  bidAmount: number | null
+  startTime: string
+  endTime: string
+  timezoneType: string
+  ageMin: number
+  ageMax: number
+  genders: number[]
+  geoCountries: string[]
+  pixelId: string
+  customEventType: string
+  applicationId: string
+  pageId: string
+}
+
+interface SectionsState {
+  basic: boolean
+  budget: boolean
+  schedule: boolean
+  targeting: boolean
+  promotedObject: boolean
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-const formData = ref<FormData>({
-  taskName: '',
+const createDefaultFormData = (): FormData => ({
   adsetName: '',
-  conversionLocation: 'Website',
-  pixelAppPage: '',
-  conversionEvent: 'Purchase',
-  performanceGoal: 'Maximize conversions',
-  attribution: '7-day click, 1-day view',
-  budget: '',
-  schedule: '',
-  targeting: '',
-  placements: 'Automatic',
-  status: 'Draft',
-  adName: '',
-  adFormat: 'Single image',
-  material: '',
-  copy: '',
-  adStatus: 'Draft',
-  owner: ''
+  optimizationGoal: 'OFFSITE_CONVERSIONS',
+  billingEvent: 'IMPRESSIONS',
+  destinationType: 'WEBSITE',
+  status: 'PAUSED',
+  budgetType: 'daily',
+  dailyBudget: null,
+  lifetimeBudget: null,
+  bidStrategy: 'LOWEST_COST_WITHOUT_CAP',
+  bidAmount: null,
+  startTime: '',
+  endTime: '',
+  timezoneType: 'USER',
+  ageMin: 18,
+  ageMax: 65,
+  genders: [1, 2],
+  geoCountries: [],
+  pixelId: '',
+  customEventType: '',
+  applicationId: '',
+  pageId: ''
 })
 
+const createDefaultSections = (): SectionsState => ({
+  basic: true,
+  budget: true,
+  schedule: false,
+  targeting: false,
+  promotedObject: false
+})
+
+const formData = ref<FormData>(createDefaultFormData())
+const sections = ref<SectionsState>(createDefaultSections())
 const errors = ref<Record<string, string>>({})
 const submitting = ref(false)
 
-// 配置选项
-const conversionLocationOptions = ['Website', 'App', 'Messenger', 'WhatsApp']
-const conversionEventOptions = ['Purchase', 'Add to cart', 'Lead', 'Complete registration', 'View content']
-const performanceGoalOptions = ['Maximize conversions', 'Maximize conversion value', 'Cost per result goal']
-const attributionOptions = ['7-day click, 1-day view', '1-day click', '7-day click']
-const placementOptions = ['Automatic', 'Manual', 'Facebook Feed', 'Instagram Feed', 'Stories', 'Reels']
-const statusOptions = ['Draft', 'Learning', 'Active', 'Paused']
-const adFormatOptions = ['Single image', 'Single video', 'Carousel', 'Collection']
-const adStatusOptions = ['Draft', 'Review', 'Active', 'Paused']
+const optimizationGoalOptions = [
+  { value: 'OFFSITE_CONVERSIONS', label: '网站转化' },
+  { value: 'LINK_CLICKS', label: '链接点击' },
+  { value: 'IMPRESSIONS', label: '展示次数' },
+  { value: 'APP_INSTALLS', label: '应用安装' },
+  { value: 'LEAD_GENERATION', label: '潜在客户开发' }
+]
 
-// 验证表单
+const billingEventOptions = [
+  { value: 'IMPRESSIONS', label: '展示次数' },
+  { value: 'LINK_CLICKS', label: '链接点击' },
+  { value: 'APP_INSTALLS', label: '应用安装' }
+]
+
+const destinationTypeOptions = [
+  { value: 'WEBSITE', label: '网站' },
+  { value: 'APP', label: '应用' },
+  { value: 'MESSENGER', label: 'Messenger' }
+]
+
+const statusOptions = [
+  { value: 'PAUSED', label: '暂停' },
+  { value: 'ACTIVE', label: '活跃' }
+]
+
+const bidStrategyOptions = [
+  { value: 'LOWEST_COST_WITHOUT_CAP', label: '最低成本（无上限）' },
+  { value: 'COST_CAP', label: '成本上限' },
+  { value: 'LOWEST_COST_WITH_BID_CAP', label: '最低成本（有出价上限）' }
+]
+
+const timezoneTypeOptions = [
+  { value: 'USER', label: '用户时区' },
+  { value: 'ADVERTISER', label: '广告主时区' }
+]
+
+const countryOptions = [
+  { value: 'US', label: '美国' },
+  { value: 'CA', label: '加拿大' },
+  { value: 'GB', label: '英国' },
+  { value: 'AU', label: '澳大利亚' },
+  { value: 'CN', label: '中国' },
+  { value: 'JP', label: '日本' },
+  { value: 'KR', label: '韩国' },
+  { value: 'SG', label: '新加坡' },
+  { value: 'DE', label: '德国' },
+  { value: 'FR', label: '法国' },
+  { value: 'IT', label: '意大利' },
+  { value: 'ES', label: '西班牙' },
+  { value: 'BR', label: '巴西' },
+  { value: 'IN', label: '印度' },
+  { value: 'MX', label: '墨西哥' }
+]
+
+const showBidAmount = computed(() => {
+  return ['COST_CAP', 'LOWEST_COST_WITH_BID_CAP'].includes(formData.value.bidStrategy)
+})
+
+const showDailyBudget = computed(() => formData.value.budgetType === 'daily')
+const showLifetimeBudget = computed(() => formData.value.budgetType === 'lifetime')
+
+const toggleSection = (section: keyof SectionsState) => {
+  sections.value[section] = !sections.value[section]
+}
+
+const handleClose = () => {
+  emit('close')
+}
+
 const validateForm = (): boolean => {
   errors.value = {}
-  
-  if (!formData.value.taskName.trim()) {
-    errors.value.taskName = '请输入任务名称'
-  }
-  
+
   if (!formData.value.adsetName.trim()) {
-    errors.value.adsetName = '请输入 Ad Set 名称'
+    errors.value.adsetName = '请输入 AdSet 名称'
   }
-  
-  if (!formData.value.budget || parseFloat(formData.value.budget) <= 0) {
-    errors.value.budget = '请输入有效的预算金额'
+
+  if (formData.value.budgetType === 'daily') {
+    if (!formData.value.dailyBudget || formData.value.dailyBudget < 1) {
+      errors.value.dailyBudget = '每日预算最低 $1.00'
+    }
+  } else {
+    if (!formData.value.lifetimeBudget || formData.value.lifetimeBudget < 1) {
+      errors.value.lifetimeBudget = '总预算最低 $1.00'
+    }
   }
-  
-  if (!formData.value.adName.trim()) {
-    errors.value.adName = '请输入广告名称'
+
+  if (showBidAmount.value) {
+    if (!formData.value.bidAmount || formData.value.bidAmount <= 0) {
+      errors.value.bidAmount = '请输入有效的出价金额'
+    }
   }
-  
+
   return Object.keys(errors.value).length === 0
 }
 
-// 重置表单
-const resetForm = () => {
-  formData.value = {
-    taskName: '',
-    adsetName: '',
-    conversionLocation: 'Website',
-    pixelAppPage: '',
-    conversionEvent: 'Purchase',
-    performanceGoal: 'Maximize conversions',
-    attribution: '7-day click, 1-day view',
-    budget: '',
-    schedule: '',
-    targeting: '',
-    placements: 'Automatic',
-    status: 'Draft',
-    adName: '',
-    adFormat: 'Single image',
-    material: '',
-    copy: '',
-    adStatus: 'Draft',
-    owner: ''
-  }
-  errors.value = {}
-}
-
-// 处理关闭
-const handleClose = () => {
-  if (!submitting.value) {
-    resetForm()
-    emit('close')
-  }
-}
-
-// 处理保存
-const handleSave = () => {
+const handleSave = async () => {
   if (!validateForm()) {
     return
   }
-  
-  submitting.value = true
-  emit('submit', formData.value)
-}
 
-// 监听提交完成
-defineExpose({
-  resetForm,
-  setSubmitting: (value: boolean) => {
-    submitting.value = value
+  submitting.value = true
+
+  try {
+    const payload = {
+      campaign_id: props.campaignId,
+      name: formData.value.adsetName,
+      optimization_goal: formData.value.optimizationGoal,
+      billing_event: formData.value.billingEvent,
+      destination_type: formData.value.destinationType,
+      status: formData.value.status,
+      budget_type: formData.value.budgetType,
+      daily_budget: formData.value.budgetType === 'daily' && formData.value.dailyBudget
+        ? Math.round(formData.value.dailyBudget * 100)
+        : null,
+      lifetime_budget: formData.value.budgetType === 'lifetime' && formData.value.lifetimeBudget
+        ? Math.round(formData.value.lifetimeBudget * 100)
+        : null,
+      bid_strategy: formData.value.bidStrategy,
+      bid_amount: formData.value.bidAmount ? Math.round(formData.value.bidAmount * 100) : null,
+      start_time: formData.value.startTime || null,
+      end_time: formData.value.endTime || null,
+      timezone_type: formData.value.timezoneType,
+      targeting: {
+        age_min: formData.value.ageMin,
+        age_max: formData.value.ageMax,
+        genders: JSON.stringify(formData.value.genders),
+        targeting_spec: JSON.stringify({
+          age_min: formData.value.ageMin,
+          age_max: formData.value.ageMax,
+          genders: formData.value.genders,
+          geo_locations: { countries: formData.value.geoCountries }
+        })
+      },
+      promoted_object: formData.value.pixelId ? {
+        pixel_id: formData.value.pixelId,
+        custom_event_type: formData.value.customEventType,
+        application_id: formData.value.applicationId,
+        page_id: formData.value.pageId
+      } : null
+    }
+
+    emit('submit', payload)
+    emit('close')
+  } catch (err: any) {
+    console.error('创建 AdSet 失败:', err)
+    errors.value.submit = err.message || '创建失败，请重试'
+  } finally {
+    submitting.value = false
   }
-})
+}
 </script>
 
 <template>
-  <!-- 遮罩层 -->
   <Transition name="fade">
     <div
       v-if="show"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
       @click.self="handleClose"
     >
-      <!-- 弹窗容器 - 右侧抽屉 -->
       <Transition name="slide">
         <div
           v-if="show"
           class="fixed right-0 top-0 h-full bg-white dark:bg-slate-800 shadow-2xl w-full max-w-[600px] overflow-hidden flex flex-col rounded-l-md"
         >
-          <!-- 弹窗头部 -->
           <div class="flex items-center justify-between px-[15px] py-[10px] border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">
-              创建广告单元 (Ad Unit)
+              创建 AdUnit（广告单元）
             </h3>
             <button
-              class="p-[4px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              type="button"
+              class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
               @click="handleClose"
-              :disabled="submitting"
             >
-              <span class="material-symbols-outlined text-[14px] text-slate-500">close</span>
+              <span class="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
 
-          <!-- 弹窗内容 -->
-          <div class="flex-1 overflow-y-auto px-[15px] py-[10px]">
+          <div class="flex-1 overflow-y-auto px-[15px] py-[12px]">
+            <div v-if="errors.submit" class="mb-[10px] p-[8px] rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+              <div class="flex items-center gap-[6px]">
+                <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[14px]">error</span>
+                <span class="text-[9px] text-red-600 dark:text-red-400">{{ errors.submit }}</span>
+              </div>
+            </div>
+
             <!-- 说明文字 -->
-            <div class="mb-[13px] p-[10px] bg-slate-50 dark:bg-slate-700/30 rounded-md">
-              <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed">
-                <strong class="text-slate-700 dark:text-slate-300">Ad Unit 配置</strong><br>
-                对应 Meta 广告组Ad Set层级，包含定向、预算、排期等配置。下层 Ad 对应具体的广告素材。
+            <div class="mb-[13px] p-[10px] bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+              <p class="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
+                <strong class="text-blue-800 dark:text-blue-200">💡 AdSet 配置说明</strong><br>
+                AdSet 对应 Meta 广告组层级，包含定向、预算、出价、排期等配置。请按需展开各个配置模块。
               </p>
             </div>
 
-            <!-- 表单 -->
             <form @submit.prevent="handleSave" class="space-y-[10px]">
-              <!-- 任务与 Ad Set 配置 -->
-              <div class="space-y-[10px]">
-                <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white">任务与 Ad Unit 配置</h4>
-                
-                <div class="grid grid-cols-2 gap-[10px]">
-                  <!-- 任务名称 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      任务名称 * <span class="text-slate-500">(Task Name)</span>
-                    </label>
-                    <input
-                      v-model="formData.taskName"
-                      type="text"
-                      placeholder="输入任务名称"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      :class="{ 'border-red-500': errors.taskName }"
-                    />
-                    <p v-if="errors.taskName" class="mt-[3px] text-[8px] text-red-500">{{ errors.taskName }}</p>
+              <!-- 1️⃣ 基本信息 -->
+              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  @click="toggleSection('basic')"
+                >
+                  <div class="flex items-center gap-[8px]">
+                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">基本信息</span>
+                    <span class="text-[9px] text-slate-500 dark:text-slate-400">（必填）</span>
                   </div>
+                  <span class="material-symbols-outlined text-[16px] text-slate-400 transition-transform" :class="{ 'rotate-180': sections.basic }">
+                    expand_more
+                  </span>
+                </button>
 
-                  <!-- Ad Set 名称 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      Ad Set 名称 * <span class="text-slate-500">(Ad Set Name)</span>
-                    </label>
-                    <input
-                      v-model="formData.adsetName"
-                      type="text"
-                      placeholder="输入 Ad Set 名称"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      :class="{ 'border-red-500': errors.adsetName }"
-                    />
-                    <p v-if="errors.adsetName" class="mt-[3px] text-[8px] text-red-500">{{ errors.adsetName }}</p>
-                  </div>
+                <Transition name="collapse">
+                  <div v-show="sections.basic" class="p-[12px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                    <div class="grid grid-cols-2 gap-[10px]">
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          AdSet 名称 *
+                        </label>
+                        <input
+                          v-model="formData.adsetName"
+                          type="text"
+                          placeholder="US_Android_Install_AdSet_001"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          :class="{ 'border-red-500': errors.adsetName }"
+                        />
+                        <p v-if="errors.adsetName" class="mt-[3px] text-[8px] text-red-500">{{ errors.adsetName }}</p>
+                      </div>
 
-                  <!-- 转化位置 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      转化位置 <span class="text-slate-500">(Conversion Location)</span>
-                    </label>
-                    <select
-                      v-model="formData.conversionLocation"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option v-for="opt in conversionLocationOptions" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
-                  </div>
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          优化目标 *
+                        </label>
+                        <select
+                          v-model="formData.optimizationGoal"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option v-for="opt in optimizationGoalOptions" :key="opt.value" :value="opt.value">
+                            {{ opt.label }}
+                          </option>
+                        </select>
+                      </div>
 
-                  <!-- Pixel/App/Page -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      Pixel/App/Page <span class="text-slate-500">(Tracking ID)</span>
-                    </label>
-                    <input
-                      v-model="formData.pixelAppPage"
-                      type="text"
-                      placeholder="输入 Pixel/App/Page"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          计费事件 *
+                        </label>
+                        <select
+                          v-model="formData.billingEvent"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option v-for="opt in billingEventOptions" :key="opt.value" :value="opt.value">
+                            {{ opt.label }}
+                          </option>
+                        </select>
+                      </div>
 
-                  <!-- 转化事件 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      转化事件 <span class="text-slate-500">(Conversion Event)</span>
-                    </label>
-                    <select
-                      v-model="formData.conversionEvent"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option v-for="opt in conversionEventOptions" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
-                  </div>
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          目标类型
+                        </label>
+                        <select
+                          v-model="formData.destinationType"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option v-for="opt in destinationTypeOptions" :key="opt.value" :value="opt.value">
+                            {{ opt.label }}
+                          </option>
+                        </select>
+                      </div>
 
-                  <!-- 效果目标 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      效果目标 <span class="text-slate-500">(Performance Goal)</span>
-                    </label>
-                    <select
-                      v-model="formData.performanceGoal"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option v-for="opt in performanceGoalOptions" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
+                      <div class="col-span-2">
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          状态 *
+                        </label>
+                        <select
+                          v-model="formData.status"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option v-for="opt in statusOptions" :key="opt.value" :value="opt.value">
+                            {{ opt.label }}
+                          </option>
+                        </select>
+                      </div>
+                    </div>
                   </div>
-
-                  <!-- 归因设置 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      归因设置 <span class="text-slate-500">(Attribution Setting)</span>
-                    </label>
-                    <select
-                      v-model="formData.attribution"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option v-for="opt in attributionOptions" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
-                  </div>
-
-                  <!-- 预算 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      预算 * <span class="text-slate-500">(Budget USD)</span>
-                    </label>
-                    <input
-                      v-model="formData.budget"
-                      type="text"
-                      placeholder="例如 500"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      :class="{ 'border-red-500': errors.budget }"
-                    />
-                    <p v-if="errors.budget" class="mt-[3px] text-[8px] text-red-500">{{ errors.budget }}</p>
-                  </div>
-
-                  <!-- 排期 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      排期 <span class="text-slate-500">(Schedule)</span>
-                    </label>
-                    <input
-                      v-model="formData.schedule"
-                      type="text"
-                      placeholder="例如 2024-01-01 至 2024-01-31"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <!-- 定向 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      定向 <span class="text-slate-500">(Targeting)</span>
-                    </label>
-                    <input
-                      v-model="formData.targeting"
-                      type="text"
-                      placeholder="国家；年龄；语言；受众"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <!-- 版位 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      版位 <span class="text-slate-500">(Placements/Network)</span>
-                    </label>
-                    <select
-                      v-model="formData.placements"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option v-for="opt in placementOptions" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
-                  </div>
-
-                  <!-- 状态 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      状态 <span class="text-slate-500">(Status)</span>
-                    </label>
-                    <select
-                      v-model="formData.status"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option v-for="opt in statusOptions" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
-                  </div>
-                </div>
+                </Transition>
               </div>
 
-              <!-- 广告素材配置 -->
-              <div class="space-y-[10px]">
-                <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white">广告素材配置</h4>
-                
-                <div class="grid grid-cols-2 gap-[10px]">
-                  <!-- 广告名称 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      素材/广告名称 * <span class="text-slate-500">(Ad Name)</span>
-                    </label>
-                    <input
-                      v-model="formData.adName"
-                      type="text"
-                      placeholder="输入广告名称"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                      :class="{ 'border-red-500': errors.adName }"
-                    />
-                    <p v-if="errors.adName" class="mt-[3px] text-[8px] text-red-500">{{ errors.adName }}</p>
+              <!-- 2️⃣ 预算与出价 -->
+              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  @click="toggleSection('budget')"
+                >
+                  <div class="flex items-center gap-[8px]">
+                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">预算与出价</span>
+                    <span class="text-[9px] text-slate-500 dark:text-slate-400">（必填）</span>
                   </div>
+                  <span class="material-symbols-outlined text-[16px] text-slate-400 transition-transform" :class="{ 'rotate-180': sections.budget }">
+                    expand_more
+                  </span>
+                </button>
 
-                  <!-- 素材格式 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      素材格式 <span class="text-slate-500">(Ad Format)</span>
-                    </label>
-                    <select
-                      v-model="formData.adFormat"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    >
-                      <option v-for="opt in adFormatOptions" :key="opt" :value="opt">{{ opt }}</option>
-                    </select>
+                <Transition name="collapse">
+                  <div v-show="sections.budget" class="p-[12px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                    <div class="space-y-[10px]">
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          预算类型 *
+                        </label>
+                        <div class="flex gap-[10px]">
+                          <label class="flex items-center gap-[5px] cursor-pointer">
+                            <input type="radio" v-model="formData.budgetType" value="daily" class="w-[14px] h-[14px]" />
+                            <span class="text-[9px] text-slate-700 dark:text-slate-300">每日预算</span>
+                          </label>
+                          <label class="flex items-center gap-[5px] cursor-pointer">
+                            <input type="radio" v-model="formData.budgetType" value="lifetime" class="w-[14px] h-[14px]" />
+                            <span class="text-[9px] text-slate-700 dark:text-slate-300">总预算</span>
+                          </label>
+                        </div>
+                      </div>
+
+                      <div v-if="showDailyBudget">
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          每日预算 * <span class="text-slate-500">(USD)</span>
+                        </label>
+                        <div class="relative">
+                          <span class="absolute left-[8px] top-[6px] text-[9px] text-slate-500">$</span>
+                          <input
+                            v-model.number="formData.dailyBudget"
+                            type="number"
+                            step="1"
+                            min="1"
+                            placeholder="100.00"
+                            class="w-full pl-[20px] pr-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            :class="{ 'border-red-500': errors.dailyBudget }"
+                          />
+                        </div>
+                        <p v-if="errors.dailyBudget" class="mt-[3px] text-[8px] text-red-500">{{ errors.dailyBudget }}</p>
+                        <p class="mt-[3px] text-[8px] text-slate-500">最低 $1.00</p>
+                      </div>
+
+                      <div v-if="showLifetimeBudget">
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          总预算 * <span class="text-slate-500">(USD)</span>
+                        </label>
+                        <div class="relative">
+                          <span class="absolute left-[8px] top-[6px] text-[9px] text-slate-500">$</span>
+                          <input
+                            v-model.number="formData.lifetimeBudget"
+                            type="number"
+                            step="1"
+                            min="1"
+                            placeholder="1000.00"
+                            class="w-full pl-[20px] pr-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            :class="{ 'border-red-500': errors.lifetimeBudget }"
+                          />
+                        </div>
+                        <p v-if="errors.lifetimeBudget" class="mt-[3px] text-[8px] text-red-500">{{ errors.lifetimeBudget }}</p>
+                        <p class="mt-[3px] text-[8px] text-slate-500">最低 $1.00</p>
+                      </div>
+
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          出价策略 *
+                        </label>
+                        <select
+                          v-model="formData.bidStrategy"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option v-for="opt in bidStrategyOptions" :key="opt.value" :value="opt.value">
+                            {{ opt.label }}
+                          </option>
+                        </select>
+                      </div>
+
+                      <div v-if="showBidAmount">
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          出价金额 * <span class="text-slate-500">(USD)</span>
+                        </label>
+                        <div class="relative">
+                          <span class="absolute left-[8px] top-[6px] text-[9px] text-slate-500">$</span>
+                          <input
+                            v-model.number="formData.bidAmount"
+                            type="number"
+                            step="0.01"
+                            min="0.01"
+                            placeholder="5.00"
+                            class="w-full pl-[20px] pr-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            :class="{ 'border-red-500': errors.bidAmount }"
+                          />
+                        </div>
+                        <p v-if="errors.bidAmount" class="mt-[3px] text-[8px] text-red-500">{{ errors.bidAmount }}</p>
+                      </div>
+                    </div>
                   </div>
-
-                  <!-- 素材名称 -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      素材名称 <span class="text-slate-500">(Material Name)</span>
-                    </label>
-                    <input
-                      v-model="formData.material"
-                      type="text"
-                      placeholder="输入素材名称"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <!-- 文案/CTA -->
-                  <div>
-                    <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                      文案/CTA <span class="text-slate-500">(Copy/CTA)</span>
-                    </label>
-                    <input
-                      v-model="formData.copy"
-                      type="text"
-                      placeholder="输入文案或 CTA"
-                      class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                </div>
+                </Transition>
               </div>
+
+              <!-- 3️⃣ 投放周期 -->
+              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  @click="toggleSection('schedule')"
+                >
+                  <div class="flex items-center gap-[8px]">
+                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">投放周期</span>
+                    <span class="text-[9px] text-slate-500 dark:text-slate-400">（可选）</span>
+                  </div>
+                  <span class="material-symbols-outlined text-[16px] text-slate-400 transition-transform" :class="{ 'rotate-180': sections.schedule }">
+                    expand_more
+                  </span>
+                </button>
+
+                <Transition name="collapse">
+                  <div v-show="sections.schedule" class="p-[12px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                    <div class="grid grid-cols-2 gap-[10px]">
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          开始时间
+                        </label>
+                        <input
+                          v-model="formData.startTime"
+                          type="datetime-local"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p class="mt-[3px] text-[8px] text-slate-500">留空表示立即开始</p>
+                      </div>
+
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          结束时间
+                        </label>
+                        <input
+                          v-model="formData.endTime"
+                          type="datetime-local"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p class="mt-[3px] text-[8px] text-slate-500">留空表示持续投放</p>
+                      </div>
+
+                      <div class="col-span-2">
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          时区设置
+                        </label>
+                        <select
+                          v-model="formData.timezoneType"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option v-for="opt in timezoneTypeOptions" :key="opt.value" :value="opt.value">
+                            {{ opt.label }}
+                          </option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+
+              <!-- 4️⃣ 受众定向 -->
+              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  @click="toggleSection('targeting')"
+                >
+                  <div class="flex items-center gap-[8px]">
+                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">受众定向</span>
+                    <span class="text-[9px] text-slate-500 dark:text-slate-400">（可选）</span>
+                  </div>
+                  <span class="material-symbols-outlined text-[16px] text-slate-400 transition-transform" :class="{ 'rotate-180': sections.targeting }">
+                    expand_more
+                  </span>
+                </button>
+
+                <Transition name="collapse">
+                  <div v-show="sections.targeting" class="p-[12px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                    <div class="space-y-[10px]">
+                      <!-- 年龄范围 -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          年龄范围
+                        </label>
+                        <div class="flex items-center gap-[8px]">
+                          <input
+                            v-model.number="formData.ageMin"
+                            type="number"
+                            min="18"
+                            max="65"
+                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                          <span class="text-[9px] text-slate-500">-</span>
+                          <input
+                            v-model.number="formData.ageMax"
+                            type="number"
+                            min="18"
+                            max="65"
+                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          />
+                        </div>
+                        <p class="mt-[3px] text-[8px] text-slate-500">年龄范围：18-65 岁</p>
+                      </div>
+
+                      <!-- 性别 -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          性别
+                        </label>
+                        <select
+                          v-model="formData.genders"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option :value="[1, 2]">全部</option>
+                          <option :value="[1]">男性</option>
+                          <option :value="[2]">女性</option>
+                        </select>
+                      </div>
+
+                      <!-- 地理位置 -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          国家/地区
+                        </label>
+                        <div class="max-h-[120px] overflow-y-auto border border-slate-300 dark:border-slate-600 rounded-md p-[8px] bg-white dark:bg-slate-900">
+                          <div class="grid grid-cols-2 gap-[6px]">
+                            <label
+                              v-for="country in countryOptions"
+                              :key="country.value"
+                              class="flex items-center gap-[5px] cursor-pointer"
+                            >
+                              <input
+                                v-model="formData.geoCountries"
+                                type="checkbox"
+                                :value="country.value"
+                                class="w-[14px] h-[14px]"
+                              />
+                              <span class="text-[9px] text-slate-700 dark:text-slate-300">{{ country.label }}</span>
+                            </label>
+                          </div>
+                        </div>
+                        <p v-if="formData.geoCountries.length > 0" class="mt-[3px] text-[8px] text-slate-600 dark:text-slate-400">
+                          已选 {{ formData.geoCountries.length }} 个: {{ formData.geoCountries.join(' / ') }}
+                        </p>
+                        <p v-else class="mt-[3px] text-[8px] text-slate-500">请选择国家/地区</p>
+                      </div>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+
+              <!-- 5️⃣ 推广对象配置 -->
+              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  @click="toggleSection('promotedObject')"
+                >
+                  <div class="flex items-center gap-[8px]">
+                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">推广对象配置</span>
+                    <span class="text-[9px] text-slate-500 dark:text-slate-400">（可选）</span>
+                  </div>
+                  <span class="material-symbols-outlined text-[16px] text-slate-400 transition-transform" :class="{ 'rotate-180': sections.promotedObject }">
+                    expand_more
+                  </span>
+                </button>
+
+                <Transition name="collapse">
+                  <div v-show="sections.promotedObject" class="p-[12px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                    <div class="space-y-[10px]">
+                      <!-- Pixel ID -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          Pixel ID
+                        </label>
+                        <input
+                          v-model="formData.pixelId"
+                          type="text"
+                          placeholder="123456789012345"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p class="mt-[3px] text-[8px] text-slate-500">Meta Pixel ID，用于追踪网站转化</p>
+                      </div>
+
+                      <!-- 转化事件 -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          转化事件
+                        </label>
+                        <input
+                          v-model="formData.customEventType"
+                          type="text"
+                          placeholder="Purchase / AddToCart / Lead"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                        <p class="mt-[3px] text-[8px] text-slate-500">自定义转化事件名称</p>
+                      </div>
+
+                      <!-- Application ID -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          Application ID
+                        </label>
+                        <input
+                          v-model="formData.applicationId"
+                          type="text"
+                          placeholder="用于应用推广"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+
+                      <!-- Page ID -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          Page ID
+                        </label>
+                        <input
+                          v-model="formData.pageId"
+                          type="text"
+                          placeholder="Facebook 主页 ID"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+
             </form>
           </div>
 
-          <!-- 弹窗底部 -->
           <div class="flex items-center justify-end gap-[8px] px-[15px] py-[10px] border-t border-slate-200 dark:border-slate-700">
             <button
               type="button"
@@ -433,7 +729,7 @@ defineExpose({
               @click="handleSave"
               :disabled="submitting"
             >
-              {{ submitting ? '创建中...' : '创建' }}
+              {{ submitting ? '创建中...' : '创建 AdSet' }}
             </button>
           </div>
         </div>
@@ -461,5 +757,18 @@ defineExpose({
 .slide-enter-from,
 .slide-leave-to {
   transform: translateX(100%);
+}
+
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: all 0.3s ease;
+  max-height: 1000px;
+  overflow: hidden;
+}
+
+.collapse-enter-from,
+.collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 </style>
