@@ -71,7 +71,11 @@ const uploadForm = ref({
   placementsText: '',
   campaignIds: [] as string[],
   creator: '',
-  rights: '商业投放授权',
+  rights: '自有素材',
+  materialType: '自动识别',
+  materialUsage: '信息流素材',
+  materialTags: ['新上传'] as string[],
+  metaNote: '',
   mediaKind: '',
   format: '',
   width: '',
@@ -123,7 +127,10 @@ const accountOptions = computed(() => {
 })
 
 const uploadFile = computed(() => uploadFiles.value[0] || null)
+const uploadPreviewUrl = ref('')
+const uploadIsVideo = computed(() => uploadFile.value?.type.startsWith('video/') || false)
 const uploadPlatformOptions = ['Meta', 'Facebook', 'Instagram', 'TikTok', 'Google']
+const uploadTagOptions = ['新上传', 'UGC', 'Gameplay', 'Reward', 'Static']
 
 const filteredRows = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -284,8 +291,10 @@ const closeUploadModal = () => {
 
 const resetUploadForm = () => {
   if (uploadPosterPreview.value) URL.revokeObjectURL(uploadPosterPreview.value)
+  if (uploadPreviewUrl.value) URL.revokeObjectURL(uploadPreviewUrl.value)
   uploadPoster.value = null
   uploadPosterPreview.value = ''
+  uploadPreviewUrl.value = ''
   uploadForm.value = {
     name: '',
     status: 'ready',
@@ -297,7 +306,11 @@ const resetUploadForm = () => {
     placementsText: 'Feed, Reels',
     campaignIds: [],
     creator: '',
-    rights: '商业投放授权',
+    rights: '自有素材',
+    materialType: '自动识别',
+    materialUsage: '信息流素材',
+    materialTags: ['新上传'],
+    metaNote: '',
     mediaKind: '',
     format: '',
     width: '',
@@ -344,24 +357,30 @@ const addFiles = (files: File[]) => {
     return true
   })
   if (validFiles.length > 0) {
-    uploadFiles.value = [validFiles[0]]
+    uploadFiles.value = validFiles
     void prepareUploadMetadata(validFiles[0])
   }
 }
 
 const removeFile = (index: number) => {
   uploadFiles.value.splice(index, 1)
-  if (index === 0) resetUploadForm()
+  if (index === 0) {
+    if (uploadFiles.value[0]) void prepareUploadMetadata(uploadFiles.value[0])
+    else resetUploadForm()
+  }
 }
 
 const prepareUploadMetadata = async (file: File) => {
   probingUpload.value = true
   if (uploadPosterPreview.value) URL.revokeObjectURL(uploadPosterPreview.value)
+  if (uploadPreviewUrl.value) URL.revokeObjectURL(uploadPreviewUrl.value)
   uploadPoster.value = null
   uploadPosterPreview.value = ''
+  uploadPreviewUrl.value = ''
 
   const baseName = file.name.replace(/\.[^.]+$/, '')
   const ext = file.name.split('.').pop()?.toUpperCase() || ''
+  uploadPreviewUrl.value = URL.createObjectURL(file)
   uploadForm.value.name = baseName
   uploadForm.value.format = ext
   uploadForm.value.fileSize = `${(file.size / 1024 / 1024).toFixed(2)} MB`
@@ -460,7 +479,7 @@ const ratioLabel = (width: number, height: number): string => {
 }
 
 const completeUpload = async () => {
-  if (!uploadFile.value) {
+  if (!uploadFiles.value.length) {
     showError('请先选择要上传的文件')
     return
   }
@@ -472,35 +491,48 @@ const completeUpload = async () => {
   uploading.value = true
   uploadProgress.value.clear()
   try {
-    const file = uploadFile.value
-    uploadProgress.value.set(file.name, 0)
-    const ctrEstimate = uploadForm.value.ctrEstimate.trim() ? Number(uploadForm.value.ctrEstimate) : undefined
-    if (ctrEstimate !== undefined && !Number.isFinite(ctrEstimate)) {
-      showError('CTR 预估必须是数字')
-      return
+    const baseName = uploadForm.value.name.trim()
+    const extraTags = uploadForm.value.tagsText.split(',').map(tag => tag.trim()).filter(Boolean)
+    const tags = Array.from(new Set([
+      ...uploadForm.value.materialTags,
+      ...extraTags,
+      uploadForm.value.materialUsage,
+      uploadForm.value.metaNote.trim() ? '有备注' : '',
+    ].filter(Boolean)))
+    const placements = uploadForm.value.materialUsage.includes('Reels')
+      ? ['Reels', 'Stories']
+      : uploadForm.value.materialUsage.includes('Feed') || uploadForm.value.materialUsage.includes('信息流')
+        ? ['Feed', 'In-Feed']
+        : [uploadForm.value.materialUsage]
+
+    for (const [index, file] of uploadFiles.value.entries()) {
+      uploadProgress.value.set(file.name, 0)
+      const isFirst = index === 0
+      const mediaKind = file.type.startsWith('video/') ? 'video' : 'image'
+      const name = uploadFiles.value.length > 1 ? `${baseName}_${String(index + 1).padStart(2, '0')}` : baseName
+      await uploadMaterialWithMetadata(file, {
+        name,
+        status: 'ready',
+        tags,
+        duration: isFirst && uploadForm.value.duration ? Number(uploadForm.value.duration) : undefined,
+        width: isFirst && uploadForm.value.width ? Number(uploadForm.value.width) : undefined,
+        height: isFirst && uploadForm.value.height ? Number(uploadForm.value.height) : undefined,
+        ratio: isFirst ? uploadForm.value.ratio || undefined : undefined,
+        format: file.name.split('.').pop()?.toUpperCase() || uploadForm.value.format || undefined,
+        media_kind: mediaKind,
+        source: 'oss_upload',
+        creator: uploadForm.value.creator.trim() || undefined,
+        rights: uploadForm.value.rights.trim() || undefined,
+        platforms: uploadForm.value.platforms,
+        review_status: '待审核',
+        source_account: uploadForm.value.sourceAccount.trim() || undefined,
+        placements,
+        campaign_ids: uploadForm.value.campaignIds,
+      }, isFirst ? uploadPoster.value || undefined : undefined)
+      uploadProgress.value.set(file.name, 100)
     }
-    await uploadMaterialWithMetadata(file, {
-      name: uploadForm.value.name.trim(),
-      status: uploadForm.value.status,
-      tags: uploadForm.value.tagsText.split(',').map(tag => tag.trim()).filter(Boolean),
-      ctr_estimate: ctrEstimate,
-      duration: uploadForm.value.duration ? Number(uploadForm.value.duration) : undefined,
-      width: uploadForm.value.width ? Number(uploadForm.value.width) : undefined,
-      height: uploadForm.value.height ? Number(uploadForm.value.height) : undefined,
-      ratio: uploadForm.value.ratio || undefined,
-      format: uploadForm.value.format || undefined,
-      media_kind: uploadForm.value.mediaKind === 'video' ? 'video' : 'image',
-      source: uploadForm.value.source,
-      creator: uploadForm.value.creator.trim() || undefined,
-      rights: uploadForm.value.rights.trim() || undefined,
-      platforms: uploadForm.value.platforms,
-      review_status: '待审核',
-      source_account: uploadForm.value.sourceAccount.trim() || undefined,
-      placements: uploadForm.value.placementsText.split(',').map(item => item.trim()).filter(Boolean),
-      campaign_ids: uploadForm.value.campaignIds,
-    }, uploadPoster.value || undefined)
-    uploadProgress.value.set(file.name, 100)
-    success('素材已上传，详情字段和视频封面已保存')
+
+    success(`素材已上传：${uploadFiles.value.length} 个文件已保存`)
     closeUploadModal()
     await loadPageData()
   } catch (err: any) {
@@ -832,85 +864,112 @@ const periodLabel = (period: string) => {
 
       <div v-if="detailOpen" class="fixed inset-0 z-40 bg-slate-950/20" @click="closeDetailDrawer"></div>
       <aside
-        class="fixed right-[18px] top-[18px] bottom-[18px] z-50 flex w-[460px] max-w-[calc(100vw-32px)] flex-col overflow-hidden rounded-md border border-slate-200 bg-slate-50 shadow-2xl transition-all duration-200 dark:border-slate-700 dark:bg-slate-950"
-        :class="detailOpen ? 'translate-x-0 opacity-100' : 'translate-x-[calc(100%+28px)] opacity-0 pointer-events-none'"
+        class="fixed right-0 top-0 bottom-0 z-50 flex h-screen w-[min(980px,64vw)] max-w-[100vw] flex-col overflow-hidden bg-slate-100 shadow-2xl transition-all duration-200 dark:bg-slate-950 max-lg:w-screen"
+        :class="detailOpen ? 'translate-x-0 opacity-100' : 'translate-x-[108%] opacity-0 pointer-events-none'"
       >
-        <div class="h-[54px] shrink-0 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[14px]">
-          <h2 class="text-[13px] font-bold text-slate-900 dark:text-white">素材详情</h2>
-          <div v-if="selectedRow" class="flex items-center gap-[6px]">
-            <button class="rounded-md p-[5px] text-slate-500 hover:bg-slate-100 hover:text-primary dark:hover:bg-slate-800" title="编辑素材" @click="openEditMaterial(selectedRow)">
-              <span class="material-symbols-outlined text-[15px]">edit</span>
-            </button>
-            <span class="rounded border px-[6px] py-[3px] text-[10px] font-medium" :class="statusClass(selectedRow.status)">{{ selectedRow.statusLabel }}</span>
-            <button class="rounded-md p-[5px] text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800" title="关闭详情" @click="closeDetailDrawer">
-              <span class="material-symbols-outlined text-[15px]">close</span>
-            </button>
+        <div class="h-[54px] shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 flex items-center gap-[18px] pr-[18px]">
+          <button class="grid h-[42px] w-[42px] place-items-center rounded-r-md bg-primary text-white hover:bg-primary/90" title="关闭详情" @click="closeDetailDrawer">
+            <span class="material-symbols-outlined text-[22px]">close</span>
+          </button>
+          <div class="flex h-full items-center gap-[24px] text-[14px] font-semibold">
+            <span class="flex h-full items-center border-b-2 border-primary text-slate-900 dark:text-white">详情</span>
+            <span class="flex h-full items-center text-slate-500 dark:text-slate-400">分析</span>
           </div>
+          <button v-if="selectedRow" class="ml-auto text-[12px] font-semibold text-primary hover:text-primary/80" @click="openEditMaterial(selectedRow)">编辑素材</button>
         </div>
 
         <div v-if="selectedRow" class="flex-1 overflow-y-auto p-[14px]">
-          <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-700 bg-black">
-            <video
-              v-if="selectedRow.mediaKind === 'video' && selectedPreviewUrl"
-              :src="selectedPreviewUrl"
-              class="max-h-[360px] w-full object-contain"
-              controls
-              playsinline
-              preload="metadata"
-            />
-            <img
-              v-else-if="selectedPreviewUrl"
-              :src="selectedPreviewUrl"
-              :alt="selectedRow.name"
-              class="max-h-[360px] w-full object-contain"
-            />
-            <div v-else class="h-[300px] flex items-center justify-center text-slate-500">
-              <span class="material-symbols-outlined text-[40px]">broken_image</span>
-            </div>
-          </div>
-
-          <div class="mt-[12px]">
-            <h3 class="text-[14px] font-bold text-slate-900 dark:text-white leading-snug">{{ selectedRow.name }}</h3>
-            <p class="mt-[4px] break-all text-[10px] text-slate-500 dark:text-slate-400">{{ selectedRow.id }}</p>
-          </div>
-
-          <div class="mt-[12px] grid grid-cols-3 gap-[8px]">
-            <div class="detail-metric"><span>评分</span><strong>{{ selectedRow.score }}</strong></div>
-            <div class="detail-metric"><span>疲劳</span><strong>{{ selectedRow.fatigue }}</strong></div>
-            <div class="detail-metric"><span>ROAS</span><strong>{{ formatNumber(selectedRow.metrics.roas, 2) }}</strong></div>
-          </div>
-
-          <div class="mt-[12px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            <dl class="divide-y divide-slate-100 dark:divide-slate-800 text-[11px]">
-              <div class="detail-row"><dt>素材类型</dt><dd>{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div>
-              <div class="detail-row"><dt>来源</dt><dd>{{ selectedRow.sourceLabel }}</dd></div>
-              <div class="detail-row"><dt>文件大小</dt><dd>{{ selectedRow.fileSizeLabel }}</dd></div>
-              <div class="detail-row"><dt>比例/时长</dt><dd>{{ selectedRow.ratio }} / {{ selectedRow.durationLabel }}</dd></div>
-              <div class="detail-row"><dt>审核状态</dt><dd>{{ selectedRow.reviewStatus }}</dd></div>
-              <div class="detail-row"><dt>关联计划</dt><dd>{{ selectedRow.associatedCampaignCount }} 个</dd></div>
-              <div class="detail-row"><dt>关联账号</dt><dd>{{ selectedRow.associatedAccountCount }} 个</dd></div>
-              <div class="detail-row"><dt>平台</dt><dd>{{ selectedRow.platforms.length ? selectedRow.platforms.join(', ') : '-' }}</dd></div>
-            </dl>
-          </div>
-
-          <div class="mt-[12px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 p-[12px]">
-            <h4 class="text-[12px] font-bold text-slate-900 dark:text-white">绑定计划</h4>
-            <div v-if="selectedRow.campaigns.length" class="mt-[8px] space-y-[7px]">
-              <div v-for="campaign in selectedRow.campaigns" :key="campaign.id" class="rounded-md bg-slate-50 dark:bg-slate-800 px-[9px] py-[7px]">
-                <p class="truncate text-[11px] font-semibold text-slate-900 dark:text-white">{{ campaign.name }}</p>
-                <p class="mt-[3px] text-[10px] text-slate-500 dark:text-slate-400">{{ campaign.platform }} · {{ campaign.status }} · {{ formatCurrency(campaign.spent || 0) }}</p>
+          <div class="grid gap-[14px] xl:grid-cols-[230px_minmax(0,1fr)]">
+            <aside class="rounded-xl bg-white p-[18px] dark:bg-slate-900">
+              <h3 class="text-[16px] font-bold text-slate-900 dark:text-white">基本信息</h3>
+              <div class="mt-[12px] overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+                <div class="bg-black">
+                  <video
+                    v-if="selectedRow.mediaKind === 'video' && selectedPreviewUrl"
+                    :src="selectedPreviewUrl"
+                    class="max-h-[360px] w-full object-contain"
+                    controls
+                    playsinline
+                    preload="metadata"
+                  />
+                  <img
+                    v-else-if="selectedPreviewUrl"
+                    :src="selectedPreviewUrl"
+                    :alt="selectedRow.name"
+                    class="max-h-[360px] w-full object-contain"
+                  />
+                  <div v-else class="grid h-[300px] place-items-center text-slate-500">
+                    <span class="material-symbols-outlined text-[40px]">broken_image</span>
+                  </div>
+                </div>
+                <div class="p-[12px]">
+                  <strong class="block text-[13px] leading-snug text-slate-800 dark:text-slate-100">{{ selectedRow.name }}</strong>
+                  <span class="mt-[5px] block break-all text-[10px] text-slate-400">ID: {{ selectedRow.id }}</span>
+                </div>
+                <button class="flex min-h-[38px] w-full items-center justify-center gap-[6px] border-t border-slate-100 text-[11px] font-semibold text-slate-600 hover:bg-slate-50 dark:border-slate-800 dark:text-slate-300 dark:hover:bg-slate-800" @click="openEditMaterial(selectedRow)">
+                  <span class="material-symbols-outlined text-[14px]">edit</span>
+                  编辑信息
+                </button>
               </div>
-            </div>
-            <p v-else class="mt-[8px] text-[11px] text-slate-500 dark:text-slate-400">暂无绑定计划</p>
-          </div>
+              <dl class="mt-[18px] space-y-[13px] text-[12px]">
+                <div><dt class="text-slate-400">素材评估</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">Score {{ selectedRow.score }} · 疲劳 {{ selectedRow.fatigue }}%</dd></div>
+                <div><dt class="text-slate-400">素材类型</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div>
+                <div><dt class="text-slate-400">创建时间</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.createdAtLabel }}</dd></div>
+                <div><dt class="text-slate-400">来源</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.sourceLabel }}</dd></div>
+                <div><dt class="text-slate-400">授权状态</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.material.rights || '-' }}</dd></div>
+              </dl>
+            </aside>
 
-          <div class="mt-[12px] flex items-center gap-[8px]">
-            <button class="flex-1 rounded-md border border-slate-200 bg-white px-[10px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" @click="openEditMaterial(selectedRow)">
-              编辑信息
-            </button>
-            <button class="flex-1 rounded-md border border-red-200 bg-white px-[10px] py-[8px] text-[11px] font-semibold text-red-600 hover:bg-red-50 dark:border-red-900 dark:bg-slate-900 dark:hover:bg-red-950/30" @click="askDeleteMaterial(selectedRow)">
-              删除记录
-            </button>
+            <main class="space-y-[14px]">
+              <section class="rounded-xl bg-white p-[18px] dark:bg-slate-900">
+                <div class="inline-flex border-b-2 border-primary pb-[7px] text-[15px] font-bold text-slate-900 dark:text-white">标准投放</div>
+              </section>
+
+              <section class="rounded-xl bg-white p-[18px] dark:bg-slate-900">
+                <div class="mb-[18px] flex flex-wrap items-center justify-between gap-[12px]">
+                  <h3 class="text-[16px] font-bold text-slate-900 dark:text-white">数据概览</h3>
+                  <div class="inline-flex min-h-[36px] items-center gap-[10px] rounded-lg bg-slate-100 px-[12px] text-[12px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                    <span>{{ periodLabel(periodFilter) }}</span>
+                    <span class="material-symbols-outlined text-[15px]">date_range</span>
+                  </div>
+                </div>
+                <div class="grid gap-[10px] md:grid-cols-5">
+                  <div class="rounded-lg bg-blue-50 p-[14px] dark:bg-blue-950/30"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">消耗</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatCurrency(selectedRow.metrics.spend) }}</b></div>
+                  <div class="rounded-lg bg-emerald-50 p-[14px] dark:bg-emerald-950/30"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">平均转化成本</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatCurrency(selectedRow.metrics.cpa) }}</b></div>
+                  <div class="rounded-lg bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">点击率</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatPercent(selectedRow.metrics.ctr) }}</b></div>
+                  <div class="rounded-lg bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">ROAS</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatNumber(selectedRow.metrics.roas, 2) }}x</b></div>
+                  <div class="rounded-lg bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">3秒播放率</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ selectedRow.mediaKind === 'video' ? '63%' : '-' }}</b></div>
+                </div>
+                <div class="mt-[22px] flex items-center justify-between text-[15px] font-bold text-slate-800 dark:text-slate-100">
+                  <span>数据对比</span>
+                  <span class="text-[12px] font-medium text-slate-400">消耗 / 转化成本</span>
+                </div>
+                <div class="relative mt-[18px] h-[250px] rounded-lg border border-slate-100 bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_49px,#e2e8f0_50px)] p-[18px] dark:border-slate-800 dark:bg-slate-900">
+                  <div class="absolute left-[42px] right-[24px] bottom-[54px] h-[3px] rounded-full bg-primary"></div>
+                  <div class="absolute left-[42px] right-[24px] bottom-[30px] flex justify-between text-[10px] text-slate-400">
+                    <span>06-18</span><span>06-19</span><span>06-20</span><span>06-21</span><span>06-22</span><span>06-23</span><span>06-24</span><span>06-25</span>
+                  </div>
+                </div>
+              </section>
+
+              <section class="rounded-xl bg-white p-[18px] dark:bg-slate-900">
+                <div class="mb-[14px] flex items-center gap-[28px] text-[15px] font-bold">
+                  <span class="border-b-2 border-primary pb-[7px] text-slate-900 dark:text-white">关联账户</span>
+                  <span class="pb-[7px] text-slate-500">关联计划</span>
+                </div>
+                <div class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+                  <div class="grid min-h-[44px] grid-cols-[44px_1fr_1.2fr_90px_90px_90px] items-center bg-slate-100 text-[11px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                    <span class="px-[10px]"><input type="checkbox" /></span><span>素材开关</span><span>账户/计划名称和ID</span><span>操作</span><span>素材状态</span><span>消耗</span>
+                  </div>
+                  <div v-if="selectedRow.campaigns.length" class="divide-y divide-slate-100 dark:divide-slate-800">
+                    <div v-for="campaign in selectedRow.campaigns" :key="campaign.id" class="grid min-h-[58px] grid-cols-[44px_1fr_1.2fr_90px_90px_90px] items-center text-[11px] text-slate-600 dark:text-slate-300">
+                      <span class="px-[10px]"><input type="checkbox" /></span><span>启用</span><span class="truncate pr-[10px]">{{ campaign.name }} · {{ campaign.id }}</span><span>查看</span><span>{{ campaign.status }}</span><span>{{ formatCurrency(campaign.spent || 0) }}</span>
+                    </div>
+                  </div>
+                  <div v-else class="grid min-h-[180px] place-items-center text-[12px] text-slate-400">暂无数据</div>
+                </div>
+              </section>
+            </main>
           </div>
         </div>
 
@@ -920,145 +979,131 @@ const periodLabel = (period: string) => {
       </aside>
     </main>
 
-    <div v-if="showUploadModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeUploadModal">
-      <div class="w-full max-w-[620px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
-        <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[12px] dark:border-slate-700">
-          <h2 class="text-[16px] font-bold text-slate-900 dark:text-white">上传素材</h2>
-          <button class="rounded-md p-[6px] hover:bg-slate-100 dark:hover:bg-slate-700" @click="closeUploadModal">
-            <span class="material-symbols-outlined text-[18px] text-slate-600 dark:text-slate-300">close</span>
-          </button>
+    <div v-if="showUploadModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-[18px]" @click.self="closeUploadModal">
+      <div class="max-h-[calc(100vh-36px)] w-full max-w-[860px] overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900">
+        <div class="sticky top-0 z-10 flex items-start justify-between gap-[16px] border-b border-slate-200 bg-white px-[18px] py-[16px] dark:border-slate-800 dark:bg-slate-900">
+          <div>
+            <h2 class="text-[20px] font-bold leading-tight text-slate-900 dark:text-white">手动提交素材</h2>
+            <p class="mt-[4px] text-[12px] text-slate-500 dark:text-slate-400">素材基础信息</p>
+          </div>
+          <button class="grid h-[36px] w-[36px] place-items-center rounded-md border border-slate-200 text-[22px] text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" @click="closeUploadModal">×</button>
         </div>
-        <div class="max-h-[calc(100vh-180px)] overflow-y-auto p-[18px]">
-          <div class="grid gap-[14px] lg:grid-cols-[220px_1fr]">
-            <div>
-              <div
-                class="rounded-md border-2 border-dashed p-[22px] text-center transition-colors"
-                :class="isDragging ? 'border-primary bg-primary/5' : 'border-slate-300 hover:border-primary dark:border-slate-600 dark:hover:border-primary'"
-                @drop="handleDrop"
-                @dragover="handleDragOver"
-                @dragleave="handleDragLeave"
-              >
-                <div class="flex flex-col items-center gap-[10px]">
-                  <div class="flex h-[42px] w-[42px] items-center justify-center rounded-full bg-slate-100 dark:bg-slate-700">
-                    <span class="material-symbols-outlined text-[24px] text-slate-400">cloud_upload</span>
-                  </div>
-                  <div>
-                    <p class="text-[11px] text-slate-700 dark:text-slate-300">
-                      拖拽或
-                      <label class="cursor-pointer font-semibold text-primary hover:text-primary/80">
-                        选择文件
-                        <input type="file" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime" class="hidden" @change="handleFileSelect" />
-                      </label>
-                    </p>
-                    <p class="mt-[5px] text-[10px] text-slate-500 dark:text-slate-400">单次上传 1 个素材，支持 MP4/MOV 自动抽封面</p>
-                  </div>
+
+        <div class="max-h-[calc(100vh-150px)] overflow-y-auto p-[18px]">
+          <section>
+            <div class="mb-[12px] flex items-center justify-between gap-[10px] text-[13px] font-bold text-slate-800 dark:text-slate-100">
+              <span>素材文件</span>
+              <span class="text-[12px] font-medium text-slate-400">图片 / 视频</span>
+            </div>
+            <div
+              class="grid min-h-[220px] place-items-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-800/70"
+              :class="isDragging ? 'border-primary bg-primary/5' : ''"
+              @drop="handleDrop"
+              @dragover="handleDragOver"
+              @dragleave="handleDragLeave"
+            >
+              <div v-if="!uploadFile" class="grid place-items-center gap-[10px] px-[24px] py-[28px] text-center">
+                <span class="material-symbols-outlined text-[30px] text-slate-500">cloud_upload</span>
+                <p class="text-[13px] text-slate-600 dark:text-slate-300">
+                  将文件拖拽到此处，或
+                  <label class="cursor-pointer font-bold text-primary hover:text-primary/80">
+                    点击上传
+                    <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime" class="hidden" @change="handleFileSelect" />
+                  </label>
+                </p>
+                <div class="max-w-[760px] space-y-[5px] text-[12px] leading-relaxed text-slate-400">
+                  <p>图片：jpg、png、jpeg、webp 等格式，建议 16:9 / 4:5 / 1:1。</p>
+                  <p>视频：mp4、mov，支持横版 16:9 或竖版 9:16，上传后自动抽取封面。</p>
                 </div>
               </div>
-
-              <div v-if="uploadFile" class="mt-[12px] rounded-md bg-slate-50 p-[10px] dark:bg-slate-700">
-                <div class="flex items-center justify-between gap-[8px]">
-                  <div class="flex min-w-0 items-center gap-[9px]">
-                    <span class="material-symbols-outlined text-[16px] text-slate-400">{{ uploadFile.type.startsWith('video/') ? 'movie' : 'image' }}</span>
-                    <div class="min-w-0">
-                      <p class="truncate text-[11px] font-medium text-slate-900 dark:text-white">{{ uploadFile.name }}</p>
-                      <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">{{ uploadForm.fileSize || (uploadFile.size / 1024 / 1024).toFixed(2) + ' MB' }}</p>
+              <div v-else class="grid w-full gap-[12px] p-[14px] md:grid-cols-[156px_minmax(0,1fr)_auto]">
+                <div class="relative min-h-[112px] overflow-hidden rounded-lg border border-slate-200 bg-black dark:border-slate-700">
+                  <video v-if="uploadIsVideo && uploadPreviewUrl" :src="uploadPreviewUrl" class="h-full min-h-[112px] w-full object-contain" controls muted playsinline />
+                  <img v-else-if="uploadPreviewUrl" :src="uploadPreviewUrl" :alt="uploadFile.name" class="h-full min-h-[112px] w-full object-cover" />
+                  <div v-else class="grid h-full min-h-[112px] place-items-center text-[12px] text-slate-400">素材预览</div>
+                  <span class="absolute left-[8px] top-[8px] rounded-full bg-slate-950/70 px-[8px] py-[3px] text-[10px] font-bold text-white">{{ uploadFiles.length > 1 ? `1 / ${uploadFiles.length}` : uploadIsVideo ? '视频' : '图片' }}</span>
+                </div>
+                <div class="grid gap-[7px]">
+                  <div v-for="(file, index) in uploadFiles" :key="`${file.name}-${index}`" class="rounded-md border border-slate-100 bg-white p-[8px] dark:border-slate-700 dark:bg-slate-900">
+                    <div class="flex items-center justify-between gap-[10px]">
+                      <div class="min-w-0">
+                        <b class="block truncate text-[12px] text-slate-800 dark:text-slate-100">{{ file.name }}</b>
+                        <span class="mt-[2px] block text-[11px] text-slate-400">{{ (file.size / 1024 / 1024).toFixed(2) }} MB · {{ file.type || 'FILE' }}</span>
+                      </div>
+                      <button class="rounded p-[4px] text-slate-400 hover:bg-slate-100 hover:text-red-500 dark:hover:bg-slate-800" @click="removeFile(index)">
+                        <span class="material-symbols-outlined text-[14px]">close</span>
+                      </button>
+                    </div>
+                    <div v-if="uploadProgress.has(file.name)" class="mt-[8px] flex items-center gap-[8px]">
+                      <span class="h-[8px] flex-1 overflow-hidden rounded-full bg-slate-200 dark:bg-slate-700"><i class="block h-full rounded-full bg-emerald-500" :style="{ width: `${uploadProgress.get(file.name) || 0}%` }"></i></span>
+                      <span class="text-[10px] font-semibold text-emerald-600">{{ uploadProgress.get(file.name) || 0 }}%</span>
                     </div>
                   </div>
-                  <button class="rounded p-[4px] hover:bg-slate-200 dark:hover:bg-slate-600" @click="removeFile(0)">
-                    <span class="material-symbols-outlined text-[14px] text-slate-500">close</span>
-                  </button>
                 </div>
-                <div v-if="uploadPosterPreview" class="mt-[10px] overflow-hidden rounded-md border border-slate-200 bg-black dark:border-slate-600">
-                  <img :src="uploadPosterPreview" alt="视频封面" class="h-[160px] w-full object-contain" />
-                </div>
-                <div v-else class="mt-[10px] flex h-[120px] items-center justify-center rounded-md border border-slate-200 bg-white text-[10px] text-slate-500 dark:border-slate-600 dark:bg-slate-800">
-                  {{ probingUpload ? '正在读取素材信息...' : '图片素材使用原图缩略图，视频会自动生成封面' }}
-                </div>
+                <label class="self-center justify-self-end rounded-md border border-blue-200 bg-blue-50 px-[12px] py-[8px] text-[11px] font-semibold text-primary hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/30">
+                  重新选择
+                  <input type="file" multiple accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/quicktime" class="hidden" @change="handleFileSelect" />
+                </label>
               </div>
             </div>
+          </section>
 
-            <div class="grid gap-[10px] sm:grid-cols-2">
-              <label class="block sm:col-span-2">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">素材名称</span>
-                <input v-model="uploadForm.name" class="edit-input" type="text" placeholder="选择文件后自动预填" />
+          <section class="mt-[18px]">
+            <div class="mb-[12px] flex items-center justify-between gap-[10px] text-[13px] font-bold text-slate-800 dark:text-slate-100">
+              <span>素材信息</span>
+              <span class="text-[12px] font-medium text-slate-400">仅填写素材相关内容</span>
+            </div>
+            <div class="grid gap-[12px] md:grid-cols-[1.2fr_.8fr]">
+              <label class="block">
+                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材名称</span>
+                <input v-model="uploadForm.name" class="edit-input" type="text" placeholder="输入素材名称" />
               </label>
               <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">状态</span>
-                <select v-model="uploadForm.status" class="edit-input">
-                  <option value="ready">待投放</option>
-                  <option value="running">投放中</option>
-                  <option value="fatigue">已疲劳</option>
+                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材类型</span>
+                <select v-model="uploadForm.materialType" class="edit-input">
+                  <option>自动识别</option><option>横版图片</option><option>竖版图片</option><option>横版视频</option><option>竖版视频</option>
                 </select>
               </label>
               <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">来源</span>
-                <select v-model="uploadForm.source" class="edit-input">
-                  <option value="oss_upload">OSS 上传</option>
-                  <option value="local">本地上传</option>
-                  <option value="meta_import">Meta 导入</option>
-                  <option value="tiktok_import">TikTok 导入</option>
-                  <option value="ai_generated">AI 生成</option>
+                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材分组</span>
+                <select v-model="uploadForm.materialUsage" class="edit-input">
+                  <option>信息流素材</option><option>Reels / Stories</option><option>Feed 素材</option><option>落地页素材</option><option>素材库归档</option>
                 </select>
               </label>
               <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">广告账户</span>
-                <input v-model="uploadForm.sourceAccount" class="edit-input" type="text" placeholder="例如 FunGame_Meta_JP_Android" />
+                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">授权状态</span>
+                <select v-model="uploadForm.rights" class="edit-input">
+                  <option>自有素材</option><option>达人授权</option><option>Spark 授权</option><option>商业可用</option><option>待确认</option>
+                </select>
               </label>
-              <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">CTR 预估 (%)</span>
-                <input v-model="uploadForm.ctrEstimate" class="edit-input" type="text" inputmode="decimal" />
-              </label>
-              <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">媒体类型</span>
-                <input v-model="uploadForm.mediaKind" class="edit-input" type="text" readonly />
-              </label>
-              <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">格式</span>
-                <input v-model="uploadForm.format" class="edit-input" type="text" />
-              </label>
-              <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">尺寸</span>
-                <input class="edit-input" type="text" :value="uploadForm.width && uploadForm.height ? `${uploadForm.width} × ${uploadForm.height}` : ''" readonly />
-              </label>
-              <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">比例 / 时长</span>
-                <input class="edit-input" type="text" :value="`${uploadForm.ratio || '-'} / ${uploadForm.duration ? uploadForm.duration + 's' : '-'}`" readonly />
-              </label>
-              <label class="block sm:col-span-2">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">标签</span>
-                <input v-model="uploadForm.tagsText" class="edit-input" type="text" placeholder="用英文逗号分隔，例如 hook, ugc, jp" />
-              </label>
-              <div class="sm:col-span-2">
-                <span class="mb-[6px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">平台</span>
-                <div class="flex flex-wrap gap-[6px]">
-                  <label v-for="platform in uploadPlatformOptions" :key="platform" class="inline-flex items-center gap-[5px] rounded-md border border-slate-200 px-[8px] py-[5px] text-[10px] text-slate-700 dark:border-slate-700 dark:text-slate-300">
-                    <input v-model="uploadForm.platforms" type="checkbox" :value="platform" class="h-[12px] w-[12px]" />
-                    {{ platform }}
+              <div class="md:col-span-2">
+                <span class="mb-[8px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材标签</span>
+                <div class="flex flex-wrap gap-[8px]">
+                  <label v-for="tag in uploadTagOptions" :key="tag" class="inline-flex min-h-[34px] items-center gap-[7px] rounded-full border border-slate-200 px-[12px] text-[12px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                    <input v-model="uploadForm.materialTags" type="checkbox" :value="tag" class="h-[14px] w-[14px] accent-primary" />
+                    {{ tag }}
                   </label>
                 </div>
               </div>
-              <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">版位</span>
-                <input v-model="uploadForm.placementsText" class="edit-input" type="text" placeholder="Feed, Reels" />
+              <label class="block md:col-span-2">
+                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材备注</span>
+                <textarea v-model="uploadForm.metaNote" class="edit-input min-h-[86px] resize-y" placeholder="补充素材亮点、授权说明或分组说明"></textarea>
               </label>
-              <label class="block">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">版权</span>
-                <input v-model="uploadForm.rights" class="edit-input" type="text" />
-              </label>
-              <label class="block sm:col-span-2">
-                <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">关联计划</span>
-                <select v-model="uploadForm.campaignIds" multiple class="edit-input min-h-[72px]">
-                  <option v-for="campaign in campaigns" :key="campaign.id" :value="campaign.id">{{ campaign.name }} · {{ campaign.account_id || campaign.platform }}</option>
-                </select>
-              </label>
+              <div class="grid gap-[12px] md:col-span-2 md:grid-cols-3">
+                <label class="block"><span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">识别尺寸</span><input class="edit-input" type="text" :value="uploadForm.width && uploadForm.height ? `${uploadForm.width} × ${uploadForm.height}` : '-'" readonly /></label>
+                <label class="block"><span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">比例 / 时长</span><input class="edit-input" type="text" :value="`${uploadForm.ratio || '-'} / ${uploadForm.duration ? uploadForm.duration + 's' : '-'}`" readonly /></label>
+                <label class="block"><span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">平台</span><select v-model="uploadForm.platforms[0]" class="edit-input"><option v-for="platform in uploadPlatformOptions" :key="platform">{{ platform }}</option></select></label>
+              </div>
             </div>
-          </div>
+          </section>
         </div>
-        <div class="flex items-center justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700">
-          <button class="rounded-md px-[12px] py-[7px] text-[11px] font-medium text-slate-700 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" @click="closeUploadModal">取消</button>
-          <button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!uploadFile || uploading || probingUpload" @click="completeUpload">
+
+        <div class="sticky bottom-0 flex items-center justify-end gap-[10px] border-t border-slate-200 bg-white px-[18px] py-[14px] dark:border-slate-800 dark:bg-slate-900">
+          <button class="rounded-md px-[14px] py-[8px] text-[12px] font-semibold text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-800" @click="closeUploadModal">取消</button>
+          <button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[14px] py-[8px] text-[12px] font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50" :disabled="!uploadFile || uploading || probingUpload" @click="completeUpload">
             <span v-if="uploading" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>
-            {{ uploading ? '上传中...' : '完成上传' }}
+            <span v-else class="material-symbols-outlined text-[14px]">upload</span>
+            {{ uploading ? '提交中...' : '提交素材' }}
           </button>
         </div>
       </div>
