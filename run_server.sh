@@ -42,6 +42,25 @@ check_port_in_use() {
   return 1
 }
 
+wait_for_port() {
+  local port=$1
+  local name=$2
+  local max_wait=${3:-20}
+  local i
+
+  for ((i=1; i<=max_wait; i++)); do
+    if command -v nc &>/dev/null; then
+      nc -z 127.0.0.1 "$port" &>/dev/null && return 0
+    elif check_port_in_use "$port"; then
+      return 0
+    fi
+
+    sleep 1
+  done
+
+  fail "$name 启动超时：端口 $port 未监听，请检查日志"
+}
+
 # ---------- 跨平台杀死端口进程函数 ----------
 kill_port_process() {
   local port=$1
@@ -63,7 +82,7 @@ kill_port_process() {
   
   # 方法3: 使用 ss + grep + awk（现代 Linux）
   if command -v ss &>/dev/null; then
-    local pids=$(ss -lptn 2>/dev/null | grep ":$port " | awk '{print $6}' | grep -oP 'pid=\K[0-9]+' | sort -u)
+    local pids=$(ss -lptn 2>/dev/null | grep ":$port " | awk '{print $6}' | sed -n 's/.*pid=\([0-9][0-9]*\).*/\1/p' | sort -u)
     if [ -n "$pids" ]; then
       echo "$pids" | xargs kill -9 2>/dev/null || true
       return 0
@@ -477,7 +496,7 @@ else
   uv run python -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
   AGENT_PID=$!
   echo "$AGENT_PID" >> "$PID_FILE"
-  sleep 2
+  wait_for_port "$AGENT_PORT" "Agent"
 
   if kill -0 "$AGENT_PID" 2>/dev/null; then
     ok "Agent 已启动 (PID: $AGENT_PID)"
@@ -526,7 +545,7 @@ fi
   LOG_FILE="$BACKEND_APP_LOG" AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" $PY -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" $UVICORN_WORKERS_FLAG $UVICORN_RELOAD_FLAG >> "$BACKEND_UVICORN_LOG" 2>&1 &
   BACKEND_PID=$!
   echo "$BACKEND_PID" >> "$PID_FILE"
-  sleep 2
+  wait_for_port "$BACKEND_PORT" "后端"
 
   if kill -0 "$BACKEND_PID" 2>/dev/null; then
     ok "后端已启动 (PID: $BACKEND_PID)"
@@ -561,7 +580,7 @@ fi
   fi
   FRONTEND_PID=$!
   echo "$FRONTEND_PID" >> "$PID_FILE"
-  sleep 3
+  wait_for_port "$FRONTEND_PORT" "前端"
 
   if kill -0 "$FRONTEND_PID" 2>/dev/null; then
     ok "前端已启动 (PID: $FRONTEND_PID)"
@@ -576,9 +595,25 @@ fi
 
 # 获取本机 Network IP（优先取第一个非 127 的 IPv4）
 get_network_ip() {
-  ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.' | head -1 || hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost"
+  if command -v ip &>/dev/null; then
+    ip -4 addr show 2>/dev/null | awk '/inet / { sub(/\/.*/, "", $2); if ($2 !~ /^127\./) { print $2; exit } }'
+    return
+  fi
+
+  if command -v ipconfig &>/dev/null; then
+    ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || true
+    return
+  fi
+
+  if command -v hostname &>/dev/null; then
+    hostname -I 2>/dev/null | awk '{print $1}'
+    return
+  fi
+
+  echo "localhost"
 }
 NETWORK_IP=$(get_network_ip)
+NETWORK_IP=${NETWORK_IP:-localhost}
 
 echo ""
 echo -e "${GREEN}============================================${NC}"

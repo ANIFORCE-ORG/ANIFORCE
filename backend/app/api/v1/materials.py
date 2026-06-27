@@ -177,6 +177,18 @@ async def get_material_image(
                 "url": storage.signed_url(object_key, process=process),
             }
 
+    if image_url.startswith(("http://", "https://")):
+        filename = os.path.basename(image_url.split("?", 1)[0])
+        mime_type = _mime_type_from_filename(filename)
+        return {
+            "material_id": material_id,
+            "filename": filename,
+            "mime_type": mime_type,
+            "size": material.get("file_size") or 0,
+            "data": "",
+            "url": image_url,
+        }
+
     # 从URL中提取文件名
     filename = os.path.basename(image_url)
     image_path = _resolve_local_image_path(image_url)
