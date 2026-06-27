@@ -57,19 +57,19 @@ onMounted(async () => {
 const loadCampaignData = async () => {
   loading.value = true
   error.value = null
-  
+
   try {
     console.log('加载广告投放详情:', campaignId.value)
-    
+
     // 加载广告投放详情
     const campaignData = await getCampaignDetail(campaignId.value)
     campaign.value = campaignData
     console.log('广告投放详情加载成功:', campaignData)
-    
+
     // TODO: 加载关联的 Ad Units
     // const adUnitsData = await getAdUnits(campaignId.value)
     // adUnits.value = adUnitsData
-    
+
     // 临时模拟数据
     adUnits.value = []
     console.log('Ad Units 加载成功:', adUnits.value.length, '条')
@@ -119,16 +119,16 @@ const handleSubmitAdUnit = async (data: any) => {
   try {
     // TODO: 调用 API 创建 Ad Unit
     console.log('创建 Ad Unit:', data)
-    
+
     // 模拟 API 调用
     await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     // 成功后关闭弹窗并刷新列表
     showCreateAdUnitModal.value = false
     if (createAdUnitModalRef.value) {
       createAdUnitModalRef.value.resetForm()
     }
-    
+
     // TODO: 刷新 Ad Units 列表
     console.log('Ad Unit 创建成功')
   } catch (err: any) {
@@ -175,7 +175,7 @@ const formatDate = (dateString?: string) => {
   <!-- 三栏布局容器 -->
   <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航抽屉 -->
-    <SidebarNav 
+    <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
       active-panel="campaigns"
@@ -210,26 +210,26 @@ const formatDate = (dateString?: string) => {
               <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed mt-[4px]">所属项目: {{ campaign?.project_name || '暂无' }}</p>
             </div>
           </div>
-          
+
           <div class="grid grid-cols-4 gap-[8px]">
             <!-- 平台 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">平台</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.platform || '-' }}</strong>
             </div>
-            
+
             <!-- 广告账户 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">广告账户</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.account_id || '-' }}</strong>
             </div>
-            
+
             <!-- 预算 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">预算</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">${{ campaign?.budget?.toLocaleString() || '-' }}</strong>
             </div>
-            
+
             <!-- 已消耗 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">已消耗</span>
@@ -241,13 +241,13 @@ const formatDate = (dateString?: string) => {
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">Buying Type</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.buying_type || '-' }}</strong>
             </div>
-            
+
             <!-- Bid Strategy -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">Bid Strategy</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.bid_strategy || '-' }}</strong>
             </div>
-            
+
             <!-- 开始/结束日期 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">开始 / 结束</span>
@@ -274,7 +274,7 @@ const formatDate = (dateString?: string) => {
               创建新广告单元
             </button>
           </div>
-          
+
           <div class="space-y-[12px]">
             <AdUnitCardDetailed
               v-for="adUnit in adUnits"

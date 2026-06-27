@@ -3,8 +3,8 @@
 #  ANIFORCE 统一部署脚本（通过 Nginx 反向代理）
 #  用法:
 #    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80] 
-#                       [--frontend-port 3010] [--backend-port 8010]
-#                       [--only all|backend|frontend|nginx] [--skip-install]
+#                       [--frontend-port 3010] [--backend-port 8010] [--agent-port 8020]
+#                       [--only all|agent|backend|frontend|nginx] [--skip-install]
 # ============================================================
 set -euo pipefail
 
@@ -82,6 +82,7 @@ SKIP_INSTALL=0
 NGINX_PORT=80
 FRONTEND_PORT=3010
 BACKEND_PORT=8010
+AGENT_PORT=8020
 DEMO_MODE=false
 USE_SSL=false
 
@@ -96,6 +97,7 @@ while [[ $# -gt 0 ]]; do
     --nginx-port) NGINX_PORT="$2"; shift 2 ;;
     --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
     --backend-port) BACKEND_PORT="$2"; shift 2 ;;
+    --agent-port) AGENT_PORT="$2"; shift 2 ;;
     --only) ONLY="$2"; shift 2 ;;
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
@@ -109,7 +111,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --nginx-port     Nginx 端口 (默认: 80)"
       echo "  --frontend-port  前端端口 (默认: 3010)"
       echo "  --backend-port   后端端口 (默认: 8010)"
-      echo "  --only           仅启动: all(默认) / backend / frontend / nginx"
+      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
+      echo "  --only           仅启动: all(默认) / agent / backend / frontend / nginx"
       echo "  --skip-install   跳过依赖安装"
       echo "  --demo           启用 Demo 模式"
       echo "  --ssl            启用 HTTPS (使用 nginx-https.conf)"
@@ -136,16 +139,17 @@ done
 if [ "$MODE" != "local" ] && [ "$MODE" != "cloud" ]; then
   fail "--mode 仅支持 local 或 cloud"
 fi
-if [ "$ONLY" != "all" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "nginx" ]; then
-  fail "--only 仅支持 all/backend/frontend/nginx"
+if [ "$ONLY" != "all" ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "nginx" ]; then
+  fail "--only 仅支持 all/agent/backend/frontend/nginx"
 fi
 
 info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, USE_SSL=$USE_SSL"
-info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT"
+info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT"
 
 # ---------- 项目根目录 ----------
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 BACKEND_DIR="$ROOT_DIR/backend"
+AGENT_DIR="$ROOT_DIR/aniforce-agent"
 FRONTEND_DIR="$ROOT_DIR/frontend"
 
 # ---------- 日志目录设置 ----------
@@ -163,6 +167,7 @@ LOG_DATE=$(date +%Y%m%d)
 # 日志文件路径
 BACKEND_APP_LOG="$LOG_DIR/backend_logs_{time:YYYYMMDD}.log"
 BACKEND_UVICORN_LOG="$LOG_DIR/uvicorn_logs_${LOG_DATE}.log"
+AGENT_UVICORN_LOG="$LOG_DIR/agent_uvicorn_logs_${LOG_DATE}.log"
 FRONTEND_LOG="$LOG_DIR/frontend_logs_${LOG_DATE}.log"
 NGINX_ACCESS_LOG="$LOG_DIR/nginx_access_${LOG_DATE}.log"
 NGINX_ERROR_LOG="$LOG_DIR/nginx_error_${LOG_DATE}.log"
@@ -170,6 +175,7 @@ NGINX_ERROR_LOG="$LOG_DIR/nginx_error_${LOG_DATE}.log"
 info "日志配置: 目录=$LOG_DIR"
 info "后端应用日志: $BACKEND_APP_LOG"
 info "后端 Uvicorn 日志: $BACKEND_UVICORN_LOG"
+info "Agent Uvicorn 日志: $AGENT_UVICORN_LOG"
 info "前端日志: $FRONTEND_LOG"
 info "Nginx访问日志: $NGINX_ACCESS_LOG"
 info "Nginx错误日志: $NGINX_ERROR_LOG"
@@ -180,6 +186,7 @@ DEPLOY_CONFIG="$ROOT_DIR/.deploy_config"
 echo "NGINX_PORT=$NGINX_PORT" >> "$DEPLOY_CONFIG"
 echo "FRONTEND_PORT=$FRONTEND_PORT" >> "$DEPLOY_CONFIG"
 echo "BACKEND_PORT=$BACKEND_PORT" >> "$DEPLOY_CONFIG"
+echo "AGENT_PORT=$AGENT_PORT" >> "$DEPLOY_CONFIG"
 echo "MODE=$MODE" >> "$DEPLOY_CONFIG"
 echo "ONLY=$ONLY" >> "$DEPLOY_CONFIG"
 echo "USE_SSL=$USE_SSL" >> "$DEPLOY_CONFIG"
@@ -211,10 +218,48 @@ if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
 fi
 
 # ============================================================
-#  2. 启动后端服务
+#  2. 启动 Agent 服务
+# ============================================================
+if [ "$ONLY" = "nginx" ]; then
+  warn "--only=nginx：跳过 Agent 启动"
+elif [ "$ONLY" = "backend" ]; then
+  warn "--only=backend：跳过 Agent 启动"
+elif [ "$ONLY" = "frontend" ]; then
+  warn "--only=frontend：跳过 Agent 启动"
+else
+  info "========== 启动 Agent 服务 =========="
+
+  if check_port_in_use $AGENT_PORT; then
+    warn "端口 $AGENT_PORT 已被占用，正在清理..."
+    kill_port_process $AGENT_PORT
+    sleep 1
+  fi
+
+  AGENT_ARGS="--mode $MODE --backend-port $BACKEND_PORT --agent-port $AGENT_PORT --only agent --log-dir $LOG_DIR --host 127.0.0.1"
+  if [ "$SKIP_INSTALL" -eq 1 ]; then
+    AGENT_ARGS="$AGENT_ARGS --skip-install"
+  fi
+
+  info "执行: ./run_server.sh $AGENT_ARGS"
+  bash "$ROOT_DIR/run_server.sh" $AGENT_ARGS &
+  AGENT_SCRIPT_PID=$!
+
+  sleep 8
+
+  if check_port_in_use $AGENT_PORT; then
+    ok "Agent 服务已启动 (端口: $AGENT_PORT)"
+  else
+    fail "Agent 服务启动失败 (端口: $AGENT_PORT)"
+  fi
+fi
+
+# ============================================================
+#  3. 启动后端服务
 # ============================================================
 if [ "$ONLY" = "nginx" ]; then
   warn "--only=nginx：跳过后端启动"
+elif [ "$ONLY" = "agent" ]; then
+  warn "--only=agent：跳过后端启动"
 elif [ "$ONLY" = "frontend" ]; then
   warn "--only=frontend：跳过后端启动"
 else
@@ -228,7 +273,7 @@ else
   fi
   
   # 调用原有的 run_server.sh 启动后端
-  BACKEND_ARGS="--mode $MODE --backend-port $BACKEND_PORT --only backend --log-dir $LOG_DIR"
+  BACKEND_ARGS="--mode $MODE --backend-port $BACKEND_PORT --agent-port $AGENT_PORT --only backend --log-dir $LOG_DIR --host 127.0.0.1"
   if [ "$SKIP_INSTALL" -eq 1 ]; then
     BACKEND_ARGS="$BACKEND_ARGS --skip-install"
   fi
@@ -252,10 +297,12 @@ else
 fi
 
 # ============================================================
-#  3. 启动前端服务
+#  4. 启动前端服务
 # ============================================================
 if [ "$ONLY" = "nginx" ]; then
   warn "--only=nginx：跳过前端启动"
+elif [ "$ONLY" = "agent" ]; then
+  warn "--only=agent：跳过前端启动"
 elif [ "$ONLY" = "backend" ]; then
   warn "--only=backend：跳过前端启动"
 else
@@ -269,7 +316,7 @@ else
   fi
   
   # 调用原有的 run_server.sh 启动前端
-  FRONTEND_ARGS="--mode $MODE --frontend-port $FRONTEND_PORT --only frontend --log-dir $LOG_DIR"
+  FRONTEND_ARGS="--mode $MODE --frontend-port $FRONTEND_PORT --backend-port $BACKEND_PORT --agent-port $AGENT_PORT --only frontend --log-dir $LOG_DIR"
   if [ "$SKIP_INSTALL" -eq 1 ]; then
     FRONTEND_ARGS="$FRONTEND_ARGS --skip-install"
   fi
@@ -290,9 +337,11 @@ else
 fi
 
 # ============================================================
-#  4. 配置并启动 Nginx
+#  5. 配置并启动 Nginx
 # ============================================================
-if [ "$ONLY" = "backend" ]; then
+if [ "$ONLY" = "agent" ]; then
+  warn "--only=agent：跳过 Nginx 启动"
+elif [ "$ONLY" = "backend" ]; then
   warn "--only=backend：跳过 Nginx 启动"
 elif [ "$ONLY" = "frontend" ]; then
   warn "--only=frontend：跳过 Nginx 启动"
@@ -388,7 +437,7 @@ else
 fi
 
 # ============================================================
-#  5. 完成
+#  6. 完成
 # ============================================================
 echo ""
 echo -e "${GREEN}============================================${NC}"
@@ -411,8 +460,15 @@ if [ "$ONLY" = "all" ] || [ "$ONLY" = "nginx" ]; then
 fi
 
 if [ "$ONLY" != "nginx" ]; then
-  echo -e "  后端直连:      ${CYAN}http://localhost:$BACKEND_PORT${NC}"
-  echo -e "  前端直连:      ${CYAN}http://localhost:$FRONTEND_PORT${NC}"
+  if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+    echo -e "  Agent 直连:     ${CYAN}http://localhost:$AGENT_PORT${NC}"
+  fi
+  if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
+    echo -e "  后端直连:      ${CYAN}http://localhost:$BACKEND_PORT${NC}"
+  fi
+  if [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ]; then
+    echo -e "  前端直连:      ${CYAN}http://localhost:$FRONTEND_PORT${NC}"
+  fi
   echo ""
 fi
 

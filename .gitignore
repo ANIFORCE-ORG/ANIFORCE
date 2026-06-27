@@ -59,11 +59,17 @@ htmlcov/
 
 # ===== 数据文件 =====
 backend/data/images/
-backend/data/sqlite/
+backend/data/sqlite/*
+!backend/data/sqlite/animagus.db
 
 # ==== 日志/临时文件 =====
 log/
 logs/
+drafts/
+aniforce-agent/tests/
+npm_cache/
+uv_cache/
+resources/
 *.log
 .server_pids
 .server_ports

@@ -50,8 +50,8 @@ const handleViewDetail = () => {
   <article class="project-card">
     <!-- Checkbox -->
     <label class="select-check">
-      <input 
-        type="checkbox" 
+      <input
+        type="checkbox"
         class="w-[12px] h-[12px] rounded border-slate-300 text-primary focus:ring-primary/20"
         @change="handleCheckboxChange"
       />

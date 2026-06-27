@@ -138,6 +138,10 @@ class HttpClient {
     return this.request<T>(endpoint, { ...options, method: 'PUT', body })
   }
 
+  async patch<T>(endpoint: string, body?: any, options?: RequestOptions): Promise<T> {
+    return this.request<T>(endpoint, { ...options, method: 'PATCH', body })
+  }
+
   async delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
     return this.request<T>(endpoint, { ...options, method: 'DELETE' })
   }

@@ -82,7 +82,7 @@ const statusFilters = [
 const loadProjects = async () => {
   loading.value = true
   error.value = null
-  
+
   try {
     console.log('开始加载项目数据...')
     const data = await getProjects({ limit: 50 })
@@ -113,7 +113,7 @@ const filteredProjects = computed(() => {
   // 按搜索关键词筛选
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
-    result = result.filter(p => 
+    result = result.filter(p =>
       p.name.toLowerCase().includes(query) ||
       p.tags.some(tag => tag.toLowerCase().includes(query))
     )
@@ -174,19 +174,19 @@ const handleSubmitProject = async (data: any) => {
       console.log('=== 更新项目请求 ===')
       console.log('项目ID:', editingProject.value.id)
       console.log('表单数据:', JSON.stringify(data, null, 2))
-      
+
       const updatedProject = await updateProject(editingProject.value.id, data)
       console.log('项目更新成功:', updatedProject)
-      
+
       // 更新项目列表中的项目
       const index = projects.value.findIndex(p => p.id === editingProject.value!.id)
       if (index !== -1) {
         projects.value[index] = updatedProject
       }
-      
+
       // 显示成功提示
       showToastMessage('项目更新成功！', 'success')
-      
+
       // 关闭弹窗并重置表单
       showCreateModal.value = false
       editingProject.value = null
@@ -195,7 +195,7 @@ const handleSubmitProject = async (data: any) => {
       // 创建模式：创建新项目
       console.log('=== 创建项目请求 ===')
       console.log('表单数据:', JSON.stringify(data, null, 2))
-      
+
       // 添加额外的后端必需字段
       const requestData = {
         ...data,  // 已包含: name, product, target_market, status, start_date, end_date, total_budget, description
@@ -203,25 +203,25 @@ const handleSubmitProject = async (data: any) => {
         game_type: data.product,  // 使用产品作为游戏类型
         tags: []
       }
-      
+
       console.log('请求数据:', JSON.stringify(requestData, null, 2))
-      
+
       const newProject = await createProject(requestData)
       console.log('项目创建成功:', newProject)
-      
+
       // 添加到项目列表
       projects.value.unshift(newProject)
-      
+
       // 关闭项目模态框
       showCreateModal.value = false
-      
+
       // 保存项目ID并打开Campaign模态框
       currentProjectId.value = newProject.id
       showCampaignModal.value = true
-      
+
       // 显示成功提示
       showToastMessage('项目创建成功！请继续创建 Campaign', 'success')
-      
+
       // 重置表单
       createModalRef.value?.resetForm()
     }
@@ -230,15 +230,15 @@ const handleSubmitProject = async (data: any) => {
     console.error('错误对象:', err)
     console.error('错误响应:', err.response)
     console.error('错误数据:', err.response?.data)
-    
+
     // 解析错误信息
     let errorMessage = '创建项目失败，请重试'
-    
+
     if (err.response?.data?.detail) {
       // FastAPI 返回的错误格式
       if (Array.isArray(err.response.data.detail)) {
         // Pydantic 验证错误格式
-        const errors = err.response.data.detail.map((e: any) => 
+        const errors = err.response.data.detail.map((e: any) =>
           `${e.loc.join('.')}: ${e.msg}`
         ).join('; ')
         errorMessage = `数据验证失败: ${errors}`
@@ -252,9 +252,9 @@ const handleSubmitProject = async (data: any) => {
     } else if (typeof err === 'string') {
       errorMessage = err
     }
-    
+
     console.error('最终错误信息:', errorMessage)
-    
+
     // 使用 Toast 显示错误
     showToastMessage(errorMessage, 'error')
   } finally {
@@ -272,40 +272,40 @@ const handleSubmitCampaign = async (data: any) => {
     console.log('=== 创建 Campaign 请求 ===')
     console.log('Campaign 数据:', JSON.stringify(data, null, 2))
     console.log('关联项目 ID:', currentProjectId.value)
-    
+
     if (!currentProjectId.value) {
       showToastMessage('项目 ID 缺失，无法创建 Campaign', 'error')
       return
     }
-    
+
     // 添加 project_id（字段映射已在 CreateCampaignModal 中完成）
     const requestData = {
       project_id: currentProjectId.value,
       ...data
     }
-    
+
     console.log('请求数据:', JSON.stringify(requestData, null, 2))
-    
+
     const newCampaign = await createCampaign(requestData)
     console.log('Campaign 创建成功:', newCampaign)
-    
+
     // 显示成功提示
     showToastMessage('Campaign 创建成功！', 'success')
-    
+
     // 关闭 Campaign 模态框
     showCampaignModal.value = false
     currentProjectId.value = null
-    
+
     // 刷新项目列表
     await loadProjects()
   } catch (err: any) {
     console.error('=== 创建 Campaign 失败 ===', err)
-    
+
     // 解析错误信息
     let errorMessage = '创建 Campaign 失败，请重试'
     if (err.response?.data?.detail) {
       if (Array.isArray(err.response.data.detail)) {
-        const errors = err.response.data.detail.map((e: any) => 
+        const errors = err.response.data.detail.map((e: any) =>
           `${e.loc.join('.')}: ${e.msg}`
         ).join('; ')
         errorMessage = `数据验证失败: ${errors}`
@@ -315,9 +315,9 @@ const handleSubmitCampaign = async (data: any) => {
     } else if (err.message) {
       errorMessage = err.message
     }
-    
+
     showToastMessage(errorMessage, 'error')
-    
+
     // 重置提交状态
     if (campaignModalRef.value) {
       campaignModalRef.value.setSubmitting(false)
@@ -335,7 +335,7 @@ const handleSubmitCampaign = async (data: any) => {
   <!-- 三栏布局容器 -->
   <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航抽屉 -->
-    <SidebarNav 
+    <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
       @switch-panel="switchPanel"
@@ -353,8 +353,8 @@ const handleSubmitCampaign = async (data: any) => {
             <button
               :class="[
                 'px-[9px] py-[6px] rounded text-[10px] font-medium transition-colors',
-                cardViewType === 'compact' 
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                cardViewType === 'compact'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               ]"
               @click="cardViewType = 'compact'"
@@ -364,8 +364,8 @@ const handleSubmitCampaign = async (data: any) => {
             <button
               :class="[
                 'px-[9px] py-[6px] rounded text-[10px] font-medium transition-colors',
-                cardViewType === 'detailed' 
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm' 
+                cardViewType === 'detailed'
+                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
                   : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
               ]"
               @click="cardViewType = 'detailed'"
@@ -464,7 +464,7 @@ const handleSubmitCampaign = async (data: any) => {
     <CreateCampaignModal
       ref="campaignModalRef"
       :show="showCampaignModal"
-      :project-id="currentProjectId"
+      :project-id="currentProjectId || undefined"
       @close="handleCloseCampaignModal"
       @submit="handleSubmitCampaign"
     />

@@ -21,7 +21,7 @@ depends_on: Union[str, Sequence[str], None] = None
 def upgrade() -> None:
     # Add new bm_customer_id column
     op.add_column('sub_account_bindings', sa.Column('bm_customer_id', sa.String(length=100), nullable=True))
-    
+
     # Rename customer_id to sub_account_id
     op.alter_column('sub_account_bindings', 'customer_id', new_column_name='sub_account_id')
 
@@ -29,6 +29,6 @@ def upgrade() -> None:
 def downgrade() -> None:
     # Rename sub_account_id back to customer_id
     op.alter_column('sub_account_bindings', 'sub_account_id', new_column_name='customer_id')
-    
+
     # Drop bm_customer_id column
     op.drop_column('sub_account_bindings', 'bm_customer_id')

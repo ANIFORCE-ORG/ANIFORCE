@@ -9,7 +9,7 @@ interface Props {
 
 interface Emits {
   (e: 'close'): void
-  (e: 'submit', data: ProjectFormData): void
+  (e: 'submit', data: ProjectSubmitData): void
 }
 
 interface ProjectFormData {
@@ -19,6 +19,17 @@ interface ProjectFormData {
   status: string
   start: string
   end: string
+  total_budget: number
+  description: string
+}
+
+interface ProjectSubmitData {
+  name: string
+  product: string
+  target_market: string
+  status: string
+  start_date: string
+  end_date: string
   total_budget: number
   description: string
 }
@@ -44,7 +55,7 @@ const getDefaultEndDate = () => {
 // 格式化日期为 datetime-local input 所需格式
 const formatDateForInput = (dateString: string | undefined | null): string => {
   if (!dateString) return getDefaultStartDate()
-  
+
   try {
     const date = new Date(dateString)
     if (isNaN(date.getTime())) {
@@ -136,23 +147,23 @@ const statusOptions = [
 // 验证表单
 const validateForm = (): boolean => {
   errors.value = {}
-  
+
   if (!formData.value.name.trim()) {
     errors.value.name = '请输入项目名称'
   }
-  
+
   if (!formData.value.product.trim()) {
     errors.value.product = '请输入产品名称'
   }
-  
+
   if (!formData.value.countries) {
     errors.value.countries = '请选择投放国家'
   }
-  
+
   if (!formData.value.total_budget || formData.value.total_budget <= 0) {
     errors.value.total_budget = '总预算必须大于0'
   }
-  
+
   return Object.keys(errors.value).length === 0
 }
 
@@ -185,9 +196,9 @@ const handleSave = () => {
   if (!validateForm()) {
     return
   }
-  
+
   submitting.value = true
-  
+
   // 将前端表单字段映射到后端 API 字段
   const submitData = {
     name: formData.value.name,
@@ -199,7 +210,7 @@ const handleSave = () => {
     total_budget: formData.value.total_budget,
     description: formData.value.description
   }
-  
+
   emit('submit', submitData)
 }
 

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  ANIFORCE 统一停止脚本
-#  用法: ./undeploy_server.sh [--only all|backend|frontend|nginx]
+#  用法: ./undeploy_server.sh [--only all|agent|backend|frontend|nginx]
 # ============================================================
 set -euo pipefail
 
@@ -19,6 +19,7 @@ DEPLOY_CONFIG="$ROOT_DIR/.deploy_config"
 NGINX_PORT=80
 FRONTEND_PORT=3010
 BACKEND_PORT=8010
+AGENT_PORT=8020
 ONLY=all
 USE_SSL=false
 
@@ -36,15 +37,17 @@ while [[ $# -gt 0 ]]; do
     --nginx-port) NGINX_PORT="$2"; shift 2 ;;
     --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
     --backend-port) BACKEND_PORT="$2"; shift 2 ;;
+    --agent-port) AGENT_PORT="$2"; shift 2 ;;
     -h|--help)
       echo "用法: $0 [选项]"
       echo ""
       echo "选项:"
-      echo "  --only           仅停止: all(默认) / backend / frontend / nginx"
+      echo "  --only           仅停止: all(默认) / agent / backend / frontend / nginx"
       echo "  --ssl            停止 HTTPS 模式的 Nginx"
       echo "  --nginx-port     Nginx 端口 (默认: 80)"
       echo "  --frontend-port  前端端口 (默认: 3010)"
       echo "  --backend-port   后端端口 (默认: 8010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo ""
       echo "示例:"
       echo "  # 停止所有服务"
@@ -68,7 +71,7 @@ info "========== 停止 ANIFORCE 服务 (ONLY=$ONLY, USE_SSL=$USE_SSL) =========
 # ============================================================
 #  1. 停止 Nginx
 # ============================================================
-if [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
+if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
   warn "--only=$ONLY：跳过 Nginx 停止"
 else
   info "========== 停止 Nginx =========="
@@ -135,7 +138,7 @@ fi
 # ============================================================
 #  2. 停止后端服务
 # ============================================================
-if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "frontend" ]; then
+if [ "$ONLY" = "agent" ] || [ "$ONLY" = "nginx" ] || [ "$ONLY" = "frontend" ]; then
   warn "--only=$ONLY：跳过后端停止"
 else
   info "========== 停止后端服务 =========="
@@ -162,9 +165,31 @@ else
 fi
 
 # ============================================================
-#  3. 停止前端服务
+#  3. 停止 Agent 服务
 # ============================================================
-if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "backend" ]; then
+if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
+  warn "--only=$ONLY：跳过 Agent 停止"
+else
+  info "========== 停止 Agent 服务 =========="
+
+  if lsof -i :$AGENT_PORT -sTCP:LISTEN &>/dev/null; then
+    info "检测到端口 $AGENT_PORT 上的进程，正在终止..."
+    lsof -ti :$AGENT_PORT | while read -r pid; do
+      kill "$pid" 2>/dev/null && ok "已停止 Agent 进程 PID $pid" && STOPPED=$((STOPPED + 1)) || true
+    done
+    sleep 1
+
+    if lsof -i :$AGENT_PORT -sTCP:LISTEN &>/dev/null; then
+      warn "端口 $AGENT_PORT 仍被占用，强制终止..."
+      lsof -ti :$AGENT_PORT | xargs kill -9 2>/dev/null || true
+    fi
+  fi
+fi
+
+# ============================================================
+#  4. 停止前端服务
+# ============================================================
+if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ]; then
   warn "--only=$ONLY：跳过前端停止"
 else
   info "========== 停止前端服务 =========="
@@ -191,7 +216,7 @@ else
 fi
 
 # ============================================================
-#  4. 清理 PID 文件
+#  5. 清理 PID 文件
 # ============================================================
 info "清理临时文件..."
 rm -f "$ROOT_DIR/.server_pids" "$ROOT_DIR/.server_ports"
@@ -202,7 +227,7 @@ if [ "$ONLY" = "all" ]; then
 fi
 
 # ============================================================
-#  5. 结果
+#  6. 结果
 # ============================================================
 echo ""
 if [ "$STOPPED" -gt 0 ]; then

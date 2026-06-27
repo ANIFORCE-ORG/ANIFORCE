@@ -176,17 +176,17 @@ const formatDateForInput = (dateStr: string | null | undefined): string => {
   if (!dateStr) {
     return new Date().toISOString().slice(0, 16)
   }
-  
+
   // 如果已经是 datetime-local 格式 (YYYY-MM-DDTHH:MM)，直接返回
   if (dateStr.includes('T') && dateStr.length >= 16) {
     return dateStr.slice(0, 16)
   }
-  
+
   // 如果是日期格式 (YYYY-MM-DD)，添加默认时间 00:00
   if (dateStr.length === 10 && dateStr.includes('-')) {
     return `${dateStr}T00:00`
   }
-  
+
   // 尝试解析为 Date 对象
   try {
     const date = new Date(dateStr)
@@ -196,7 +196,7 @@ const formatDateForInput = (dateStr: string | null | undefined): string => {
   } catch (e) {
     console.error('日期格式转换失败:', dateStr, e)
   }
-  
+
   // 默认返回当前时间
   return new Date().toISOString().slice(0, 16)
 }
@@ -229,17 +229,17 @@ watch(() => formData.value.buyingType, (newBuyingType) => {
 const fetchAccountOptions = async () => {
   loadingAccounts.value = true
   console.log('[fetchAccountOptions] 开始获取广告账户列表, channel:', formData.value.channel)
-  
+
   try {
     const accounts = await http.get<any[]>(`/platform-auth/ad-accounts?channel=${formData.value.channel}`)
     console.log('[fetchAccountOptions] 接收到的数据:', accounts)
-    
+
     accountOptions.value = accounts.map((account: any) => ({
       accountId: account.account_id,
       accountName: account.account_name,
       channel: account.channel
     }))
-    
+
     console.log('[fetchAccountOptions] 转换后的账户选项:', accountOptions.value)
   } catch (error) {
     console.error('[fetchAccountOptions] 获取广告账户失败:', error)
@@ -261,24 +261,24 @@ const handleChannelChange = () => {
 // 验证表单
 const validateForm = (): boolean => {
   errors.value = {}
-  
+
   if (!formData.value.campaignName.trim()) {
     errors.value.campaignName = '请输入 Campaign 名称'
   }
-  
+
   if (!formData.value.account) {
     errors.value.account = '请选择广告账户'
   }
-  
+
   if (!formData.value.budget || parseFloat(formData.value.budget) <= 0) {
     errors.value.budget = '请输入有效的预算金额'
   }
-  
+
   // 验证 special_ad_category_country：当 special_ad_categories 不为 None 时必填
   if (formData.value.specialAdCategories !== 'None' && !formData.value.specialAdCategoryCountry) {
     errors.value.specialAdCategoryCountry = '请选择特殊广告类别国家'
   }
-  
+
   // 验证 promoted_object：如果填写了，必须是有效的 JSON
   if (formData.value.promotedObject && formData.value.promotedObject.trim()) {
     try {
@@ -287,7 +287,7 @@ const validateForm = (): boolean => {
       errors.value.promotedObject = '请输入有效的 JSON 格式'
     }
   }
-  
+
   return Object.keys(errors.value).length === 0
 }
 
@@ -329,9 +329,9 @@ const handleSave = () => {
   if (!validateForm()) {
     return
   }
-  
+
   submitting.value = true
-  
+
   // 将前端表单字段映射到后端 API 字段
   const submitData: any = {
     id: props.initialData?.id,  // 编辑模式时包含 ID
@@ -351,7 +351,7 @@ const handleSave = () => {
     start_date: formData.value.start_date,
     end_date: formData.value.end_date
   }
-  
+
   emit('submit', submitData)
 }
 

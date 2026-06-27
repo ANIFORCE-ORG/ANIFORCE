@@ -39,12 +39,28 @@ class Material(Base):
     status: Mapped[MaterialStatus] = mapped_column(Enum(MaterialStatus), nullable=False, default=MaterialStatus.READY, index=True)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    poster_url: Mapped[str | None] = mapped_column(Text, nullable=True)
+    preview_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     
     # 预估数据
     ctr_estimate: Mapped[float | None] = mapped_column(Float, nullable=True)
     tags: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 数组
     
     # 元数据
+    media_kind: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    format: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    width: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    height: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    ratio: Mapped[str | None] = mapped_column(String(20), nullable=True)
+    source: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    creator: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    rights: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    platforms: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 数组
+    review_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    source_account: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    placements: Mapped[str | None] = mapped_column(Text, nullable=True)  # JSON 数组
+    score: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    fatigue: Mapped[int | None] = mapped_column(Integer, nullable=True)
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)

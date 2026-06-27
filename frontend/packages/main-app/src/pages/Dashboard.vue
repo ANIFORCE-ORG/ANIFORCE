@@ -1,16 +1,11 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
-const auth = useAuthStore()
-
 const activeSession = ref('sess_g001')
-const chatInput = ref('')
 const timeFilter = ref('7d')
 
 const sessions = ref([
@@ -19,37 +14,6 @@ const sessions = ref([
   { id: 'sess_g003', name: '东南亚市场测试', active: false },
   { id: 'sess_d001', name: 'DramaBox新剧推广', active: false }
 ])
-
-const messages = ref([
-  {
-    role: 'assistant',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: `您好${auth.user?.name || '李明'}！我是ANIFORCE智能营销助手。
-
-当前投放概览：
-• 📊 Candy Blast：消耗$52,300，ROI 1.88x
-• 🎬 DramaBox：消耗$98,700，ROI 2.15x
-
-我可以帮您：
-• 查看营销数据概览
-• 创建和管理项目
-• 规划和执行广告投放
-• 生成和管理创意素材
-• 分析数据报表
-
-请告诉我您需要什么帮助？`
-  }
-])
-
-const quickHints = [
-  '数据概览',
-  '项目列表',
-  '广告系列',
-  '生成创意',
-  '热门素材',
-  '素材二创'
-]
 
 const stats = ref({
   spend: { value: '$151,000', label: '总消耗', change: '+5%', trend: 'up' },
@@ -110,15 +74,6 @@ const switchPanel = (item: any) => {
 const switchSession = (session: any) => {
   activeSession.value = session.id
   sessions.value.forEach(s => s.active = s.id === session.id)
-}
-
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
 }
 
 const handleRefresh = () => {
@@ -249,14 +204,5 @@ const handleAlertAction = (alert: any) => {
       </div>
     </main>
 
-    <!-- 右侧对话区 -->
-    <ChatPanel
-      :messages="messages"
-      :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
-    />
   </div>
 </template>

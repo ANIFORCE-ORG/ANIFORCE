@@ -2,35 +2,16 @@
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 
 const activeSession = ref('sess_m001')
-const chatInput = ref('')
-
 const sessions = ref([
   { id: 'sess_m001', name: '数据分析咨询', active: true },
   { id: 'sess_m002', name: '优化建议', active: false },
   { id: 'sess_m003', name: '效果监控', active: false },
 ])
-
-const messages = ref([
-  {
-    role: 'assistant',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: '您好！我是ANIFORCE智能助手。\n\n我可以帮您分析投放数据、监控广告效果、提供优化建议。请告诉我您需要什么帮助？'
-  }
-])
-
-const quickHints = [
-  '分析投放效果',
-  '优化建议',
-  '数据对比',
-  '趋势预测'
-]
 
 const switchPanel = (item: any) => {
   if (item.path) {
@@ -43,20 +24,6 @@ const switchSession = (session: any) => {
   sessions.value.forEach(s => s.active = s.id === session.id)
 }
 
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  messages.value.push({
-    role: 'user',
-    author: '用户',
-    time: '刚刚',
-    content: message
-  })
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
-}
 </script>
 
 <template>
@@ -92,14 +59,5 @@ const handleHintClick = (hint: string) => {
       </div>
     </main>
 
-    <!-- 右侧对话区 -->
-    <ChatPanel
-      :messages="messages"
-      :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
-    />
   </div>
 </template>

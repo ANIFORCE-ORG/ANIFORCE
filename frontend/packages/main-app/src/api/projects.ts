@@ -7,6 +7,7 @@ import { http } from './http'
 export interface Project {
   id: string
   name: string
+  product?: string
   description?: string
   game_type: string
   target_market: string

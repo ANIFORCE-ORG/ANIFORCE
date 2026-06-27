@@ -3,7 +3,6 @@ import { ref, computed, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import ChatPanel from '@/components/layout/ChatPanel.vue'
 import { getCampaigns, updateCampaignStatus, type Campaign } from '@/api'
 import { navItems } from '@/config/navigation'
 
@@ -11,7 +10,6 @@ const router = useRouter()
 const auth = useAuthStore()
 
 const activeSession = ref('sess_c001')
-const chatInput = ref('')
 const statusFilter = ref('all')
 const searchQuery = ref('')
 const projectFilter = ref('all')
@@ -25,23 +23,6 @@ const sessions = ref([
   { id: 'sess_c002', name: '预算优化建议', active: false },
   { id: 'sess_c003', name: '投放策略分析', active: false },
 ])
-
-// 聊天消息
-const messages = ref([
-  {
-    role: 'ai',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: '您好！我可以帮您创建广告计划、优化投放策略或分析广告数据。请问需要什么帮助？'
-  }
-])
-
-// 快捷提示
-const quickHints = [
-  '创建新的广告计划',
-  '优化现有广告',
-  '分析广告数据'
-]
 
 // 广告数据（从后端 API 获取）
 const campaigns = ref<Campaign[]>([])
@@ -128,16 +109,6 @@ const switchSession = (session: any) => {
   sessions.value.forEach(s => {
     s.active = s.id === session.id
   })
-}
-
-// 发送消息
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-}
-
-// 快捷提示点击
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
 }
 
 // 创建广告
@@ -379,15 +350,5 @@ const getStatusColor = (status: string) => {
       </div>
     </main>
 
-    <!-- 右侧对话区 -->
-    <ChatPanel
-      :messages="messages"
-      :quick-hints="quickHints"
-      :chat-input="chatInput"
-      :sessions="sessions"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @switch-session="switchSession"
-    />
   </div>
 </template>

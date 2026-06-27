@@ -19,12 +19,12 @@ depends_on = None
 def upgrade() -> None:
     # 为 projects 表添加新字段
     op.add_column('projects', sa.Column('product', sa.String(255), nullable=True, comment='产品名称，例如：休闲消除手游'))
-    
+
     # 为 campaigns 表添加平台绑定字段
     op.add_column('campaigns', sa.Column('account_id', sa.String(100), nullable=True, comment='广告账户ID，对应 sub_account_bindings.sub_account_id'))
     op.add_column('campaigns', sa.Column('platform_campaign_id', sa.String(100), nullable=True, comment='平台广告系列ID，用于与Meta/Google/TikTok平台创建的Campaign ID进行绑定同步'))
     op.add_column('campaigns', sa.Column('countries', sa.String(500), nullable=True, comment='投放国家，例如：美国 / 加拿大'))
-    
+
     # 为 campaigns 表添加 Meta 广告特定字段
     op.add_column('campaigns', sa.Column('objective', sa.String(100), nullable=True, comment='广告目标，例如：App promotion, Conversions, Traffic'))
     op.add_column('campaigns', sa.Column('buying_type', sa.String(50), nullable=True, comment='购买类型，例如：Auction, Reserved'))
@@ -34,7 +34,7 @@ def upgrade() -> None:
     op.add_column('campaigns', sa.Column('budget_type', sa.String(50), nullable=True, comment='预算类型：Daily budget / Lifetime budget'))
     op.add_column('campaigns', sa.Column('bid_strategy', sa.String(100), nullable=True, comment='出价策略：Lowest cost, Cost cap, Bid cap, ROAS goal'))
     op.add_column('campaigns', sa.Column('spend_limit', sa.Float(), nullable=True, comment='花费限制金额'))
-    
+
     # 为 platform_campaign_id 添加索引以提高查询性能
     op.create_index('ix_campaigns_platform_campaign_id', 'campaigns', ['platform_campaign_id'])
 
@@ -42,7 +42,7 @@ def upgrade() -> None:
 def downgrade() -> None:
     # 删除索引
     op.drop_index('ix_campaigns_platform_campaign_id', 'campaigns')
-    
+
     # 删除 campaigns 表的新字段
     op.drop_column('campaigns', 'spend_limit')
     op.drop_column('campaigns', 'bid_strategy')
@@ -55,6 +55,6 @@ def downgrade() -> None:
     op.drop_column('campaigns', 'countries')
     op.drop_column('campaigns', 'platform_campaign_id')
     op.drop_column('campaigns', 'account_id')
-    
+
     # 删除 projects 表的新字段
     op.drop_column('projects', 'product')

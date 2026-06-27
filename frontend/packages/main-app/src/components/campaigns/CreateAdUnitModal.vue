@@ -268,10 +268,18 @@ const handleClose = () => {
 const validateForm = (): boolean => {
   errors.value = {}
 
+<<<<<<< HEAD
+=======
+  if (!formData.value.taskName.trim()) {
+    errors.value.taskName = '请输入任务名称'
+  }
+
+>>>>>>> feat/openai-agent-service-split-master-compat-260624
   if (!formData.value.adsetName.trim()) {
     errors.value.adsetName = '请输入 AdSet 名称'
   }
 
+<<<<<<< HEAD
   if (formData.value.budgetType === 'daily') {
     if (!formData.value.dailyBudget || formData.value.dailyBudget < 1) {
       errors.value.dailyBudget = '每日预算最低 $1.00'
@@ -288,10 +296,17 @@ const validateForm = (): boolean => {
     }
   }
 
+=======
+  if (!formData.value.budget || parseFloat(formData.value.budget) <= 0) {
+    errors.value.budget = '请输入有效的预算金额'
+  }
+
+>>>>>>> feat/openai-agent-service-split-master-compat-260624
   if (!formData.value.adName.trim()) {
     errors.value.adName = '请输入 Ad 名称'
   }
 
+<<<<<<< HEAD
   if (!formData.value.creativeName.trim()) {
     errors.value.creativeName = '请输入 Creative 名称'
   }
@@ -335,6 +350,8 @@ const validateForm = (): boolean => {
     errors.value.trackingSpecs = 'Tracking Specs 必须是合法 JSON'
   }
 
+=======
+>>>>>>> feat/openai-agent-service-split-master-compat-260624
   return Object.keys(errors.value).length === 0
 }
 
@@ -342,6 +359,13 @@ const handleSave = async () => {
   if (!validateForm()) {
     return
   }
+<<<<<<< HEAD
+=======
+
+  submitting.value = true
+  emit('submit', formData.value)
+}
+>>>>>>> feat/openai-agent-service-split-master-compat-260624
 
   submitting.value = true
 

@@ -1,9 +1,12 @@
 """项目管理 API"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from app.repositories.protocols import ProjectRepository
 from app.repositories.factory import get_project_repo
+from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 from app.api.deps import get_current_user
+from app.services.idempotency_service import IDEMPOTENCY_HEADER, IdempotencyService
+from app.services.session_state_mutation import record_entity_change
 
 router = APIRouter(prefix="/projects", tags=["projects"])
 
@@ -50,28 +53,35 @@ async def get_project(
     project = await project_repo.get_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     # 验证权限
     if project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     return project
 
 
 @router.post("")
 async def create_project(
+    http_request: Request,
     request: CreateProjectRequest,
     current_user: dict = Depends(get_current_user),
     project_repo: ProjectRepository = Depends(get_project_repo),
 ):
     """创建新项目"""
     import logging
-    
+
     logger = logging.getLogger(__name__)
-    
+
     try:
+        idempotency_key = http_request.headers.get(IDEMPOTENCY_HEADER)
+        idempotency = IdempotencyService(project_repo.session)
+        cached = await idempotency.get_response(current_user["id"], idempotency_key)
+        if cached is not None:
+            return cached
+
         logger.info(f"Creating project: {request.name} for user: {current_user['id']}")
-        
+
         project = await project_repo.create(
             user_id=current_user["id"],
             name=request.name,
@@ -86,11 +96,34 @@ async def create_project(
             end_date=request.end_date,
             status=request.status or "active",
         )
-        
+
+        session_id = http_request.headers.get("X-Agent-Session-Id")
+        if session_id:
+            await record_entity_change(
+                repo=SqliteSessionStateRepository(project_repo.session),
+                session_id=session_id,
+                user_id=current_user["id"],
+                entity_type="project",
+                entity_id=project["id"],
+                action="created",
+                new_value={"name": project["name"], "total_budget": project["total_budget"]},
+                run_id=http_request.headers.get("X-Agent-Run-Id"),
+                tool_call_id=http_request.headers.get("X-Agent-Tool-Call-Id"),
+                linked_entity_updates={"project_id": project["id"]},
+            )
+
+        await idempotency.save_response(
+            current_user["id"],
+            idempotency_key,
+            http_request.method,
+            str(http_request.url.path),
+            project,
+        )
+        await project_repo.session.commit()
         logger.info(f"Project created with ID: {project['id']}")
-        
+
         return project
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -120,16 +153,16 @@ async def update_project(
 ):
     """更新项目"""
     import logging
-    
+
     logger = logging.getLogger(__name__)
-    
+
     project = await project_repo.get_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     if project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     # 构建更新数据
     update_data = {}
     if request.name is not None:
@@ -148,11 +181,11 @@ async def update_project(
         update_data["total_budget"] = request.total_budget
     if request.description is not None:
         update_data["description"] = request.description
-    
+
     logger.info(f"Updating project {project_id} with data: {update_data}")
-    
+
     await project_repo.update(project_id, **update_data)
-    
+
     # 返回更新后的项目
     updated_project = await project_repo.get_by_id(project_id)
     return updated_project
@@ -168,9 +201,9 @@ async def delete_project(
     project = await project_repo.get_by_id(project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    
+
     if project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     await project_repo.delete(project_id)
     return {"message": "Project deleted successfully"}

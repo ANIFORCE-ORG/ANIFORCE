@@ -16,17 +16,17 @@ class ProjectRepository(Protocol):
     async def create(
         self, user_id: str, name: str, total_budget: float, **kwargs
     ) -> dict: ...
-    
+
     async def get_by_id(self, project_id: str) -> dict | None: ...
-    
+
     async def list_by_user(
         self, user_id: str, status: str | None = None, limit: int = 20
     ) -> list[dict]: ...
-    
+
     async def update(self, project_id: str, **kwargs) -> None: ...
-    
+
     async def update_spent(self, project_id: str, amount: float) -> None: ...
-    
+
     async def delete(self, project_id: str) -> None: ...
 
 
@@ -44,29 +44,31 @@ class MaterialRepository(Protocol):
     async def create(
         self, user_id: str, name: str, type: str, url: str, **kwargs
     ) -> dict: ...
-    
+
     async def get_by_id(self, material_id: str) -> dict | None: ...
-    
+
     async def list_by_user(
         self, user_id: str, type: str | None = None, limit: int = 50
     ) -> list[dict]: ...
-    
+
     async def list_by_project(
         self, project_id: str, limit: int = 50
     ) -> list[dict]: ...
-    
+
     async def list_by_campaign(
         self, campaign_id: str, limit: int = 50
     ) -> list[dict]: ...
-    
+
+    async def update(self, material_id: str, **kwargs) -> dict: ...
+
     async def add_to_project(self, material_id: str, project_id: str) -> None: ...
-    
+
     async def remove_from_project(self, material_id: str, project_id: str) -> None: ...
-    
+
     async def add_to_campaign(self, material_id: str, campaign_id: str) -> None: ...
-    
+
     async def remove_from_campaign(self, material_id: str, campaign_id: str) -> None: ...
-    
+
     async def delete(self, material_id: str) -> None: ...
 
 
@@ -76,25 +78,25 @@ class CampaignRepository(Protocol):
     async def create(
         self, project_id: str, name: str, platform: str, budget: float, **kwargs
     ) -> dict: ...
-    
+
     async def get_by_id(self, campaign_id: str) -> dict | None: ...
-    
+
     async def list_by_project(
         self, project_id: str, status: str | None = None, limit: int = 20
     ) -> list[dict]: ...
-    
+
     async def update(self, campaign_id: str, **kwargs) -> dict: ...
-    
+
     async def update_status(self, campaign_id: str, status: str) -> None: ...
-    
+
     async def update_spent(self, campaign_id: str, amount: float) -> None: ...
-    
+
     async def add_material(self, campaign_id: str, material_id: str) -> None: ...
-    
+
     async def remove_material(self, campaign_id: str, material_id: str) -> None: ...
-    
+
     async def get_materials(self, campaign_id: str) -> list[dict]: ...
-    
+
     async def delete(self, campaign_id: str) -> None: ...
 
 
