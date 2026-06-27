@@ -2,9 +2,9 @@
 # ============================================================
 #  ANIFORCE 统一部署脚本（通过 Nginx 反向代理）
 #  用法:
-#    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80] 
+#    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80]
 #                       [--frontend-port 3010] [--backend-port 8010] [--agent-port 8020]
-#                       [--only all|agent|backend|frontend|nginx] [--skip-install]
+#                       [--only all|agent|backend|frontend|nginx] [--skip-install] [--without-agent]
 # ============================================================
 set -euo pipefail
 
@@ -79,6 +79,7 @@ kill_port_process() {
 MODE=local
 ONLY=all
 SKIP_INSTALL=0
+WITHOUT_AGENT=0
 NGINX_PORT=80
 FRONTEND_PORT=3010
 BACKEND_PORT=8010
@@ -100,6 +101,7 @@ while [[ $# -gt 0 ]]; do
     --agent-port) AGENT_PORT="$2"; shift 2 ;;
     --only) ONLY="$2"; shift 2 ;;
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
+    --without-agent) WITHOUT_AGENT=1; shift 1 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
     --ssl) USE_SSL=true; shift 1 ;;
     --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
@@ -114,6 +116,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo "  --only           仅启动: all(默认) / agent / backend / frontend / nginx"
       echo "  --skip-install   跳过依赖安装"
+      echo "  --without-agent  跳过 Agent 服务部署"
       echo "  --demo           启用 Demo 模式"
       echo "  --ssl            启用 HTTPS (使用 nginx-https.conf)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
@@ -142,8 +145,11 @@ fi
 if [ "$ONLY" != "all" ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "nginx" ]; then
   fail "--only 仅支持 all/agent/backend/frontend/nginx"
 fi
+if [ "$WITHOUT_AGENT" -eq 1 ] && [ "$ONLY" = "agent" ]; then
+  fail "--without-agent 不能与 --only agent 同时使用"
+fi
 
-info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, USE_SSL=$USE_SSL"
+info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, USE_SSL=$USE_SSL, WITHOUT_AGENT=$WITHOUT_AGENT"
 info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT"
 
 # ---------- 项目根目录 ----------
@@ -190,6 +196,7 @@ echo "AGENT_PORT=$AGENT_PORT" >> "$DEPLOY_CONFIG"
 echo "MODE=$MODE" >> "$DEPLOY_CONFIG"
 echo "ONLY=$ONLY" >> "$DEPLOY_CONFIG"
 echo "USE_SSL=$USE_SSL" >> "$DEPLOY_CONFIG"
+echo "WITHOUT_AGENT=$WITHOUT_AGENT" >> "$DEPLOY_CONFIG"
 
 # ============================================================
 #  1. 检查 Nginx
@@ -226,6 +233,8 @@ elif [ "$ONLY" = "backend" ]; then
   warn "--only=backend：跳过 Agent 启动"
 elif [ "$ONLY" = "frontend" ]; then
   warn "--only=frontend：跳过 Agent 启动"
+elif [ "$WITHOUT_AGENT" -eq 1 ]; then
+  warn "--without-agent：跳过 Agent 启动"
 else
   info "========== 启动 Agent 服务 =========="
 
@@ -460,7 +469,7 @@ if [ "$ONLY" = "all" ] || [ "$ONLY" = "nginx" ]; then
 fi
 
 if [ "$ONLY" != "nginx" ]; then
-  if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+  if [ "$WITHOUT_AGENT" -eq 0 ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
     echo -e "  Agent 直连:     ${CYAN}http://localhost:$AGENT_PORT${NC}"
   fi
   if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
