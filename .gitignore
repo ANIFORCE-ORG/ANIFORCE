@@ -66,8 +66,7 @@ backend/data/sqlite/*
 log/
 logs/
 drafts/
-aniforce-agent/tests/manual/outputs/
-aniforce-agent/tests/manual/runtime/
+aniforce-agent/tests/
 npm_cache/
 uv_cache/
 resources/
