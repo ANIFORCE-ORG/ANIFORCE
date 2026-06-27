@@ -64,6 +64,9 @@ class Settings(BaseSettings):
     FRONTEND_BASE_URL: str = "http://localhost:3010"
     BACKEND_BASE_URL: str = "http://localhost:8010"
 
+    # Agent Service（后端代理 /api/v1/agent/* 时使用）
+    AGENT_SERVICE_URL: str = "http://127.0.0.1:8020"
+
     # OAuth 回调地址配置（用于第三方平台 OAuth 重定向）
     # 默认使用生产域名，本地开发时可设置为 http://localhost:8010
     OAUTH_REDIRECT_BASE_URL: str = "https://www.aniforce.cc"
