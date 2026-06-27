@@ -68,6 +68,7 @@ logs/
 drafts/
 npm_cache/
 uv_cache/
+resources/
 *.log
 .server_pids
 .server_ports
