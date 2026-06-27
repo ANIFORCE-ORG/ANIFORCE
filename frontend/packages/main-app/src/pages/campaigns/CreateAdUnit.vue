@@ -71,23 +71,23 @@ const adStatusOptions = ['Draft', 'Review', 'Active', 'Paused']
 // 验证表单
 const validateForm = (): boolean => {
   errors.value = {}
-  
+
   if (!formData.value.taskName.trim()) {
     errors.value.taskName = '请输入任务名称'
   }
-  
+
   if (!formData.value.adsetName.trim()) {
     errors.value.adsetName = '请输入 Ad Set 名称'
   }
-  
+
   if (!formData.value.budget || parseFloat(formData.value.budget) <= 0) {
     errors.value.budget = '请输入有效的预算金额'
   }
-  
+
   if (!formData.value.adName.trim()) {
     errors.value.adName = '请输入广告名称'
   }
-  
+
   return Object.keys(errors.value).length === 0
 }
 
@@ -108,16 +108,16 @@ const handleSave = async () => {
   if (!validateForm()) {
     return
   }
-  
+
   submitting.value = true
-  
+
   try {
     // TODO: 调用 API 创建 Ad Unit
     console.log('创建 Ad Unit:', formData.value)
-    
+
     // 模拟 API 调用
     await new Promise(resolve => setTimeout(resolve, 1000))
-    
+
     // 成功后返回上一页
     router.back()
   } catch (err: any) {

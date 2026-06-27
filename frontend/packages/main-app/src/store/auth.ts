@@ -38,7 +38,7 @@ export const useAuthStore = defineStore('auth', () => {
   // 从localStorage初始化状态
   const storedUser = localStorage.getItem(AUTH_STORAGE_KEY)
   const storedToken = localStorage.getItem(TOKEN_STORAGE_KEY)
-  
+
   const user = ref<User | null>(storedUser ? JSON.parse(storedUser) : null)
   const token = ref<string | null>(storedToken)
 
@@ -69,7 +69,7 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       // 调用后端登录API
       const response = await axios.post<LoginResponse>('/api/v1/auth/login', credentials)
-      
+
       if (response.data.success && response.data.data) {
         console.log('[Auth] Login response data:', response.data.data)
         console.log('[Auth] User data:', response.data.data.user)
@@ -78,20 +78,20 @@ export const useAuthStore = defineStore('auth', () => {
         token.value = response.data.data.access_token
         return response.data
       }
-      
+
       return {
         success: false,
         message: response.data.message || '登录失败'
       }
     } catch (error: any) {
       console.error('登录错误:', error)
-      
+
       // 根据 HTTP 状态码和错误详情返回不同的错误信息
       const status = error.response?.status
       const detail = error.response?.data?.detail
-      
+
       let errorMessage = '网络错误，请稍后重试'
-      
+
       if (status === 404) {
         // 邮箱未注册
         errorMessage = detail || '该邮箱尚未注册'
@@ -105,7 +105,7 @@ export const useAuthStore = defineStore('auth', () => {
         // 使用 message 字段
         errorMessage = error.response.data.message
       }
-      
+
       return {
         success: false,
         message: errorMessage
@@ -118,13 +118,13 @@ export const useAuthStore = defineStore('auth', () => {
     try {
       // 调用后端注册API
       const response = await axios.post<LoginResponse>('/api/v1/auth/register', credentials)
-      
+
       if (response.data.success && response.data.data) {
         user.value = response.data.data.user
         token.value = response.data.data.access_token
         return response.data
       }
-      
+
       return {
         success: false,
         message: response.data.message || '注册失败'
@@ -157,7 +157,7 @@ export const useAuthStore = defineStore('auth', () => {
   // 验证token有效性
   async function validateToken(): Promise<boolean> {
     if (!token.value) return false
-    
+
     try {
       const response = await axios.get('/api/v1/auth/validate')
       return response.data.success
@@ -168,13 +168,13 @@ export const useAuthStore = defineStore('auth', () => {
     }
   }
 
-  return { 
-    user, 
-    token, 
-    isLoggedIn, 
+  return {
+    user,
+    token,
+    isLoggedIn,
     login,
     register,
-    fakeLogin, 
+    fakeLogin,
     logout,
     validateToken
   }

@@ -64,15 +64,15 @@ onMounted(async () => {
 const loadProjectData = async () => {
   loading.value = true
   error.value = null
-  
+
   try {
     console.log('加载项目详情:', projectId.value)
-    
+
     // 加载项目详情
     const projectData = await getProjectDetail(projectId.value)
     project.value = projectData
     console.log('项目详情加载成功:', projectData)
-    
+
     // 加载关联的广告投放
     const campaignsData = await getProjectCampaigns(projectId.value)
     campaigns.value = campaignsData
@@ -118,14 +118,14 @@ const handleSubmitCampaign = async (data: any) => {
     const isEdit = !!data.id
     console.log(`=== ${isEdit ? '更新' : '创建'} Campaign 请求 ===`)
     console.log('Campaign 数据:', JSON.stringify(data, null, 2))
-    
+
     let result
     if (isEdit) {
       // 编辑模式：更新 Campaign
       console.log('Campaign ID:', data.id)
       result = await updateCampaign(data.id, data)
       console.log('Campaign 更新成功:', result)
-      
+
       // 显示成功提示
       toastMessage.value = 'Campaign 更新成功！'
       toastType.value = 'success'
@@ -133,7 +133,7 @@ const handleSubmitCampaign = async (data: any) => {
     } else {
       // 创建模式：创建新 Campaign
       console.log('关联项目 ID:', projectId.value)
-      
+
       if (!projectId.value) {
         console.error('项目 ID 缺失，无法创建 Campaign')
         toastMessage.value = '项目 ID 缺失，无法创建 Campaign'
@@ -141,37 +141,37 @@ const handleSubmitCampaign = async (data: any) => {
         showToast.value = true
         return
       }
-      
+
       // 添加 project_id（字段映射已在 CreateCampaignModal 中完成）
       const requestData = {
         project_id: projectId.value,
         ...data
       }
-      
+
       console.log('请求数据:', JSON.stringify(requestData, null, 2))
       result = await createCampaign(requestData)
       console.log('Campaign 创建成功:', result)
-      
+
       // 显示成功提示
       toastMessage.value = 'Campaign 创建成功！'
       toastType.value = 'success'
       showToast.value = true
     }
-    
+
     // 关闭 Campaign 模态框
     showCampaignModal.value = false
     editingCampaign.value = null
-    
+
     // 刷新 Campaign 列表
     await loadCampaigns()
   } catch (err: any) {
     console.error(`=== ${data.id ? '更新' : '创建'} Campaign 失败 ===`, err)
-    
+
     // 显示错误提示
     toastMessage.value = `${data.id ? '更新' : '创建'} Campaign 失败：${err.message || '未知错误'}`
     toastType.value = 'error'
     showToast.value = true
-    
+
     // 重置提交状态
     if (campaignModalRef.value) {
       campaignModalRef.value.setSubmitting(false)
@@ -217,7 +217,7 @@ const handleCloseToast = () => {
   <!-- 三栏布局容器 -->
   <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航抽屉 -->
-    <SidebarNav 
+    <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
       active-panel="projects"
@@ -252,26 +252,26 @@ const handleCloseToast = () => {
               <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed mt-[4px]">{{ project?.description || '暂无描述' }}</p>
             </div>
           </div>
-          
+
           <div class="grid grid-cols-4 gap-[8px]">
             <!-- 产品类型 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">产品类型</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.game_type || '-' }}</strong>
             </div>
-            
+
             <!-- 目标市场 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">目标市场</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.target_market || '-' }}</strong>
             </div>
-            
+
             <!-- 总预算 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">总预算</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">${{ project?.total_budget.toLocaleString() || '-' }}</strong>
             </div>
-            
+
             <!-- 已消耗 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">已消耗</span>
@@ -292,13 +292,13 @@ const handleCloseToast = () => {
                 <span v-if="!project?.tags || project.tags.length === 0" class="text-[9px] text-slate-400 dark:text-slate-500">-</span>
               </div>
             </div>
-            
+
             <!-- 开始/结束日期 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">开始 / 结束</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.start_date || '-' }} / {{ project?.end_date || '-' }}</strong>
             </div>
-            
+
             <!-- 负责人 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">负责人</span>
@@ -310,7 +310,7 @@ const handleCloseToast = () => {
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">状态</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ project?.status || '-' }}</strong>
             </div>
-            
+
           </div>
         </aside>
 
@@ -326,7 +326,7 @@ const handleCloseToast = () => {
               创建广告任务
             </button>
           </div>
-          
+
           <div class="space-y-[9px]">
             <CampaignCardDetailed
               v-for="campaign in campaigns"

@@ -1,11 +1,14 @@
 """广告投放管理 API"""
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.protocols import CampaignRepository, ProjectRepository
 from app.repositories.factory import get_campaign_repo, get_project_repo
+from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 from app.config.database import get_db
 from app.api.deps import get_current_user
+from app.services.idempotency_service import IDEMPOTENCY_HEADER, IdempotencyService
+from app.services.session_state_mutation import record_entity_change
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
 
@@ -83,7 +86,7 @@ async def list_campaigns(
             raise HTTPException(status_code=404, detail="Project not found")
         if project["user_id"] != current_user["id"]:
             raise HTTPException(status_code=403, detail="Permission denied")
-        
+
         campaigns = await campaign_repo.list_by_project(
             project_id=project_id,
             status=status,
@@ -103,7 +106,7 @@ async def list_campaigns(
             for campaign in project_campaigns:
                 campaign["project_name"] = project["name"]
             campaigns.extend(project_campaigns)
-    
+
     return {"campaigns": campaigns}
 
 
@@ -118,20 +121,21 @@ async def get_campaign(
     campaign = await campaign_repo.get_by_id(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # 验证权限
     project = await project_repo.get_by_id(campaign["project_id"])
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     # 添加项目名称
     campaign["project_name"] = project["name"]
-    
+
     return campaign
 
 
 @router.post("")
 async def create_campaign(
+    http_request: Request,
     request: CreateCampaignRequest,
     current_user: dict = Depends(get_current_user),
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
@@ -139,13 +143,19 @@ async def create_campaign(
     session: AsyncSession = Depends(get_db),
 ):
     """创建新广告投放"""
+    idempotency_key = http_request.headers.get(IDEMPOTENCY_HEADER)
+    idempotency = IdempotencyService(session)
+    cached = await idempotency.get_response(current_user["id"], idempotency_key)
+    if cached is not None:
+        return cached
+
     # 验证项目权限
     project = await project_repo.get_by_id(request.project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
     if project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     campaign = await campaign_repo.create(
         project_id=request.project_id,
         name=request.name,
@@ -165,10 +175,39 @@ async def create_campaign(
         start_date=request.start_date,
         end_date=request.end_date,
     )
-    
+
+    session_id = http_request.headers.get("X-Agent-Session-Id")
+    if session_id:
+        state_repo = SqliteSessionStateRepository(session)
+        current_state = await state_repo.get(session_id, current_user["id"])
+        campaign_ids = []
+        if current_state:
+            campaign_ids = list((current_state.get("linked_entities") or {}).get("campaign_ids") or [])
+        if campaign["id"] not in campaign_ids:
+            campaign_ids.append(campaign["id"])
+        await record_entity_change(
+            repo=state_repo,
+            session_id=session_id,
+            user_id=current_user["id"],
+            entity_type="campaign",
+            entity_id=campaign["id"],
+            action="created",
+            new_value={"name": campaign["name"], "budget": campaign["budget"], "platform": campaign["platform"]},
+            run_id=http_request.headers.get("X-Agent-Run-Id"),
+            tool_call_id=http_request.headers.get("X-Agent-Tool-Call-Id"),
+            linked_entity_updates={"project_id": campaign["project_id"], "campaign_ids": campaign_ids},
+        )
+
+    await idempotency.save_response(
+        current_user["id"],
+        idempotency_key,
+        http_request.method,
+        str(http_request.url.path),
+        campaign,
+    )
     # 提交事务以确保数据持久化
     await session.commit()
-    
+
     return campaign
 
 
@@ -185,12 +224,12 @@ async def update_campaign(
     campaign = await campaign_repo.get_by_id(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # 验证权限
     project = await project_repo.get_by_id(campaign["project_id"])
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     # 准备更新数据，只更新非 None 的字段
     update_data = {}
     if request.name is not None:
@@ -225,17 +264,18 @@ async def update_campaign(
         update_data["start_date"] = request.start_date
     if request.end_date is not None:
         update_data["end_date"] = request.end_date
-    
+
     # 调用 repository 更新方法
     updated_campaign = await campaign_repo.update(campaign_id, **update_data)
     await session.commit()
-    
+
     return updated_campaign
 
 
 @router.put("/{campaign_id}/status")
 async def update_campaign_status(
     campaign_id: str,
+    http_request: Request,
     request: UpdateStatusRequest,
     current_user: dict = Depends(get_current_user),
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
@@ -243,18 +283,48 @@ async def update_campaign_status(
     session: AsyncSession = Depends(get_db),
 ):
     """更新广告投放状态"""
+    idempotency_key = http_request.headers.get(IDEMPOTENCY_HEADER)
+    idempotency = IdempotencyService(session)
+    cached = await idempotency.get_response(current_user["id"], idempotency_key)
+    if cached is not None:
+        return cached
+
     campaign = await campaign_repo.get_by_id(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # 验证权限
     project = await project_repo.get_by_id(campaign["project_id"])
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     await campaign_repo.update_status(campaign_id, request.status)
+    session_id = http_request.headers.get("X-Agent-Session-Id")
+    if session_id:
+        await record_entity_change(
+            repo=SqliteSessionStateRepository(session),
+            session_id=session_id,
+            user_id=current_user["id"],
+            entity_type="campaign",
+            entity_id=campaign_id,
+            action="updated",
+            field="status",
+            old_value=campaign.get("status"),
+            new_value={"name": campaign.get("name"), "status": request.status},
+            run_id=http_request.headers.get("X-Agent-Run-Id"),
+            tool_call_id=http_request.headers.get("X-Agent-Tool-Call-Id"),
+            rollbackable=True,
+        )
+    response = {"message": "Campaign status updated successfully"}
+    await idempotency.save_response(
+        current_user["id"],
+        idempotency_key,
+        http_request.method,
+        str(http_request.url.path),
+        response,
+    )
     await session.commit()  # 提交事务到数据库
-    return {"message": "Campaign status updated successfully"}
+    return response
 
 
 @router.get("/{campaign_id}/materials")
@@ -268,12 +338,12 @@ async def get_campaign_materials(
     campaign = await campaign_repo.get_by_id(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # 验证权限
     project = await project_repo.get_by_id(campaign["project_id"])
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     materials = await campaign_repo.get_materials(campaign_id)
     return {"materials": materials}
 
@@ -290,12 +360,12 @@ async def add_material_to_campaign(
     campaign = await campaign_repo.get_by_id(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # 验证权限
     project = await project_repo.get_by_id(campaign["project_id"])
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     await campaign_repo.add_material(campaign_id, material_id)
     return {"message": "Material added to campaign successfully"}
 
@@ -312,12 +382,12 @@ async def remove_material_from_campaign(
     campaign = await campaign_repo.get_by_id(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # 验证权限
     project = await project_repo.get_by_id(campaign["project_id"])
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     await campaign_repo.remove_material(campaign_id, material_id)
     return {"message": "Material removed from campaign successfully"}
 
@@ -333,11 +403,11 @@ async def delete_campaign(
     campaign = await campaign_repo.get_by_id(campaign_id)
     if not campaign:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    
+
     # 验证权限
     project = await project_repo.get_by_id(campaign["project_id"])
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    
+
     await campaign_repo.delete(campaign_id)
     return {"message": "Campaign deleted successfully"}

@@ -72,23 +72,23 @@ const adStatusOptions = ['Draft', 'Review', 'Active', 'Paused']
 // 验证表单
 const validateForm = (): boolean => {
   errors.value = {}
-  
+
   if (!formData.value.taskName.trim()) {
     errors.value.taskName = '请输入任务名称'
   }
-  
+
   if (!formData.value.adsetName.trim()) {
     errors.value.adsetName = '请输入 Ad Set 名称'
   }
-  
+
   if (!formData.value.budget || parseFloat(formData.value.budget) <= 0) {
     errors.value.budget = '请输入有效的预算金额'
   }
-  
+
   if (!formData.value.adName.trim()) {
     errors.value.adName = '请输入广告名称'
   }
-  
+
   return Object.keys(errors.value).length === 0
 }
 
@@ -130,7 +130,7 @@ const handleSave = () => {
   if (!validateForm()) {
     return
   }
-  
+
   submitting.value = true
   emit('submit', formData.value)
 }
@@ -187,7 +187,7 @@ defineExpose({
               <!-- 任务与 Ad Set 配置 -->
               <div class="space-y-[10px]">
                 <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white">任务与 Ad Unit 配置</h4>
-                
+
                 <div class="grid grid-cols-2 gap-[10px]">
                   <!-- 任务名称 -->
                   <div>
@@ -356,7 +356,7 @@ defineExpose({
               <!-- 广告素材配置 -->
               <div class="space-y-[10px]">
                 <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white">广告素材配置</h4>
-                
+
                 <div class="grid grid-cols-2 gap-[10px]">
                   <!-- 广告名称 -->
                   <div>

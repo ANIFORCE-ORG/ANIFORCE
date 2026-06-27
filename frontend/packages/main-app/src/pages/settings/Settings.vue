@@ -62,12 +62,12 @@ const switchSession = (session: any) => {
 
 const handleCardClick = (cardId: string) => {
   const card = settingCards.find(c => c.id === cardId)
-  
+
   if (card?.path) {
     router.push(card.path)
     return
   }
-  
+
   switch (cardId) {
     case 'system':
       showSystemPanel.value = true
@@ -82,7 +82,7 @@ onMounted(() => {
 
 <template>
   <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
-    <SidebarNav 
+    <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
       :active-panel="activePanel"
@@ -111,8 +111,8 @@ onMounted(() => {
             <p class="mt-[8px] text-[11px] text-slate-500 dark:text-slate-400 min-h-[31px]">{{ card.description }}</p>
             <button
               class="mt-[15px] px-[12px] py-[6px] rounded-md text-[11px] font-medium transition-colors"
-              :class="card.enabled 
-                ? 'bg-primary text-white hover:bg-primary/90' 
+              :class="card.enabled
+                ? 'bg-primary text-white hover:bg-primary/90'
                 : 'border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'"
               :disabled="!card.enabled"
               @click="handleCardClick(card.id)"

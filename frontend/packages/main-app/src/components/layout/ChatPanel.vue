@@ -1,15 +1,17 @@
 <script setup lang="ts">
 import { ref, nextTick, watch } from 'vue'
 import { agentService } from '@/services/agentService'
+import type { AGUIEventHandlers } from '@/services/agentService'
 import { agentConfig } from '@/config/agent'
-
-interface Message {
-  role: 'user' | 'assistant' | 'system'
-  author: string
-  time: string
-  content: string
-  isStreaming?: boolean
-}
+import type {
+  EnhancedMessage,
+  ExecutionPlan,
+  ToolCall,
+  HITLConfirmationRequest,
+} from '@/types/agui'
+import PlanView from '@/components/agent/PlanView.vue'
+import ToolCallView from '@/components/agent/ToolCallView.vue'
+import HITLDialog from '@/components/agent/HITLDialog.vue'
 
 interface Props {
   sessionId?: string
@@ -34,10 +36,16 @@ const emit = defineEmits<{
 
 // 状态管理
 const localChatInput = ref('')
-const messages = ref<Message[]>([])
+const messages = ref<EnhancedMessage[]>([])
 const isLoading = ref(false)
-const currentSessionId = ref(props.sessionId || agentService.generateSessionId('chat'))
+const currentSessionId = ref(props.sessionId || '')
 const messagesContainer = ref<HTMLElement | null>(null)
+
+// AG-UI 状态
+const currentPlan = ref<ExecutionPlan | null>(null)
+const activeTool = ref<ToolCall | null>(null)
+const hitlRequest = ref<HITLConfirmationRequest | null>(null)
+const showHITLDialog = ref(false)
 
 // 折叠状态 - 从localStorage读取初始值
 const CHATPANEL_COLLAPSED_KEY = 'aniforce_chatpanel_collapsed'
@@ -71,10 +79,12 @@ const loadSessionHistory = async () => {
   try {
     const sessionDetail = await agentService.getSessionDetail(currentSessionId.value)
     messages.value = sessionDetail.messages.map(msg => ({
+      id: msg.id,
       role: msg.role,
       author: msg.role === 'user' ? '用户' : 'AI助手',
-      time: msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : getCurrentTime(),
-      content: msg.content
+      time: msg.created_at ? new Date(msg.created_at).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }) : getCurrentTime(),
+      content: msg.content,
+      type: 'text' as const,
     }))
     scrollToBottom()
   } catch (error) {
@@ -83,7 +93,7 @@ const loadSessionHistory = async () => {
   }
 }
 
-// 发送消息 - 根据配置使用流式或非流式对话
+// 发送消息 - 使用 AG-UI 协议
 const handleSendMessage = async () => {
   if (!localChatInput.value.trim() || isLoading.value) return
 
@@ -91,40 +101,129 @@ const handleSendMessage = async () => {
   localChatInput.value = ''
 
   // 添加用户消息
+  const userMsgId = `msg_user_${Date.now()}`
   messages.value.push({
+    id: userMsgId,
     role: 'user',
     author: '用户',
     time: getCurrentTime(),
-    content: userMessage
+    content: userMessage,
+    type: 'text',
   })
   scrollToBottom()
 
   // 添加AI消息占位符
   const aiMessageIndex = messages.value.length
+  const aiMsgId = `msg_ai_${Date.now()}`
   messages.value.push({
+    id: aiMsgId,
     role: 'assistant',
     author: 'AI助手',
     time: getCurrentTime(),
     content: '',
-    isStreaming: true
+    type: 'text',
+    isStreaming: true,
   })
 
   isLoading.value = true
+  currentPlan.value = null
+  activeTool.value = null
 
   try {
-    if (agentConfig.chatMode === 'stream') {
-      // 流式对话 - 逐字显示
-      for await (const chunk of agentService.chatStream(currentSessionId.value, userMessage)) {
-        messages.value[aiMessageIndex].content += chunk
+    if (!currentSessionId.value) {
+      const session = await agentService.createChatSession(userMessage.slice(0, 30) || '新对话')
+      currentSessionId.value = session.id
+      emit('session-change', session.id)
+    }
+
+    // 定义 AG-UI 事件处理器
+    const handlers: AGUIEventHandlers = {
+      onTextMessage: (content: string) => {
+        messages.value[aiMessageIndex].content += content
         scrollToBottom()
-      }
-      messages.value[aiMessageIndex].isStreaming = false
-    } else {
-      // 非流式对话 - 一次性显示
-      const response = await agentService.chat(currentSessionId.value, userMessage)
-      messages.value[aiMessageIndex].content = response.message
-      messages.value[aiMessageIndex].isStreaming = false
-      messages.value[aiMessageIndex].time = new Date(response.timestamp).toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })
+      },
+
+      onMessageCompleted: (content: string) => {
+        if (content) {
+          messages.value[aiMessageIndex].content = content
+        }
+        messages.value[aiMessageIndex].isStreaming = false
+        scrollToBottom()
+      },
+
+      onToolCall: (tool: ToolCall) => {
+        // 更新或创建 Tool Call 消息
+        const existingToolMsg = messages.value.find(
+          (m) => m.type === 'tool_call' && m.metadata?.tool?.tool_name === tool.tool_name
+        )
+
+        if (existingToolMsg && existingToolMsg.metadata?.tool) {
+          // 更新现有工具调用
+          Object.assign(existingToolMsg.metadata.tool, tool)
+        } else {
+          // 创建新的工具调用消息
+          messages.value.splice(aiMessageIndex, 0, {
+            id: `msg_tool_${Date.now()}`,
+            role: 'assistant',
+            author: 'AI助手',
+            time: getCurrentTime(),
+            content: `正在调用工具：${tool.tool_name}`,
+            type: 'tool_call',
+            metadata: { tool },
+          })
+        }
+        activeTool.value = tool
+        scrollToBottom()
+      },
+
+      onPlanCreated: (plan: ExecutionPlan) => {
+        currentPlan.value = plan
+        
+        // 在消息流中插入 Plan
+        messages.value.splice(aiMessageIndex, 0, {
+          id: `msg_plan_${Date.now()}`,
+          role: 'assistant',
+          author: 'AI助手',
+          time: getCurrentTime(),
+          content: '已创建执行计划',
+          type: 'plan',
+          metadata: { plan },
+        })
+        scrollToBottom()
+      },
+
+      onTodoUpdated: (todoId: string, status: string) => {
+        if (currentPlan.value) {
+          const todo = currentPlan.value.todos.find((t) => t.id === todoId)
+          if (todo) {
+            todo.status = status as any
+          }
+        }
+      },
+
+      onHITLRequest: (request: HITLConfirmationRequest) => {
+        hitlRequest.value = request
+        showHITLDialog.value = true
+        
+        // 暂停流式输出
+        messages.value[aiMessageIndex].isStreaming = false
+      },
+
+      onError: (error: any) => {
+        console.error('AG-UI 错误:', error)
+        messages.value[aiMessageIndex].content = `抱歉，出现错误：${error.message || '未知错误'}`
+        messages.value[aiMessageIndex].isStreaming = false
+        messages.value[aiMessageIndex].type = 'error'
+      },
+    }
+
+    // 使用 AG-UI 增强的流式对话
+    for await (const event of agentService.streamChatWithHandlers(
+      currentSessionId.value,
+      userMessage,
+      handlers
+    )) {
+      // 事件已由 handlers 处理
     }
     
     scrollToBottom()
@@ -132,9 +231,62 @@ const handleSendMessage = async () => {
     console.error('对话失败:', error)
     messages.value[aiMessageIndex].content = '抱歉,对话出现错误,请稍后重试。'
     messages.value[aiMessageIndex].isStreaming = false
+    messages.value[aiMessageIndex].type = 'error'
   } finally {
     isLoading.value = false
   }
+}
+
+// HITL 确认处理
+const handleHITLConfirm = async (feedback?: string) => {
+  if (!hitlRequest.value) return
+  
+  try {
+    await agentService.sendHITLResponse(
+      currentSessionId.value,
+      hitlRequest.value.request_id,
+      true,
+      feedback
+    )
+    showHITLDialog.value = false
+    hitlRequest.value = null
+    
+    // 继续对话流
+    // TODO: 恢复流式输出
+  } catch (error) {
+    console.error('HITL 确认失败:', error)
+  }
+}
+
+const handleHITLCancel = async (feedback?: string) => {
+  if (!hitlRequest.value) return
+  
+  try {
+    await agentService.sendHITLResponse(
+      currentSessionId.value,
+      hitlRequest.value.request_id,
+      false,
+      feedback
+    )
+    showHITLDialog.value = false
+    hitlRequest.value = null
+    
+    // 添加取消消息
+    messages.value.push({
+      id: `msg_cancel_${Date.now()}`,
+      role: 'assistant',
+      author: 'AI助手',
+      time: getCurrentTime(),
+      content: '操作已取消。',
+      type: 'text',
+    })
+  } catch (error) {
+    console.error('HITL 取消失败:', error)
+  }
+}
+
+const handleHITLClose = () => {
+  showHITLDialog.value = false
 }
 
 // 快捷提示点击
@@ -144,9 +296,9 @@ const handleHintClick = (hint: string) => {
 
 // 创建新对话
 const handleNewChat = () => {
-  currentSessionId.value = agentService.generateSessionId('chat')
+  currentSessionId.value = ''
   messages.value = []
-  emit('session-change', currentSessionId.value)
+  emit('session-change', '')
 }
 
 // 折叠/展开
@@ -234,9 +386,24 @@ if (props.sessionId) {
                 生成中...
               </span>
             </div>
-            <div class="text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
-              {{ message.content }}
-              <span v-if="message.isStreaming" class="inline-block w-[3px] h-[12px] bg-primary animate-pulse ml-[4px]"></span>
+            <!-- 消息内容 - 根据类型渲染 -->
+            <div class="space-y-2">
+              <!-- 文本消息 -->
+              <div v-if="message.type === 'text'" class="text-[11px] text-slate-700 dark:text-slate-300 whitespace-pre-line leading-relaxed">
+                {{ message.content }}
+                <span v-if="message.isStreaming" class="inline-block w-[3px] h-[12px] bg-primary animate-pulse ml-[4px]"></span>
+              </div>
+
+              <!-- 执行计划 -->
+              <PlanView v-if="message.type === 'plan' && message.metadata?.plan" :plan="message.metadata.plan" />
+
+              <!-- 工具调用 -->
+              <ToolCallView v-if="message.type === 'tool_call' && message.metadata?.tool" :tool="message.metadata.tool" />
+
+              <!-- 错误消息 -->
+              <div v-if="message.type === 'error'" class="text-[11px] text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded p-2">
+                ⚠️ {{ message.content }}
+              </div>
             </div>
           </div>
         </div>
@@ -279,6 +446,16 @@ if (props.sessionId) {
         </div>
       </div>
     </template>
+
+    <!-- HITL 确认对话框 -->
+    <HITLDialog
+      v-if="hitlRequest"
+      :request="hitlRequest"
+      :visible="showHITLDialog"
+      @confirm="handleHITLConfirm"
+      @cancel="handleHITLCancel"
+      @close="handleHITLClose"
+    />
   </aside>
 </template>
 

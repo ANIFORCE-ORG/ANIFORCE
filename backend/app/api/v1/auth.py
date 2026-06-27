@@ -2,13 +2,14 @@ from fastapi import APIRouter, Depends, HTTPException
 from datetime import datetime, timedelta
 from jose import jwt
 from passlib.context import CryptContext
+from passlib.exc import UnknownHashError
 from app.config.settings import get_settings
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse, UserResponse, UpdateNameRequest, UpdatePasswordRequest
 from app.schemas.base import ResponseBase
 from app.repositories.factory import get_user_repo
 
-# 使用 argon2 替代 bcrypt，更现代且更安全
-pwd_context = CryptContext(schemes=["argon2"], deprecated="auto")
+# 兼容历史 bcrypt hash；新注册继续使用 argon2。
+pwd_context = CryptContext(schemes=["argon2", "bcrypt"], deprecated="auto")
 
 router = APIRouter(prefix="/auth", tags=["认证"])
 
@@ -39,7 +40,11 @@ async def login(
         raise HTTPException(status_code=404, detail="该邮箱尚未注册")
     
     # 验证密码
-    if not pwd_context.verify(req.password, user["password_hash"]):
+    try:
+        password_valid = pwd_context.verify(req.password, user["password_hash"])
+    except UnknownHashError:
+        password_valid = False
+    if not password_valid:
         raise HTTPException(status_code=401, detail="密码错误")
     
     # 生成 token

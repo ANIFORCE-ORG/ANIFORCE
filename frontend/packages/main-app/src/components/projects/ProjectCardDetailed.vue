@@ -3,9 +3,12 @@ import type { Project } from '@/api/projects'
 
 interface Props {
   project: Project
+  mode?: 'page' | 'workspace' | 'readonly'
 }
 
-const props = defineProps<Props>()
+withDefaults(defineProps<Props>(), {
+  mode: 'page'
+})
 const emit = defineEmits<{
   viewDetail: [project: Project]
 }>()
@@ -32,28 +35,28 @@ const getStatusLabel = (status: string) => {
 <template>
   <div class="project-card-detailed">
     <!-- Project Header -->
-    <div class="flex items-start justify-between mb-[12px]">
+    <div class="flex items-start justify-between mb-4">
       <div class="flex-1">
-        <div class="flex items-center gap-[9px] mb-[6px]">
-          <h4 class="text-[12px] font-semibold text-slate-900 dark:text-white">{{ project.name }}</h4>
+        <div class="flex items-center gap-3 mb-2">
+          <h4 class="text-base font-semibold text-slate-900 dark:text-white">{{ project.name }}</h4>
           <span
-            class="text-[10px] font-semibold px-[6px] py-[2px] rounded-full"
+            class="text-xs font-semibold px-2 py-0.5 rounded-full"
             :class="getStatusColor(project.status)"
           >
             {{ getStatusLabel(project.status) }}
           </span>
         </div>
-        <div class="flex items-center gap-[12px] text-[10px] text-slate-500 dark:text-slate-400">
-          <span class="flex items-center gap-[4px]">
-            <span class="material-symbols-outlined text-[11px]">person</span>
+        <div class="flex items-center gap-4 text-xs text-slate-500 dark:text-slate-400">
+          <span class="flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">person</span>
             {{ project.manager }}
           </span>
-          <span class="flex items-center gap-[4px]">
-            <span class="material-symbols-outlined text-[11px]">calendar_today</span>
+          <span class="flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">calendar_today</span>
             {{ project.start_date }} - {{ project.end_date }}
           </span>
-          <span class="flex items-center gap-[4px]">
-            <span class="material-symbols-outlined text-[11px]">public</span>
+          <span class="flex items-center gap-1">
+            <span class="material-symbols-outlined text-sm">public</span>
             {{ project.target_market }}
           </span>
         </div>
@@ -61,36 +64,36 @@ const getStatusLabel = (status: string) => {
     </div>
 
     <!-- Project Stats -->
-    <div class="grid grid-cols-5 gap-[12px] mb-[12px]">
+    <div class="grid grid-cols-5 gap-4 mb-4">
       <div>
-        <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">预算</div>
-        <div class="text-[11px] font-semibold text-slate-900 dark:text-white">${{ project.total_budget.toLocaleString() }}</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">预算</div>
+        <div class="text-sm font-semibold text-slate-900 dark:text-white">${{ project.total_budget.toLocaleString() }}</div>
       </div>
       <div>
-        <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">已消耗</div>
-        <div class="text-[11px] font-semibold text-slate-900 dark:text-white">${{ project.spent.toLocaleString() }}</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">已消耗</div>
+        <div class="text-sm font-semibold text-slate-900 dark:text-white">${{ project.spent.toLocaleString() }}</div>
       </div>
       <div>
-        <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">进度</div>
-        <div class="text-[11px] font-semibold text-emerald-600">{{ Math.round((project.spent / project.total_budget) * 100) }}%</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">进度</div>
+        <div class="text-sm font-semibold text-emerald-600">{{ Math.round((project.spent / project.total_budget) * 100) }}%</div>
       </div>
       <div>
-        <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">类型</div>
-        <div class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ project.game_type }}</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">类型</div>
+        <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ project.game_type }}</div>
       </div>
       <div>
-        <div class="text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">状态</div>
-        <div class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ getStatusLabel(project.status) }}</div>
+        <div class="text-xs text-slate-500 dark:text-slate-400 mb-1">状态</div>
+        <div class="text-sm font-semibold text-slate-900 dark:text-white">{{ getStatusLabel(project.status) }}</div>
       </div>
     </div>
 
     <!-- Progress Bar -->
-    <div class="mb-[9px]">
-      <div class="flex items-center justify-between text-[10px] text-slate-500 dark:text-slate-400 mb-[4px]">
+    <div class="mb-3">
+      <div class="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mb-1">
         <span>预算使用进度</span>
         <span>{{ Math.round((project.spent / project.total_budget) * 100) }}%</span>
       </div>
-      <div class="h-[6px] bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+      <div class="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
         <div
           class="h-full bg-primary rounded-full transition-all"
           :style="{ width: `${Math.round((project.spent / project.total_budget) * 100)}%` }"
@@ -99,23 +102,24 @@ const getStatusLabel = (status: string) => {
     </div>
 
     <!-- Tags -->
-    <div class="flex items-center gap-[6px] flex-wrap mb-[9px]">
+    <div class="flex items-center gap-2 flex-wrap mb-3">
       <span
         v-for="tag in project.tags"
         :key="tag"
-        class="text-[10px] px-[6px] py-[4px] rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
+        class="text-xs px-2 py-1 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
       >
         {{ tag }}
       </span>
     </div>
 
     <!-- Actions -->
-    <div class="flex items-center gap-[6px] pt-[9px] border-t border-slate-200 dark:border-slate-700">
+    <div class="flex items-center gap-2 pt-3 border-t border-slate-200 dark:border-slate-700">
       <button
-        class="flex-1 px-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
+        v-if="mode !== 'readonly'"
+        class="flex-1 px-4 py-2 rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-sm font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-700 transition-colors"
         @click="emit('viewDetail', project)"
       >
-        查看详情
+        {{ mode === 'workspace' ? '在画布查看' : '查看详情' }}
       </button>
     </div>
   </div>
@@ -123,8 +127,8 @@ const getStatusLabel = (status: string) => {
 
 <style scoped>
 .project-card-detailed {
-  padding: 16px;
-  border-radius: 6px;
+  padding: 20px;
+  border-radius: 8px;
   border: 1px solid #e2e8f0;
   background: #f8fafc;
   transition: all 0.16s ease;

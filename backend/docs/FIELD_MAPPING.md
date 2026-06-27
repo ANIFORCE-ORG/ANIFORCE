@@ -208,7 +208,7 @@
    ```python
    # 调用Meta/Google/TikTok API创建广告系列
    platform_response = create_campaign_on_platform(campaign)
-   
+
    # 更新platform_campaign_id
    campaign.platform_campaign_id = platform_response['id']
    db.commit()

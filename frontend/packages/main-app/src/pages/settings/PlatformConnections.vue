@@ -152,7 +152,7 @@ const handleDelete = (connection: PlatformConnectionResponse) => {
 
 const confirmDelete = async () => {
   if (!deletingConnection.value) return
-  
+
   const connection = deletingConnection.value
   try {
     await platformApi.deleteConnection(connection.id)
@@ -335,12 +335,12 @@ const handleDeleteSubAccount = async (connectionId: string, subAccountId: string
 
 onMounted(() => {
   loadConnections()
-  
+
   // 检查 URL 参数，显示授权结果
   const urlParams = new URLSearchParams(window.location.search)
   const successParam = urlParams.get('success')
   const errorParam = urlParams.get('error')
-  
+
   if (successParam === 'authorized') {
     success('授权成功！')
     // 清除 URL 参数
@@ -360,7 +360,7 @@ onMounted(() => {
 
 <template>
   <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
-    <SidebarNav 
+    <SidebarNav
       :nav-items="navItems"
       :sessions="[]"
       active-panel="settings"
@@ -391,14 +391,14 @@ onMounted(() => {
               v-for="platform in platforms"
               :key="platform.id"
               class="rounded-md border p-[12px] text-left transition-colors hover:border-primary/50"
-              :class="activePlatform === platform.id 
-                ? 'border-primary bg-primary/5' 
+              :class="activePlatform === platform.id
+                ? 'border-primary bg-primary/5'
                 : 'border-slate-200 dark:border-slate-700'"
               @click="activePlatform = platform.id"
             >
               <div class="flex items-center justify-between">
                 <div class="font-semibold text-[13px] text-slate-900 dark:text-white">{{ platform.label }}</div>
-                <span 
+                <span
                   class="rounded px-[6px] py-[4px] text-[10px] font-medium"
                   :class="isPlatformConnected(platform.id)
                     ? 'bg-green-50 dark:bg-green-900/30 text-green-700 dark:text-green-400'
@@ -464,7 +464,7 @@ onMounted(() => {
                 添加广告账户
               </button>
             </div>
-            
+
             <!-- Google 平台特殊功能 -->
             <div v-if="activePlatform === 'google'" class="flex items-center justify-between">
               <p class="text-[11px] text-slate-600 dark:text-slate-400">点击添加账户后将直接跳转到 Google OAuth 授权页面</p>
@@ -482,18 +482,18 @@ onMounted(() => {
             <div class="px-[16px] py-[12px] border-b border-slate-200 dark:border-slate-700">
               <h2 class="text-[11px] font-semibold text-slate-900 dark:text-white">已连接的平台账户</h2>
             </div>
-            
+
             <div v-if="loading" class="p-[25px] text-center text-slate-500 dark:text-slate-400">
               <span class="material-symbols-outlined animate-spin text-[23px]">progress_activity</span>
               <p class="mt-[6px] text-[11px]">加载中...</p>
             </div>
-            
+
             <div v-else-if="filteredConnections.length === 0" class="p-[25px] text-center text-slate-500 dark:text-slate-400">
               <span class="material-symbols-outlined text-[39px] mb-[6px]">cloud_off</span>
               <p class="text-[11px]">暂无 {{ platforms.find(p => p.id === activePlatform)?.label }} 平台连接</p>
               <p v-if="activePlatform === 'meta'" class="text-[10px] mt-[4px]">点击上方「添加广告账户」按钮开始配置</p>
             </div>
-            
+
             <div v-else class="overflow-x-auto">
               <table class="w-full">
                 <thead class="bg-slate-50 dark:bg-slate-700/50">
@@ -565,7 +565,7 @@ onMounted(() => {
                         </button>
                         <button
                           class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
-                          :class="getEffectiveStatus(connection) === 'active' 
+                          :class="getEffectiveStatus(connection) === 'active'
                             ? 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'
                             : 'border-primary text-primary hover:bg-primary/5'"
                           :disabled="getEffectiveStatus(connection) === 'active'"
@@ -582,7 +582,7 @@ onMounted(() => {
                       </div>
                     </td>
                     </tr>
-                    
+
                     <!-- 子账号展开行（Meta 和 Google 平台） -->
                     <tr v-if="(activePlatform === 'meta' || activePlatform === 'google') && isExpanded(connection.id)" class="bg-slate-50/50 dark:bg-slate-700/20">
                       <td :colspan="activePlatform === 'meta' ? 6 : 7" class="px-0 py-0">
@@ -592,7 +592,7 @@ onMounted(() => {
                             <span class="material-symbols-outlined animate-spin text-[19px] text-slate-400">progress_activity</span>
                             <p class="text-[10px] text-slate-500 dark:text-slate-400 mt-[6px]">加载子账号中...</p>
                           </div>
-                          
+
                           <!-- 子账号列表 -->
                           <div v-else-if="subAccounts[connection.id] && subAccounts[connection.id].length > 0">
                             <div class="flex items-center justify-between mb-[9px]">
@@ -642,7 +642,7 @@ onMounted(() => {
                               </div>
                             </div>
                           </div>
-                          
+
                           <!-- 无子账号 -->
                           <div v-else class="text-center py-[12px]">
                             <span class="material-symbols-outlined text-[23px] text-slate-300 dark:text-slate-600">folder_open</span>
@@ -676,7 +676,7 @@ onMounted(() => {
         <div class="px-[19px] py-[12px] border-b border-slate-200 dark:border-slate-700">
           <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">添加子账号</h3>
         </div>
-        
+
         <div class="px-[19px] py-[12px] space-y-[12px]">
           <div>
             <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">
@@ -689,7 +689,7 @@ onMounted(() => {
               class="w-full px-[9px] py-[6px] border border-slate-300 dark:border-slate-600 rounded-md bg-white dark:bg-slate-700 text-slate-900 dark:text-white placeholder-slate-400 focus:outline-none focus:ring-2 focus:ring-primary focus:border-transparent text-[11px]"
             />
           </div>
-          
+
           <div>
             <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">
               Customer ID <span class="text-red-500">*</span>
@@ -705,7 +705,7 @@ onMounted(() => {
             </p>
           </div>
         </div>
-        
+
         <div class="px-[19px] py-[12px] border-t border-slate-200 dark:border-slate-700 flex items-center justify-end gap-[9px]">
           <button
             @click="closeAddSubAccountDialog"
@@ -737,7 +737,7 @@ onMounted(() => {
       @cancel="cancelDelete"
       @close="showDeleteConfirm = false"
     />
-    
+
     <!-- Toast 提示容器 -->
     <ToastContainer />
   </div>
