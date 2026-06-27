@@ -45,7 +45,7 @@ check_port_in_use() {
 wait_for_port() {
   local port=$1
   local name=$2
-  local max_wait=${3:-20}
+  local max_wait=${3:-60}
   local i
 
   for ((i=1; i<=max_wait; i++)); do
@@ -57,6 +57,15 @@ wait_for_port() {
 
     sleep 1
   done
+
+  if [ -n "${PID_FILE:-}" ] && [ -f "$PID_FILE" ]; then
+    warn "$name 启动超时，正在清理已启动的后台进程..."
+    while IFS= read -r pid; do
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        kill "$pid" 2>/dev/null || true
+      fi
+    done < "$PID_FILE"
+  fi
 
   fail "$name 启动超时：端口 $port 未监听，请检查日志"
 }
