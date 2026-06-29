@@ -27,7 +27,7 @@ from agents import (
 )
 from agents.run import RunResult
 from agents.sandbox import SandboxAgent, Manifest, SandboxRunConfig
-from agents.sandbox.capabilities import Skills, LocalDirLazySkillSource
+from agents.sandbox.capabilities import Skills, LocalDirLazySkillSource, Shell
 from agents.sandbox.entries import LocalDir
 from agents.sandbox.sandboxes.unix_local import UnixLocalSandboxClient
 from agents.models.openai_responses import OpenAIResponsesModel  # 添加 Responses API
@@ -126,6 +126,7 @@ class OpenAISDKAdapter:
         self.sandbox_dir = str(Path(sandbox_dir or "runtime/agent/sandbox").resolve())
         self.tracer = get_tracer() if enable_tracing else None
         self._tool_name_by_call_id: dict[str, str] = {}
+        self._streamed_reasoning_task_ids: set[str] = set()
         
         # 创建沙箱目录
         Path(self.sandbox_dir).mkdir(parents=True, exist_ok=True)
@@ -247,11 +248,11 @@ class OpenAISDKAdapter:
                 )
             )
             if self.api_mode == "chat_completions":
-                capabilities = [skills_capability]
-                capability_label = "ChatCompletions-compatible Skills"
+                capabilities = [Shell(), skills_capability]
+                capability_label = "ChatCompletions-compatible Shell + Skills"
             else:
-                capabilities = [skills_capability]
-                capability_label = "Responses Skills"
+                capabilities = [Shell(), skills_capability]
+                capability_label = "Responses Shell + Skills"
 
             agent = SandboxAgent(
                 name=name,
@@ -541,9 +542,10 @@ class OpenAISDKAdapter:
                         ))
                 
                 # Reasoning/Thinking Delta Event
-                elif data_type == "response.reasoning_text.delta":
+                elif data_type in {"response.reasoning_text.delta", "response.reasoning_summary_text.delta"}:
                     delta = getattr(data, "delta", "")
                     if delta:
+                        self._streamed_reasoning_task_ids.add(task_id)
                         events.append(AgentTaskEvent(
                             event_id=f"event_{task_id}_{sequence}",
                             task_id=task_id,
@@ -613,6 +615,22 @@ class OpenAISDKAdapter:
                     },
                     sequence=sequence,
                 ))
+
+            # reasoning output from ChatCompletions-compatible models.
+            # DeepSeek may surface thinking as a completed SDK reasoning item instead
+            # of raw `response.reasoning_text.delta` events.
+            elif name == "reasoning_item_created":
+                if task_id in self._streamed_reasoning_task_ids:
+                    return events
+                reasoning_text = self._extract_reasoning_text(item)
+                if reasoning_text:
+                    events.append(AgentTaskEvent(
+                        event_id=f"event_{task_id}_{sequence}",
+                        task_id=task_id,
+                        event_type=EventType.THINKING_UPDATED,
+                        payload={"delta": reasoning_text},
+                        sequence=sequence,
+                    ))
         
         # 3. agent_updated_stream_event（Agent 切换）
         elif event_type_str == "agent_updated_stream_event":
@@ -629,6 +647,28 @@ class OpenAISDKAdapter:
                 ))
         
         return events
+
+    def _extract_reasoning_text(self, item) -> str:
+        """Extract reasoning summary text from SDK ReasoningItem wrappers.
+
+        ChatCompletions-compatible providers such as DeepSeek can expose thinking as
+        a `run_item_stream_event` named `reasoning_item_created`, whose raw item is
+        a reasoning object containing `summary: [{type: "summary_text", text: "..."}]`.
+        """
+        if not item or getattr(item, "type", None) != "reasoning_item":
+            return ""
+
+        raw_item = getattr(item, "raw_item", item)
+        summary = self._read_field(raw_item, "summary", []) or []
+        if not isinstance(summary, list):
+            return ""
+
+        texts = []
+        for entry in summary:
+            text = self._read_field(entry, "text")
+            if text:
+                texts.append(str(text))
+        return "\n\n".join(texts).strip()
 
     def _extract_tool_call_info(self, item) -> Optional[dict]:
         """Extract tool call metadata from SDK RunItem wrappers."""
