@@ -412,9 +412,9 @@ export function useHomeAgentSession() {
         }
 
         if (event.event === 'message.completed') {
-          drainTypewriter()
-          // 不再从 message.completed 覆盖 content — typewriter 已轻累积了流式文本。
-          // 只更新 usage 和时间戳。
+          // 不再从 message.completed 立即 drainTypewriter，否则当上游只返回一个大 delta 时，
+          // 打字机缓冲会被瞬间刷完，看起来像没有流式响应。
+          // 这里只更新 usage 和时间戳；最终收尾由 finally 中的 deferred finalizer 等待打字机播完。
           const usage = event.data.usage
           if (usage && typeof usage === 'object') assistant.usage = usage as any
           if (event.data.timestamp) assistant.timestamp = event.data.timestamp as number | string
