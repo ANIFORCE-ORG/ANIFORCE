@@ -262,12 +262,22 @@ export const useAgentStore = defineStore('agent', () => {
     finalize()
   }
 
+  function ensureStreamingContentBlocks(): AgentContentBlock[] | null {
+    const msg = streamingMessage.value
+    if (!msg) return null
+    if (Array.isArray(msg.content)) return msg.content as AgentContentBlock[]
+    const existingText = typeof msg.content === 'string' ? msg.content : ''
+    const blocks: AgentContentBlock[] = existingText ? [{ type: 'text', text: existingText }] : []
+    msg.content = blocks
+    return blocks
+  }
+
   // streamingMessage content 操作（统一入口，避免多处直接改）
   function appendDeltaToStreaming(blockType: 'text' | 'thinking', field: 'text' | 'thinking', delta: string): void {
     const msg = streamingMessage.value
     if (!msg || !delta) return
-    if (!Array.isArray(msg.content)) msg.content = []
-    const blocks = msg.content as AgentContentBlock[]
+    const blocks = ensureStreamingContentBlocks()
+    if (!blocks) return
     // 累积到最后一个同类型 block（不是第一个！修复多轮 thinking 的 bug）
     let last = blocks[blocks.length - 1]
     if (!last || typeof last !== 'object' || !('type' in last) || last.type !== blockType) {
@@ -281,8 +291,8 @@ export const useAgentStore = defineStore('agent', () => {
   function appendToolCallToStreaming(tool: { id: string; name: string; arguments?: Record<string, unknown>; result?: unknown }): void {
     const msg = streamingMessage.value
     if (!msg) return
-    if (!Array.isArray(msg.content)) msg.content = []
-    const blocks = msg.content as AgentContentBlock[]
+    const blocks = ensureStreamingContentBlocks()
+    if (!blocks) return
     const existing = blocks.find(
       (b): b is Record<string, unknown> => b && typeof b === 'object' && b.type === 'toolCall' && (b.toolCallId === tool.id || b.id === tool.id)
     )

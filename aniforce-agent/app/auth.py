@@ -50,7 +50,7 @@ async def get_current_user(request: Request) -> dict:
             detail="Token missing user id",
         )
 
-    logger.info(
+    logger.debug(
         "[PERF][agent_first_token] agent_api.auth total_ms={} jwt_decode_ms={} user_id={}",
         _elapsed_ms(auth_start),
         _elapsed_ms(jwt_start),

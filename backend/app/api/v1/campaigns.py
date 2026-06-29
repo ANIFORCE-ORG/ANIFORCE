@@ -167,9 +167,13 @@ async def create_campaign(
         objective=request.objective,
         buying_type=request.buying_type,
         special_ad_categories=request.special_ad_categories,
+        special_ad_category_country=request.special_ad_category_country,
+        promoted_object=request.promoted_object,
         ab_test=request.ab_test,
         campaign_budget_optimization=request.campaign_budget_optimization,
         budget_type=request.budget_type,
+        budget_schedule_specs=request.budget_schedule_specs,
+        pacing_type=request.pacing_type,
         bid_strategy=request.bid_strategy,
         spend_limit=request.spend_limit,
         start_date=request.start_date,
@@ -250,12 +254,20 @@ async def update_campaign(
         update_data["buying_type"] = request.buying_type
     if request.special_ad_categories is not None:
         update_data["special_ad_categories"] = request.special_ad_categories
+    if request.special_ad_category_country is not None:
+        update_data["special_ad_category_country"] = request.special_ad_category_country
+    if request.promoted_object is not None:
+        update_data["promoted_object"] = request.promoted_object
     if request.ab_test is not None:
         update_data["ab_test"] = request.ab_test
     if request.campaign_budget_optimization is not None:
         update_data["campaign_budget_optimization"] = request.campaign_budget_optimization
     if request.budget_type is not None:
         update_data["budget_type"] = request.budget_type
+    if request.budget_schedule_specs is not None:
+        update_data["budget_schedule_specs"] = request.budget_schedule_specs
+    if request.pacing_type is not None:
+        update_data["pacing_type"] = request.pacing_type
     if request.bid_strategy is not None:
         update_data["bid_strategy"] = request.bid_strategy
     if request.spend_limit is not None:
