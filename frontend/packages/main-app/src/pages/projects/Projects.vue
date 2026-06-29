@@ -3,7 +3,6 @@ import { ref, onMounted, computed } from 'vue'
 import { useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import ChatPanel from '@/components/layout/ChatPanel.vue'
 import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
 import ProjectCardCompact from '@/components/projects/ProjectCardCompact.vue'
@@ -32,7 +31,6 @@ const handleToastClose = () => {
 }
 
 const activeSession = ref('sess_g001')
-const chatInput = ref('')
 const showCreateModal = ref(false)
 const showCampaignModal = ref(false)
 const editingProject = ref<Project | null>(null)
@@ -52,24 +50,6 @@ const sessions = ref([
   { id: 'sess_g003', name: '东南亚市场拓展', active: false },
   { id: 'sess_g004', name: 'DramaBox新剧推广', active: false },
 ])
-
-const messages = ref([
-  {
-    role: 'assistant',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: `您好 ${auth.user?.name} ！我是ANIFORCE智能助手。\n\n当前项目概览：\n• 📱 Candy Blast：消耗$52,300，ROI 1.88x\n• 📺 DramaBox：消耗$98,700，ROI 2.15x\n\n我可以帮您分析项目数据、优化投放策略。请告诉我您需要什么帮助？`
-  }
-])
-
-const quickHints = [
-  '项目数据分析',
-  '创建新项目',
-  '优化建议',
-  '预算调整',
-  '素材管理',
-  '投放策略'
-]
 
 const statusFilters = [
   { value: 'all', label: '全部项目' },
@@ -131,15 +111,6 @@ const switchPanel = (item: any) => {
 const switchSession = (session: any) => {
   activeSession.value = session.id
   sessions.value.forEach(s => s.active = s.id === session.id)
-}
-
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
 }
 
 const handleSearch = () => {
@@ -440,16 +411,6 @@ const handleSubmitCampaign = async (data: any) => {
         </div>
       </div>
     </main>
-
-    <!-- 右侧对话区 -->
-    <ChatPanel
-      :messages="messages"
-      :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
-    />
 
     <!-- 创建项目弹窗 -->
     <CreateProjectModal
