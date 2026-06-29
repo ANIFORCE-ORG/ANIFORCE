@@ -4,7 +4,7 @@ import base64
 import json
 from pathlib import Path
 from typing import Annotated
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.protocols import MaterialRepository
@@ -12,6 +12,7 @@ from app.repositories.factory import get_material_repo
 from app.api.deps import get_current_user
 from app.config.database import get_db
 from app.config.settings import get_settings
+from app.services.idempotency_service import IDEMPOTENCY_HEADER, IdempotencyService
 from app.services.object_storage import AliyunOssStorageService, ObjectStorageError
 
 router = APIRouter(prefix="/materials", tags=["materials"])
@@ -352,11 +353,19 @@ async def upload_material_with_metadata(
 
 @router.post("")
 async def create_material(
+    http_request: Request,
     request: CreateMaterialRequest,
     current_user: dict = Depends(get_current_user),
     material_repo: MaterialRepository = Depends(get_material_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """创建新素材"""
+    idempotency_key = http_request.headers.get(IDEMPOTENCY_HEADER)
+    idempotency = IdempotencyService(session)
+    cached = await idempotency.get_response(current_user["id"], idempotency_key)
+    if cached is not None:
+        return cached
+
     try:
         material = await material_repo.create(
             user_id=current_user["id"],
@@ -371,6 +380,15 @@ async def create_material(
         )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
+
+    await idempotency.save_response(
+        current_user["id"],
+        idempotency_key,
+        http_request.method,
+        str(http_request.url.path),
+        material,
+    )
+    await session.commit()
     return material
 
 

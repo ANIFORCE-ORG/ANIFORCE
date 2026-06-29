@@ -331,6 +331,7 @@ export function useHomeAgentSession() {
     store.streamingMessage = assistant
 
     let streamCompletedSuccessfully = false
+    let completedAssistantContent = ''
 
     try {
       const contextSnapshot = collectContextSnapshot(_route)
@@ -390,6 +391,9 @@ export function useHomeAgentSession() {
         }
 
         if (event.event === 'thinking.updated') {
+          // thinking 也是结构化 block。若前面已有未播放完的文本，先刷入文本 block，
+          // 保证事件顺序对应渲染顺序：text -> thinking/tool -> text。
+          drainTypewriter(false)
           if (!streamingMessage.value) continue
           if (!store.currentAssistantMessageId) {
             streamingMessage.value.id = `msg_${Date.now()}`
@@ -412,9 +416,11 @@ export function useHomeAgentSession() {
         }
 
         if (event.event === 'message.completed') {
-          drainTypewriter()
-          // 不再从 message.completed 覆盖 content — typewriter 已轻累积了流式文本。
-          // 只更新 usage 和时间戳。
+          // 不再从 message.completed 立即 drainTypewriter，否则当上游只返回一个大 delta 时，
+          // 打字机缓冲会被瞬间刷完，看起来像没有流式响应。
+          // 这里只更新 usage 和时间戳；最终收尾由 finally 中的 deferred finalizer 等待打字机播完。
+          const content = event.data.content
+          if (typeof content === 'string') completedAssistantContent = content
           const usage = event.data.usage
           if (usage && typeof usage === 'object') assistant.usage = usage as any
           if (event.data.timestamp) assistant.timestamp = event.data.timestamp as number | string
@@ -423,6 +429,9 @@ export function useHomeAgentSession() {
         }
 
         if (event.event === 'tool_call.started') {
+          // 工具卡片是结构化 block。插入前必须先把当前打字机缓冲刷到文本 block，
+          // 否则“工具调用前的过渡文本”会被拆到工具卡片之间。
+          drainTypewriter(false)
           const toolName = String(event.data.tool_name || 'tool')
           const toolId = String(event.data.tool_call_id || `${toolName}_${Date.now()}`)
           const args = normalizeRecord(event.data.arguments)
@@ -502,6 +511,9 @@ export function useHomeAgentSession() {
     } finally {
       const finishSuccess = () => {
         drainTypewriter(false)
+        if (completedAssistantContent && store.streamingMessage && !hasTextContent(store.streamingMessage)) {
+          store.appendDeltaToStreaming('text', 'text', completedAssistantContent)
+        }
         console.info('[PERF][agent_first_token][frontend] stream_completed', {
           elapsedMs: perfMs(),
           runId: store.currentRunId,
@@ -615,6 +627,13 @@ export function useHomeAgentSession() {
     return value && typeof value === 'object' && !Array.isArray(value)
       ? value as Record<string, unknown>
       : undefined
+  }
+
+  function hasTextContent(message: AgentMessage): boolean {
+    const content = message.content
+    if (typeof content === 'string') return content.trim().length > 0
+    if (!Array.isArray(content)) return false
+    return content.some(block => block && typeof block === 'object' && block.type === 'text' && String(block.text || '').trim().length > 0)
   }
 
   function hasMessageContent(message: AgentMessage): boolean {
