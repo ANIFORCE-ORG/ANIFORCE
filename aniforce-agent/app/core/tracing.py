@@ -31,7 +31,7 @@ class LocalTracer:
         self._current_trace_file: Optional[Path] = None
         self._trace_data: list = []
         
-        logger.info(f"LocalTracer initialized: {self.trace_dir}")
+        logger.debug(f"LocalTracer initialized: {self.trace_dir}")
     
     @contextmanager
     def trace_task(self, task_id: str, user_id: str, task_type: str):

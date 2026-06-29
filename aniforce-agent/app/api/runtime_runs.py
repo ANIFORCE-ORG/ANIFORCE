@@ -65,7 +65,7 @@ async def run_runtime(
     )
     _ACTIVE_RUNTIME_RUNS[run_id] = {"task_id": task.task_id, "user_id": user_id}
     perf_log = logger.bind(run_id=run_id, task_id=task.task_id, session_id=session_id, user_id=user_id)
-    perf_log.info(
+    perf_log.debug(
         "[PERF][agent_first_token] runtime_api.pre_stream total_ms={} prompt_chars={} context_chars={}",
         _elapsed_ms(request_start),
         len(prompt),
@@ -77,7 +77,7 @@ async def run_runtime(
         if active and active.get("task_id") == task.task_id:
             active["stream_task"] = asyncio.current_task()
             if active.get("cancel_requested"):
-                perf_log.info("runtime run stream cancelled before start")
+                perf_log.debug("runtime run stream cancelled before start")
                 return
         try:
             async for event in service.run_task(
@@ -93,7 +93,7 @@ async def run_runtime(
                 yield f"event: {event.event_type}\n"
                 yield f"data: {json.dumps(payload, default=str, ensure_ascii=False)}\n\n"
         except asyncio.CancelledError:
-            perf_log.info("runtime run stream cancelled")
+            perf_log.debug("runtime run stream cancelled")
             raise
         except Exception as exc:
             perf_log.exception("runtime run failed")

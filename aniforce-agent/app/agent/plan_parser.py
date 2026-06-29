@@ -34,19 +34,19 @@ class PlanParser:
         # 尝试 JSON 格式
         plan = PlanParser._extract_json_plan(text, task_id)
         if plan:
-            logger.info(f"[PlanParser] 提取到 JSON 格式的 Plan，包含 {len(plan.todos)} 个 Todo")
+            logger.debug(f"[PlanParser] 提取到 JSON 格式的 Plan，包含 {len(plan.todos)} 个 Todo")
             return plan
         
         # 尝试 Markdown 列表格式
         plan = PlanParser._extract_markdown_plan(text, task_id)
         if plan:
-            logger.info(f"[PlanParser] 提取到 Markdown 格式的 Plan，包含 {len(plan.todos)} 个 Todo")
+            logger.debug(f"[PlanParser] 提取到 Markdown 格式的 Plan，包含 {len(plan.todos)} 个 Todo")
             return plan
         
         # 尝试纯文本格式
         plan = PlanParser._extract_text_plan(text, task_id)
         if plan:
-            logger.info(f"[PlanParser] 提取到纯文本格式的 Plan，包含 {len(plan.todos)} 个 Todo")
+            logger.debug(f"[PlanParser] 提取到纯文本格式的 Plan，包含 {len(plan.todos)} 个 Todo")
             return plan
         
         logger.debug(f"[PlanParser] 未能从文本中提取 Plan")

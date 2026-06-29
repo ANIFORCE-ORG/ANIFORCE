@@ -10,7 +10,6 @@ OpenAI Agents SDK 适配器
 import json
 import os
 import re
-from time import perf_counter
 from typing import AsyncIterator, Optional
 from pathlib import Path
 from loguru import logger
@@ -28,7 +27,7 @@ from agents import (
 )
 from agents.run import RunResult
 from agents.sandbox import SandboxAgent, Manifest, SandboxRunConfig
-from agents.sandbox.capabilities import Capabilities, Skills, LocalDirLazySkillSource, Shell
+from agents.sandbox.capabilities import Skills, LocalDirLazySkillSource
 from agents.sandbox.entries import LocalDir
 from agents.sandbox.sandboxes.unix_local import UnixLocalSandboxClient
 from agents.models.openai_responses import OpenAIResponsesModel  # 添加 Responses API
@@ -38,10 +37,6 @@ from agents.models.chatcmpl_converter import Converter
 from app.models.agent_platform_models import AgentTaskEvent, EventType
 from app.core.errors import AppError, AgentErrorCode, ErrorCategory
 from app.core.tracing import get_tracer
-
-
-def _elapsed_ms(start: float) -> int:
-    return int((perf_counter() - start) * 1000)
 
 
 _ORIGINAL_ITEMS_TO_MESSAGES = Converter.items_to_messages
@@ -158,7 +153,6 @@ class OpenAISDKAdapter:
         self.openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
         set_default_openai_client(self.openai_client, use_for_tracing=False)
         
-        logger.info(f"OpenAI SDK Adapter initialized: {model} | api={self.api_mode} | tracing={enable_tracing}")
     
     def _generate_skills_index(self) -> str:
         """生成 Skills 索引（用于注入到 System Prompt）"""
@@ -192,7 +186,6 @@ class OpenAISDKAdapter:
                     
                     if name and description:
                         skills_list.append(f"- **{name}**: {description}")
-                        logger.debug(f"[SDK] Found skill: {name}")
             except Exception as e:
                 logger.warning(f"[SDK] Failed to parse skill {skill_dir.name}: {e}")
         
@@ -254,11 +247,11 @@ class OpenAISDKAdapter:
                 )
             )
             if self.api_mode == "chat_completions":
-                capabilities = [Shell(), skills_capability]
-                capability_label = "ChatCompletions-compatible Shell + Skills"
+                capabilities = [skills_capability]
+                capability_label = "ChatCompletions-compatible Skills"
             else:
-                capabilities = Capabilities.default() + [skills_capability]
-                capability_label = "Responses default capabilities + Skills"
+                capabilities = [skills_capability]
+                capability_label = "Responses Skills"
 
             agent = SandboxAgent(
                 name=name,
@@ -268,8 +261,6 @@ class OpenAISDKAdapter:
                 default_manifest=Manifest(root=workspace_dir),
                 capabilities=capabilities,
             )
-            logger.info(f"[SDK] Created SandboxAgent with {self.api_mode} + {capability_label}: {self.skills_dir}")
-            logger.info(f"[SDK] Sandbox workspace: {workspace_dir}")
         else:
             # 使用普通 Agent（向后兼容）
             agent = Agent(
@@ -278,9 +269,7 @@ class OpenAISDKAdapter:
                 model=sdk_model,
                 mcp_servers=mcp_servers or [],
             )
-            logger.info(f"[SDK] Created Agent with {self.api_mode} (skills disabled)")
-        
-        logger.debug(f"[SDK] Agent '{name}' with {len(mcp_servers or [])} MCP servers")
+
         return agent
     
     def create_session(self, session_id: str, db_path: str = "runtime/agent/sessions.db") -> SQLiteSession:
@@ -374,51 +363,9 @@ class OpenAISDKAdapter:
         """
         sequence = start_sequence
         assistant_message_content = ""
-        stream_start = perf_counter()
-        first_raw_logged = False
-        first_transformed_logged = False
-        first_thinking_delta_logged = False
-        first_text_delta_logged = False
-        raw_event_count = 0
-        transformed_event_count = 0
-        pre_delta_raw_counts: dict[str, int] = {}
-        
+
         try:
             async for event in result.stream_events():
-                raw_event_count += 1
-                raw_summary = self._describe_stream_event(event)
-                if not first_text_delta_logged:
-                    raw_key = raw_summary.get("key", raw_summary.get("raw_type", "unknown"))
-                    pre_delta_raw_counts[raw_key] = pre_delta_raw_counts.get(raw_key, 0) + 1
-                    # 特别记录 reasoning 文本内容
-                    if raw_summary.get("data_type") == "response.reasoning_text.delta":
-                        data = getattr(event, "data", None)
-                        delta_text = getattr(data, "delta", "") if data else ""
-                        logger.info(
-                            "[PERF][agent_first_token] sdk.reasoning_delta raw_index={} delta_text={!r}",
-                            raw_event_count,
-                            delta_text,
-                        )
-                    logger.info(
-                        "[PERF][agent_first_token] sdk.raw_before_delta elapsed_ms={} raw_index={} raw_type={} data_type={} item_name={} item_type={} delta_chars={} response_status={} output_index={} item_id={}",
-                        _elapsed_ms(stream_start),
-                        raw_event_count,
-                        raw_summary.get("raw_type"),
-                        raw_summary.get("data_type"),
-                        raw_summary.get("item_name"),
-                        raw_summary.get("item_type"),
-                        raw_summary.get("delta_chars"),
-                        raw_summary.get("response_status"),
-                        raw_summary.get("output_index"),
-                        raw_summary.get("item_id"),
-                    )
-                if not first_raw_logged:
-                    first_raw_logged = True
-                    logger.info(
-                        "[PERF][agent_first_token] sdk.first_raw_event elapsed_ms={} raw_type={}",
-                        _elapsed_ms(stream_start),
-                        getattr(event, "type", "unknown"),
-                    )
                 # Trace SDK 事件
                 if self.tracer:
                     self.tracer.log_sdk_event(
@@ -432,35 +379,8 @@ class OpenAISDKAdapter:
                     task_id=task_id,
                     sequence=sequence,
                 )
-                
+
                 for agent_event in agent_events:
-                    transformed_event_count += 1
-                    if not first_transformed_logged:
-                        first_transformed_logged = True
-                        logger.info(
-                            "[PERF][agent_first_token] sdk.first_transformed_event elapsed_ms={} raw_events={} event_type={}",
-                            _elapsed_ms(stream_start),
-                            raw_event_count,
-                            agent_event.event_type,
-                        )
-                    if not first_thinking_delta_logged and agent_event.event_type == EventType.THINKING_UPDATED:
-                        first_thinking_delta_logged = True
-                        logger.info(
-                            "[PERF][agent_first_token] sdk.first_thinking_delta elapsed_ms={} raw_events={} transformed_events={} pre_delta_raw_counts={}",
-                            _elapsed_ms(stream_start),
-                            raw_event_count,
-                            transformed_event_count,
-                            pre_delta_raw_counts,
-                        )
-                    if not first_text_delta_logged and agent_event.event_type == EventType.MESSAGE_UPDATED:
-                        first_text_delta_logged = True
-                        logger.info(
-                            "[PERF][agent_first_token] sdk.first_text_delta elapsed_ms={} raw_events={} transformed_events={} pre_delta_raw_counts={}",
-                            _elapsed_ms(stream_start),
-                            raw_event_count,
-                            transformed_event_count,
-                            pre_delta_raw_counts,
-                        )
                     sequence += 1
                     agent_event.sequence = sequence
                     
@@ -482,13 +402,6 @@ class OpenAISDKAdapter:
             # 最终输出
             final_output = getattr(result, "final_output", None) or assistant_message_content
             usage = self._extract_usage(result)
-            logger.info(
-                "[PERF][agent_first_token] sdk.stream_done elapsed_ms={} raw_events={} transformed_events={} usage={}",
-                _elapsed_ms(stream_start),
-                raw_event_count,
-                transformed_event_count,
-                usage,
-            )
             
             # Trace LLM 响应
             if self.tracer:
@@ -648,17 +561,10 @@ class OpenAISDKAdapter:
             if name == "tool_called":
                 tool_info = self._extract_tool_call_info(item)
                 if not tool_info:
-                    logger.debug(f"[SDK] ignored non-tool tool_called item: {type(item).__name__}")
                     return events
                 tool_name = tool_info["tool_name"]
                 arguments = tool_info["arguments"]
                 tool_call_id = tool_info.get("tool_call_id")
-                
-                logger.debug(
-                    f"[SDK] tool_called event: item_type={type(item).__name__} | "
-                    f"run_item_type={getattr(item, 'type', None)} | "
-                    f"tool_name={tool_name} | tool_call_id={tool_call_id}"
-                )
                 
                 # Trace 工具调用
                 if self.tracer:
@@ -683,7 +589,6 @@ class OpenAISDKAdapter:
             elif name == "tool_output":
                 output_info = self._extract_tool_output_info(item)
                 if not output_info:
-                    logger.debug(f"[SDK] ignored non-tool tool_output item: {type(item).__name__}")
                     return events
                 tool_name = output_info["tool_name"]
                 result = output_info.get("result")

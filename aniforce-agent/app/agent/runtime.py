@@ -41,11 +41,9 @@ class AgentRuntime:
         self.session_db_path = session_db_path
         self.enable_tracing = enable_tracing
         self.tracer = get_tracer() if enable_tracing else None
-        
+
         # Plan-Execute 状态管理
         self.current_plan: Optional[ExecutionPlan] = None
-        
-        logger.info(f"AgentRuntime initialized | tracing={enable_tracing}")
     
     @asynccontextmanager
     async def _mcp_connection(self, task: AgentTask):
@@ -98,7 +96,7 @@ class AgentRuntime:
             await mcp_server.__aenter__()
             mcp_servers.append(mcp_server)
             logger.debug(f"[RUNTIME] MCP server connected: {mcp_url} (jwt={'<present>' if jwt_token else '<missing>'})")
-            perf_log.info(
+            perf_log.debug(
                 "[PERF][agent_first_token] runtime.mcp_connected mcp_connect_ms={}",
                 _elapsed_ms(mcp_start),
             )
@@ -144,7 +142,7 @@ class AgentRuntime:
             trace_ctx.__enter__()
         
         try:
-            task_logger.info(f"[RUNTIME] Task started: {task.task_type}")
+            task_logger.debug(f"[RUNTIME] Task started: {task.task_type}")
             self.current_plan = None
             
             # 1. 更新状态为 running
@@ -166,7 +164,7 @@ class AgentRuntime:
             append_started_start = perf_counter()
             await self.repo.append_event(started_event)
             append_started_ms = _elapsed_ms(append_started_start)
-            task_logger.info(
+            task_logger.debug(
                 "[PERF][agent_first_token] runtime.started_ready total_ms={} update_status_ms={} count_events_ms={} append_started_ms={}",
                 _elapsed_ms(task_start),
                 update_status_ms,
@@ -179,13 +177,13 @@ class AgentRuntime:
             session_start = perf_counter()
             if task.session_id:
                 session = self.adapter.create_session(task.session_id, self.session_db_path)
-                task_logger.info(f"[RUNTIME] Reusing session: {task.session_id}")
+                task_logger.debug(f"[RUNTIME] Reusing session: {task.session_id}")
             else:
                 session_id = f"session_{uuid4().hex[:16]}"
                 session = self.adapter.create_session(session_id, self.session_db_path)
                 task.session_id = session_id
-                task_logger.info(f"[RUNTIME] Created new session: {session_id}")
-            task_logger.info(
+                task_logger.debug(f"[RUNTIME] Created new session: {session_id}")
+            task_logger.debug(
                 "[PERF][agent_first_token] runtime.session_ready total_ms={} session_create_ms={}",
                 _elapsed_ms(task_start),
                 _elapsed_ms(session_start),
@@ -202,7 +200,7 @@ class AgentRuntime:
                     mcp_servers=mcp_servers,
                     session_id=task.session_id,
                 )
-                task_logger.info(
+                task_logger.debug(
                     "[PERF][agent_first_token] runtime.agent_ready total_ms={} agent_create_ms={} prompt_chars={}",
                     _elapsed_ms(task_start),
                     _elapsed_ms(agent_create_start),
@@ -210,14 +208,14 @@ class AgentRuntime:
                 )
                 
                 # 6. 执行 Agent
-                task_logger.info(f"[RUNTIME] Executing Agent...")
+                task_logger.debug(f"[RUNTIME] Executing Agent...")
                 run_streamed_start = perf_counter()
                 result = await self.adapter.run_streamed(
                     agent=agent,
                     input_text=user_input,
                     session=session,
                 )
-                task_logger.info(
+                task_logger.debug(
                     "[PERF][agent_first_token] runtime.run_streamed_returned total_ms={} run_streamed_wait_ms={}",
                     _elapsed_ms(task_start),
                     _elapsed_ms(run_streamed_start),
@@ -234,7 +232,7 @@ class AgentRuntime:
                 async for event in self.adapter.stream_events(result, task.task_id, start_sequence=sequence):
                     if not first_event_seen:
                         first_event_seen = True
-                        task_logger.info(
+                        task_logger.debug(
                             "[PERF][agent_first_token] runtime.first_adapter_event total_ms={} stream_events_wait_ms={} event_type={}",
                             _elapsed_ms(task_start),
                             _elapsed_ms(stream_events_start),
@@ -242,7 +240,7 @@ class AgentRuntime:
                         )
                     if not first_thinking_delta_seen and event.event_type == EventType.THINKING_UPDATED:
                         first_thinking_delta_seen = True
-                        task_logger.info(
+                        task_logger.debug(
                             "[PERF][agent_first_token] runtime.first_thinking_delta total_ms={} stream_events_wait_ms={} sequence={}",
                             _elapsed_ms(task_start),
                             _elapsed_ms(stream_events_start),
@@ -250,7 +248,7 @@ class AgentRuntime:
                         )
                     if not first_delta_seen and event.event_type == EventType.MESSAGE_UPDATED:
                         first_delta_seen = True
-                        task_logger.info(
+                        task_logger.debug(
                             "[PERF][agent_first_token] runtime.first_message_delta total_ms={} stream_events_wait_ms={} sequence={}",
                             _elapsed_ms(task_start),
                             _elapsed_ms(stream_events_start),
@@ -261,7 +259,7 @@ class AgentRuntime:
                     append_event_ms = _elapsed_ms(append_event_start)
                     if not first_delta_persisted_logged and first_delta_seen and event.event_type == EventType.MESSAGE_UPDATED:
                         first_delta_persisted_logged = True
-                        task_logger.info(
+                        task_logger.debug(
                             "[PERF][agent_first_token] runtime.first_delta_persisted total_ms={} append_event_ms={}",
                             _elapsed_ms(task_start),
                             append_event_ms,
@@ -294,7 +292,7 @@ class AgentRuntime:
                     # 跟踪 Todo 执行
                     elif event.event_type == EventType.TOOL_CALL_STARTED:
                         tool_name = event.payload.get("tool_name", "unknown")
-                        task_logger.info(f"[RUNTIME] Event[{sequence}]: tool_call | tool={tool_name}")
+                        task_logger.debug(f"[RUNTIME] Event[{sequence}]: tool_call | tool={tool_name}")
                         
                         # 尝试关联到 Todo
                         todo_event = await self._track_todo_execution(
@@ -310,7 +308,7 @@ class AgentRuntime:
             
             latest_task = await self.repo.get_user_task(task.user_id, task.task_id)
             if latest_task and latest_task.status == AgentTaskStatus.ABORTED:
-                task_logger.info("[RUNTIME] Task was cancelled before completion; skip completed event")
+                task_logger.debug("[RUNTIME] Task was cancelled before completion; skip completed event")
                 return
 
             # 8. 更新状态为 completed
@@ -330,7 +328,7 @@ class AgentRuntime:
             await self.repo.append_event(completed_event)
             yield completed_event
             
-            task_logger.info(f"[RUNTIME] Task completed successfully")
+            task_logger.debug(f"[RUNTIME] Task completed successfully")
         
         except asyncio.CancelledError:
             task_logger.warning(f"[RUNTIME] Task cancelled by user")
@@ -473,7 +471,7 @@ class AgentRuntime:
                 sequence=current_sequence + 1,
             )
             
-            logger.info(f"[RUNTIME] Detected Plan with {len(plan.todos)} todos")
+            logger.debug(f"[RUNTIME] Detected Plan with {len(plan.todos)} todos")
             return (plan, plan_event)
         
         return None
@@ -523,7 +521,7 @@ class AgentRuntime:
                 sequence=current_sequence + 1,
             )
             
-            logger.info(f"[RUNTIME] Todo started: {current_todo.id} - {current_todo.title}")
+            logger.debug(f"[RUNTIME] Todo started: {current_todo.id} - {current_todo.title}")
             return todo_event
         
         return None

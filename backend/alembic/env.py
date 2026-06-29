@@ -17,7 +17,7 @@ if config.config_file_name is not None:
 # add your model's MetaData object here
 # for 'autogenerate' support
 from app.config.database import Base
-from app.models import User, Project, Campaign, Material, Metric, SessionState, AgentSession, AgentMessage, AgentRun
+from app.models import User, Project, Campaign, Material, Metric, SessionState, AgentSession, AgentMessage, AgentRun, IdempotencyRecord
 target_metadata = Base.metadata
 
 # other values from the config, defined by the needs of env.py,
