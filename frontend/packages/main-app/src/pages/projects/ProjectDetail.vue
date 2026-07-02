@@ -341,7 +341,7 @@ const handleCloseToast = () => {
           <!-- Empty State -->
           <div v-if="campaigns.length === 0" class="flex flex-col items-center justify-center py-[50px]">
             <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">campaign</span>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-[12px]">{{ project?.description || '暂无描述' }}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-[12px]">暂无广告任务</p>
             <button
               class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
               @click="handleCreateCampaign"

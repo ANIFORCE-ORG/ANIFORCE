@@ -39,7 +39,7 @@ check_port_in_use() {
     nc -z localhost $port &>/dev/null && return 0
   fi
   
-  # 如果所有方法都不可用，返回失败（假设端口未占用）
+  # 如果所有方法都不可用, 返回失败（假设端口未占用）
   return 1
 }
 
@@ -71,7 +71,7 @@ kill_port_process() {
     fi
   fi
   
-  warn "无法自动清理端口 $port，请手动检查"
+  warn "无法自动清理端口 $port, 请手动检查"
   return 1
 }
 
@@ -205,7 +205,7 @@ if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
   info "========== 检查 Nginx =========="
   
   if ! command -v nginx &>/dev/null; then
-    warn "未检测到 Nginx，正在尝试安装..."
+    warn "未检测到 Nginx, 正在尝试安装..."
     if command -v brew &>/dev/null; then
       brew install nginx || fail "Nginx 安装失败"
       ok "Nginx 已通过 Homebrew 安装"
@@ -216,7 +216,7 @@ if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
       sudo yum install -y nginx || fail "Nginx 安装失败"
       ok "Nginx 已通过 yum 安装"
     else
-      fail "无法自动安装 Nginx，请手动安装后重试"
+      fail "无法自动安装 Nginx, 请手动安装后重试"
     fi
   else
     NGINX_VER=$(nginx -v 2>&1 | awk -F'/' '{print $2}')
@@ -228,18 +228,18 @@ fi
 #  2. 启动 Agent 服务
 # ============================================================
 if [ "$ONLY" = "nginx" ]; then
-  warn "--only=nginx：跳过 Agent 启动"
+  warn "--only=nginx :跳过 Agent 启动"
 elif [ "$ONLY" = "backend" ]; then
-  warn "--only=backend：跳过 Agent 启动"
+  warn "--only=backend :跳过 Agent 启动"
 elif [ "$ONLY" = "frontend" ]; then
-  warn "--only=frontend：跳过 Agent 启动"
+  warn "--only=frontend :跳过 Agent 启动"
 elif [ "$WITHOUT_AGENT" -eq 1 ]; then
-  warn "--without-agent：跳过 Agent 启动"
+  warn "--without-agent :跳过 Agent 启动"
 else
   info "========== 启动 Agent 服务 =========="
 
   if check_port_in_use $AGENT_PORT; then
-    warn "端口 $AGENT_PORT 已被占用，正在清理..."
+    warn "端口 $AGENT_PORT 已被占用, 正在清理..."
     kill_port_process $AGENT_PORT
     sleep 1
   fi
@@ -266,17 +266,17 @@ fi
 #  3. 启动后端服务
 # ============================================================
 if [ "$ONLY" = "nginx" ]; then
-  warn "--only=nginx：跳过后端启动"
+  warn "--only=nginx :跳过后端启动"
 elif [ "$ONLY" = "agent" ]; then
-  warn "--only=agent：跳过后端启动"
+  warn "--only=agent :跳过后端启动"
 elif [ "$ONLY" = "frontend" ]; then
-  warn "--only=frontend：跳过后端启动"
+  warn "--only=frontend :跳过后端启动"
 else
   info "========== 启动后端服务 =========="
   
   # 清理后端端口占用
   if check_port_in_use $BACKEND_PORT; then
-    warn "端口 $BACKEND_PORT 已被占用，正在清理..."
+    warn "端口 $BACKEND_PORT 已被占用, 正在清理..."
     kill_port_process $BACKEND_PORT
     sleep 1
   fi
@@ -309,17 +309,17 @@ fi
 #  4. 启动前端服务
 # ============================================================
 if [ "$ONLY" = "nginx" ]; then
-  warn "--only=nginx：跳过前端启动"
+  warn "--only=nginx :跳过前端启动"
 elif [ "$ONLY" = "agent" ]; then
-  warn "--only=agent：跳过前端启动"
+  warn "--only=agent :跳过前端启动"
 elif [ "$ONLY" = "backend" ]; then
-  warn "--only=backend：跳过前端启动"
+  warn "--only=backend :跳过前端启动"
 else
   info "========== 启动前端服务 =========="
   
   # 清理前端端口占用
   if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
-    warn "端口 $FRONTEND_PORT 已被占用，正在清理..."
+    warn "端口 $FRONTEND_PORT 已被占用, 正在清理..."
     lsof -ti :$FRONTEND_PORT | xargs kill -9 2>/dev/null || true
     sleep 1
   fi
@@ -349,11 +349,11 @@ fi
 #  5. 配置并启动 Nginx
 # ============================================================
 if [ "$ONLY" = "agent" ]; then
-  warn "--only=agent：跳过 Nginx 启动"
+  warn "--only=agent :跳过 Nginx 启动"
 elif [ "$ONLY" = "backend" ]; then
-  warn "--only=backend：跳过 Nginx 启动"
+  warn "--only=backend :跳过 Nginx 启动"
 elif [ "$ONLY" = "frontend" ]; then
-  warn "--only=frontend：跳过 Nginx 启动"
+  warn "--only=frontend :跳过 Nginx 启动"
 else
   info "========== 配置 Nginx =========="
   
@@ -364,7 +364,7 @@ else
     
     # 检查 SSL 证书是否存在
     if [ ! -f "/etc/letsencrypt/live/www.aniforce.cc/fullchain.pem" ]; then
-      warn "SSL 证书未找到，请先运行: sudo ./scripts/ssl/setup_ssl.sh"
+      warn "SSL 证书未找到, 请先运行: sudo ./scripts/ssl/setup_ssl.sh"
       warn "或者使用不带 --ssl 参数启动开发模式"
       fail "SSL 证书缺失"
     fi
@@ -385,13 +385,13 @@ else
   done
   
   if [ -z "$MIME_TYPES_PATH" ]; then
-    warn "未找到 mime.types 文件，使用默认路径"
+    warn "未找到 mime.types 文件, 使用默认路径"
     MIME_TYPES_PATH="/etc/nginx/mime.types"
   fi
   
   # 根据配置类型生成运行时配置
   if [ "$USE_SSL" = "true" ]; then
-    # HTTPS 配置：替换端口和日志路径
+    # HTTPS 配置 :替换端口和日志路径
     sed "s/localhost:3010/localhost:$FRONTEND_PORT/g" "$NGINX_CONF" | \
     sed "s/localhost:8010/localhost:$BACKEND_PORT/g" | \
     sed "s|include /etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" | \
@@ -400,7 +400,7 @@ else
     sed "s|error_log /var/log/nginx/aniforce_error.log;|error_log $NGINX_ERROR_LOG;|g" | \
     sed "s|access_log /var/log/nginx/aniforce_access.log main;|access_log $NGINX_ACCESS_LOG main;|g" > "$NGINX_RUNTIME_CONF"
   else
-    # HTTP 配置：替换端口配置、mime.types 路径和日志路径
+    # HTTP 配置 :替换端口配置、mime.types 路径和日志路径
     sed "s/listen 80;/listen $NGINX_PORT;/g" "$NGINX_CONF" | \
     sed "s/127.0.0.1:8010/127.0.0.1:$BACKEND_PORT/g" | \
     sed "s/127.0.0.1:3010/127.0.0.1:$FRONTEND_PORT/g" | \
@@ -423,17 +423,17 @@ else
   
   # 检查端口占用
   if check_port_in_use $NGINX_PORT; then
-    warn "端口 $NGINX_PORT 已被占用，尝试停止现有 Nginx..."
+    warn "端口 $NGINX_PORT 已被占用, 尝试停止现有 Nginx..."
     nginx -s stop 2>/dev/null || sudo nginx -s stop 2>/dev/null || true
     sleep 2
   fi
   
   # 启动 Nginx
   if [ "$USE_SSL" = "true" ]; then
-    info "启动 Nginx (HTTPS 模式，端口: 80/443)..."
+    info "启动 Nginx (HTTPS 模式, 端口: 80/443)..."
     sudo nginx -c "$NGINX_RUNTIME_CONF" || fail "Nginx 启动失败"
   else
-    info "启动 Nginx (HTTP 模式，端口: $NGINX_PORT)..."
+    info "启动 Nginx (HTTP 模式, 端口: $NGINX_PORT)..."
     nginx -c "$NGINX_RUNTIME_CONF" || sudo nginx -c "$NGINX_RUNTIME_CONF" || fail "Nginx 启动失败"
   fi
   sleep 2
