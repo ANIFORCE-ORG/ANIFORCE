@@ -38,7 +38,7 @@ check_port_in_use() {
     nc -z localhost $port &>/dev/null && return 0
   fi
   
-  # 如果所有方法都不可用，返回失败（假设端口未占用）
+  # 如果所有方法都不可用,返回失败（假设端口未占用）
   return 1
 }
 
@@ -59,7 +59,7 @@ wait_for_port() {
   done
 
   if [ -n "${PID_FILE:-}" ] && [ -f "$PID_FILE" ]; then
-    warn "$name 启动超时，正在清理已启动的后台进程..."
+    warn "$name 启动超时,正在清理已启动的后台进程..."
     while IFS= read -r pid; do
       if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
         kill "$pid" 2>/dev/null || true
@@ -67,7 +67,7 @@ wait_for_port() {
     done < "$PID_FILE"
   fi
 
-  fail "$name 启动超时：端口 $port 未监听，请检查日志"
+  fail "$name 启动超时: 端口 $port 未监听,请检查日志"
 }
 
 # ---------- 跨平台杀死端口进程函数 ----------
@@ -98,7 +98,7 @@ kill_port_process() {
     fi
   fi
   
-  warn "无法自动清理端口 $port，请手动检查"
+  warn "无法自动清理端口 $port,请手动检查"
   return 1
 }
 
@@ -141,8 +141,8 @@ while [[ $# -gt 0 ]]; do
       echo "  --only           仅启动: all(默认) / agent / backend / frontend"
       echo "  --skip-install   跳过依赖安装（云端更常用）"
       echo "  --host           监听地址（默认: 0.0.0.0）"
-      echo "  --demo           启用 Demo 模式（设置 DEMO_MODE=true，默认: false 生产模式）"
-      echo "  --frontend-port  前端端口 (默认: 3010；cloud 模式若存在环境变量 PORT 且未显式指定，将使用 PORT)"
+      echo "  --demo           启用 Demo 模式（设置 DEMO_MODE=true,默认: false 生产模式）"
+      echo "  --frontend-port  前端端口 (默认: 3010；cloud 模式若存在环境变量 PORT 且未显式指定,将使用 PORT)"
       echo "  --backend-port   后端端口 (默认: 8010)"
       echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
@@ -152,7 +152,7 @@ while [[ $# -gt 0 ]]; do
       echo "                   用于自动配置 .env 中的 FRONTEND_BASE_URL、BACKEND_BASE_URL 和 OAUTH_REDIRECT_BASE_URL"
       echo ""
       echo "使用场景:"
-      echo "  • 本脚本用于开发调试，直接启动前后端服务（无 Nginx）"
+      echo "  • 本脚本用于开发调试,直接启动前后端服务（无 Nginx）"
       echo "  • 生产部署建议使用 deploy_server.sh（支持 Nginx + HTTPS）"
       echo "  • HTTPS 部署请使用: ./deploy_server.sh --mode cloud --ssl"
       echo ""
@@ -171,13 +171,13 @@ while [[ $# -gt 0 ]]; do
 done
 
 if [ "$MODE" != "local" ] && [ "$MODE" != "cloud" ]; then
-  fail "--mode 仅支持 local 或 cloud，当前: $MODE"
+  fail "--mode 仅支持 local 或 cloud,当前: $MODE"
 fi
 if [ "$ONLY" != "all" ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
-  fail "--only 仅支持 all/agent/backend/frontend，当前: $ONLY"
+  fail "--only 仅支持 all/agent/backend/frontend,当前: $ONLY"
 fi
 
-# cloud 模式下，若设置了 PORT 且用户没显式指定 --frontend-port，则使用 PORT 作为前端端口
+# cloud 模式下,若设置了 PORT 且用户没显式指定 --frontend-port,则使用 PORT 作为前端端口
 if [ "$MODE" = "cloud" ] && [ -n "${PORT:-}" ]; then
   if [ "$FRONTEND_PORT_EXPLICIT" -eq 0 ]; then
     FRONTEND_PORT="$PORT"
@@ -208,13 +208,13 @@ LOG_DATE=$(date +%Y%m%d)
 LOG_ENV="$MODE"
 
 # 日志文件路径
-# 后端应用日志：使用 loguru 的时间占位符，支持自动按日期轮转
+# 后端应用日志: 使用 loguru 的时间占位符,支持自动按日期轮转
 BACKEND_APP_LOG="$LOG_DIR/{time:YYYYMMDD}.${LOG_ENV}.backend.app.log"
-# 后端 uvicorn 日志：使用启动时的日期
+# 后端 uvicorn 日志: 使用启动时的日期
 BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.uvicorn.log"
-# Agent uvicorn 日志：使用启动时的日期
+# Agent uvicorn 日志: 使用启动时的日期
 AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.uvicorn.log"
-# 前端日志：使用启动时的日期（Vite 不支持自动轮转）
+# 前端日志: 使用启动时的日期（Vite 不支持自动轮转）
 FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
 
 info "日志配置: 目录=$LOG_DIR"
@@ -242,7 +242,7 @@ cleanup() {
     fi
   done < "$PID_FILE"
   rm -f "$PID_FILE" "$PORT_FILE"
-  ok "所有服务已停止，再见！"
+  ok "所有服务已停止,再见！"
   exit 0
 }
 trap cleanup SIGINT SIGTERM
@@ -258,24 +258,24 @@ if command -v python3 &>/dev/null; then
 elif command -v python &>/dev/null; then
   PY="python"
 else
-  fail "未检测到 Python，请先安装 Python 3.10+"
+  fail "未检测到 Python,请先安装 Python 3.10+"
 fi
 PY_VER=$($PY --version 2>&1 | awk '{print $2}')
 PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
 PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
 if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
-  fail "Python 版本过低 ($PY_VER)，需要 3.10+"
+  fail "Python 版本过低 ($PY_VER),需要 3.10+"
 fi
 ok "Python $PY_VER"
 
 # --- Node.js ---
 if ! command -v node &>/dev/null; then
-  fail "未检测到 Node.js，请先安装 Node.js 20+"
+  fail "未检测到 Node.js,请先安装 Node.js 20+"
 fi
 NODE_VER=$(node -v | sed 's/v//')
 NODE_MAJOR=$(echo "$NODE_VER" | cut -d. -f1)
 if [ "$NODE_MAJOR" -lt 20 ]; then
-  fail "Node.js 版本过低 ($NODE_VER)，需要 20+"
+  fail "Node.js 版本过低 ($NODE_VER),需要 20+"
 fi
 ok "Node.js $NODE_VER"
 
@@ -285,9 +285,9 @@ if command -v pnpm &>/dev/null; then
   ok "pnpm $PNPM_VER"
 else
   if [ "$SKIP_INSTALL" -eq 1 ]; then
-    warn "未检测到 pnpm，但启用了 --skip-install，将继续（若需要启动前端请确保 pnpm 已安装）"
+    warn "未检测到 pnpm,但启用了 --skip-install,将继续（若需要启动前端请确保 pnpm 已安装）"
   else
-    warn "未检测到 pnpm，正在安装..."
+    warn "未检测到 pnpm,正在安装..."
     npm install -g pnpm@latest || fail "pnpm 安装失败"
     PNPM_VER=$(pnpm -v)
     ok "pnpm $PNPM_VER"
@@ -302,9 +302,9 @@ info "========== Agent 依赖 =========="
 cd "$AGENT_DIR"
 
 if [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
-  warn "--only=$ONLY：跳过 Agent 依赖安装"
+  warn "--only=$ONLY: 跳过 Agent 依赖安装"
 elif [ "$SKIP_INSTALL" -eq 1 ]; then
-  warn "已启用 --skip-install，跳过 Agent 依赖安装"
+  warn "已启用 --skip-install,跳过 Agent 依赖安装"
 else
   if [ ! -d ".venv" ]; then
     info "创建 Agent Python 虚拟环境..."
@@ -316,7 +316,7 @@ else
 fi
 
 if [ ! -f ".env" ] && [ -f ".env.openai" ]; then
-  warn "Agent .env 不存在，从 .env.openai 复制..."
+  warn "Agent .env 不存在,从 .env.openai 复制..."
   cp .env.openai .env
   ok "已创建 Agent .env"
 fi
@@ -352,9 +352,9 @@ ok "虚拟环境已激活"
 
 # 安装依赖
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "frontend" ]; then
-  warn "--only=$ONLY：跳过后端依赖安装"
+  warn "--only=$ONLY 跳过后端依赖安装"
 elif [ "$SKIP_INSTALL" -eq 1 ]; then
-  warn "已启用 --skip-install，跳过后端依赖安装"
+  warn "已启用 --skip-install, 跳过后端依赖安装"
 else
   info "安装 Python 依赖..."
   pip install -q --upgrade pip
@@ -364,7 +364,7 @@ fi
 
 # .env 文件
 if [ ! -f ".env" ]; then
-  warn ".env 文件不存在，从 .env.example 复制..."
+  warn ".env 文件不存在,从 .env.example 复制..."
   cp .env.example .env
   ok "已创建 .env"
 fi
@@ -391,24 +391,24 @@ fi
 # 根据 MODE 自动配置服务地址
 if [ "$MODE" = "cloud" ]; then
   info "配置 Cloud 模式服务地址"
-  # 使用生产域名（可通过环境变量 CLOUD_DOMAIN 指定，否则使用默认域名）
+  # 使用生产域名（可通过环境变量 CLOUD_DOMAIN 指定,否则使用默认域名）
   CLOUD_DOMAIN=${CLOUD_DOMAIN:-https://www.aniforce.cc}
   
-  # 更新 FRONTEND_BASE_URL（使用域名，不带端口）
+  # 更新 FRONTEND_BASE_URL（使用域名,不带端口）
   if grep -q "^FRONTEND_BASE_URL=" .env; then
     sed -i.bak "s|^FRONTEND_BASE_URL=.*|FRONTEND_BASE_URL=$CLOUD_DOMAIN|" .env && rm -f .env.bak
   else
     echo "FRONTEND_BASE_URL=$CLOUD_DOMAIN" >> .env
   fi
   
-  # 更新 BACKEND_BASE_URL（使用域名，不带端口）
+  # 更新 BACKEND_BASE_URL（使用域名,不带端口）
   if grep -q "^BACKEND_BASE_URL=" .env; then
     sed -i.bak "s|^BACKEND_BASE_URL=.*|BACKEND_BASE_URL=$CLOUD_DOMAIN|" .env && rm -f .env.bak
   else
     echo "BACKEND_BASE_URL=$CLOUD_DOMAIN" >> .env
   fi
   
-  # 更新 OAUTH_REDIRECT_BASE_URL（使用域名，用于 OAuth 回调）
+  # 更新 OAUTH_REDIRECT_BASE_URL（使用域名,用于 OAuth 回调）
   if grep -q "^OAUTH_REDIRECT_BASE_URL=" .env; then
     sed -i.bak "s|^OAUTH_REDIRECT_BASE_URL=.*|OAUTH_REDIRECT_BASE_URL=$CLOUD_DOMAIN|" .env && rm -f .env.bak
   else
@@ -462,16 +462,16 @@ info "========== 前端依赖 =========="
 cd "$FRONTEND_DIR"
 
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ]; then
-  warn "--only=$ONLY：跳过前端依赖安装"
+  warn "--only=$ONLY : 跳过前端依赖安装"
 elif [ "$SKIP_INSTALL" -eq 1 ]; then
-  warn "已启用 --skip-install，跳过前端依赖安装"
+  warn "已启用 --skip-install, 跳过前端依赖安装"
 else
   if [ ! -d "node_modules" ] || [ ! -f "node_modules/.pnpm/lock.yaml" ]; then
     info "安装前端依赖 (pnpm install)..."
     pnpm install --frozen-lockfile 2>/dev/null || pnpm install
     ok "前端依赖安装完成"
   else
-    ok "前端依赖已存在，跳过安装"
+    ok "前端依赖已存在,跳过安装"
   fi
 fi
 
@@ -479,14 +479,14 @@ fi
 #  5. 启动 Agent 服务
 # ============================================================
 if [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
-  warn "--only=$ONLY：跳过 Agent 启动"
+  warn "--only=$ONLY: 跳过 Agent 启动"
 else
   info "========== 启动 Agent =========="
 
   cd "$AGENT_DIR"
 
   if check_port_in_use $AGENT_PORT; then
-    warn "端口 $AGENT_PORT 已被占用，尝试终止..."
+    warn "端口 $AGENT_PORT 已被占用,尝试终止..."
     kill_port_process $AGENT_PORT
     sleep 1
   fi
@@ -510,7 +510,7 @@ else
   if kill -0 "$AGENT_PID" 2>/dev/null; then
     ok "Agent 已启动 (PID: $AGENT_PID)"
   else
-    fail "Agent 启动失败，请检查日志"
+    fail "Agent 启动失败,请检查日志"
   fi
 fi
 
@@ -518,7 +518,7 @@ fi
 #  6. 启动后端服务
 # ============================================================
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "frontend" ]; then
-  warn "--only=$ONLY：跳过后端启动"
+  warn "--only=$ONLY: 跳过后端启动"
 else
   info "========== 启动后端 =========="
 
@@ -535,7 +535,7 @@ else
 
   # 检查后端端口
 if check_port_in_use $BACKEND_PORT; then
-  warn "端口 $BACKEND_PORT 已被占用，尝试终止..."
+  warn "端口 $BACKEND_PORT 已被占用,尝试终止..."
   kill_port_process $BACKEND_PORT
   sleep 1
 fi
@@ -559,7 +559,7 @@ fi
   if kill -0 "$BACKEND_PID" 2>/dev/null; then
     ok "后端已启动 (PID: $BACKEND_PID)"
   else
-    fail "后端启动失败，请检查日志"
+    fail "后端启动失败,请检查日志"
   fi
 fi
 
@@ -567,7 +567,7 @@ fi
 #  7. 启动前端服务
 # ============================================================
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ]; then
-  warn "--only=$ONLY：跳过前端启动"
+  warn "--only=$ONLY :跳过前端启动"
 else
   info "========== 启动前端 =========="
 
@@ -575,7 +575,7 @@ cd "$FRONTEND_DIR"
 
 # 检查前端端口
 if check_port_in_use $FRONTEND_PORT; then
-  warn "端口 $FRONTEND_PORT 已被占用，尝试终止..."
+  warn "端口 $FRONTEND_PORT 已被占用,尝试终止..."
   kill_port_process $FRONTEND_PORT
   sleep 1
 fi
@@ -594,7 +594,7 @@ fi
   if kill -0 "$FRONTEND_PID" 2>/dev/null; then
     ok "前端已启动 (PID: $FRONTEND_PID)"
   else
-    fail "前端启动失败，请检查日志"
+    fail "前端启动失败,请检查日志"
   fi
 fi
 
@@ -659,5 +659,5 @@ if [ "$MODE" = "local" ]; then
   fi
 fi
 
-# 保持脚本运行，等待 Ctrl+C
+# 保持脚本运行,等待 Ctrl+C
 wait

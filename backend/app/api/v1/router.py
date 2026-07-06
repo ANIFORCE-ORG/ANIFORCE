@@ -6,6 +6,7 @@ from app.api.v1.projects import router as projects_router
 from app.api.v1.campaigns import router as campaigns_router
 from app.api.v1.materials import router as materials_router
 from app.api.v1.platform_auth import router as platform_auth_router
+from app.api.v1.meta_mapi import router as meta_mapi_router
 from app.api.v1.organization import router as organization_router
 from app.api.v1.contact_info import router as contact_info_router
 from app.api.v1.agent_routes import router as agent_router
@@ -18,6 +19,7 @@ api_router.include_router(projects_router)
 api_router.include_router(campaigns_router)
 api_router.include_router(materials_router)
 api_router.include_router(platform_auth_router)
+api_router.include_router(meta_mapi_router, prefix="/platform-auth", tags=["Meta Marketing API"])
 api_router.include_router(organization_router)
 api_router.include_router(contact_info_router)
 api_router.include_router(agent_router)

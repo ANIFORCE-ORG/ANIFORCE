@@ -224,16 +224,16 @@ const formatDate = (dateString?: string) => {
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.account_id || '-' }}</strong>
             </div>
 
+            <!-- Budget Level -->
+            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">CampaignBudgetOptimization</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.campaign_budget_optimization}}</strong>
+            </div>
+
             <!-- 预算 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">预算</span>
               <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">${{ campaign?.budget?.toLocaleString() || '-' }}</strong>
-            </div>
-
-            <!-- 已消耗 -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">已消耗</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">${{ campaign?.spent?.toLocaleString() || '-' }}</strong>
             </div>
 
             <!-- Buying Type -->
@@ -244,8 +244,8 @@ const formatDate = (dateString?: string) => {
 
             <!-- Bid Strategy -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">Bid Strategy</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.bid_strategy || '-' }}</strong>
+              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">Objective</span>
+              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.objective || '-' }}</strong>
             </div>
 
             <!-- 开始/结束日期 -->
@@ -316,6 +316,9 @@ const formatDate = (dateString?: string) => {
       ref="createAdUnitModalRef"
       :show="showCreateAdUnitModal"
       :campaign-id="campaignId"
+      :campaign-buying-type="campaign?.buying_type"
+      :campaign-objective="campaign?.objective"
+      :campaign-budget-optimization="campaign?.campaign_budget_optimization"
       @close="handleCloseAdUnitModal"
       @submit="handleSubmitAdUnit"
     />

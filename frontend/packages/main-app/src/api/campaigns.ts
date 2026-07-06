@@ -10,6 +10,7 @@ export interface Campaign {
   name: string
   description?: string
   platform: string
+  connection_id?: string
   account_id?: string
   objective?: string
   buying_type?: string
@@ -96,6 +97,112 @@ export async function createCampaign(data: {
   material_ids?: string[]
 }): Promise<Campaign> {
   return http.post<Campaign>('/campaigns', data)
+}
+
+/**
+ * 应用信息接口
+ */
+export interface Application {
+  id: string
+  name: string
+  namespace?: string
+  object_store_urls?: {
+    ios_url?: string
+    itunes?: string
+    android_url?: string
+    google_play?: string
+    amazon_app_store?: string
+    windows_phone_app_store?: string
+  }
+  supported_platforms?: string[]
+  app_type?: string
+  link?: string
+}
+
+/**
+ * 获取 Meta 广告账户的应用列表
+ */
+export async function getMetaApplications(
+  connectionId: string,
+  adAccountId: string
+): Promise<Application[]> {
+  return http.get<Application[]>(
+    `/platform-auth/meta/${connectionId}/adaccounts/${adAccountId}/applications`
+  )
+}
+
+/**
+ * Facebook Page 信息接口
+ */
+export interface FacebookPage {
+  id: string
+  name: string
+  category?: string
+  tasks?: string[]
+  instagram_business_account?: {
+    id: string
+  }
+  has_advertise_permission: boolean
+}
+
+/**
+ * 获取用户可管理的 Facebook Pages
+ */
+export async function getMetaPages(connectionId: string): Promise<FacebookPage[]> {
+  return http.get<FacebookPage[]>(`/platform-auth/meta/${connectionId}/pages`)
+}
+
+/**
+ * Meta 广告图片信息接口
+ */
+export interface AdImage {
+  id: string
+  name?: string
+  hash: string
+  url?: string
+  url_128?: string
+  height?: number
+  width?: number
+  status?: string
+  created_time?: string
+}
+
+/**
+ * 获取 Meta 广告账户的图片素材列表
+ */
+export async function getMetaAdImages(
+  connectionId: string,
+  adAccountId: string
+): Promise<AdImage[]> {
+  return http.get<AdImage[]>(
+    `/platform-auth/meta/${connectionId}/adaccounts/${adAccountId}/images`
+  )
+}
+
+/**
+ * Meta 广告视频信息接口
+ */
+export interface AdVideo {
+  id: string
+  title?: string
+  description?: string
+  length?: number
+  picture?: string
+  source?: string
+  status?: string
+  created_time?: string
+}
+
+/**
+ * 获取 Meta 广告账户的视频素材列表
+ */
+export async function getMetaAdVideos(
+  connectionId: string,
+  adAccountId: string
+): Promise<AdVideo[]> {
+  return http.get<AdVideo[]>(
+    `/platform-auth/meta/${connectionId}/adaccounts/${adAccountId}/videos`
+  )
 }
 
 /**

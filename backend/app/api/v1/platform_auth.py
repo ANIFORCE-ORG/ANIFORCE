@@ -1614,6 +1614,7 @@ class AdAccountOption(BaseModel):
     account_id: str
     account_name: str
     channel: str
+    connection_id: str
 
     class Config:
         from_attributes = True
@@ -1678,7 +1679,8 @@ async def get_ad_accounts(
             AdAccountOption(
                 account_id=binding.sub_account_id,
                 account_name=binding.sub_account_name,
-                channel=channel
+                channel=channel,
+                connection_id=binding.parent_connection_id
             )
             for binding in bindings
         ]

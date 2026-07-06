@@ -38,6 +38,7 @@ interface AccountOption {
   accountId: string
   accountName: string
   channel: string
+  connectionId: string
 }
 
 const props = defineProps<Props>()
@@ -216,12 +217,23 @@ const showSpecialAdCategoryCountry = computed(() => {
   return formData.value.specialAdCategories !== 'None'
 })
 
+const isCampaignBudgetEnabled = computed(() => {
+  return formData.value.campaignBudget === '开启'
+})
+
 // 监听 Buying Type 改变，自动调整 Objective
 watch(() => formData.value.buyingType, (newBuyingType) => {
   const allowedObjectives = filteredObjectiveOptions.value
   // 如果当前 Objective 不在允许的选项中，重置为第一个允许的选项
   if (!allowedObjectives.includes(formData.value.objective)) {
     formData.value.objective = allowedObjectives[0] || 'Awareness'
+  }
+})
+
+watch(() => formData.value.campaignBudget, (newCampaignBudget) => {
+  if (newCampaignBudget === '关闭' && errors.value.budget) {
+    const { budget, ...restErrors } = errors.value
+    errors.value = restErrors
   }
 })
 
@@ -237,7 +249,8 @@ const fetchAccountOptions = async () => {
     accountOptions.value = accounts.map((account: any) => ({
       accountId: account.account_id,
       accountName: account.account_name,
-      channel: account.channel
+      channel: account.channel,
+      connectionId: account.connection_id
     }))
 
     console.log('[fetchAccountOptions] 转换后的账户选项:', accountOptions.value)
@@ -270,7 +283,7 @@ const validateForm = (): boolean => {
     errors.value.account = '请选择广告账户'
   }
 
-  if (!formData.value.budget || parseFloat(formData.value.budget) <= 0) {
+  if (isCampaignBudgetEnabled.value && (!formData.value.budget || parseFloat(formData.value.budget) <= 0)) {
     errors.value.budget = '请输入有效的预算金额'
   }
 
@@ -297,13 +310,13 @@ const resetForm = () => {
     channel: 'Meta',
     account: '',
     campaignName: '',
-    objective: 'App promotion',
+    objective: 'Awareness',
     buyingType: 'Auction',
     specialAdCategories: 'None',
     specialAdCategoryCountry: '',
     promotedObject: '',
     abTest: '关闭',
-    campaignBudget: '开启',
+    campaignBudget: '关闭',
     campaignStatus: 'draft',
     budgetType: 'Daily budget',
     budget: '',
@@ -331,12 +344,20 @@ const handleSave = () => {
   }
 
   submitting.value = true
+  const campaignBudgetEnabled = isCampaignBudgetEnabled.value
+
+  // 根据选择的账户找到对应的 connection_id
+  const selectedAccount = accountOptions.value.find(
+    account => account.accountId === formData.value.account
+  )
+  const connectionId = selectedAccount?.connectionId
 
   // 将前端表单字段映射到后端 API 字段
   const submitData: any = {
     id: props.initialData?.id,  // 编辑模式时包含 ID
     name: formData.value.campaignName,  // campaignName -> name
     platform: formData.value.channel,  // channel -> platform
+    connection_id: connectionId,  // 添加 connection_id
     account_id: formData.value.account,  // account -> account_id
     objective: formData.value.objective,
     buying_type: formData.value.buyingType,  // buyingType -> buying_type
@@ -344,14 +365,15 @@ const handleSave = () => {
     ab_test: formData.value.abTest,  // abTest -> ab_test
     campaign_budget_optimization: formData.value.campaignBudget,  // campaignBudget -> campaign_budget_optimization
     status: formData.value.campaignStatus,  // campaignStatus -> status
-    budget_type: formData.value.budgetType,  // budgetType -> budget_type
-    budget: parseFloat(formData.value.budget) || 0,  // 转换为数字
+    budget_type: campaignBudgetEnabled ? formData.value.budgetType : undefined,  // budgetType -> budget_type
+    budget: campaignBudgetEnabled ? (parseFloat(formData.value.budget) || 0) : 0,  // 转换为数字
     bid_strategy: formData.value.bidStrategy,  // bidStrategy -> bid_strategy
     spend_limit: formData.value.spendLimit ? parseFloat(formData.value.spendLimit) : undefined,  // 转换为数字或undefined
     start_date: formData.value.start_date,
     end_date: formData.value.end_date
   }
 
+  console.log('[handleSave] 提交数据包含 connection_id:', connectionId)
   emit('submit', submitData)
 }
 
@@ -379,13 +401,13 @@ watch(() => props.initialData, (newData) => {
       channel: newData.platform || 'Meta',
       account: newData.account_id || '',
       campaignName: newData.name || '',
-      objective: newData.objective || 'App promotion',
+      objective: newData.objective || 'Awareness',
       buyingType: newData.buying_type || 'Auction',
       specialAdCategories: newData.special_ad_categories || 'None',
       specialAdCategoryCountry: newData.special_ad_category_country || '',
       promotedObject: newData.promoted_object || '',
       abTest: newData.ab_test || '关闭',
-      campaignBudget: newData.campaign_budget_optimization || '开启',
+      campaignBudget: newData.campaign_budget_optimization || '关闭',
       campaignStatus: newData.status || 'draft',
       budgetType: newData.budget_type || 'Daily budget',
       budget: newData.budget?.toString() || '',
@@ -505,25 +527,10 @@ defineExpose({
 
               <!-- 第三行：Objective + Buying Type -->
               <div class="grid grid-cols-2 gap-[10px]">
-                <!-- Objective -->
-                <div>
-                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                    Objective
-                  </label>
-                  <select
-                    v-model="formData.objective"
-                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option v-for="opt in filteredObjectiveOptions" :key="opt" :value="opt">
-                      {{ opt }}
-                    </option>
-                  </select>
-                </div>
-
                 <!-- Buying Type -->
                 <div>
                   <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                    Buying Type
+                    Buying Type *
                   </label>
                   <select
                     v-model="formData.buyingType"
@@ -534,9 +541,37 @@ defineExpose({
                     </option>
                   </select>
                 </div>
+
+                <!-- Objective -->
+                <div>
+                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    Objective *
+                  </label>
+                  <select
+                    v-model="formData.objective"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option v-for="opt in filteredObjectiveOptions" :key="opt" :value="opt">
+                      {{ opt }}
+                    </option>
+                  </select>
+                </div>
               </div>
 
-              <!-- 第四行：Special Ad Categories + A/B Test -->
+              <!-- Spend Limit -->
+              <div>
+                <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                  Campaign Spend Limit (Optional)
+                </label>
+                <input
+                  v-model="formData.spendLimit"
+                  type="text"
+                  placeholder="例如 18,000 USD"
+                  class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                />
+              </div>
+
+              <!-- 第四行：Special Ad Categories -->
               <div class="grid grid-cols-2 gap-[10px]">
                 <!-- Special Ad Categories -->
                 <div>
@@ -571,20 +606,6 @@ defineExpose({
                     </option>
                   </select>
                   <p v-if="errors.specialAdCategoryCountry" class="mt-[3px] text-[9px] text-red-500">{{ errors.specialAdCategoryCountry }}</p>
-                </div>
-
-                <!-- A/B Test -->
-                <div>
-                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                    A/B Test
-                  </label>
-                  <select
-                    v-model="formData.abTest"
-                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  >
-                    <option value="关闭">关闭</option>
-                    <option value="开启">开启</option>
-                  </select>
                 </div>
               </div>
 
@@ -629,7 +650,8 @@ defineExpose({
                   </label>
                   <select
                     v-model="formData.budgetType"
-                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    :disabled="!isCampaignBudgetEnabled"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                   >
                     <option v-for="type in budgetTypeOptions" :key="type" :value="type">
                       {{ type }}
@@ -640,20 +662,21 @@ defineExpose({
                 <!-- Daily/Lifetime Budget -->
                 <div>
                   <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                    Daily/Lifetime budget(USD) *
+                    Daily/Lifetime budget(USD)<span v-if="isCampaignBudgetEnabled"> *</span>
                   </label>
                   <input
                     v-model="formData.budget"
                     type="text"
                     placeholder="例如 800 USD"
-                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                    :disabled="!isCampaignBudgetEnabled"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed"
                     :class="{ 'border-red-500': errors.budget }"
                   />
                   <p v-if="errors.budget" class="mt-[3px] text-[9px] text-red-500">{{ errors.budget }}</p>
                 </div>
               </div>
 
-              <!-- 第七行：Bid Strategy + Spend Limit -->
+              <!-- 第七行：Bid Strategy + A/B Test  -->
               <div class="grid grid-cols-2 gap-[10px]">
                 <!-- Bid Strategy -->
                 <div>
@@ -670,17 +693,18 @@ defineExpose({
                   </select>
                 </div>
 
-                <!-- Spend Limit -->
+                <!-- A/B Test -->
                 <div>
                   <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                    Spend Limit
+                    A/B Test
                   </label>
-                  <input
-                    v-model="formData.spendLimit"
-                    type="text"
-                    placeholder="例如 18,000 USD"
-                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
-                  />
+                  <select
+                    v-model="formData.abTest"
+                    class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500"
+                  >
+                    <option value="关闭">关闭</option>
+                    <option value="开启">开启</option>
+                  </select>
                 </div>
               </div>
 
