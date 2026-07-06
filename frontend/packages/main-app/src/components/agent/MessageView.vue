@@ -422,18 +422,13 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
         </div>
 
         <!-- Approval Block: SDK HITL / MCP approval -->
-        <div v-else-if="block.type === 'approval'" class="approval-block" :class="String(block.status || 'pending')">
+        <div v-else-if="block.type === 'approval'" class="approval-block compact" :class="String(block.status || 'pending')">
           <div class="approval-head">
             <span class="material-symbols-outlined approval-icon">verified_user</span>
             <div class="approval-title-wrap">
-              <div class="approval-title">需要人工确认</div>
-              <div class="approval-subtitle">{{ approvalTitle(block) }} · {{ approvalStatus(block) }}</div>
+              <div class="approval-title">{{ approvalTitle(block) }}</div>
+              <div class="approval-subtitle">{{ approvalStatus(block) }} · 请在右侧工作台确认</div>
             </div>
-          </div>
-          <pre class="approval-args">{{ approvalArgs(block) }}</pre>
-          <div v-if="canResolveApproval(block)" class="approval-actions">
-            <button class="approval-button secondary" type="button" @click="resolveApproval(block, 'reject')">拒绝</button>
-            <button class="approval-button primary" type="button" @click="resolveApproval(block, 'approve')">批准执行</button>
           </div>
         </div>
 
@@ -912,6 +907,10 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   border-radius: 8px;
   background: #fffaf0;
   color: var(--text, #202124);
+}
+
+.approval-block.compact {
+  padding: 8px;
 }
 
 .approval-block.approved {

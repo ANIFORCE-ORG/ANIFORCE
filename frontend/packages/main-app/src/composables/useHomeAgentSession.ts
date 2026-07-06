@@ -1053,6 +1053,29 @@ export function useHomeAgentSession() {
             markFirstMessageDelta() {},
             markFirstThinkingDelta() {},
           })
+          // Workspace 投影更新：tool_called / tool_output
+          const raw = event.data as unknown as AgentSdkStreamEvent
+          if (raw.type === 'tool_called' && raw.data?.tool_name) {
+            const toolName = String(raw.data.tool_name)
+            const config = (await import('@/store/workspace')).toolProjectionRegistry[toolName]
+            if (config) {
+              workspace.upsertProjection(sessionId, {
+                id: String(raw.data.tool_call_id || `tool_${Date.now()}`),
+                runId,
+                sessionId,
+                surface: config.surface,
+                mode: config.mode,
+                sourceToolName: toolName,
+                sourceToolCallId: String(raw.data.tool_call_id || ''),
+                payload: (raw.data.arguments || {}) as Record<string, unknown>,
+                updatedAt: Date.now(),
+              })
+            }
+          }
+          if (raw.type === 'tool_output' && raw.data?.tool_call_id) {
+            const result = (raw.data.output || {}) as Record<string, unknown>
+            workspace.setProjectionReady(sessionId, String(raw.data.tool_call_id), result)
+          }
         }
         if (event.event === 'runtime.completed') {
           const finalOutput = event.data.final_output
@@ -1060,6 +1083,8 @@ export function useHomeAgentSession() {
           const usage = event.data.usage
           if (usage && typeof usage === 'object') assistant.usage = usage as any
           markRunningToolsCompleted()
+          // 标记当前 approval draft 为 completed
+          workspace.setApprovalDraftStatus(checkpointId, 'completed')
         }
         if (event.event === 'runtime.requires_action') {
           drainTypewriter(false)
