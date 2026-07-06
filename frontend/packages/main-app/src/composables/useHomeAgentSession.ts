@@ -1046,36 +1046,56 @@ export function useHomeAgentSession() {
     let completedAssistantContent = ''
     try {
       for await (const event of resolveAgentRunApproval(runId, checkpointId, decision, undefined, approvalAbortController.signal, editedArguments, argumentDiff)) {
-        if (event.event === 'raw_response_event' || event.event === 'run_item_stream_event' || event.event === 'agent_updated_stream_event') {
-          handleSdkRawEvent(event.data as unknown as AgentSdkStreamEvent, sessionId, {
+        // approval resume 流返回的是 SDK 原生事件，event.event 是 type（如 'tool_called'、'tool_output'）
+        const eventType = event.event
+        const raw = event.data as unknown as AgentSdkStreamEvent
+
+        // SDK 原生事件：处理对话消息
+        if (eventType === 'raw_response_event' || eventType === 'run_item_stream_event' || eventType === 'agent_updated_stream_event') {
+          handleSdkRawEvent(raw, sessionId, {
             assistant,
             perfMs: () => 0,
             markFirstMessageDelta() {},
             markFirstThinkingDelta() {},
           })
-          // Workspace 投影更新：tool_called / tool_output
-          const raw = event.data as unknown as AgentSdkStreamEvent
-          if (raw.type === 'tool_called' && raw.data?.tool_name) {
-            const toolName = String(raw.data.tool_name)
-            const config = (await import('@/store/workspace')).toolProjectionRegistry[toolName]
-            if (config) {
-              workspace.upsertProjection(sessionId, {
-                id: String(raw.data.tool_call_id || `tool_${Date.now()}`),
-                runId,
-                sessionId,
-                surface: config.surface,
-                mode: config.mode,
-                sourceToolName: toolName,
-                sourceToolCallId: String(raw.data.tool_call_id || ''),
-                payload: (raw.data.arguments || {}) as Record<string, unknown>,
-                updatedAt: Date.now(),
-              })
-            }
+        }
+
+        // SDK 原生事件：处理 Workspace 投影
+        if (eventType === 'tool_called' && raw.data?.tool_name) {
+          const toolName = String(raw.data.tool_name)
+          const config = (await import('@/store/workspace')).toolProjectionRegistry[toolName]
+          if (config) {
+            workspace.upsertProjection(sessionId, {
+              id: String(raw.data.tool_call_id || `tool_${Date.now()}`),
+              runId,
+              sessionId,
+              surface: config.surface,
+              mode: config.mode,
+              sourceToolName: toolName,
+              sourceToolCallId: String(raw.data.tool_call_id || ''),
+              payload: (raw.data.arguments || {}) as Record<string, unknown>,
+              updatedAt: Date.now(),
+            })
           }
-          if (raw.type === 'tool_output' && raw.data?.tool_call_id) {
-            const result = (raw.data.output || {}) as Record<string, unknown>
-            workspace.setProjectionReady(sessionId, String(raw.data.tool_call_id), result)
-          }
+          // 同时调用 handleSdkRawEvent 处理对话消息
+          handleSdkRawEvent(raw, sessionId, {
+            assistant,
+            perfMs: () => 0,
+            markFirstMessageDelta() {},
+            markFirstThinkingDelta() {},
+          })
+        }
+
+        if (eventType === 'tool_output' && raw.data?.tool_call_id) {
+          const result = (raw.data.output || {}) as Record<string, unknown>
+          workspace.setProjectionReady(sessionId, String(raw.data.tool_call_id), result)
+          // 同时调用 handleSdkRawEvent 处理对话消息
+          handleSdkRawEvent(raw, sessionId, {
+            assistant,
+            perfMs: () => 0,
+            markFirstMessageDelta() {},
+            markFirstThinkingDelta() {},
+          })
         }
         if (event.event === 'runtime.completed') {
           const finalOutput = event.data.final_output
