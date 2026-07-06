@@ -7,9 +7,7 @@ System Prompt 管理
 3. Conversation 模式（纯对话）
 """
 
-from pathlib import Path
 from typing import List, Optional
-from loguru import logger
 
 
 class SystemPromptManager:
@@ -17,22 +15,17 @@ class SystemPromptManager:
     
     @staticmethod
     def get_plan_execute_prompt(
-        skills_dir: Optional[str] = None,
         available_mcp_tools: Optional[List[str]] = None
     ) -> str:
         """
         获取 Plan-Execute 模式的 System Prompt
         
         Args:
-            skills_dir: Skills 目录路径
             available_mcp_tools: 可用的 MCP Tools 列表
         
         Returns:
             System Prompt 字符串
         """
-        
-        # Skills 索引由 OpenAI Agents SDK 的 Skills capability 在运行时自动注入。
-        skills_index = SystemPromptManager._get_skills_usage_instructions()
         
         # 获取 MCP Tools 列表
         mcp_tools_list = SystemPromptManager._format_mcp_tools(available_mcp_tools)
@@ -43,22 +36,13 @@ class SystemPromptManager:
 
 你拥有以下能力：
 
-## 1. Skills（领域知识）
-
-{skills_index}
-
-**使用方法**：
-- 当遇到复杂任务时，先调用 `load_skill("skill-name")` 加载相关 Skill
-- Skill 会提供详细的工作流程、示例和约束
-- 按照 Skill 的指导完成任务
-
-## 2. MCP Tools（业务操作）
+## 1. MCP Tools（业务操作）
 
 你可以直接调用以下 MCP Tools 执行业务操作：
 
 {mcp_tools_list}
 
-## 3. 混合工作模式（Plan-ReAct Hybrid）
+## 2. 混合工作模式（Plan-ReAct Hybrid）
 
 你支持两种工作模式，根据任务复杂度选择：
 
@@ -117,9 +101,8 @@ class SystemPromptManager:
 **工作流程**：
 1. 分析任务 - 理解用户需求
 2. 制定计划 - 输出执行计划（JSON 或 Markdown）
-3. 加载 Skill（如需要）- 调用 load_skill
-4. 逐步执行 - 按计划调用 Tools
-5. 汇总结果 - 向用户报告
+3. 逐步执行 - 按计划调用 Tools
+4. 汇总结果 - 向用户报告
 
 **示例**：
 ```
@@ -134,7 +117,6 @@ class SystemPromptManager:
 3. 分析预算使用情况和效果数据
 4. 生成优化建议
 
-[调用 load_skill("data-analysis")]
 [调用 get_project_detail(id="A")]
 [调用 list_campaigns(project_id="A")]
 ...
@@ -175,9 +157,8 @@ class SystemPromptManager:
 
 1. **分析任务** - 理解用户需求
 2. **制定计划** - 输出执行计划（JSON 或 Markdown）
-3. **加载 Skill**（如需要）- 调用 load_skill
-4. **逐步执行** - 按计划调用 Tools
-5. **汇总结果** - 向用户报告
+3. **逐步执行** - 按计划调用 Tools
+4. **汇总结果** - 向用户报告
 
 ---
 
@@ -190,7 +171,7 @@ class SystemPromptManager:
    - 不编造、不假设、不猜测数据
 
 2. **操作安全性**
-   - 删除操作必须使用 hitl-operations Skill
+   - 删除操作必须先展示预览和风险警告
    - 批量操作必须先展示预览和风险警告
    - 高风险操作必须要求用户明确确认
 
@@ -210,15 +191,15 @@ class SystemPromptManager:
 ❌ 不要修改用户没有要求修改的数据
 ❌ 不要假装操作成功（如果 Tool 返回错误）
 ❌ 不要使用虚假数据回复用户
-❌ 不要忽略 Skill 的硬约束
+❌ 不要绕过用户确认执行高风险操作
 
 ---
 
 # 特殊场景
 
-## 高风险操作（必须使用 HITL）
+## 高风险操作（必须确认）
 
-当遇到以下操作时，必须加载 `hitl-operations` Skill：
+当遇到以下操作时，必须先向用户展示影响范围和风险，并获得明确确认：
 
 - 删除项目或广告计划
 - 批量修改
@@ -226,19 +207,17 @@ class SystemPromptManager:
 - 其他不可逆操作
 
 **流程**：
-1. 调用 `load_skill("hitl-operations")`
-2. 按照 Skill 指导，展示风险警告
-3. 要求用户明确确认
-4. 验证确认后再执行
+1. 展示风险警告和影响范围
+2. 要求用户明确确认
+3. 验证确认后再执行
 
-## 数据分析（使用 data-analysis Skill）
+## 数据分析
 
 当用户要求分析数据、生成报告、提供建议时：
 
-1. 调用 `load_skill("data-analysis")`
-2. 按照 Skill 的工作流执行
-3. 生成结构化的分析报告
-4. 包含数据、结论和建议
+1. 通过 MCP Tools 获取真实业务数据
+2. 生成结构化的分析报告
+3. 包含数据、结论和建议
 
 ---
 
@@ -268,25 +247,11 @@ class SystemPromptManager:
 
 现在开始工作吧！记住：
 1. 复杂任务先制定计划
-2. 需要时加载 Skill
-3. 使用真实数据
-4. 高风险操作必须确认
+2. 使用真实数据
+3. 高风险操作必须确认
 """
         
         return prompt
-    
-    @staticmethod
-    def _get_skills_usage_instructions() -> str:
-        """获取 Skills 使用说明。
-
-        OpenAI Agents SDK 会通过 SandboxAgent capability.instructions() 自动注入
-        Skills 名称、描述、路径和 load_skill 使用规则，这里不能自行做文件系统
-        检查，否则会和 SDK 的运行时注入产生冲突。
-        """
-        return (
-            "你具备 OpenAI Agents SDK Skills 能力。可用 Skills 列表、描述、路径和 "
-            "`load_skill` 使用规则由 SDK 在运行时自动注入到上下文中。"
-        )
     
     @staticmethod
     def _format_mcp_tools(tools: Optional[List[str]]) -> str:

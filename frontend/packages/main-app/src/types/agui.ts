@@ -1,61 +1,19 @@
 /**
- * AG-UI 协议类型定义
- * 
- * 定义前端与 Agent Runtime 之间的事件协议
+ * Agent UI 类型定义
+ *
+ * 流式模型事件使用 Agents SDK 原生 event type；这里保留 UI 组件需要的数据类型。
  */
 
 // ============================================================================
-// AG-UI 事件类型
+// Agent stream event types
 // ============================================================================
 
 export enum AGUIEventType {
-  // 文本消息事件
-  TEXT_MESSAGE_START = 'TEXT_MESSAGE_START',
-  TEXT_MESSAGE_CONTENT = 'TEXT_MESSAGE_CONTENT',
-  TEXT_MESSAGE_END = 'TEXT_MESSAGE_END',
-  
-  // 工具调用事件
-  TOOL_CALL_START = 'TOOL_CALL_START',
-  TOOL_CALL_ARGS = 'TOOL_CALL_ARGS',
-  TOOL_CALL_END = 'TOOL_CALL_END',
-  
-  // 共享状态事件
   STATE_SNAPSHOT = 'STATE_SNAPSHOT',
-  
-  // 自定义事件（Plan/Todo/HITL）
-  CUSTOM = 'CUSTOM',
-  
-  // 运行时事件
   RUNTIME_STARTED = 'runtime.started',
   RUNTIME_COMPLETED = 'runtime.completed',
   RUNTIME_ERROR = 'runtime.error',
   RUNTIME_ABORTED = 'runtime.aborted',
-  
-  // 兼容旧事件
-  MESSAGE_DELTA = 'message_delta',
-  MESSAGE_UPDATED = 'message.updated',
-  MESSAGE_COMPLETED = 'message_completed',
-  MESSAGE_COMPLETED_ALT = 'message.completed',
-}
-
-// ============================================================================
-// 自定义事件子类型
-// ============================================================================
-
-export enum CustomEventSubtype {
-  // Plan 事件
-  PLAN_CREATED = 'plan.created',
-  PLAN_UPDATED = 'plan.updated',
-  
-  // Todo 事件
-  TODO_STARTED = 'todo.started',
-  TODO_COMPLETED = 'todo.completed',
-  TODO_FAILED = 'todo.failed',
-  TODO_SKIPPED = 'todo.skipped',
-  
-  // HITL 事件
-  HITL_CONFIRMATION_REQUEST = 'hitl.confirmation_request',
-  HITL_CONFIRMATION_RESPONSE = 'hitl.confirmation_response',
 }
 
 // ============================================================================
@@ -195,53 +153,3 @@ export interface AGUIEvent {
  */
 export type AGUIEventHandler = (event: AGUIEvent) => void | Promise<void>
 
-// ============================================================================
-// 工具函数
-// ============================================================================
-
-/**
- * 判断是否为文本消息事件
- */
-export function isTextMessageEvent(eventType: string): boolean {
-  return [
-    AGUIEventType.TEXT_MESSAGE_CONTENT,
-    AGUIEventType.MESSAGE_DELTA,
-    AGUIEventType.MESSAGE_UPDATED,
-  ].includes(eventType as AGUIEventType)
-}
-
-/**
- * 判断是否为消息完成事件
- */
-export function isMessageCompletedEvent(eventType: string): boolean {
-  return [
-    AGUIEventType.TEXT_MESSAGE_END,
-    AGUIEventType.MESSAGE_COMPLETED,
-    AGUIEventType.MESSAGE_COMPLETED_ALT,
-  ].includes(eventType as AGUIEventType)
-}
-
-/**
- * 判断是否为工具调用事件
- */
-export function isToolCallEvent(eventType: string): boolean {
-  return [
-    AGUIEventType.TOOL_CALL_START,
-    AGUIEventType.TOOL_CALL_ARGS,
-    AGUIEventType.TOOL_CALL_END,
-  ].includes(eventType as AGUIEventType)
-}
-
-/**
- * 判断是否为自定义事件
- */
-export function isCustomEvent(eventType: string): boolean {
-  return eventType === AGUIEventType.CUSTOM
-}
-
-/**
- * 获取自定义事件子类型
- */
-export function getCustomEventSubtype(event: AGUIEvent): string | undefined {
-  return event.data.subtype || event.data.payload?.subtype
-}

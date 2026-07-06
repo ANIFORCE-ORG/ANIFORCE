@@ -31,39 +31,51 @@ class ChatEventAssembler:
         tool_by_id: dict[str, dict] = {}
 
         for event_name, data in events:
-            if event_name == "message.updated":
-                delta = str(data.get("delta") or data.get("content") or "")
-                if delta:
-                    text_parts.append(delta)
-            elif event_name == "thinking.updated":
-                delta = str(data.get("delta") or data.get("content") or "")
-                if delta:
-                    thinking_parts.append(delta)
-            elif event_name == "tool_call.started":
-                call_id = str(data.get("tool_call_id") or data.get("id") or f"tool_{len(tool_blocks) + 1}")
-                block = {
-                    "type": "tool_call",
-                    "toolCallId": call_id,
-                    "tool": data.get("tool_name") or data.get("tool") or data.get("name"),
-                    "args": data.get("arguments") or data.get("args") or {},
-                    "status": "running",
-                }
-                tool_by_id[call_id] = block
-                tool_blocks.append(block)
-            elif event_name in {"tool_call.completed", "tool_call.error"}:
-                call_id = str(data.get("tool_call_id") or data.get("id") or "")
-                block = tool_by_id.get(call_id)
-                if not block:
-                    block = {
-                        "type": "tool_call",
-                        "toolCallId": call_id or f"tool_{len(tool_blocks) + 1}",
-                        "tool": data.get("tool_name") or data.get("tool") or data.get("name"),
-                        "args": data.get("arguments") or data.get("args") or {},
-                    }
-                    tool_blocks.append(block)
-                block["status"] = "error" if event_name.endswith(".error") else "completed"
-                block["result"] = data.get("result") or data.get("error")
-            elif event_name in {"runtime.completed", "message.completed"}:
+            if event_name in {"raw_response_event", "run_item_stream_event", "agent_updated_stream_event"}:
+                sdk_type = str(data.get("type") or "")
+                sdk_data = self._as_dict(data.get("data"))
+                sdk_item = self._as_dict(data.get("item"))
+
+                if sdk_type == "raw_response_event":
+                    data_type = str(sdk_data.get("type") or "")
+                    delta = str(sdk_data.get("delta") or "")
+                    if data_type == "response.output_text.delta" and delta:
+                        text_parts.append(delta)
+                    elif data_type in {"response.reasoning_text.delta", "response.reasoning_summary_text.delta"} and delta:
+                        thinking_parts.append(delta)
+
+                elif sdk_type == "run_item_stream_event":
+                    name = str(data.get("name") or "")
+                    if name == "tool_called":
+                        call_id, tool_name, args = self._tool_call_info(sdk_item)
+                        call_id = call_id or f"tool_{len(tool_blocks) + 1}"
+                        block = {
+                            "type": "tool_call",
+                            "toolCallId": call_id,
+                            "tool": tool_name,
+                            "args": args,
+                            "status": "running",
+                        }
+                        tool_by_id[call_id] = block
+                        tool_blocks.append(block)
+                    elif name == "tool_output":
+                        call_id, result = self._tool_output_info(sdk_item)
+                        block = tool_by_id.get(call_id or "")
+                        if not block:
+                            block = {
+                                "type": "tool_call",
+                                "toolCallId": call_id or f"tool_{len(tool_blocks) + 1}",
+                                "tool": "unknown",
+                                "args": {},
+                            }
+                            tool_blocks.append(block)
+                        block["status"] = "completed"
+                        block["result"] = result
+                    elif name == "reasoning_item_created":
+                        reasoning = self._reasoning_text(sdk_item)
+                        if reasoning:
+                            thinking_parts.append(reasoning)
+            elif event_name == "runtime.completed":
                 usage = data.get("usage") or usage
 
         blocks: list[dict] = []
@@ -84,3 +96,42 @@ class ChatEventAssembler:
     def _summarize(self, content: str) -> str:
         cleaned = " ".join(content.split())
         return cleaned[:120] + ("..." if len(cleaned) > 120 else "")
+
+    def _as_dict(self, value: Any) -> dict[str, Any]:
+        return value if isinstance(value, dict) else {}
+
+    def _tool_call_info(self, item: dict[str, Any]) -> tuple[str, str, dict[str, Any]]:
+        raw = self._as_dict(item.get("raw_item"))
+        call_id = str(item.get("call_id") or raw.get("call_id") or raw.get("id") or "")
+        tool_name = str(item.get("tool_name") or raw.get("name") or item.get("name") or "tool")
+        args = raw.get("arguments") or item.get("arguments") or {}
+        if isinstance(args, str):
+            import json
+            try:
+                args = json.loads(args) if args.strip() else {}
+            except Exception:
+                args = {"raw": args}
+        if not isinstance(args, dict):
+            args = {}
+        return call_id, tool_name, args
+
+    def _tool_output_info(self, item: dict[str, Any]) -> tuple[str, Any]:
+        raw = self._as_dict(item.get("raw_item"))
+        call_id = str(item.get("call_id") or raw.get("call_id") or raw.get("id") or "")
+        result = item.get("output")
+        if result is None:
+            result = raw.get("output") if "output" in raw else raw.get("content")
+        return call_id, result
+
+    def _reasoning_text(self, item: dict[str, Any]) -> str:
+        raw = self._as_dict(item.get("raw_item")) or item
+        summary = raw.get("summary") or []
+        if not isinstance(summary, list):
+            return ""
+        texts = []
+        for entry in summary:
+            record = self._as_dict(entry)
+            text = record.get("text")
+            if text:
+                texts.append(str(text))
+        return "\n\n".join(texts).strip()

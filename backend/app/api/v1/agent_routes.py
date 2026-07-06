@@ -592,18 +592,20 @@ async def _consume_agent_run_background(
                             _elapsed_ms(gateway_start),
                             len(chunk),
                         )
-                    if not first_message_logged and b"event: message.updated" in chunk:
-                        first_message_logged = True
-                        perf_log.info(
-                            "[PERF][agent_first_token] backend.first_message_delta total_ms={} gateway_wait_ms={} upstream_bytes_before_first_delta={}",
-                            _elapsed_ms(perf_start),
-                            _elapsed_ms(gateway_start),
-                            upstream_bytes,
-                        )
                     stream_buffer += chunk.decode("utf-8", errors="ignore")
                     events, stream_buffer = _parse_sse_events(stream_buffer)
                     for event_name, data in events:
-                        if not first_thinking_logged and event_name == "thinking.updated":
+                        sdk_data = data.get("data") if event_name == "raw_response_event" and isinstance(data, dict) else None
+                        sdk_data_type = sdk_data.get("type") if isinstance(sdk_data, dict) else None
+                        if not first_message_logged and sdk_data_type == "response.output_text.delta":
+                            first_message_logged = True
+                            perf_log.info(
+                                "[PERF][agent_first_token] backend.first_message_delta total_ms={} gateway_wait_ms={} upstream_bytes_before_first_delta={}",
+                                _elapsed_ms(perf_start),
+                                _elapsed_ms(gateway_start),
+                                upstream_bytes,
+                            )
+                        if not first_thinking_logged and sdk_data_type in {"response.reasoning_text.delta", "response.reasoning_summary_text.delta"}:
                             first_thinking_logged = True
                             perf_log.info(
                                 "[PERF][agent_first_token] backend.first_thinking_delta total_ms={} gateway_wait_ms={} upstream_bytes_before_first_thinking={}",

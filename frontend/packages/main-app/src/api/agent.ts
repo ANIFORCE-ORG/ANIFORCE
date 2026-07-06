@@ -53,9 +53,18 @@ export interface AgentModel {
   input?: string[]
 }
 
+export interface AgentSdkStreamEvent {
+  type: string
+  class?: string
+  name?: string
+  data?: Record<string, unknown>
+  item?: Record<string, unknown>
+  new_agent?: Record<string, unknown>
+}
+
 export interface AgentStreamEvent {
   event: string
-  data: Record<string, unknown>
+  data: Record<string, unknown> & { sdk_event?: AgentSdkStreamEvent }
 }
 
 export interface AgentContextSnapshot {

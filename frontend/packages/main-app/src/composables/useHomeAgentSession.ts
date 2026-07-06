@@ -15,6 +15,7 @@ import {
   type AgentSession,
   type AgentContextSnapshot,
   type AgentContentBlock,
+  type AgentSdkStreamEvent,
   type SideEffectEvent,
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
@@ -369,116 +370,31 @@ export function useHomeAgentSession() {
           }
         }
 
-        if (event.event === 'message.updated') {
-          if (!store.currentAssistantMessageId) {
-            assistant.id = `msg_${Date.now()}`
-            store.currentAssistantMessageId = assistant.id
-            attachCurrentRunTimelineBlocks(assistant.id)
-          }
-          const delta = event.data.delta
-          if (typeof delta === 'string') {
-            if (!firstMessageDeltaLogged) {
+        if (event.event === 'raw_response_event' || event.event === 'run_item_stream_event' || event.event === 'agent_updated_stream_event') {
+          handleSdkRawEvent(event.data as unknown as AgentSdkStreamEvent, sessionId, {
+            assistant,
+            perfMs,
+            markFirstMessageDelta(deltaChars) {
+              if (firstMessageDeltaLogged) return
               firstMessageDeltaLogged = true
               console.info('[PERF][agent_first_token][frontend] first_message_delta', {
                 elapsedMs: perfMs(),
                 runId: store.currentRunId,
                 sessionId,
-                deltaChars: delta.length,
+                deltaChars,
               })
-            }
-            enqueueTypewriter(delta)
-          }
-        }
-
-        if (event.event === 'thinking.updated') {
-          // thinking 也是结构化 block。若前面已有未播放完的文本，先刷入文本 block，
-          // 保证事件顺序对应渲染顺序：text -> thinking/tool -> text。
-          drainTypewriter(false)
-          if (!streamingMessage.value) continue
-          if (!store.currentAssistantMessageId) {
-            streamingMessage.value.id = `msg_${Date.now()}`
-            store.currentAssistantMessageId = streamingMessage.value.id
-            attachCurrentRunTimelineBlocks(streamingMessage.value.id)
-          }
-          const delta = event.data.delta
-          if (typeof delta === 'string') {
-            if (!firstThinkingDeltaLogged) {
+            },
+            markFirstThinkingDelta(deltaChars) {
+              if (firstThinkingDeltaLogged) return
               firstThinkingDeltaLogged = true
               console.info('[PERF][agent_first_token][frontend] first_thinking_delta', {
                 elapsedMs: perfMs(),
                 runId: store.currentRunId,
                 sessionId,
-                deltaChars: delta.length,
+                deltaChars,
               })
-            }
-            store.appendDeltaToStreaming('thinking', 'thinking', delta)
-          }
-        }
-
-        if (event.event === 'message.completed') {
-          // 不再从 message.completed 立即 drainTypewriter，否则当上游只返回一个大 delta 时，
-          // 打字机缓冲会被瞬间刷完，看起来像没有流式响应。
-          // 这里只更新 usage 和时间戳；最终收尾由 finally 中的 deferred finalizer 等待打字机播完。
-          const content = event.data.content
-          if (typeof content === 'string') completedAssistantContent = content
-          const usage = event.data.usage
-          if (usage && typeof usage === 'object') assistant.usage = usage as any
-          if (event.data.timestamp) assistant.timestamp = event.data.timestamp as number | string
-          store.currentAssistantMessageId = assistant.id
-          attachCurrentRunTimelineBlocks(assistant.id)
-        }
-
-        if (event.event === 'tool_call.started') {
-          // 工具卡片是结构化 block。插入前必须先把当前打字机缓冲刷到文本 block，
-          // 否则“工具调用前的过渡文本”会被拆到工具卡片之间。
-          drainTypewriter(false)
-          const toolName = String(event.data.tool_name || 'tool')
-          const toolId = String(event.data.tool_call_id || `${toolName}_${Date.now()}`)
-          const args = normalizeRecord(event.data.arguments)
-          const tool: AgentExecutionTool = {
-            id: toolId,
-            name: toolName,
-            status: 'running',
-            arguments: args,
-          }
-          executionTools.value = [...executionTools.value, tool].slice(-8)
-          store.appendToolCallToStreaming({ id: toolId, name: toolName, arguments: args })
-          upsertTimelineTool({ id: toolId, toolName, status: 'running', arguments: args })
-          store.agentPhase = {
-            kind: 'running_tools',
-            tools: executionTools.value
-              .filter(item => item.status === 'running')
-              .map(item => ({ id: item.id, name: item.name })),
-          }
-        }
-
-        if (event.event === 'tool_call.completed') {
-          const toolId = String(event.data.tool_call_id || '')
-          const result = event.data.result
-          let toolName = String(event.data.tool_name || '')
-          const index = executionTools.value.findIndex(t => t.id === toolId)
-          if (index >= 0) {
-            toolName = toolName || executionTools.value[index].name
-            executionTools.value[index] = {
-              ...executionTools.value[index],
-              status: 'completed',
-              result,
-            }
-            executionTools.value = [...executionTools.value]
-          }
-          if (toolName) {
-            if (toolId) store.updateToolCallResultInStreaming(toolId, result)
-            upsertTimelineTool({ id: toolId || `${toolName}_${Date.now()}`, toolName, status: 'completed', result })
-            appendBusinessResultBlock(toolId, toolName, result)
-          }
-          const running = executionTools.value.filter(item => item.status === 'running')
-          store.agentPhase = running.length
-            ? { kind: 'running_tools', tools: running.map(item => ({ id: item.id, name: item.name })) }
-            : { kind: 'waiting_model' }
-        }
-
-        if (event.event === 'plan.created' || event.event === 'plan.updated' || event.event.startsWith('todo.')) {
-          handleCustomEvent({ subtype: event.event, ...event.data })
+            },
+          })
         }
 
         if (event.event === 'side_effect') {
@@ -486,6 +402,10 @@ export function useHomeAgentSession() {
         }
 
         if (event.event === 'runtime.completed') {
+          const finalOutput = event.data.final_output
+          if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
+          const usage = event.data.usage
+          if (usage && typeof usage === 'object') assistant.usage = usage as any
           markRunningToolsCompleted()
         }
 
@@ -604,25 +524,6 @@ export function useHomeAgentSession() {
     store.selectedModel = { provider, modelId }
   }
 
-  function readEventPayload(data: Record<string, unknown>): Record<string, unknown> {
-    const payload = data.payload
-    return payload && typeof payload === 'object' ? payload as Record<string, unknown> : data
-  }
-
-  function readAssistantEvent(data: Record<string, unknown>): AgentMessage & { delta?: string } {
-    const payload = readEventPayload(data)
-    const value = payload.assistantMessageEvent
-    if (value && typeof value === 'object') return value as AgentMessage & { delta?: string }
-    return payload as AgentMessage & { delta?: string }
-  }
-
-  function readUsage(data: Record<string, unknown>): AgentMessage['usage'] | undefined {
-    const payload = readEventPayload(data)
-    const usage = payload.usage
-    if (usage && typeof usage === 'object') return usage as AgentMessage['usage']
-    return undefined
-  }
-
   function normalizeRecord(value: unknown): Record<string, unknown> | undefined {
     return value && typeof value === 'object' && !Array.isArray(value)
       ? value as Record<string, unknown>
@@ -647,55 +548,6 @@ export function useHomeAgentSession() {
       if (block.type === 'toolCall') return true
       return false
     })
-  }
-
-  function handleCustomEvent(data: Record<string, unknown>): void {
-    const payload = readEventPayload(data)
-    const subtype = String(payload.subtype || '')
-    if (subtype === 'plan.created') {
-      const todos = Array.isArray(payload.todos) ? payload.todos : []
-      executionPlan.value = {
-        id: String(payload.plan_id || `plan_${Date.now()}`),
-        todos: todos.map((todo, index) => {
-          const record = todo && typeof todo === 'object' ? todo as Record<string, unknown> : {}
-          return {
-            id: String(record.id || `todo_${index + 1}`),
-            title: String(record.title || `步骤 ${index + 1}`),
-            description: record.description ? String(record.description) : undefined,
-            status: normalizeTodoStatus(record.status),
-          }
-        }),
-      }
-      upsertPlanBlock()
-      return
-    }
-
-    if (subtype.startsWith('todo.') && executionPlan.value) {
-      const todoId = String(payload.todo_id || '')
-      const nextStatus = normalizeTodoStatus(subtype.replace('todo.', ''))
-      executionPlan.value = {
-        ...executionPlan.value,
-        todos: executionPlan.value.todos.map(todo =>
-          todo.id === todoId ? { ...todo, status: nextStatus } : todo
-        ),
-      }
-      upsertPlanBlock()
-    }
-  }
-
-  function upsertPlanBlock(): void {
-    if (!executionPlan.value) return
-    const blockId = executionPlan.value.id
-    const existing = timelineBlocks.value.find(item => item.type === 'plan' && item.id === blockId)
-    const now = Date.now()
-    const block: AgentTimelineBlock = {
-      ...timelineMeta({ id: blockId, existing, activityType: 'PLAN', now }),
-      type: 'plan',
-      id: blockId,
-      todos: executionPlan.value.todos,
-    }
-    if (!activeSession.value) return
-    store.upsertTimelineBlock(activeSession.value.id, block)
   }
 
   function upsertTimelineTool(input: {
@@ -915,19 +767,120 @@ export function useHomeAgentSession() {
     }
   }
 
-  function normalizeTodoStatus(value: unknown): AgentExecutionTodo['status'] {
-    if (value === 'running' || value === 'completed' || value === 'failed' || value === 'skipped') return value
-    return 'pending'
+  function handleSdkRawEvent(event: AgentSdkStreamEvent, sessionId: string, options: {
+    assistant: AgentMessage
+    perfMs: () => number
+    markFirstMessageDelta: (deltaChars: number) => void
+    markFirstThinkingDelta: (deltaChars: number) => void
+  }): void {
+    if (event.type === 'raw_response_event') {
+      const data = normalizeRecord(event.data)
+      const dataType = String(data?.type || '')
+      const delta = typeof data?.delta === 'string' ? data.delta : ''
+      if (dataType === 'response.output_text.delta' && delta) {
+        ensureAssistantMessage(options.assistant)
+        options.markFirstMessageDelta(delta.length)
+        enqueueTypewriter(delta)
+      } else if ((dataType === 'response.reasoning_text.delta' || dataType === 'response.reasoning_summary_text.delta') && delta) {
+        drainTypewriter(false)
+        if (!streamingMessage.value) return
+        ensureAssistantMessage(streamingMessage.value)
+        options.markFirstThinkingDelta(delta.length)
+        store.appendDeltaToStreaming('thinking', 'thinking', delta)
+      }
+      return
+    }
+
+    if (event.type !== 'run_item_stream_event') return
+    const item = normalizeRecord(event.item)
+    if (event.name === 'tool_called') {
+      drainTypewriter(false)
+      const { id, name, args } = readSdkToolCall(item)
+      const tool: AgentExecutionTool = {
+        id,
+        name,
+        status: 'running',
+        arguments: args,
+      }
+      executionTools.value = [...executionTools.value, tool].slice(-8)
+      store.appendToolCallToStreaming({ id, name, arguments: args })
+      upsertTimelineTool({ id, toolName: name, status: 'running', arguments: args })
+      store.agentPhase = {
+        kind: 'running_tools',
+        tools: executionTools.value
+          .filter(item => item.status === 'running')
+          .map(item => ({ id: item.id, name: item.name })),
+      }
+    } else if (event.name === 'tool_output') {
+      const { id, result } = readSdkToolOutput(item)
+      let toolName = ''
+      const index = executionTools.value.findIndex(t => t.id === id)
+      if (index >= 0) {
+        toolName = executionTools.value[index].name
+        executionTools.value[index] = {
+          ...executionTools.value[index],
+          status: 'completed',
+          result,
+        }
+        executionTools.value = [...executionTools.value]
+      }
+      if (toolName) {
+        if (id) store.updateToolCallResultInStreaming(id, result)
+        upsertTimelineTool({ id: id || `${toolName}_${Date.now()}`, toolName, status: 'completed', result })
+        appendBusinessResultBlock(id, toolName, result)
+      }
+      const running = executionTools.value.filter(item => item.status === 'running')
+      store.agentPhase = running.length
+        ? { kind: 'running_tools', tools: running.map(item => ({ id: item.id, name: item.name })) }
+        : { kind: 'waiting_model' }
+    } else if (event.name === 'reasoning_item_created') {
+      const reasoning = readSdkReasoningText(item)
+      if (reasoning) {
+        drainTypewriter(false)
+        if (!streamingMessage.value) return
+        ensureAssistantMessage(streamingMessage.value)
+        options.markFirstThinkingDelta(reasoning.length)
+        store.appendDeltaToStreaming('thinking', 'thinking', reasoning)
+      }
+    }
   }
 
-  function findLatestToolIndex(toolName: string): number {
-    for (let index = executionTools.value.length - 1; index >= 0; index -= 1) {
-      if (executionTools.value[index]?.name === toolName && executionTools.value[index]?.status === 'running') return index
+  function ensureAssistantMessage(message: AgentMessage): void {
+    if (store.currentAssistantMessageId) return
+    message.id = `msg_${Date.now()}`
+    store.currentAssistantMessageId = message.id
+    attachCurrentRunTimelineBlocks(message.id)
+  }
+
+  function readSdkToolCall(item?: Record<string, unknown>): { id: string; name: string; args: Record<string, unknown> | undefined } {
+    const raw = normalizeRecord(item?.raw_item)
+    const name = String(item?.tool_name || raw?.name || item?.name || 'tool')
+    const id = String(item?.call_id || raw?.call_id || raw?.id || `${name}_${Date.now()}`)
+    let args: unknown = raw?.arguments || item?.arguments || {}
+    if (typeof args === 'string') {
+      try {
+        args = args.trim() ? JSON.parse(args) : {}
+      } catch {
+        args = { raw: args }
+      }
     }
-    for (let index = executionTools.value.length - 1; index >= 0; index -= 1) {
-      if (executionTools.value[index]?.name === toolName) return index
-    }
-    return -1
+    return { id, name, args: normalizeRecord(args) }
+  }
+
+  function readSdkToolOutput(item?: Record<string, unknown>): { id: string; result: unknown } {
+    const raw = normalizeRecord(item?.raw_item)
+    const id = String(item?.call_id || raw?.call_id || raw?.id || '')
+    const result = item && 'output' in item ? item.output : raw && 'output' in raw ? raw.output : raw?.content
+    return { id, result }
+  }
+
+  function readSdkReasoningText(item?: Record<string, unknown>): string {
+    const raw = normalizeRecord(item?.raw_item) || item
+    const summary = Array.isArray(raw?.summary) ? raw.summary : []
+    return summary
+      .map(entry => normalizeRecord(entry)?.text)
+      .filter(text => typeof text === 'string' && text)
+      .join('\n\n')
   }
 
   function markRunningToolsCompleted(): void {

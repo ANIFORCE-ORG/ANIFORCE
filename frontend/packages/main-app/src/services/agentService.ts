@@ -6,12 +6,7 @@ import type {
   SharedState,
 } from '@/types/agui'
 import {
-  isTextMessageEvent,
-  isMessageCompletedEvent,
-  isCustomEvent,
-  getCustomEventSubtype,
   AGUIEventType,
-  CustomEventSubtype,
 } from '@/types/agui'
 
 export interface AgentChatSession {
@@ -79,18 +74,28 @@ function parseSseEvent(rawEvent: string): AgentStreamEvent | null {
   }
 }
 
-function toolEventToTool(eventType: string, payload: Record<string, any>): ToolCall | null {
-  if (eventType === AGUIEventType.TOOL_CALL_START || eventType === 'tool_call.started') {
+function readSdkTextDelta(event: AgentStreamEvent): string {
+  const data = event.data.data
+  if (event.event !== 'raw_response_event' || event.data.type !== 'raw_response_event' || !data || typeof data !== 'object') return ''
+  const record = data as Record<string, any>
+  return record.type === 'response.output_text.delta' ? String(record.delta || '') : ''
+}
+
+function sdkToolEventToTool(event: AgentStreamEvent): ToolCall | null {
+  if (event.event !== 'run_item_stream_event' || event.data.type !== 'run_item_stream_event') return null
+  const item = event.data.item && typeof event.data.item === 'object' ? event.data.item as Record<string, any> : {}
+  const raw = item.raw_item && typeof item.raw_item === 'object' ? item.raw_item as Record<string, any> : {}
+  if (event.data.name === 'tool_called') {
     return {
-      tool_name: String(payload.tool_name || 'tool'),
-      tool_args: payload.arguments || payload.tool_args || payload.args,
+      tool_name: String(item.tool_name || raw.name || item.name || 'tool'),
+      tool_args: raw.arguments || item.arguments || {},
       started_at: new Date().toISOString(),
     }
   }
-  if (eventType === AGUIEventType.TOOL_CALL_END || eventType === 'tool_call.completed') {
+  if (event.data.name === 'tool_output') {
     return {
-      tool_name: String(payload.tool_name || 'tool'),
-      tool_result: payload.result || payload.tool_result,
+      tool_name: String(item.tool_name || raw.name || item.name || 'tool'),
+      tool_result: 'output' in item ? item.output : raw.output || raw.content,
       completed_at: new Date().toISOString(),
     }
   }
@@ -148,10 +153,9 @@ export class AgentService {
     let text = ''
     let timestamp = new Date().toISOString()
     for await (const event of this.streamChat(sessionId, message)) {
-      const payload = readEventPayload(event.data)
-      if (event.event === 'message_delta' || event.event === 'message.updated') text += String(payload.delta || '')
-      if (event.event === 'message_completed' || event.event === 'message.completed') {
-        text = String(payload.content || text)
+      text += readSdkTextDelta(event)
+      if (event.event === 'runtime.completed') {
+        text = String(event.data.final_output || text)
         timestamp = String(event.data.created_at || timestamp)
       }
     }
@@ -160,10 +164,10 @@ export class AgentService {
 
   async *chatStream(sessionId: string, message: string): AsyncGenerator<string, void, unknown> {
     for await (const event of this.streamChat(sessionId, message)) {
-      const payload = readEventPayload(event.data)
-      if (event.event === 'message_delta' || event.event === 'message.updated') yield String(payload.delta || '')
+      const delta = readSdkTextDelta(event)
+      if (delta) yield delta
       if (event.event === 'runtime.error' || event.event === 'error') {
-        throw new Error(String(payload.message || event.data.message || 'Agent stream error'))
+        throw new Error(String(event.data.message || 'Agent stream error'))
       }
     }
   }
@@ -217,56 +221,24 @@ export class AgentService {
   ): AsyncGenerator<AGUIEvent, void, unknown> {
     for await (const event of this.streamChat(sessionId, message)) {
       const aguiEvent: AGUIEvent = event as AGUIEvent
-      const eventType = aguiEvent.event
-      const payload = readEventPayload(aguiEvent.data)
 
       try {
-        if (isTextMessageEvent(eventType)) {
-          const content = String(payload.delta || payload.content || '')
-          if (content) handlers.onTextMessage?.(content)
+        const content = readSdkTextDelta(event)
+        if (content) handlers.onTextMessage?.(content)
+
+        if (event.event === 'runtime.completed') {
+          handlers.onMessageCompleted?.(String(event.data.final_output || ''))
         }
 
-        if (isMessageCompletedEvent(eventType)) {
-          const content = String(payload.content || payload.text || '')
-          handlers.onMessageCompleted?.(content)
-        }
-
-        const tool = toolEventToTool(eventType, payload)
+        const tool = sdkToolEventToTool(event)
         if (tool) handlers.onToolCall?.(tool)
 
-        if (isCustomEvent(eventType)) {
-          const subtype = getCustomEventSubtype(aguiEvent)
-
-          if (subtype === CustomEventSubtype.PLAN_CREATED) {
-            handlers.onPlanCreated?.({
-              plan_id: String(payload.plan_id || ''),
-              task_id: sessionId,
-              todos: payload.todos || [],
-            })
-          } else if (
-            subtype === CustomEventSubtype.TODO_STARTED ||
-            subtype === CustomEventSubtype.TODO_COMPLETED ||
-            subtype === CustomEventSubtype.TODO_FAILED ||
-            subtype === CustomEventSubtype.TODO_SKIPPED
-          ) {
-            handlers.onTodoUpdated?.(String(payload.todo_id || ''), subtype.replace('todo.', ''))
-          } else if (subtype === CustomEventSubtype.HITL_CONFIRMATION_REQUEST) {
-            handlers.onHITLRequest?.({
-              request_id: String(payload.request_id || ''),
-              operation: String(payload.operation || ''),
-              description: String(payload.description || ''),
-              risk_level: payload.risk_level || 'medium',
-              details: payload.details,
-            })
-          }
+        if (event.event === AGUIEventType.STATE_SNAPSHOT) {
+          handlers.onStateUpdate?.(event.data.state || event.data)
         }
 
-        if (eventType === AGUIEventType.STATE_SNAPSHOT) {
-          handlers.onStateUpdate?.(payload.state || payload)
-        }
-
-        if (eventType === AGUIEventType.RUNTIME_ERROR || eventType === 'error') {
-          handlers.onError?.(payload)
+        if (event.event === AGUIEventType.RUNTIME_ERROR || event.event === 'error') {
+          handlers.onError?.(event.data)
         }
 
         yield aguiEvent

@@ -26,14 +26,11 @@ class Settings(BaseSettings):
     OPENAI_AGENTS_MODEL: str = "deepseek/deepseek-v4-pro"
     OPENAI_AGENTS_API: str = "responses"
 
-    # 数据库路径
-    AGENT_TASK_DB: str = "runtime/agent/tasks.db"
-    AGENT_SESSION_DB: str = "runtime/agent/sessions.db"
+    # Agents SDK runtime database
+    AGENT_RUNTIME_DB_URL: str = "sqlite+aiosqlite:///runtime/agent/agent.db"
 
     # Runtime 配置
     RUNTIME_DIR: str = "runtime/sessions"
-    SKILLS_DIR: str = "runtime/skills"
-    SANDBOX_DIR: str = "runtime/agent/sandbox"
     AGENT_TRACING_ENABLED: bool = True
 
     # CORS

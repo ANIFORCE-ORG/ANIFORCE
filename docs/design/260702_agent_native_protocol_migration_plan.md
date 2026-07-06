@@ -6,13 +6,15 @@
 
 硬约束：
 
-1. 当前阶段使用普通 `Agent`，不默认使用 `SandboxAgent`。
-2. 不启用 Skills，不把 skills 目录存在作为启用 sandbox 的条件。
-3. 协议层全面拥抱 Agents SDK 原生对象和事件，不再二次发明 message/tool/plan/todo 协议。
-4. Session 历史使用 SDK `SQLAlchemySession`，存在独立 `agent.db`。
-5. system db 不保存 SDK Session item，不保存完整 SDK RunState JSON，只保存产品状态和必要指针。
-6. Hook / HITL 机制只预留清晰扩展口，当前不提前做复杂框架。
-7. 迁移代码必须清爽、职责分明、便于阅读和后续替换。
+1. 当前主链路 `WorkspaceAgent` 使用普通 `Agent`，不默认使用 `SandboxAgent`。
+2. `SandboxAgent` 作为未来 `ArtifactAgent` / heavy task 的显式能力保留，不删除、不默认启用。
+3. 当前不启用 SDK `Skills`。SDK `Skills` 是 sandbox capability，不是普通 Agent 的轻量插件。
+4. 普通 Agent 阶段如需技能化能力，走 ANIFORCE `Business Skill Registry`，不依赖 sandbox。
+5. 协议层全面拥抱 Agents SDK 原生对象和事件，不再二次发明 message/tool/plan/todo 协议。
+6. Session 历史使用 SDK `SQLAlchemySession`，存在独立 `agent.db`。
+7. system db 不保存 SDK Session item，不保存完整 SDK RunState JSON，只保存产品状态和必要指针。
+8. Hook / HITL 机制只预留清晰扩展口，当前不提前做复杂框架。
+9. 迁移代码必须清爽、职责分明、便于阅读和后续替换。
 
 一句话：
 
@@ -23,9 +25,163 @@ ANIFORCE 负责用户在哪、看什么、选什么、业务发生了什么。
 
 ---
 
-## 2. 当前必须修正的问题
+## 2. Agent 双轨策略
 
-### 2.1 当前默认会走 SandboxAgent
+### 2.1 WorkspaceAgent：当前主链路
+
+`WorkspaceAgent` 服务高频 SaaS 工作台场景：
+
+```text
+查询项目 / 素材 / 计划
+投放复盘
+指标解释
+草稿生成
+轻量业务操作
+Workspace 投影展示
+```
+
+目标形态：
+
+```text
+普通 Agent
++ MCP tools
++ SQLAlchemySession
++ WorkspaceRunContext
++ dynamic instructions
++ hooks / projection
++ Business Skill Registry（后续）
+```
+
+不默认启用：
+
+```text
+SandboxAgent
+SDK Skills
+Sandbox filesystem
+Sandbox shell
+Sandbox snapshot/resume
+```
+
+原因：这些高频任务的事实源是 Backend DB 和 Workspace 状态，不是 sandbox 文件系统。
+
+### 2.2 ArtifactAgent：未来重型链路
+
+`ArtifactAgent` 是未来显式开启的重型任务 Agent。
+
+适用场景：
+
+```text
+生成多文件报告包
+生成 Excel / PPT / PDF
+运行 Python 数据分析脚本
+处理用户上传文件
+模板渲染
+多轮编辑同一批文件
+需要 filesystem / shell / snapshot 的任务
+```
+
+目标形态：
+
+```text
+SandboxAgent
++ SDK Skills
++ Manifest
++ Filesystem / Shell capabilities
++ SandboxRunConfig
++ sandbox snapshot/resume
+```
+
+触发方式：
+
+```text
+用户明确要求文件产物 / 报告包 / 脚本分析
+或 WorkspaceAgent 判断任务进入重型 artifact 流程后 handoff
+```
+
+当前阶段只保留扩展口，不实现完整 ArtifactAgent。
+
+---
+
+## 3. Skills 边界
+
+### 3.1 SDK Skills
+
+SDK `Skills` 位于：
+
+```text
+agents.sandbox.capabilities.Skills
+```
+
+源码结论：
+
+```text
+SDK Skills 是 sandbox capability。
+它依赖 Manifest、SandboxSession、workspace filesystem 和 load_skill 工具。
+普通 Agent 不能直接使用 SDK Skills。
+```
+
+关键行为：
+
+```text
+Skills.process_manifest() 把 SKILL.md/scripts/references/assets 挂进 sandbox workspace。
+Skills.tools() 在 lazy_from 模式下暴露 load_skill 工具。
+load_skill 需要 BaseSandboxSession，未绑定 SandboxSession 会报错。
+```
+
+因此：
+
+```text
+SDK Skills 只用于未来 ArtifactAgent / SandboxAgent 链路。
+当前 WorkspaceAgent 不启用 SDK Skills。
+```
+
+### 3.2 Business Skill Registry
+
+ANIFORCE 仍然需要“技能化能力”，但当前阶段应实现为业务技能注册表，而不是 SDK Skills。
+
+Business Skill 形态：
+
+```yaml
+name: campaign_review
+description: 投放复盘
+instructions: |
+  先读取项目基础信息，再读取计划和指标，最后总结异常与建议。
+tools:
+  - get_project_detail
+  - list_campaigns
+  - get_campaign_metrics
+output_contract:
+  - summary
+  - key_findings
+  - next_actions
+examples:
+  - 用户：复盘这个项目最近 7 天表现
+```
+
+运行方式：
+
+```text
+根据 intent + workspace context 选择 skill
+将 skill instructions 注入 dynamic instructions
+引导模型使用推荐 MCP tools
+输出遵循 skill 的 response contract
+```
+
+它不做：
+
+```text
+文件加载
+scripts 执行
+assets/templates 物化
+sandbox workspace
+load_skill 工具
+```
+
+---
+
+## 4. 当前必须修正的问题
+
+### 4.1 当前默认会走 SandboxAgent
 
 当前 `OpenAISDKAdapter.create_agent()` 的默认参数是：
 
@@ -41,35 +197,35 @@ has_skills = enable_skills and Path(self.skills_dir).exists()
 
 `main.py` 启动时又会创建 `settings.SKILLS_DIR`，所以目录存在会让系统默认创建 `SandboxAgent`。
 
-这和当前阶段目标冲突。
-
 迁移要求：
 
 ```text
 默认普通 Agent。
 SandboxAgent 必须显式配置启用。
-Skills 必须显式配置启用，且目录中存在有效 SKILL.md。
+SDK Skills 必须显式配置启用，且只在 SandboxAgent 路径使用。
+不要继续让 skills_dir.exists() 决定 Agent 类型。
 ```
 
 建议配置：
 
 ```text
-ENABLE_SANDBOX_AGENT=false
-ENABLE_SKILLS=false
+WORKSPACE_AGENT_USE_SANDBOX=false
+ARTIFACT_AGENT_USE_SANDBOX=false
+ENABLE_SDK_SKILLS=false
+ENABLE_BUSINESS_SKILLS=false
 ```
 
 短期实现：
 
 ```python
-if settings.ENABLE_SANDBOX_AGENT:
+if settings.WORKSPACE_AGENT_USE_SANDBOX:
+    # 当前不启用，仅保留显式分支
     agent = SandboxAgent(...)
 else:
     agent = Agent(...)
 ```
 
-不要继续让 `skills_dir.exists()` 决定 Agent 类型。
-
-### 2.2 当前有过多自定义协议
+### 4.2 当前有过多自定义协议
 
 当前存在：
 
@@ -93,7 +249,7 @@ else:
 不再让 agent_messages 作为对话历史事实源。
 ```
 
-### 2.3 DB 职责混乱
+### 4.3 DB 职责混乱
 
 当前 system db 中：
 
@@ -110,11 +266,11 @@ system db 只放产品会话、run lifecycle、workspace state、业务事件、
 
 ---
 
-## 3. 目标架构
+## 5. 目标架构
 
-### 3.1 Agent Runtime
+### 5.1 Agent Runtime
 
-使用 SDK 原生能力：
+当前主链路使用 SDK 原生能力：
 
 ```text
 Agent
@@ -133,20 +289,16 @@ hooks
 当前阶段：
 
 ```text
-Agent + MCP tools + SQLAlchemySession + WorkspaceRunContext
+WorkspaceAgent = Agent + MCP tools + SQLAlchemySession + WorkspaceRunContext
 ```
 
-暂不使用：
+未来预留：
 
 ```text
-SandboxAgent
-Skills
-Sandbox filesystem
-Sandbox shell
-自定义 plan/todo runtime
+ArtifactAgent = SandboxAgent + SDK Skills + Manifest + Filesystem/Shell
 ```
 
-### 3.2 数据库
+### 5.2 数据库
 
 ```text
 system db:
@@ -159,7 +311,7 @@ realtime channel:
   token delta / reasoning delta / 临时 streaming buffer
 ```
 
-### 3.3 Workspace
+### 5.3 Workspace
 
 Workspace 是 Agent 执行结果的业务投影。
 
@@ -172,9 +324,9 @@ Agent Workspace 只是容器和数据来源，不新做一套组件。
 
 ---
 
-## 4. 协议策略
+## 6. 协议策略
 
-### 4.1 SDK 原生事件直通
+### 6.1 SDK 原生事件直通
 
 Agent Service 对外输出 SDK 原生事件，最多做传输层序列化，不做语义转换。
 
@@ -222,7 +374,7 @@ run item names:
   mcp_approval_requested
 ```
 
-### 4.2 ANIFORCE 业务事件独立表达
+### 6.2 ANIFORCE 业务事件独立表达
 
 Workspace projection、business event、business pending action 是 ANIFORCE 业务事件，不假装成 SDK event。
 
@@ -262,9 +414,11 @@ business channel = 业务事实或业务审批发生了什么
 
 ---
 
-## 5. DB 职责设计
+## 7. DB 职责设计
 
-## 5.1 system db
+DB 设计采用最小事实源原则：现在只保留必要字段，扩展信息优先进入 JSON 字段；SDK 内部状态只放 `agent.db`，system db 只保存产品状态和引用指针。
+
+## 7.1 system db
 
 ### agent_sessions
 
@@ -276,37 +430,45 @@ business channel = 业务事实或业务审批发生了什么
 会话列表、标题、归档、用户归属。
 ```
 
-字段建议：
+核心字段：
 
 ```text
 session_id
 user_id
 title
 status
+metadata_json nullable
 created_at
 updated_at
-archived_at
+archived_at nullable
+```
+
+说明：
+
+```text
+metadata_json 只放低频产品元数据，例如 workspace_type、last_model、last_agent_type。
+不要放对话历史、SDK item、Workspace snapshot 或 RunState。
 ```
 
 ### agent_runs
 
 保留，表示一次用户请求的产品生命周期，不保存完整 SDK 内部状态。
 
-字段建议：
+核心字段：
 
 ```text
 run_id
 session_id
 user_id
 status
-input_text 或 input_summary
-idempotency_key
-trace_id
-agent_checkpoint_id      # 指向 agent.db，可空
-usage_summary_json       # 汇总信息
-error_summary_json       # 脱敏摘要
+input_text
+idempotency_key nullable
+trace_id nullable
+checkpoint_ref nullable
+usage_json nullable
+error_json nullable
 started_at
-completed_at
+completed_at nullable
 updated_at
 ```
 
@@ -314,6 +476,15 @@ updated_at
 
 ```text
 run 状态、幂等、审计入口、trace 指针、checkpoint 指针。
+```
+
+字段约束：
+
+```text
+input_text 是事实源；如有敏感信息，在写入前脱敏或截断。
+checkpoint_ref 指向 agent.db runtime checkpoint，例如 chk_xxx 或 agentdb:chk_xxx。
+usage_json 只保存汇总 token/requests，不保存 SDK item。
+error_json 只保存脱敏错误摘要，不保存完整 traceback。
 ```
 
 不建议继续作为长期字段：
@@ -333,32 +504,33 @@ pending_approval_json
 Workspace 当前状态、长期 linked entities、业务摘要、刷新恢复。
 ```
 
-字段建议：
+核心字段：
 
 ```text
 session_id
 user_id
-mode
-ui_snapshot_json
+workspace_type
+ui_snapshot_json nullable
 linked_entities_json
-workspace_summary
+summary
 version
-status
-created_at
 updated_at
 ```
 
-注意：
+说明：
 
 ```text
+workspace_type 比 mode 更明确，例如 general/project/campaign/material/report。
+summary 是 workspace/business context summary，不是 SDK 对话摘要。
 selectedEntities 默认是前端临时状态，随每次 run 的 context_snapshot 传入。
 mentions 属于本次输入上下文，不作为长期 session 状态。
 linked_entities 才是长期会话关注对象。
+status/created_at 可短期保留兼容旧表，但不作为新设计核心字段。
 ```
 
-### pending_actions
+### pending_actions（Phase 5 引入）
 
-只放业务级人工确认。
+业务级人工确认，不是第一阶段必建。
 
 职责：
 
@@ -368,51 +540,56 @@ linked_entities 才是长期会话关注对象。
 
 不要存 SDK MCP approval 的 RunState。
 
-字段建议：
+最小字段：
 
 ```text
 action_id
 session_id
 run_id
 user_id
-action_type
-title
-payload_json
+type
+title nullable
 status
+payload_json
+result_json nullable
 created_at
-resolved_at
-resolved_by
+resolved_at nullable
 ```
 
-### business_events
+### business_events（按需引入）
 
-记录业务副作用和审计事实。
+记录 Agent 触发的业务副作用和审计事实，不做完整 event sourcing。
 
-职责：
+职责示例：
 
 ```text
 campaign_created
 campaign_budget_updated
 material_attached
 project_status_changed
-workspace_projection_shown
 ```
 
-字段建议：
+最小字段：
 
 ```text
 event_id
-session_id
-run_id
+session_id nullable
+run_id nullable
 user_id
-event_type
-entity_type
-entity_id
+type
+entity_type nullable
+entity_id nullable
 payload_json
 created_at
 ```
 
-## 5.2 agent.db
+说明：
+
+```text
+workspace_projection_shown 不是业务事实，后续如需统计应进入 telemetry/analytics，不进入 business_events。
+```
+
+## 7.2 agent.db
 
 agent.db 是 Agent Runtime 数据库。
 
@@ -445,29 +622,38 @@ MCP approval item
 
 ### runtime_checkpoints
 
-用于 SDK HITL / 中断恢复。
+用于 SDK HITL / 中断恢复，也为未来 ArtifactAgent 或外部 workflow checkpoint 预留抽象空间。
 
-字段建议：
+最小字段：
 
 ```text
 checkpoint_id
 run_id
 session_id
-sdk_run_state_json
-interruptions_json
+type
+state_json
+metadata_json nullable
 status
 created_at
-resolved_at
+resolved_at nullable
+```
+
+说明：
+
+```text
+type 当前主要是 sdk_run_state，未来可扩展 artifact_job_state / handoff_state。
+state_json 存 SDK RunState 或其他 checkpoint 主体。
+metadata_json 存 interruptions、approval summary 等辅助信息。
 ```
 
 system db 只保存：
 
 ```text
-agent_runs.agent_checkpoint_id = checkpoint_id
+agent_runs.checkpoint_ref = checkpoint_id
 agent_runs.status = awaiting_approval
 ```
 
-## 5.3 realtime channel
+## 7.3 realtime channel
 
 不进长期 DB：
 
@@ -488,15 +674,15 @@ typing buffer
 
 ---
 
-## 6. Hooks 扩展口
+## 8. Hooks 扩展口
 
-### 6.1 目标
+### 8.1 目标
 
 Hook 机制用于观察 SDK 运行过程，承接后续 Workspace projection、审计、指标统计和安全策略。
 
 当前阶段只留轻量接口，不提前做复杂事件总线。
 
-### 6.2 建议结构
+### 8.2 建议结构
 
 ```python
 class AgentRuntimeHooks:
@@ -530,7 +716,7 @@ on_run_failed:
 不要把 hooks 做成复杂 workflow engine。
 ```
 
-### 6.3 Workspace Projection 扩展口
+### 8.3 Workspace Projection 扩展口
 
 建议 registry：
 
@@ -561,9 +747,9 @@ entity_type=material + kind=entity_list
 
 ---
 
-## 7. HITL 扩展口
+## 9. HITL 扩展口
 
-### 7.1 两类 HITL 必须分开
+### 9.1 两类 HITL 必须分开
 
 SDK MCP approval：
 
@@ -583,7 +769,7 @@ SDK MCP approval：
 批准后执行业务动作或发起新 run。
 ```
 
-### 7.2 当前阶段预留
+### 9.2 当前阶段预留
 
 当前迁移不需要完整前端审批 UI，但代码结构要留口：
 
@@ -600,7 +786,7 @@ class BusinessPendingActionService:
     async def resolve_action(...): ...
 ```
 
-### 7.3 恢复流程目标
+### 9.3 恢复流程目标
 
 ```text
 SDK interruption
@@ -616,9 +802,9 @@ SDK interruption
 
 ---
 
-## 8. Workspace Context 改造
+## 10. Workspace Context 改造
 
-### 8.1 WorkspaceRunContext
+### 10.1 WorkspaceRunContext
 
 定义本次 run 的本地上下文：
 
@@ -637,7 +823,7 @@ class WorkspaceRunContext:
     business_context_summary: str
 ```
 
-### 8.2 Dynamic instructions
+### 10.2 Dynamic instructions
 
 LLM 不会自动看到 `ctx.context`，必须通过 dynamic instructions 注入必要摘要。
 
@@ -650,7 +836,7 @@ selectedEntities 优先于 active entity。
 已投影到 Workspace 的列表不重复用文本完整列举。
 ```
 
-### 8.3 前端 context_snapshot
+### 10.3 前端 context_snapshot
 
 需要补齐：
 
@@ -666,7 +852,7 @@ draftEdits
 
 ---
 
-## 9. Workspace 组件复用
+## 11. Workspace 组件复用
 
 原则：
 
@@ -699,26 +885,29 @@ Agent Workspace：workspace_projection/workspace state
 
 ---
 
-## 10. 迁移阶段
+## 12. 迁移阶段
 
-### Phase 0：冻结新包装并切回普通 Agent
+### Phase 0：冻结新包装并切回 WorkspaceAgent 普通 Agent
 
 目标：先止血，避免继续扩大复杂度。
 
 动作：
 
-1. 新增 `ENABLE_SANDBOX_AGENT=false`、`ENABLE_SKILLS=false`。
-2. 默认创建普通 `Agent`。
-3. 移除 `skills_dir.exists()` 触发 SandboxAgent 的逻辑。
-4. 保留 SandboxAgent 代码为显式开关分支，但当前不启用。
-5. 不再新增 `EventType`、plan/todo、自定义 tool/message 协议。
+1. 新增 `WORKSPACE_AGENT_USE_SANDBOX=false`。
+2. 新增 `ARTIFACT_AGENT_USE_SANDBOX=false`。
+3. 新增 `ENABLE_SDK_SKILLS=false`。
+4. 默认创建普通 `Agent`。
+5. 移除 `skills_dir.exists()` 触发 SandboxAgent 的逻辑。
+6. 保留 SandboxAgent 代码为未来 ArtifactAgent 显式分支，但当前不启用。
+7. 不再新增 `EventType`、plan/todo、自定义 tool/message 协议。
 
 验收：
 
 ```text
-默认运行路径：Agent + MCP tools + SDK Session。
+默认运行路径：WorkspaceAgent = Agent + MCP tools + SDK Session。
 不会创建 SandboxAgent。
 不会传 SandboxRunConfig。
+SDK Skills 不进入主链路。
 ```
 
 ### Phase 1：agent.db + SQLAlchemySession
@@ -780,6 +969,26 @@ Agent Workspace：workspace_projection/workspace state
 @mention 项目/素材时，Agent 优先使用 mentions。
 ```
 
+### Phase 3.5：Business Skill Registry 预留
+
+目标：为普通 Agent 提供轻量技能化能力，不依赖 SDK Skills。
+
+动作：
+
+1. 定义 business skill metadata schema。
+2. 支持按 intent / workspace context 选择 skill。
+3. dynamic instructions 注入 selected skill 的规则。
+4. skill 可声明推荐工具、输出结构、示例。
+5. 当前不做文件加载、不做 scripts、不做 sandbox workspace。
+
+验收：
+
+```text
+用户问“复盘这个项目”，系统选择 campaign_review skill。
+Agent 使用对应 instructions 和 MCP tools 完成复盘。
+不创建 SandboxAgent，不调用 load_skill。
+```
+
 ### Phase 4：Hooks + Workspace Projection
 
 目标：Agent 结果进入 Workspace，而不是长文本重复。
@@ -806,9 +1015,9 @@ Agent Workspace：workspace_projection/workspace state
 动作：
 
 1. agent.db 预留 `runtime_checkpoints`。
-2. system db `agent_runs` 预留 `agent_checkpoint_id`。
-3. SDK MCP approval checkpoint 放 agent.db。
-4. 业务 pending action 放 system db `pending_actions`。
+2. system db `agent_runs` 预留 `checkpoint_ref`。
+3. SDK MCP approval checkpoint 放 agent.db，`runtime_checkpoints.type=sdk_run_state`。
+4. 业务 pending action 在 Phase 5 引入 system db `pending_actions`。
 5. `agent_runs.run_state_json` 标记 deprecated。
 6. `session_states.pending_actions_json` 迁出。
 
@@ -819,7 +1028,26 @@ SDK approval 和业务 pending action 数据职责清楚。
 恢复 SDK run 不依赖 system db 保存完整 RunState。
 ```
 
-### Phase 6：清理旧结构
+### Phase 6：ArtifactAgent / SandboxAgent 设计预留
+
+目标：为未来重型文件产物能力保留清晰入口，但不进入当前主链路。
+
+动作：
+
+1. 在 `agent_factory.py` 中保留 ArtifactAgent 创建接口。
+2. 仅当 `ARTIFACT_AGENT_USE_SANDBOX=true` 时允许创建 SandboxAgent。
+3. 仅当 `ENABLE_SDK_SKILLS=true` 且 ArtifactAgent 启用时装配 SDK Skills。
+4. 明确 ArtifactAgent 的任务类型：报告包、文件处理、脚本分析、多文件产物。
+5. 不从 WorkspaceAgent 默认 handoff，除非后续产品明确需要。
+
+验收：
+
+```text
+WorkspaceAgent 主链路仍是普通 Agent。
+SandboxAgent 只能通过显式配置和显式任务类型进入。
+```
+
+### Phase 7：清理旧结构
 
 目标：移除历史包袱。
 
@@ -829,8 +1057,8 @@ SDK approval 和业务 pending action 数据职责清楚。
 2. 删除或归档自定义 `TEXT_MESSAGE_*` / `TOOL_CALL_*`。
 3. 删除未使用 plan/todo runtime。
 4. `session_states` 收敛或迁移为 `workspace_states`。
-5. `changelog_json` 拆到 `business_events`。
-6. `last_error_json` 迁到 `agent_runs.error_summary_json` 或日志系统。
+5. `changelog_json` 按需拆到 `business_events`，不做完整 event sourcing。
+6. `last_error_json` 迁到 `agent_runs.error_json` 或日志系统。
 
 验收：
 
@@ -842,7 +1070,7 @@ SDK 历史只有一个事实源：agent.db SQLAlchemySession。
 
 ---
 
-## 11. 代码结构建议
+## 13. 代码结构建议
 
 迁移后 Agent Service 建议分层：
 
@@ -851,13 +1079,16 @@ app/agent/runtime.py
   编排 Runner.run_streamed，管理 run lifecycle。
 
 app/agent/agent_factory.py
-  创建普通 Agent，集中处理 model / instructions / mcp_servers。
+  创建 WorkspaceAgent / 未来 ArtifactAgent，集中处理 model / instructions / mcp_servers。
 
 app/agent/session_store.py
   创建 SQLAlchemySession，管理 agent.db engine。
 
 app/agent/context.py
   WorkspaceRunContext 和 dynamic instructions。
+
+app/agent/business_skills.py
+  Business Skill Registry，管理普通 Agent 的业务技能。
 
 app/agent/hooks.py
   AgentRuntimeHooks 扩展口。
@@ -873,31 +1104,40 @@ app/agent/hitl.py
 
 ---
 
-## 12. 审核点
+## 14. 审核点
 
 开工前需要确认：
 
-1. 默认普通 `Agent`，当前不使用 `SandboxAgent`。
-2. `ENABLE_SANDBOX_AGENT=false`、`ENABLE_SKILLS=false` 作为默认配置。
-3. SDK 流式事件只做序列化直通，不再转换为自定义 EventType。
-4. `agent.db` 独立于 system db。
-5. `agent_messages` 废弃为对话历史事实源。
-6. `agent_runs` 只存 product lifecycle 和 checkpoint pointer，不存完整 RunState。
-7. `session_states` 收敛为 workspace state，不存 pending action/changelog/error。
-8. hooks 只作为扩展口，不提前做复杂 workflow engine。
-9. HITL 分 SDK checkpoint 和业务 pending action 两套状态。
-10. Workspace projection 使用业务语义协议，不绑定组件名。
-11. Agent Workspace 复用 SaaS 页面业务组件。
+1. 默认主链路是 `WorkspaceAgent = 普通 Agent`。
+2. `SandboxAgent` 只作为未来 `ArtifactAgent` 显式能力保留。
+3. `WORKSPACE_AGENT_USE_SANDBOX=false` 作为默认配置。
+4. `ARTIFACT_AGENT_USE_SANDBOX=false` 作为默认配置。
+5. `ENABLE_SDK_SKILLS=false` 作为默认配置。
+6. SDK 流式事件只做序列化直通，不再转换为自定义 EventType。
+7. `agent.db` 独立于 system db。
+8. system db 当前核心只收敛 `agent_sessions`、`agent_runs`、`workspace_states`。
+9. `pending_actions` Phase 5 再引入，`business_events` 按需引入。
+10. `agent_messages` 废弃为对话历史事实源。
+11. `agent_runs` 只存 product lifecycle 和 `checkpoint_ref`，不存完整 RunState。
+12. `workspace_states` 只存 workspace 当前状态和 linked entities，不存 pending action/changelog/error。
+13. agent.db `runtime_checkpoints` 使用 `type/state_json/metadata_json` 抽象字段。
+14. hooks 只作为扩展口，不提前做复杂 workflow engine。
+15. HITL 分 SDK checkpoint 和业务 pending action 两套状态。
+16. Workspace projection 使用业务语义协议，不绑定组件名。
+17. Agent Workspace 复用 SaaS 页面业务组件。
+18. Business Skill Registry 与 SDK Skills 明确分层。
 
 ---
 
-## 13. 不在本轮做的事
+## 15. 不在本轮做的事
 
 明确暂缓：
 
 ```text
-SandboxAgent 默认化
-Skills 体系
+SandboxAgent 进入 WorkspaceAgent 默认主链路
+SDK Skills 进入 WorkspaceAgent 主链路
+完整 ArtifactAgent
+复杂文件产物工作流
 复杂 plan/todo runtime
 自研 Session 历史协议
 token 级长期事件存储
