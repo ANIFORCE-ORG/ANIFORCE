@@ -79,6 +79,8 @@ class AgentRuntime:
                 meta["session_id"] = session_id
             if run_id:
                 meta["run_id"] = run_id
+            if user_id:
+                meta["user_id"] = user_id
             return meta or None
 
         mcp_server = None
@@ -321,6 +323,8 @@ class AgentRuntime:
         auth_token: str = "",
         rejection_message: str | None = None,
         always: bool = False,
+        edited_arguments: dict | None = None,
+        argument_diff: list | None = None,
     ) -> AsyncIterator[dict]:
         """Resume a paused SDK HITL checkpoint."""
         engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
@@ -331,7 +335,24 @@ class AgentRuntime:
         if checkpoint["status"] != "pending":
             raise AppError(AgentErrorCode.UNKNOWN_ERROR, f"Checkpoint is {checkpoint['status']}")
 
+        # 保存用户编辑后的参数和 diff 到 checkpoint metadata
+        if edited_arguments or argument_diff:
+            await store.save_approval_metadata(
+                checkpoint_id,
+                user_id,
+                approved_arguments=edited_arguments or {},
+                argument_diff=argument_diff or [],
+            )
+
         safe_context = checkpoint["run_state"].get("context", {}).get("value") or {}
+        # 构建 approved_arguments_by_call_id：用 interruption 的 call_id 关联
+        approved_args_by_call_id: dict[str, dict] = {}
+        if edited_arguments:
+            for interruption in checkpoint.get("interruptions", []):
+                call_id = interruption.get("call_id")
+                if call_id:
+                    approved_args_by_call_id[call_id] = edited_arguments
+
         workspace_context = WorkspaceRunContext(
             user_id=checkpoint["user_id"],
             session_id=checkpoint["session_id"],
@@ -341,6 +362,8 @@ class AgentRuntime:
             ui_snapshot=safe_context.get("ui_snapshot") or {},
             session_state=safe_context.get("session_state") or {},
             task_type=safe_context.get("task_type", "conversation"),
+            approved_arguments_by_call_id=approved_args_by_call_id,
+            argument_diff=argument_diff or [],
         )
 
         sequence = 0

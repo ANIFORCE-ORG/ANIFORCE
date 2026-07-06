@@ -28,3 +28,9 @@ class WorkspaceRunContext:
 
     # 运行元信息
     task_type: str = "conversation"
+
+    # HITL 审批用户编辑后的参数（按 tool call_id 关联）
+    # MCP 工具执行前读取，覆盖原始 arguments
+    approved_arguments_by_call_id: dict[str, dict[str, Any]] = field(default_factory=dict)
+    # 用户修改 diff 摘要，供 dynamic instructions 注入 LLM
+    argument_diff: list[dict[str, Any]] = field(default_factory=list)

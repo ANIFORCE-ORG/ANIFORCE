@@ -380,6 +380,8 @@ async def resolve_run_approval(
         "rejection_message": body.get("rejection_message"),
         "always": bool(body.get("always", False)),
         "auth_token": _authorization(request),
+        "edited_arguments": body.get("edited_arguments"),
+        "argument_diff": body.get("argument_diff"),
     }
 
     async def event_generator():

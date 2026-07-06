@@ -7,6 +7,7 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDea
 import { useRoute, useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
+import WorkspaceRenderer from '@/components/agent/workspace/WorkspaceRenderer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
@@ -633,6 +634,45 @@ watch(
         </div>
       </div>
     </main>
+
+    <!-- 右侧 Workspace 投影栏 -->
+    <aside
+      class="flex-shrink-0 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
+      :style="workspaceStyle"
+    >
+      <div class="flex items-center justify-between px-[12px] py-[8px] border-b border-slate-200 dark:border-slate-700">
+        <div class="flex items-center gap-[6px]">
+          <span class="material-symbols-outlined text-[16px] text-slate-500">workspaces</span>
+          <span class="text-[11px] font-medium text-slate-700 dark:text-slate-300">工作台</span>
+        </div>
+        <div class="flex items-center gap-[2px]">
+          <button
+            class="p-[4px] rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            @click="toggleWorkspaceCollapsed"
+          >
+            <span class="material-symbols-outlined text-[14px] text-slate-400">{{ workspaceCollapsed ? 'left_panel_open' : 'right_panel_close' }}</span>
+          </button>
+          <div
+            v-if="!workspaceCollapsed"
+            class="w-[4px] h-[24px] cursor-col-resize flex items-center"
+            @pointerdown="startWorkspaceResize"
+          >
+            <div class="w-[1px] h-[16px] bg-slate-300 dark:bg-slate-600"></div>
+          </div>
+        </div>
+      </div>
+      <div v-show="!workspaceCollapsed" class="flex-1 overflow-hidden">
+        <WorkspaceRenderer
+          :projection="agent.workspaceProjection.value"
+          :approval-draft="agent.workspaceApprovalDraft.value"
+          :session-id="agent.activeSession.value?.id || ''"
+          @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: agent.workspaceApprovalDraft.value?.runId || '' })"
+          @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
+          @select-entity="entity => agent.selectWorkspaceEntity(entity)"
+          @view-project="(projectId: string) => openProject({ id: projectId })"
+        />
+      </div>
+    </aside>
   </div>
 
   <Teleport to="body">

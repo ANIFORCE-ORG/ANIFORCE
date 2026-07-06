@@ -20,6 +20,7 @@ import {
   type SideEffectEvent,
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
+import { useWorkspaceStore, toolProjectionRegistry } from '@/store/workspace'
 
 export type AgentPhase =
   | { kind: 'queued' }
@@ -121,6 +122,7 @@ export type AgentTimelineBlock =
 
 export function useHomeAgentSession() {
   const store = useAgentStore()
+  const workspace = useWorkspaceStore()
   const route = useRoute()
   
   // 从 store 读取全局状态（这些是 computed，只读）
@@ -413,11 +415,42 @@ export function useHomeAgentSession() {
         if (event.event === 'runtime.requires_action') {
           drainTypewriter(false)
           ensureAssistantMessage(assistant)
+          const checkpointId = String(event.data.checkpoint_id || '')
+          const runIdStr = String(event.data.run_id || run.run_id)
+          const interruptions = Array.isArray(event.data.interruptions) ? event.data.interruptions as any : []
           store.appendApprovalToStreaming({
-            runId: String(event.data.run_id || run.run_id),
-            checkpointId: String(event.data.checkpoint_id || ''),
-            interruptions: Array.isArray(event.data.interruptions) ? event.data.interruptions as any : [],
+            runId: runIdStr,
+            checkpointId,
+            interruptions,
           })
+          // Workspace 投影：高风险工具产生可编辑审批草稿 + review projection
+          const sessionId = activeSession.value?.id
+          if (sessionId) {
+            for (const interruption of interruptions) {
+              const toolName = String(interruption?.tool_name || '')
+              const config = toolProjectionRegistry[toolName]
+              if (!config) continue
+              let originalArgs: Record<string, unknown> = {}
+              const rawArgs = interruption?.arguments
+              if (typeof rawArgs === 'string') {
+                try { originalArgs = JSON.parse(rawArgs) } catch { originalArgs = { raw: rawArgs } }
+              } else if (rawArgs && typeof rawArgs === 'object') {
+                originalArgs = rawArgs as Record<string, unknown>
+              }
+              workspace.createApprovalDraft(checkpointId, runIdStr, toolName, config.surface, originalArgs)
+              workspace.upsertProjection(sessionId, {
+                id: `proj_approval_${checkpointId}`,
+                sessionId,
+                runId: runIdStr,
+                surface: config.surface,
+                sourceToolName: toolName,
+                mode: 'review',
+                payload: { originalArguments: originalArgs },
+                approval: { runId: runIdStr, checkpointId, decisionStatus: 'pending' },
+                updatedAt: Date.now(),
+              })
+            }
+          }
           store.agentPhase = null
           // 重要：requires_action 时流已结束，必须清理 agentRunning，否则 resolveApproval 会 early return
           streamCompletedSuccessfully = true
@@ -482,13 +515,21 @@ export function useHomeAgentSession() {
 
   function collectContextSnapshot(routeContext?: AgentRouteContext): AgentContextSnapshot {
     const activePanel = routeContext?.workspace_type || new URLSearchParams(window.location.search).get('panel') || undefined
+    const sessionId = activeSession.value?.id || ''
     return {
       route: route.fullPath,
       activePanel: isAgentPanel(activePanel) ? activePanel : undefined,
       activeProjectId: readRouteParam('projectId') || readRouteParam('id'),
       activeCampaignId: readRouteParam('campaignId'),
-      selectedEntities: [],
-      draftEdits: {},
+      selectedEntities: workspace.getSelectedEntities(sessionId),
+      draftEdits: workspace.getDraftSummaries(sessionId),
+      pendingApprovals: workspace.getPendingApprovalSummaries(sessionId),
+      recentInteractions: workspace.getRecentInteractions(sessionId, 10).map(e => ({
+        type: e.type,
+        surface: e.surface,
+        field: e.field,
+        at: e.createdAt,
+      })),
     }
   }
 
@@ -820,6 +861,14 @@ export function useHomeAgentSession() {
       executionTools.value = [...executionTools.value, tool].slice(-8)
       store.appendToolCallToStreaming({ id, name, arguments: args })
       upsertTimelineTool({ id, toolName: name, status: 'running', arguments: args })
+      // Workspace 投影：查询类工具也产生 loading 投影
+      const sessionId = activeSession.value?.id
+      if (sessionId) {
+        const config = toolProjectionRegistry[name]
+        if (config) {
+          workspace.setProjectionLoading(sessionId, store.currentRunId || '', config.surface, name, id)
+        }
+      }
       store.agentPhase = {
         kind: 'running_tools',
         tools: executionTools.value
@@ -843,6 +892,15 @@ export function useHomeAgentSession() {
         if (id) store.updateToolCallResultInStreaming(id, result)
         upsertTimelineTool({ id: id || `${toolName}_${Date.now()}`, toolName, status: 'completed', result })
         appendBusinessResultBlock(id, toolName, result)
+        // Workspace 投影：查询类工具输出转 projection ready
+        const sessionId = activeSession.value?.id
+        if (sessionId) {
+          const config = toolProjectionRegistry[toolName]
+          if (config && config.resultToPayload && !config.requiresApproval) {
+            const payload = config.resultToPayload(result)
+            workspace.setProjectionReady(sessionId, id || '', payload, config.mode)
+          }
+        }
       }
       const running = executionTools.value.filter(item => item.status === 'running')
       store.agentPhase = running.length
@@ -930,11 +988,14 @@ export function useHomeAgentSession() {
     if (runDeferredFinalizer) store.runDeferredStreamFinalizer()
   }
 
-  async function resolveApproval(runId: string, checkpointId: string, decision: 'approve' | 'reject'): Promise<void> {
-    if (!activeSession.value) {
-      console.warn('[resolveApproval] early return: no active session')
-      return
-    }
+  async function resolveApproval(
+    runId: string,
+    checkpointId: string,
+    decision: 'approve' | 'reject',
+    editedArguments?: Record<string, unknown>,
+    argumentDiff?: Array<{ field: string; before: unknown; after: unknown }>,
+  ): Promise<void> {
+    if (!activeSession.value) return
     const sessionId = activeSession.value.id
 
     drainTypewriter(false)
@@ -951,6 +1012,21 @@ export function useHomeAgentSession() {
     store.agentRunning = true
     store.agentPhase = { kind: 'waiting_model' }
     store.updateApprovalStatus(checkpointId, decision === 'approve' ? 'approved' : 'rejected')
+    workspace.setApprovalDraftStatus(checkpointId, decision === 'approve' ? 'executing' : 'rejected')
+    if (decision === 'approve' && editedArguments) {
+      workspace.recordInteraction(sessionId, {
+        type: 'approval.confirmed',
+        surface: workspace.getApprovalDraft(checkpointId)?.surface || '',
+        field: checkpointId,
+        after: editedArguments,
+      })
+    } else if (decision === 'reject') {
+      workspace.recordInteraction(sessionId, {
+        type: 'approval.rejected',
+        surface: workspace.getApprovalDraft(checkpointId)?.surface || '',
+        field: checkpointId,
+      })
+    }
     // Resume 流也必须绑定 activeRunSessionId，否则 streamingMessage computed 不会渲染。
     store.resetStreamRuntime(sessionId, runId)
 
@@ -969,7 +1045,7 @@ export function useHomeAgentSession() {
     store.streamingMessage = assistant
     let completedAssistantContent = ''
     try {
-      for await (const event of resolveAgentRunApproval(runId, checkpointId, decision, undefined, approvalAbortController.signal)) {
+      for await (const event of resolveAgentRunApproval(runId, checkpointId, decision, undefined, approvalAbortController.signal, editedArguments, argumentDiff)) {
         if (event.event === 'raw_response_event' || event.event === 'run_item_stream_event' || event.event === 'agent_updated_stream_event') {
           handleSdkRawEvent(event.data as unknown as AgentSdkStreamEvent, sessionId, {
             assistant,
@@ -1020,6 +1096,40 @@ export function useHomeAgentSession() {
   // 注意：不再在 onUnmounted 里 abort。
   // 流式状态现在在 store，切页面不丢；用户主动点“停止”才取消。
 
+  // Workspace 投影状态
+  const workspaceProjection = computed(() => {
+    const sessionId = activeSession.value?.id || ''
+    return workspace.getActiveProjection(sessionId)
+  })
+  const workspaceApprovalDraft = computed(() => {
+    const projection = workspaceProjection.value
+    if (!projection?.approval) return null
+    return workspace.getApprovalDraft(projection.approval.checkpointId) || null
+  })
+
+  function updateApprovalDraftForm(checkpointId: string, formModel: import('@/components/projects/projectFormModel').ProjectFormModel): void {
+    workspace.updateApprovalDraftForm(checkpointId, formModel)
+  }
+
+  function resolveWorkspaceApproval(payload: {
+    checkpointId: string
+    runId: string
+    editedArguments: Record<string, unknown>
+    argumentDiff: Array<{ field: string; before: unknown; after: unknown }>
+  }): Promise<void> {
+    return resolveApproval(payload.runId, payload.checkpointId, 'approve', payload.editedArguments, payload.argumentDiff)
+  }
+
+  function rejectWorkspaceApproval(checkpointId: string, runId: string): Promise<void> {
+    return resolveApproval(runId, checkpointId, 'reject')
+  }
+
+  function selectWorkspaceEntity(entity: { type: 'project' | 'campaign' | 'material'; id: string; name?: string }): void {
+    const sessionId = activeSession.value?.id
+    if (!sessionId) return
+    workspace.selectEntity(sessionId, entity)
+  }
+
   return {
     sessions,
     activeSession,
@@ -1037,6 +1147,8 @@ export function useHomeAgentSession() {
     contextUsage,
     currentTask,
     workspaceToolResults,
+    workspaceProjection,
+    workspaceApprovalDraft,
     executionPlan,
     executionTools,
     timelineBlocks,
@@ -1050,6 +1162,10 @@ export function useHomeAgentSession() {
     deleteSession,
     send,
     resolveApproval,
+    resolveWorkspaceApproval,
+    rejectWorkspaceApproval,
+    updateApprovalDraftForm,
+    selectWorkspaceEntity,
     abort,
     pauseTypewriter: store.pauseTypewriter,
     resumeTypewriter: store.resumeTypewriter,

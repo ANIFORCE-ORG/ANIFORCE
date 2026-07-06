@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS runtime_checkpoints (
     status TEXT NOT NULL,
     interruptions_json TEXT NOT NULL,
     run_state_json TEXT NOT NULL,
+    approved_arguments_json TEXT,
+    argument_diff_json TEXT,
     sdk_version TEXT,
     agent_version TEXT,
     expires_at TEXT NOT NULL,
@@ -71,6 +73,8 @@ class RuntimeCheckpointStore:
             "status": "pending",
             "interruptions_json": json.dumps(interruptions, ensure_ascii=False, default=str),
             "run_state_json": json.dumps(run_state, ensure_ascii=False, default=str),
+            "approved_arguments_json": None,
+            "argument_diff_json": None,
             "sdk_version": sdk_version,
             "agent_version": agent_version,
             "expires_at": (now + timedelta(hours=ttl_hours)).isoformat(),
@@ -84,11 +88,15 @@ class RuntimeCheckpointStore:
                     """
                     INSERT INTO runtime_checkpoints (
                         id, run_id, session_id, user_id, kind, status,
-                        interruptions_json, run_state_json, sdk_version, agent_version,
+                        interruptions_json, run_state_json,
+                        approved_arguments_json, argument_diff_json,
+                        sdk_version, agent_version,
                         expires_at, created_at, resolved_at, error_json
                     ) VALUES (
                         :id, :run_id, :session_id, :user_id, :kind, :status,
-                        :interruptions_json, :run_state_json, :sdk_version, :agent_version,
+                        :interruptions_json, :run_state_json,
+                        :approved_arguments_json, :argument_diff_json,
+                        :sdk_version, :agent_version,
                         :expires_at, :created_at, :resolved_at, :error_json
                     )
                     """
@@ -136,10 +144,42 @@ class RuntimeCheckpointStore:
             )
         return await self.get(checkpoint_id, user_id)
 
+    async def save_approval_metadata(
+        self,
+        checkpoint_id: str,
+        user_id: str,
+        *,
+        approved_arguments: dict[str, Any],
+        argument_diff: list[dict[str, Any]],
+    ) -> dict[str, Any] | None:
+        """保存用户编辑后的审批参数和 diff。"""
+        await self.ensure_tables()
+        values = {
+            "id": checkpoint_id,
+            "user_id": user_id,
+            "approved_arguments_json": json.dumps(approved_arguments, ensure_ascii=False, default=str),
+            "argument_diff_json": json.dumps(argument_diff, ensure_ascii=False, default=str),
+        }
+        async with self.engine.begin() as conn:
+            await conn.execute(
+                text(
+                    """
+                    UPDATE runtime_checkpoints
+                    SET approved_arguments_json = :approved_arguments_json,
+                        argument_diff_json = :argument_diff_json
+                    WHERE id = :id AND user_id = :user_id
+                    """
+                ),
+                values,
+            )
+        return await self.get(checkpoint_id, user_id)
+
     def _decode(self, item: dict[str, Any]) -> dict[str, Any]:
         decoded = dict(item)
         decoded["interruptions"] = json.loads(decoded.pop("interruptions_json") or "[]")
         decoded["run_state"] = json.loads(decoded.pop("run_state_json") or "{}")
+        decoded["approved_arguments"] = json.loads(decoded.pop("approved_arguments_json") or "null") or {}
+        decoded["argument_diff"] = json.loads(decoded.pop("argument_diff_json") or "null") or []
         decoded["error"] = json.loads(decoded.pop("error_json") or "null")
         return decoded
 

@@ -80,7 +80,9 @@ export interface AgentContextSnapshot {
   activeProjectId?: string | null
   activeCampaignId?: string | null
   selectedEntities?: Array<{ type: 'project' | 'campaign' | 'material'; id: string; name?: string }>
-  draftEdits?: Record<string, unknown>
+  draftEdits?: Array<Record<string, unknown>> | Record<string, unknown>
+  pendingApprovals?: Array<Record<string, unknown>>
+  recentInteractions?: Array<Record<string, unknown>>
 }
 
 export interface SideEffectEvent {
@@ -287,7 +289,15 @@ function normalizeAgentMessage(raw: any): AgentMessage {
   }
 }
 
-export async function* resolveAgentRunApproval(runId: string, checkpointId: string, decision: 'approve' | 'reject', rejectionMessage?: string, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent, void, unknown> {
+export async function* resolveAgentRunApproval(
+  runId: string,
+  checkpointId: string,
+  decision: 'approve' | 'reject',
+  rejectionMessage?: string,
+  signal?: AbortSignal,
+  editedArguments?: Record<string, unknown>,
+  argumentDiff?: Array<{ field: string; before: unknown; after: unknown }>,
+): AsyncGenerator<AgentStreamEvent, void, unknown> {
   const token = getValidAgentToken()
   const response = await fetch(`/api/v1/agent/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(checkpointId)}`, {
     method: 'POST',
@@ -296,7 +306,12 @@ export async function* resolveAgentRunApproval(runId: string, checkpointId: stri
       Accept: 'text/event-stream',
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
-    body: JSON.stringify({ decision, rejection_message: rejectionMessage }),
+    body: JSON.stringify({
+      decision,
+      rejection_message: rejectionMessage,
+      edited_arguments: editedArguments,
+      argument_diff: argumentDiff,
+    }),
     signal,
   })
   if (!response.ok) {

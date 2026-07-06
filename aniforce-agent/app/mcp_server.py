@@ -37,6 +37,7 @@ def _get_meta(ctx) -> dict:
                 "jwt_token": getattr(meta, "jwt_token", "") or "",
                 "session_id": getattr(meta, "session_id", "") or "",
                 "run_id": getattr(meta, "run_id", "") or "",
+                "user_id": getattr(meta, "user_id", "") or "",
             }
     except Exception as e:
         logger.warning(f"[MCP] 读取 meta 失败: {e}")
@@ -75,6 +76,40 @@ def _get_backend_headers(ctx, tool_name: str | None = None, arguments: dict | No
             headers["X-Agent-Tool-Call-Id"] = tool_call_id
             headers["Idempotency-Key"] = tool_call_id
     return headers
+
+
+async def _get_approved_arguments(ctx, tool_name: str) -> dict | None:
+    """查询当前 run 的 checkpoint，读取用户编辑后的审批参数。
+
+    Workspace 可编辑 HITL：用户在 Workspace 表单里改了参数后 approve，
+    approved_arguments 存在 checkpoint metadata 里。
+    MCP 工具执行前读出来覆盖原始 arguments。
+    """
+    meta = _get_meta(ctx)
+    run_id = meta.get("run_id")
+    if not run_id:
+        return None
+    try:
+        import aiosqlite
+        from app.config.settings import get_settings
+        db_url = get_settings().AGENT_RUNTIME_DB_URL
+        if "sqlite" not in db_url:
+            return None
+        db_path = db_url.replace("sqlite+aiosqlite:///", "")
+        async with aiosqlite.connect(db_path) as db:
+            db.row_factory = aiosqlite.Row
+            cursor = await db.execute(
+                "SELECT approved_arguments_json FROM runtime_checkpoints "
+                "WHERE run_id = ? AND approved_arguments_json IS NOT NULL "
+                "ORDER BY resolved_at DESC LIMIT 1",
+                (run_id,),
+            )
+            row = await cursor.fetchone()
+            if row and row["approved_arguments_json"]:
+                return json.loads(row["approved_arguments_json"])
+    except Exception as e:
+        logger.warning(f"[MCP] 读取 approved_arguments 失败: {e}")
+    return None
 
 
 # ============ Project 工具 ============
@@ -136,6 +171,11 @@ async def create_project(
         "game_type": game_type or None,
         "target_market": target_market or None,
     }
+    # Workspace 可编辑 HITL：用用户确认后的参数覆盖原始 arguments
+    approved = await _get_approved_arguments(ctx, "create_project")
+    if approved:
+        logger.info(f"[MCP] create_project 使用用户编辑后的参数: {approved}")
+        data.update({k: v for k, v in approved.items() if v is not None})
     return await backend_client.create_project(
         token=token,
         data=data,

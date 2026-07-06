@@ -30,6 +30,8 @@ async def resume_checkpoint(
     auth_token = str(body.get("auth_token") or "").removeprefix("Bearer ")
     rejection_message = body.get("rejection_message")
     always = bool(body.get("always", False))
+    edited_arguments = body.get("edited_arguments")
+    argument_diff = body.get("argument_diff")
 
     async def event_generator():
         try:
@@ -40,6 +42,8 @@ async def resume_checkpoint(
                 auth_token=auth_token,
                 rejection_message=rejection_message,
                 always=always,
+                edited_arguments=edited_arguments,
+                argument_diff=argument_diff,
             ):
                 sequence = int(event.get("sequence") or 0)
                 event_name = str(event.get("event") or "sdk.event")
