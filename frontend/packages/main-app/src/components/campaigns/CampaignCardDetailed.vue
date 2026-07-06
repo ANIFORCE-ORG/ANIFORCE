@@ -7,8 +7,8 @@ interface Campaign {
   platform: string
   account_id?: string
   status: string
-  budget: number
-  spent?: number
+  buying_type?: string
+  objective?: string
   start_date?: string
   end_date?: string
 }
@@ -84,7 +84,7 @@ const handleEdit = () => {
           </span>
         </h3>
         <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-          {{ campaign.platform }} Campaign · 预算 ${{ campaign.budget?.toLocaleString() || 0 }}
+          BuyingType - {{ campaign.buying_type }} · Objective - {{ campaign.objective }}
         </p>
       </div>
       <div class="shrink-0 flex flex-col gap-[6px]">

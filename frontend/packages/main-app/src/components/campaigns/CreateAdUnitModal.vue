@@ -5,6 +5,9 @@ import { useLanguage } from '@/store/language'
 interface Props {
   show: boolean
   campaignId: string
+  campaignBuyingType?: string
+  campaignObjective?: string
+  campaignBudgetOptimization?: string
 }
 
 interface Emits {
@@ -21,6 +24,8 @@ interface FormData {
   budgetType: 'daily' | 'lifetime'
   dailyBudget: number | null
   lifetimeBudget: number | null
+  minBudgetSpendPercentage: number | null
+  maxBudgetSpendPercentage: number | null
   bidStrategy: string
   bidAmount: number | null
   startTime: string
@@ -77,19 +82,44 @@ const localizedOptions = <T extends string>(options: Array<{ value: T; cn: strin
   }))
 ))
 
+// 获取当前本地时间，格式化为 datetime-local 格式 (YYYY-MM-DDTHH:mm)
+const getCurrentLocalDateTime = (): string => {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  const hours = String(now.getHours()).padStart(2, '0')
+  const minutes = String(now.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
+// 获取30天后的本地时间
+const get30DaysLaterDateTime = (): string => {
+  const future = new Date()
+  future.setDate(future.getDate() + 30)
+  const year = future.getFullYear()
+  const month = String(future.getMonth() + 1).padStart(2, '0')
+  const day = String(future.getDate()).padStart(2, '0')
+  const hours = String(future.getHours()).padStart(2, '0')
+  const minutes = String(future.getMinutes()).padStart(2, '0')
+  return `${year}-${month}-${day}T${hours}:${minutes}`
+}
+
 const createDefaultFormData = (): FormData => ({
   adsetName: '',
-  optimizationGoal: 'OFFSITE_CONVERSIONS',
+  optimizationGoal: 'APP_INSTALLS',
   billingEvent: 'IMPRESSIONS',
-  destinationType: 'WEBSITE',
+  destinationType: 'APP',
   status: 'PAUSED',
   budgetType: 'daily',
   dailyBudget: null,
   lifetimeBudget: null,
+  minBudgetSpendPercentage: null,
+  maxBudgetSpendPercentage: null,
   bidStrategy: 'LOWEST_COST_WITHOUT_CAP',
   bidAmount: null,
-  startTime: '',
-  endTime: '',
+  startTime: getCurrentLocalDateTime(),
+  endTime: get30DaysLaterDateTime(),
   timezoneType: 'USER',
   ageMin: 18,
   ageMax: 65,
@@ -134,13 +164,46 @@ const sections = ref<SectionsState>(createDefaultSections())
 const errors = ref<Record<string, string>>({})
 const submitting = ref(false)
 
-const optimizationGoalOptions = localizedOptions([
+// 所有可能的 Optimization Goal 选项
+const allOptimizationGoalOptions = [
   { value: 'OFFSITE_CONVERSIONS', cn: '网站转化', en: 'Website conversions' },
   { value: 'LINK_CLICKS', cn: '链接点击', en: 'Link clicks' },
   { value: 'IMPRESSIONS', cn: '展示次数', en: 'Impressions' },
   { value: 'APP_INSTALLS', cn: '应用安装', en: 'App installs' },
+  { value: 'APP_INSTALLS_AND_OFFSITE_CONVERSIONS', cn: '最大化应用事件数', en: 'Maximize number of app events' },
+  { value: 'VALUE', cn: '最大化转化价值', en: 'Maximize value of conversions' },
   { value: 'LEAD_GENERATION', cn: '潜在客户开发', en: 'Lead generation' }
-])
+]
+
+// 根据 buying_type 和 objective 筛选可用的 Optimization Goal 选项
+const optimizationGoalOptions = computed(() => {
+  const buyingType = props.campaignBuyingType?.toLowerCase()
+  const objective = props.campaignObjective?.toLowerCase()
+
+  // Auction + App Promotion 组合的特定选项
+  if (buyingType === 'auction' && objective === 'app promotion') {
+    const allowedValues = [
+      'APP_INSTALLS_AND_OFFSITE_CONVERSIONS',
+      'APP_INSTALLS',
+      'VALUE',
+      'LINK_CLICKS'
+    ]
+    return allOptimizationGoalOptions
+      .filter(opt => allowedValues.includes(opt.value))
+      .map(({ value, cn, en }) => ({
+        value,
+        label: displayText(cn, en),
+        disabled: false
+      }))
+  }
+
+  // 默认：返回所有选项
+  return allOptimizationGoalOptions.map(({ value, cn, en }) => ({
+    value,
+    label: displayText(cn, en),
+    disabled: false
+  }))
+})
 
 const billingEventOptions = localizedOptions([
   { value: 'IMPRESSIONS', cn: '展示次数', en: 'Impressions' },
@@ -148,11 +211,65 @@ const billingEventOptions = localizedOptions([
   { value: 'APP_INSTALLS', cn: '应用安装', en: 'App installs' }
 ])
 
+// 判断 Billing Event 是否可编辑
+const isBillingEventDisabled = computed(() => {
+  const buyingType = props.campaignBuyingType?.toLowerCase()
+  const objective = props.campaignObjective?.toLowerCase()
+  // Auction + App Promotion: Billing Event 固定为 IMPRESSIONS
+  return buyingType === 'auction' && objective === 'app promotion'
+})
+
 const destinationTypeOptions = localizedOptions([
   { value: 'WEBSITE', cn: '网站', en: 'Website' },
   { value: 'APP', cn: '应用', en: 'App' },
   { value: 'MESSENGER', cn: 'Messenger', en: 'Messenger' }
 ])
+
+// 判断 Destination Type 是否可编辑
+const isDestinationTypeDisabled = computed(() => {
+  const buyingType = props.campaignBuyingType?.toLowerCase()
+  const objective = props.campaignObjective?.toLowerCase()
+  // Auction + App Promotion: Destination Type 固定为 APP
+  return buyingType === 'auction' && objective === 'app promotion'
+})
+
+// Conversion Event 选项列表
+const conversionEventOptions = localizedOptions([
+  { value: '', cn: 'None', en: 'None' },
+  { value: 'PURCHASE', cn: '购买 / 付费', en: 'Purchase' },
+  { value: 'ADD_TO_CART', cn: '加购', en: 'Add to cart' },
+  { value: 'INITIATED_CHECKOUT', cn: '开始结账', en: 'Initiated checkout' },
+  { value: 'ADD_PAYMENT_INFO', cn: '添加支付信息', en: 'Add payment info' },
+  { value: 'COMPLETE_REGISTRATION', cn: '注册完成', en: 'Complete registration' },
+  { value: 'SUBSCRIBE', cn: '订阅', en: 'Subscribe' },
+  { value: 'START_TRIAL', cn: '开始试用', en: 'Start trial' },
+  { value: 'CONTENT_VIEW', cn: '内容浏览', en: 'Content view' },
+  { value: 'SEARCH', cn: '搜索', en: 'Search' },
+  { value: 'TUTORIAL_COMPLETION', cn: '完成教程', en: 'Tutorial completion' },
+  { value: 'LEVEL_ACHIEVED', cn: '游戏关卡', en: 'Level achieved' },
+  { value: 'ACHIEVEMENT_UNLOCKED', cn: '解锁成就', en: 'Achievement unlocked' },
+  { value: 'SPENT_CREDITS', cn: '花费点数', en: 'Spent credits' }
+])
+
+// 判断 Pixel ID 是否禁用（APP_INSTALLS 时禁用）
+const isPixelIdDisabled = computed(() => {
+  return formData.value.optimizationGoal === 'APP_INSTALLS'
+})
+
+// 判断 Page ID 是否禁用（APP_INSTALLS 时禁用）
+const isPageIdDisabled = computed(() => {
+  return formData.value.optimizationGoal === 'APP_INSTALLS'
+})
+
+// 判断 Conversion Event 是否禁用（仅 APP_INSTALLS_AND_OFFSITE_CONVERSIONS 时启用）
+const isConversionEventDisabled = computed(() => {
+  return formData.value.optimizationGoal !== 'APP_INSTALLS_AND_OFFSITE_CONVERSIONS'
+})
+
+// 判断是否启用了 Campaign Budget Optimization
+const isCBOEnabled = computed(() => {
+  return props.campaignBudgetOptimization === '开启' || props.campaignBudgetOptimization === 'enabled'
+})
 
 const statusOptions = localizedOptions([
   { value: 'PAUSED', cn: '暂停', en: 'Paused' },
@@ -220,8 +337,8 @@ const showBidAmount = computed(() => {
   return ['COST_CAP', 'LOWEST_COST_WITH_BID_CAP'].includes(formData.value.bidStrategy)
 })
 
-const showDailyBudget = computed(() => formData.value.budgetType === 'daily')
-const showLifetimeBudget = computed(() => formData.value.budgetType === 'lifetime')
+const showDailyBudget = computed(() => !isCBOEnabled.value && formData.value.budgetType === 'daily')
+const showLifetimeBudget = computed(() => !isCBOEnabled.value && formData.value.budgetType === 'lifetime')
 
 const buildCreativeObjectStorySpec = () => {
   const callToAction = formData.value.creativeCallToAction === 'NO_BUTTON'
@@ -289,13 +406,34 @@ const validateForm = (): boolean => {
     errors.value.adsetName = displayText('请输入 AdSet 名称', 'Please enter AdSet name')
   }
 
-  if (formData.value.budgetType === 'daily') {
-    if (!formData.value.dailyBudget || formData.value.dailyBudget < 1) {
-      errors.value.dailyBudget = displayText('每日预算最低 $1.00', 'Daily budget must be at least $1.00')
+  // CBO 关闭时验证预算
+  if (!isCBOEnabled.value) {
+    if (formData.value.budgetType === 'daily') {
+      if (!formData.value.dailyBudget || formData.value.dailyBudget < 1) {
+        errors.value.dailyBudget = displayText('每日预算最低 $1.00', 'Daily budget must be at least $1.00')
+      }
+    } else {
+      if (!formData.value.lifetimeBudget || formData.value.lifetimeBudget < 1) {
+        errors.value.lifetimeBudget = displayText('总预算最低 $1.00', 'Lifetime budget must be at least $1.00')
+      }
     }
-  } else {
-    if (!formData.value.lifetimeBudget || formData.value.lifetimeBudget < 1) {
-      errors.value.lifetimeBudget = displayText('总预算最低 $1.00', 'Lifetime budget must be at least $1.00')
+  }
+
+  // CBO 开启时验证百分比
+  if (isCBOEnabled.value) {
+    const minPercent = formData.value.minBudgetSpendPercentage
+    const maxPercent = formData.value.maxBudgetSpendPercentage
+
+    if (minPercent !== null && (minPercent < 0 || minPercent > 100)) {
+      errors.value.minBudgetSpendPercentage = displayText('最小百分比必须在 0-100 之间', 'Min percentage must be between 0-100')
+    }
+
+    if (maxPercent !== null && (maxPercent < 0 || maxPercent > 100)) {
+      errors.value.maxBudgetSpendPercentage = displayText('最大百分比必须在 0-100 之间', 'Max percentage must be between 0-100')
+    }
+
+    if (minPercent !== null && maxPercent !== null && minPercent >= maxPercent) {
+      errors.value.maxBudgetSpendPercentage = displayText('最大百分比必须大于最小百分比', 'Max percentage must be greater than min percentage')
     }
   }
 
@@ -533,7 +671,13 @@ const handleSave = async () => {
                           v-model="formData.optimizationGoal"
                           class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                         >
-                          <option v-for="opt in optimizationGoalOptions" :key="opt.value" :value="opt.value">
+                          <option 
+                            v-for="opt in optimizationGoalOptions" 
+                            :key="opt.value" 
+                            :value="opt.value"
+                            :disabled="opt.disabled"
+                            :class="{ 'text-slate-400': opt.disabled }"
+                          >
                             {{ opt.label }}
                           </option>
                         </select>
@@ -545,12 +689,17 @@ const handleSave = async () => {
                         </label>
                         <select
                           v-model="formData.billingEvent"
+                          :disabled="isBillingEventDisabled"
                           class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          :class="{ 'opacity-50 cursor-not-allowed': isBillingEventDisabled }"
                         >
                           <option v-for="opt in billingEventOptions" :key="opt.value" :value="opt.value">
                             {{ opt.label }}
                           </option>
                         </select>
+                        <p v-if="isBillingEventDisabled" class="mt-[3px] text-[8px] text-slate-500">
+                          {{ displayText('App Promotion 目标下固定为 Impressions', 'Fixed to Impressions for App Promotion objective') }}
+                        </p>
                       </div>
 
                       <div>
@@ -559,12 +708,17 @@ const handleSave = async () => {
                         </label>
                         <select
                           v-model="formData.destinationType"
+                          :disabled="isDestinationTypeDisabled"
                           class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          :class="{ 'opacity-50 cursor-not-allowed': isDestinationTypeDisabled }"
                         >
                           <option v-for="opt in destinationTypeOptions" :key="opt.value" :value="opt.value">
                             {{ opt.label }}
                           </option>
                         </select>
+                        <p v-if="isDestinationTypeDisabled" class="mt-[3px] text-[8px] text-slate-500">
+                          {{ displayText('App Promotion 目标下固定为 APP', 'Fixed to APP for App Promotion objective') }}
+                        </p>
                       </div>
 
                       <div class="col-span-2">
@@ -585,6 +739,100 @@ const handleSave = async () => {
                 </Transition>
               </div>
 
+              <!-- 5️⃣ 推广对象配置 -->
+              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+                <button
+                  type="button"
+                  class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+                  @click="toggleSection('promotedObject')"
+                >
+                  <div class="flex items-center gap-[8px]">
+                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ displayText('推广对象配置', 'Promoted object') }}</span>
+                    <span class="text-[9px] text-slate-500 dark:text-slate-400">{{ displayText('（可选）', '(Optional)') }}</span>
+                  </div>
+                  <span class="material-symbols-outlined text-[16px] text-slate-400 transition-transform" :class="{ 'rotate-180': sections.promotedObject }">
+                    expand_more
+                  </span>
+                </button>
+
+                <Transition name="collapse">
+                  <div v-show="sections.promotedObject" class="p-[12px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
+                    <div class="space-y-[10px]">
+                      <!-- Application ID -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          Application ID
+                        </label>
+                        <input
+                          v-model="formData.applicationId"
+                          type="text"
+                          :placeholder="displayText('用于应用推广', 'For app promotion')"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        />
+                      </div>
+                      
+                      <!-- Pixel ID -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          Pixel ID
+                        </label>
+                        <input
+                          v-model="formData.pixelId"
+                          type="text"
+                          placeholder="123456789012345"
+                          :disabled="isPixelIdDisabled"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          :class="{ 'opacity-50 cursor-not-allowed': isPixelIdDisabled }"
+                        />
+                        <p v-if="isPixelIdDisabled" class="mt-[3px] text-[8px] text-amber-600 dark:text-amber-400">
+                          {{ displayText('APP_INSTALLS 优化目标下无需 Pixel ID', 'Pixel ID not required for APP_INSTALLS optimization goal') }}
+                        </p>
+                        <p v-else class="mt-[3px] text-[8px] text-slate-500">{{ displayText('Meta Pixel ID，用于追踪网站转化', 'Meta Pixel ID for tracking website conversions') }}</p>
+                      </div>
+
+                      <!-- 转化事件 -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          {{ displayText('转化事件', 'Conversion event') }}
+                        </label>
+                        <select
+                          v-model="formData.customEventType"
+                          :disabled="isConversionEventDisabled"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          :class="{ 'opacity-50 cursor-not-allowed': isConversionEventDisabled }"
+                        >
+                          <option v-for="opt in conversionEventOptions" :key="opt.value" :value="opt.value">
+                            {{ opt.label }}
+                          </option>
+                        </select>
+                        <p v-if="isConversionEventDisabled" class="mt-[3px] text-[8px] text-amber-600 dark:text-amber-400">
+                          {{ displayText('仅在优化目标为 APP_INSTALLS_AND_OFFSITE_CONVERSIONS 时可选择', 'Only available for APP_INSTALLS_AND_OFFSITE_CONVERSIONS optimization goal') }}
+                        </p>
+                        <p v-else class="mt-[3px] text-[8px] text-slate-500">{{ displayText('选择转化事件类型', 'Select conversion event type') }}</p>
+                      </div>
+
+                      <!-- Page ID -->
+                      <div>
+                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                          Page ID
+                        </label>
+                        <input
+                          v-model="formData.pageId"
+                          type="text"
+                          :placeholder="displayText('Facebook 主页 ID', 'Facebook Page ID')"
+                          :disabled="isPageIdDisabled"
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          :class="{ 'opacity-50 cursor-not-allowed': isPageIdDisabled }"
+                        />
+                        <p v-if="isPageIdDisabled" class="mt-[3px] text-[8px] text-amber-600 dark:text-amber-400">
+                          {{ displayText('APP_INSTALLS 优化目标下无需 Page ID', 'Page ID not required for APP_INSTALLS optimization goal') }}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+                </Transition>
+              </div>
+
               <!-- 2️⃣ 预算与出价 -->
               <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
@@ -593,7 +841,7 @@ const handleSave = async () => {
                   @click="toggleSection('budget')"
                 >
                   <div class="flex items-center gap-[8px]">
-                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ displayText('预算与出价', 'Budget and bid') }}</span>
+                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ displayText('预算与出价', 'Budget & Bid') }}</span>
                     <span class="text-[9px] text-slate-500 dark:text-slate-400">{{ displayText('（必填）', '(Required)') }}</span>
                   </div>
                   <span class="material-symbols-outlined text-[16px] text-slate-400 transition-transform" :class="{ 'rotate-180': sections.budget }">
@@ -604,7 +852,15 @@ const handleSave = async () => {
                 <Transition name="collapse">
                   <div v-show="sections.budget" class="p-[12px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
                     <div class="space-y-[10px]">
-                      <div>
+                      <!-- CBO 开启时显示提示 -->
+                      <div v-if="isCBOEnabled" class="p-[8px] bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+                        <p class="text-[9px] text-blue-700 dark:text-blue-300">
+                          {{ displayText('Campaign 已启用预算优化，此处无需设置预算', 'Campaign Budget Optimization is enabled, budget settings not required here') }}
+                        </p>
+                      </div>
+
+                      <!-- CBO 关闭时显示预算类型选择 -->
+                      <div v-if="!isCBOEnabled">
                         <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
                           {{ displayText('预算类型', 'Budget type') }} *
                         </label>
@@ -659,6 +915,51 @@ const handleSave = async () => {
                         <p v-if="errors.lifetimeBudget" class="mt-[3px] text-[8px] text-red-500">{{ errors.lifetimeBudget }}</p>
                         <p class="mt-[3px] text-[8px] text-slate-500">{{ displayText('最低 $1.00', 'Minimum $1.00') }}</p>
                       </div>
+
+                      <!-- CBO 开启时显示百分比输入框 -->
+                      <div v-if="isCBOEnabled" class="grid grid-cols-2 gap-[10px]">
+                        <div>
+                          <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                            {{ displayText('最小预算花费百分比', 'Min budget spend %') }}
+                          </label>
+                          <div class="relative">
+                            <input
+                              v-model.number="formData.minBudgetSpendPercentage"
+                              type="number"
+                              step="1"
+                              min="0"
+                              max="100"
+                              placeholder="0"
+                              class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              :class="{ 'border-red-500': errors.minBudgetSpendPercentage }"
+                            />
+                            <span class="absolute right-[8px] top-[6px] text-[9px] text-slate-500">%</span>
+                          </div>
+                          <p v-if="errors.minBudgetSpendPercentage" class="mt-[3px] text-[8px] text-red-500">{{ errors.minBudgetSpendPercentage }}</p>
+                        </div>
+                        <div>
+                          <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                            {{ displayText('最大预算花费百分比', 'Max budget spend %') }}
+                          </label>
+                          <div class="relative">
+                            <input
+                              v-model.number="formData.maxBudgetSpendPercentage"
+                              type="number"
+                              step="1"
+                              min="0"
+                              max="100"
+                              placeholder="100"
+                              class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              :class="{ 'border-red-500': errors.maxBudgetSpendPercentage }"
+                            />
+                            <span class="absolute right-[8px] top-[6px] text-[9px] text-slate-500">%</span>
+                          </div>
+                          <p v-if="errors.maxBudgetSpendPercentage" class="mt-[3px] text-[8px] text-red-500">{{ errors.maxBudgetSpendPercentage }}</p>
+                        </div>
+                      </div>
+                      <p v-if="isCBOEnabled" class="text-[8px] text-slate-500">
+                        {{ displayText('输入 0-100 之间的数值，最小值必须小于最大值', 'Enter values between 0-100, min must be less than max') }}
+                      </p>
 
                       <div>
                         <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
@@ -849,83 +1150,6 @@ const handleSave = async () => {
                 </Transition>
               </div>
 
-              <!-- 5️⃣ 推广对象配置 -->
-              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
-                <button
-                  type="button"
-                  class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-                  @click="toggleSection('promotedObject')"
-                >
-                  <div class="flex items-center gap-[8px]">
-                    <span class="text-[11px] font-semibold text-slate-900 dark:text-white">{{ displayText('推广对象配置', 'Promoted object') }}</span>
-                    <span class="text-[9px] text-slate-500 dark:text-slate-400">{{ displayText('（可选）', '(Optional)') }}</span>
-                  </div>
-                  <span class="material-symbols-outlined text-[16px] text-slate-400 transition-transform" :class="{ 'rotate-180': sections.promotedObject }">
-                    expand_more
-                  </span>
-                </button>
-
-                <Transition name="collapse">
-                  <div v-show="sections.promotedObject" class="p-[12px] bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-700">
-                    <div class="space-y-[10px]">
-                      <!-- Pixel ID -->
-                      <div>
-                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                          Pixel ID
-                        </label>
-                        <input
-                          v-model="formData.pixelId"
-                          type="text"
-                          placeholder="123456789012345"
-                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <p class="mt-[3px] text-[8px] text-slate-500">{{ displayText('Meta Pixel ID，用于追踪网站转化', 'Meta Pixel ID for tracking website conversions') }}</p>
-                      </div>
-
-                      <!-- 转化事件 -->
-                      <div>
-                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                          {{ displayText('转化事件', 'Conversion event') }}
-                        </label>
-                        <input
-                          v-model="formData.customEventType"
-                          type="text"
-                          placeholder="Purchase / AddToCart / Lead"
-                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                        <p class="mt-[3px] text-[8px] text-slate-500">{{ displayText('自定义转化事件名称', 'Custom conversion event name') }}</p>
-                      </div>
-
-                      <!-- Application ID -->
-                      <div>
-                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                          Application ID
-                        </label>
-                        <input
-                          v-model="formData.applicationId"
-                          type="text"
-                          :placeholder="displayText('用于应用推广', 'For app promotion')"
-                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-
-                      <!-- Page ID -->
-                      <div>
-                        <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                          Page ID
-                        </label>
-                        <input
-                          v-model="formData.pageId"
-                          type="text"
-                          :placeholder="displayText('Facebook 主页 ID', 'Facebook Page ID')"
-                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
-                      </div>
-                    </div>
-                  </div>
-                </Transition>
-              </div>
-
               <div class="flex items-center gap-[10px] py-[4px]">
                 <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
                 <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400">
@@ -986,20 +1210,6 @@ const handleSave = async () => {
                       <div class="grid grid-cols-2 gap-[10px]">
                         <div>
                           <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                            {{ displayText('Creative 名称', 'Creative name') }} *
-                          </label>
-                          <input
-                            v-model="formData.creativeName"
-                            type="text"
-                            placeholder="Creative_001"
-                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            :class="{ 'border-red-500': errors.creativeName }"
-                          />
-                          <p v-if="errors.creativeName" class="mt-[3px] text-[8px] text-red-500">{{ errors.creativeName }}</p>
-                        </div>
-
-                        <div>
-                          <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
                             {{ displayText('Creative 类型', 'Creative type') }} *
                           </label>
                           <select
@@ -1024,46 +1234,6 @@ const handleSave = async () => {
                             :class="{ 'border-red-500': errors.creativePageId }"
                           />
                           <p v-if="errors.creativePageId" class="mt-[3px] text-[8px] text-red-500">{{ errors.creativePageId }}</p>
-                        </div>
-
-                        <div>
-                          <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                            {{ displayText('目标链接', 'Destination URL') }} *
-                          </label>
-                          <input
-                            v-model="formData.creativeLink"
-                            type="url"
-                            placeholder="https://example.com"
-                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            :class="{ 'border-red-500': errors.creativeLink }"
-                          />
-                          <p v-if="errors.creativeLink" class="mt-[3px] text-[8px] text-red-500">{{ errors.creativeLink }}</p>
-                        </div>
-
-                        <div>
-                          <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                            {{ displayText('标题', 'Title') }}
-                          </label>
-                          <input
-                            v-model="formData.creativeTitle"
-                            type="text"
-                            :placeholder="displayText('广告标题', 'Ad title')"
-                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          />
-                        </div>
-
-                        <div>
-                          <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                            CTA
-                          </label>
-                          <select
-                            v-model="formData.creativeCallToAction"
-                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
-                          >
-                            <option v-for="opt in callToActionOptions" :key="opt.value" :value="opt.value">
-                              {{ opt.label }}
-                            </option>
-                          </select>
                         </div>
 
                         <div v-if="formData.creativeFormat === 'image'">
@@ -1096,14 +1266,30 @@ const handleSave = async () => {
 
                         <div>
                           <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
-                            Instagram Actor ID
+                            {{ displayText('目标链接', 'Destination URL') }} *
                           </label>
                           <input
-                            v-model="formData.creativeInstagramActorId"
-                            type="text"
-                            :placeholder="displayText('Instagram 账户 ID', 'Instagram account ID')"
+                            v-model="formData.creativeLink"
+                            type="url"
+                            placeholder="https://example.com"
                             class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            :class="{ 'border-red-500': errors.creativeLink }"
                           />
+                          <p v-if="errors.creativeLink" class="mt-[3px] text-[8px] text-red-500">{{ errors.creativeLink }}</p>
+                        </div>
+
+                        <div>
+                          <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
+                            CTA
+                          </label>
+                          <select
+                            v-model="formData.creativeCallToAction"
+                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                          >
+                            <option v-for="opt in callToActionOptions" :key="opt.value" :value="opt.value">
+                              {{ opt.label }}
+                            </option>
+                          </select>
                         </div>
 
                         <div class="col-span-2">
