@@ -26,6 +26,8 @@ class CreateCampaignRequest(BaseModel):
     budget: float
     status: str | None = "draft"
     material_ids: list[str] | None = None
+    # 平台连接
+    connection_id: str | None = None
     # Meta Campaign 特定字段
     account_id: str | None = None
     objective: str | None = None
@@ -51,6 +53,8 @@ class UpdateCampaignRequest(BaseModel):
     budget: float | None = None
     status: str | None = None
     material_ids: list[str] | None = None
+    # 平台连接
+    connection_id: str | None = None
     # Meta Campaign 特定字段
     account_id: str | None = None
     objective: str | None = None
@@ -163,6 +167,7 @@ async def create_campaign(
         budget=request.budget,
         status=request.status or "draft",
         material_ids=request.material_ids or [],
+        connection_id=request.connection_id,
         account_id=request.account_id,
         objective=request.objective,
         buying_type=request.buying_type,
@@ -246,6 +251,8 @@ async def update_campaign(
         update_data["status"] = request.status
     if request.material_ids is not None:
         update_data["material_ids"] = request.material_ids
+    if request.connection_id is not None:
+        update_data["connection_id"] = request.connection_id
     if request.account_id is not None:
         update_data["account_id"] = request.account_id
     if request.objective is not None:

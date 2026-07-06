@@ -8,7 +8,7 @@ import CampaignCardDetailed from '@/components/campaigns/CampaignCardDetailed.vu
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
 import Toast from '@/components/toasts/Toast.vue'
 import { getProjectDetail, getProjectCampaigns, type Project } from '@/api/projects'
-import { createCampaign, updateCampaign } from '@/api/campaigns'
+import { createCampaign, updateCampaign, deleteCampaign } from '@/api/campaigns'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
@@ -208,6 +208,33 @@ const handleEditCampaign = (campaign: any) => {
   showCampaignModal.value = true
 }
 
+const handleDeleteCampaign = async (campaignId: string) => {
+  // 显示确认对话框
+  const confirmed = confirm('确定要删除这个 Campaign 吗？此操作无法撤销。')
+  
+  if (!confirmed) {
+    return
+  }
+  
+  try {
+    console.log('删除 Campaign:', campaignId)
+    await deleteCampaign(campaignId)
+    
+    // 显示成功提示
+    toastMessage.value = 'Campaign 删除成功！'
+    toastType.value = 'success'
+    showToast.value = true
+    
+    // 重新加载 Campaign 列表
+    await loadCampaigns()
+  } catch (err: any) {
+    console.error('删除 Campaign 失败:', err)
+    toastMessage.value = err.message || '删除 Campaign 失败'
+    toastType.value = 'error'
+    showToast.value = true
+  }
+}
+
 const handleCloseToast = () => {
   showToast.value = false
 }
@@ -335,6 +362,7 @@ const handleCloseToast = () => {
               @view="handleViewCampaign"
               @add-creative="handleAddCreative"
               @edit="handleEditCampaign"
+              @delete="handleDeleteCampaign"
             />
           </div>
 

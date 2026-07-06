@@ -38,6 +38,7 @@ interface AccountOption {
   accountId: string
   accountName: string
   channel: string
+  connectionId: string
 }
 
 const props = defineProps<Props>()
@@ -248,7 +249,8 @@ const fetchAccountOptions = async () => {
     accountOptions.value = accounts.map((account: any) => ({
       accountId: account.account_id,
       accountName: account.account_name,
-      channel: account.channel
+      channel: account.channel,
+      connectionId: account.connection_id
     }))
 
     console.log('[fetchAccountOptions] 转换后的账户选项:', accountOptions.value)
@@ -344,11 +346,18 @@ const handleSave = () => {
   submitting.value = true
   const campaignBudgetEnabled = isCampaignBudgetEnabled.value
 
+  // 根据选择的账户找到对应的 connection_id
+  const selectedAccount = accountOptions.value.find(
+    account => account.accountId === formData.value.account
+  )
+  const connectionId = selectedAccount?.connectionId
+
   // 将前端表单字段映射到后端 API 字段
   const submitData: any = {
     id: props.initialData?.id,  // 编辑模式时包含 ID
     name: formData.value.campaignName,  // campaignName -> name
     platform: formData.value.channel,  // channel -> platform
+    connection_id: connectionId,  // 添加 connection_id
     account_id: formData.value.account,  // account -> account_id
     objective: formData.value.objective,
     buying_type: formData.value.buyingType,  // buyingType -> buying_type
@@ -364,6 +373,7 @@ const handleSave = () => {
     end_date: formData.value.end_date
   }
 
+  console.log('[handleSave] 提交数据包含 connection_id:', connectionId)
   emit('submit', submitData)
 }
 

@@ -31,6 +31,7 @@ class Campaign(Base):
     # 主键和外键
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()), comment="广告系列唯一标识")
     project_id: Mapped[str] = mapped_column(ForeignKey("projects.id", ondelete="CASCADE"), nullable=False, index=True, comment="所属项目ID")
+    connection_id: Mapped[str | None] = mapped_column(ForeignKey("platform_connections.id", ondelete="SET NULL"), nullable=True, index=True, comment="关联的平台连接ID，用于获取 access_token 和调用平台 API")
 
     # 基本信息
     name: Mapped[str] = mapped_column(String(255), nullable=False, comment="广告系列名称，对应前端的Campaign名称字段")

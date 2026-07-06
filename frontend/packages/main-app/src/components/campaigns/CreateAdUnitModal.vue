@@ -1,6 +1,24 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 import { useLanguage } from '@/store/language'
+import { getCampaignDetail, getMetaApplications, getMetaPages, getMetaAdImages, getMetaAdVideos, type Campaign, type FacebookPage, type AdImage, type AdVideo } from '@/api/campaigns'
+
+interface Application {
+  id: string
+  name: string
+  namespace?: string
+  object_store_urls?: {
+    ios_url?: string
+    itunes?: string
+    android_url?: string
+    google_play?: string
+    amazon_app_store?: string
+    windows_phone_app_store?: string
+  }
+  supported_platforms?: string[]
+  app_type?: string
+  link?: string
+}
 
 interface Props {
   show: boolean
@@ -164,6 +182,26 @@ const sections = ref<SectionsState>(createDefaultSections())
 const errors = ref<Record<string, string>>({})
 const submitting = ref(false)
 
+// 应用列表相关状态
+const applications = ref<Application[]>([])
+const loadingApplications = ref(false)
+const applicationsError = ref<string>('')
+
+// Facebook Pages 列表相关状态
+const pages = ref<FacebookPage[]>([])
+const loadingPages = ref(false)
+const pagesError = ref<string>('')
+
+// 图片素材列表相关状态
+const images = ref<AdImage[]>([])
+const loadingImages = ref(false)
+const imagesError = ref<string>('')
+
+// 视频素材列表相关状态
+const videos = ref<AdVideo[]>([])
+const loadingVideos = ref(false)
+const videosError = ref<string>('')
+
 // 所有可能的 Optimization Goal 选项
 const allOptimizationGoalOptions = [
   { value: 'OFFSITE_CONVERSIONS', cn: '网站转化', en: 'Website conversions' },
@@ -265,6 +303,178 @@ const isPageIdDisabled = computed(() => {
 const isConversionEventDisabled = computed(() => {
   return formData.value.optimizationGoal !== 'APP_INSTALLS_AND_OFFSITE_CONVERSIONS'
 })
+
+// 获取应用列表
+const fetchApplications = async () => {
+  if (!props.campaignId) return
+  
+  loadingApplications.value = true
+  applicationsError.value = ''
+  
+  try {
+    // 获取 campaign 详情以获取 connection_id 和 account_id
+    const campaign = await getCampaignDetail(props.campaignId)
+    console.log('[fetchApplications] Campaign detail:', campaign)
+    
+    if (!campaign.connection_id || !campaign.account_id) {
+      console.warn('[fetchApplications]Campaign missing connection_id or account_id')
+      applications.value = []
+      return
+    }
+    
+    // 调用 API 获取应用列表
+    applications.value = await getMetaApplications(campaign.connection_id, campaign.account_id)
+    
+  } catch (error: any) {
+    console.error('[fetchApplications]Failed to fetch applications:', error)
+    applicationsError.value = error.message || displayText('获取应用列表失败', 'Failed to fetch applications')
+    applications.value = []
+  } finally {
+    loadingApplications.value = false
+  }
+}
+
+// 获取 Facebook Pages 列表
+const fetchPages = async () => {
+  if (!props.campaignId) {
+    console.log('[fetchPages] No campaignId provided')
+    return
+  }
+  
+  loadingPages.value = true
+  pagesError.value = ''
+  
+  try {
+    console.log('[fetchPages] Fetching campaign detail for:', props.campaignId)
+    // 获取 campaign 详情以获取 connection_id
+    const campaign = await getCampaignDetail(props.campaignId)
+    console.log('[fetchPages] Campaign detail:', campaign)
+    
+    if (!campaign.connection_id) {
+      console.warn('[fetchPages] Campaign missing connection_id')
+      pages.value = []
+      return
+    }
+    
+    console.log('[fetchPages] Calling getMetaPages with connection_id:', campaign.connection_id)
+    // 调用 API 获取 Pages 列表
+    const result = await getMetaPages(campaign.connection_id)
+    console.log('[fetchPages] Received pages:', result)
+    pages.value = result
+    
+  } catch (error: any) {
+    console.error('[fetchPages] Failed to fetch pages:', error)
+    console.error('[fetchPages] Error details:', error.response?.data || error.message)
+    pagesError.value = error.message || displayText('获取 Pages 列表失败', 'Failed to fetch pages')
+    pages.value = []
+  } finally {
+    loadingPages.value = false
+    console.log('[fetchPages] Final pages count:', pages.value.length)
+  }
+}
+
+// 获取图片素材列表
+const fetchImages = async () => {
+  if (!props.campaignId) {
+    console.log('[fetchImages] No campaignId provided')
+    return
+  }
+  
+  loadingImages.value = true
+  imagesError.value = ''
+  
+  try {
+    console.log('[fetchImages] Fetching campaign detail for:', props.campaignId)
+    // 获取 campaign 详情以获取 connection_id 和 account_id
+    const campaign = await getCampaignDetail(props.campaignId)
+    console.log('[fetchImages] Campaign detail:', campaign)
+    
+    if (!campaign.connection_id || !campaign.account_id) {
+      console.warn('[fetchImages] Campaign missing connection_id or account_id')
+      images.value = []
+      return
+    }
+    
+    console.log('[fetchImages] Calling getMetaAdImages with:', campaign.connection_id, campaign.account_id)
+    // 调用 API 获取图片列表
+    const result = await getMetaAdImages(campaign.connection_id, campaign.account_id)
+    console.log('[fetchImages] Received images:', result)
+    images.value = result
+    
+  } catch (error: any) {
+    console.error('[fetchImages] Failed to fetch images:', error)
+    console.error('[fetchImages] Error details:', error.response?.data || error.message)
+    imagesError.value = error.message || displayText('获取图片列表失败', 'Failed to fetch images')
+    images.value = []
+  } finally {
+    loadingImages.value = false
+    console.log('[fetchImages] Final images count:', images.value.length)
+  }
+}
+
+// 获取视频素材列表
+const fetchVideos = async () => {
+  if (!props.campaignId) {
+    console.log('[fetchVideos] No campaignId provided')
+    return
+  }
+  
+  loadingVideos.value = true
+  videosError.value = ''
+  
+  try {
+    console.log('[fetchVideos] Fetching campaign detail for:', props.campaignId)
+    // 获取 campaign 详情以获取 connection_id 和 account_id
+    const campaign = await getCampaignDetail(props.campaignId)
+    console.log('[fetchVideos] Campaign detail:', campaign)
+    
+    if (!campaign.connection_id || !campaign.account_id) {
+      console.warn('[fetchVideos] Campaign missing connection_id or account_id')
+      videos.value = []
+      return
+    }
+    
+    console.log('[fetchVideos] Calling getMetaAdVideos with:', campaign.connection_id, campaign.account_id)
+    // 调用 API 获取视频列表
+    const result = await getMetaAdVideos(campaign.connection_id, campaign.account_id)
+    console.log('[fetchVideos] Received videos:', result)
+    videos.value = result
+    
+  } catch (error: any) {
+    console.error('[fetchVideos] Failed to fetch videos:', error)
+    console.error('[fetchVideos] Error details:', error.response?.data || error.message)
+    videosError.value = error.message || displayText('获取视频列表失败', 'Failed to fetch videos')
+    videos.value = []
+  } finally {
+    loadingVideos.value = false
+    console.log('[fetchVideos] Final videos count:', videos.value.length)
+  }
+}
+
+// 监听 modal 显示状态，自动获取应用列表、Pages 列表、图片列表和视频列表
+watch(() => props.show, (newVal) => {
+  if (newVal) {
+    fetchApplications()
+    fetchPages()
+    fetchImages()
+    fetchVideos()
+  }
+})
+
+// 格式化应用选项显示文本
+const formatApplicationOption = (app: Application): string => {
+  const platforms = app.supported_platforms?.join(', ') || 'N/A'
+  const appType = app.app_type || 'App'
+  return `${app.name} (${app.id}) - ${appType} [${platforms}]`
+}
+
+// 获取应用的商店 URL 用于显示
+const getApplicationStoreUrl = (app: Application): string => {
+  const urls = app.object_store_urls
+  if (!urls) return ''
+  
+  return urls.ios_url || urls.itunes || urls.android_url || urls.google_play || urls.amazon_app_store || urls.windows_phone_app_store || ''
+}
 
 // 判断是否启用了 Campaign Budget Optimization
 const isCBOEnabled = computed(() => {
@@ -763,12 +973,81 @@ const handleSave = async () => {
                         <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
                           Application ID
                         </label>
-                        <input
+                        
+                        <!-- 加载中状态 -->
+                        <div v-if="loadingApplications" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-[9px] text-slate-500">
+                          {{ displayText('正在加载应用列表...', 'Loading applications...') }}
+                        </div>
+                        
+                        <!-- 应用列表下拉选择 -->
+                        <select
+                          v-else-if="applications.length > 0"
                           v-model="formData.applicationId"
-                          type="text"
-                          :placeholder="displayText('用于应用推广', 'For app promotion')"
-                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        />
+                          class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
+                        >
+                          <option value="">{{ displayText('请选择应用', 'Select an application') }}</option>
+                          <option v-for="app in applications" :key="app.id" :value="app.id">
+                            {{ formatApplicationOption(app) }}
+                          </option>
+                        </select>
+                        
+                        <!-- 空列表引导 -->
+                        <div v-else class="space-y-[6px]">
+                          <input
+                            v-model="formData.applicationId"
+                            type="text"
+                            disabled
+                            :placeholder="displayText('无可用应用', 'No applications available')"
+                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-[9px] text-slate-500 dark:text-slate-500 placeholder:text-slate-400 cursor-not-allowed"
+                          />
+                          <div class="p-[8px] bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                            <p class="text-[8px] text-amber-800 dark:text-amber-200 mb-[4px]">
+                              {{ displayText('未找到可用的应用', 'No applications found') }}
+                            </p>
+                            <p class="text-[8px] text-amber-700 dark:text-amber-300">
+                              {{ displayText(
+                                '请前往 Meta Business Manager 添加并配置您的应用：',
+                                'Please add and configure your app in Meta Business Manager:'
+                              ) }}
+                            </p>
+                            <a
+                              href="https://business.facebook.com/settings/apps"
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              class="inline-block mt-[4px] text-[8px] text-blue-600 dark:text-blue-400 hover:underline"
+                            >
+                              {{ displayText('前往 Business Manager →', 'Go to Business Manager →') }}
+                            </a>
+                          </div>
+                        </div>
+                        
+                        <!-- 错误提示 -->
+                        <p v-if="applicationsError" class="mt-[3px] text-[8px] text-red-600 dark:text-red-400">
+                          {{ applicationsError }}
+                        </p>
+                        
+                        <!-- 已选应用的详细信息 -->
+                        <div v-if="formData.applicationId && applications.length > 0" class="mt-[6px] p-[6px] bg-slate-50 dark:bg-slate-800 rounded-md">
+                          <template v-for="app in applications" :key="app.id">
+                            <div v-if="app.id === formData.applicationId" class="space-y-[2px]">
+                              <p class="text-[8px] text-slate-600 dark:text-slate-400">
+                                <span class="font-medium">{{ displayText('名称', 'Name') }}:</span> {{ app.name }}
+                              </p>
+                              <p v-if="app.app_type" class="text-[8px] text-slate-600 dark:text-slate-400">
+                                <span class="font-medium">{{ displayText('类型', 'Type') }}:</span> {{ app.app_type }}
+                              </p>
+                              <p v-if="app.supported_platforms && app.supported_platforms.length > 0" class="text-[8px] text-slate-600 dark:text-slate-400">
+                                <span class="font-medium">{{ displayText('平台', 'Platforms') }}:</span> {{ app.supported_platforms.join(', ') }}
+                              </p>
+                              <p v-if="getApplicationStoreUrl(app)" class="text-[8px] text-slate-600 dark:text-slate-400 truncate">
+                                <span class="font-medium">{{ displayText('商店链接', 'Store URL') }}:</span> 
+                                <a :href="getApplicationStoreUrl(app)" target="_blank" rel="noopener noreferrer" class="text-blue-600 dark:text-blue-400 hover:underline">
+                                  {{ getApplicationStoreUrl(app) }}
+                                </a>
+                              </p>
+                            </div>
+                          </template>
+                        </div>
                       </div>
                       
                       <!-- Pixel ID -->
@@ -1226,41 +1505,275 @@ const handleSave = async () => {
                           <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
                             Facebook Page ID *
                           </label>
-                          <input
+                          
+                          <!-- 加载中状态 -->
+                          <div v-if="loadingPages" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-[9px] text-slate-500">
+                            {{ displayText('正在加载 Pages...', 'Loading pages...') }}
+                          </div>
+                          
+                          <!-- Pages 列表下拉选择 -->
+                          <select
+                            v-else-if="pages.length > 0"
                             v-model="formData.creativePageId"
-                            type="text"
-                            placeholder="123456789012345"
-                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-blue-500"
                             :class="{ 'border-red-500': errors.creativePageId }"
-                          />
+                          >
+                            <option value="">{{ displayText('请选择 Page', 'Select a page') }}</option>
+                            <option v-for="page in pages" :key="page.id" :value="page.id">
+                              {{ page.name }} ({{ page.id }}){{ page.has_advertise_permission ? ' ✓' : '' }}
+                            </option>
+                          </select>
+                          
+                          <!-- 空列表或手动输入 -->
+                          <div v-else class="space-y-[6px]">
+                            <input
+                              v-model="formData.creativePageId"
+                              type="text"
+                              :placeholder="displayText('手动输入 Page ID', 'Enter Page ID manually')"
+                              class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
+                              :class="{ 'border-red-500': errors.creativePageId }"
+                            />
+                            <div v-if="!loadingPages" class="p-[8px] bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                              <p class="text-[8px] text-amber-800 dark:text-amber-200 mb-[4px]">
+                                {{ displayText('未找到可用的 Pages', 'No pages found') }}
+                              </p>
+                              <p class="text-[8px] text-amber-700 dark:text-amber-300">
+                                {{ displayText(
+                                  '请前往 Meta Business Manager 添加并配置您的 Page：',
+                                  'Please add and configure your page in Meta Business Manager:'
+                                ) }}
+                              </p>
+                              <a
+                                href="https://business.facebook.com/settings/pages"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-block mt-[4px] text-[8px] text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                {{ displayText('前往 Business Manager →', 'Go to Business Manager →') }}
+                              </a>
+                            </div>
+                          </div>
+                          
+                          <!-- 错误提示 -->
+                          <p v-if="pagesError" class="mt-[3px] text-[8px] text-red-600 dark:text-red-400">
+                            {{ pagesError }}
+                          </p> 
+                          
                           <p v-if="errors.creativePageId" class="mt-[3px] text-[8px] text-red-500">{{ errors.creativePageId }}</p>
                         </div>
 
-                        <div v-if="formData.creativeFormat === 'image'">
+                        <div v-if="formData.creativeFormat === 'image'" class="col-span-2">
                           <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
                             Image Hash *
                           </label>
-                          <input
-                            v-model="formData.creativeImageHash"
-                            type="text"
-                            :placeholder="displayText('Meta 图片哈希', 'Meta image hash')"
-                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            :class="{ 'border-red-500': errors.creativeImageHash }"
-                          />
+                          
+                          <!-- 加载中状态 -->
+                          <div v-if="loadingImages" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-[9px] text-slate-500">
+                            {{ displayText('正在加载图片素材...', 'Loading images...') }}
+                          </div>
+                          
+                          <!-- 图片网格选择 -->
+                          <div v-else-if="images.length > 0" class="space-y-[6px]">
+                            <div class="grid grid-cols-4 gap-[8px] max-h-[300px] overflow-y-auto p-[4px] border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-900">
+                              <div
+                                v-for="image in images"
+                                :key="image.id"
+                                @click="formData.creativeImageHash = image.hash"
+                                class="relative cursor-pointer group"
+                                :class="{
+                                  'ring-2 ring-blue-500': formData.creativeImageHash === image.hash
+                                }"
+                              >
+                                <img
+                                  :src="image.url_128 || image.url"
+                                  :alt="image.name || 'Image'"
+                                  class="w-full h-[80px] object-cover rounded-md"
+                                  loading="lazy"
+                                />
+                                <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-30 transition-all rounded-md flex items-center justify-center">
+                                  <div v-if="formData.creativeImageHash === image.hash" class="text-white text-[16px]">✓</div>
+                                </div>
+                                <div class="mt-[2px] text-[7px] text-slate-600 dark:text-slate-400 truncate" :title="image.name">
+                                  {{ image.name || image.hash.substring(0, 8) }}
+                                </div>
+                                <div class="text-[7px] text-slate-500 dark:text-slate-500">
+                                  {{ image.width }}×{{ image.height }}
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <!-- 已选图片信息 -->
+                            <div v-if="formData.creativeImageHash" class="p-[6px] bg-slate-50 dark:bg-slate-800 rounded-md">
+                              <template v-for="img in images" :key="img.id">
+                                <div v-if="img.hash === formData.creativeImageHash" class="flex items-center gap-[8px]">
+                                  <img :src="img.url_128 || img.url" :alt="img.name" class="w-[40px] h-[40px] object-cover rounded" />
+                                  <div class="flex-1 min-w-0">
+                                    <p class="text-[8px] text-slate-700 dark:text-slate-300 font-medium truncate">{{ img.name || 'Unnamed' }}</p>
+                                    <p class="text-[7px] text-slate-500">{{ img.width }}×{{ img.height }} • Hash: {{ img.hash.substring(0, 12) }}...</p>
+                                  </div>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                          
+                          <!-- 空列表或禁用输入 -->
+                          <div v-else class="space-y-[6px]">
+                            <input
+                              v-model="formData.creativeImageHash"
+                              type="text"
+                              disabled
+                              :placeholder="displayText('无可用图片', 'No images available')"
+                              class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-[9px] text-slate-500 dark:text-slate-500 placeholder:text-slate-400 cursor-not-allowed"
+                            />
+                            <div class="p-[8px] bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                              <p class="text-[8px] text-amber-800 dark:text-amber-200 mb-[4px]">
+                                {{ displayText('未找到可用的图片素材', 'No images found') }}
+                              </p>
+                              <p class="text-[8px] text-amber-700 dark:text-amber-300">
+                                {{ displayText(
+                                  '请前往 Meta Ads Manager 上传图片素材',
+                                  'Please upload images in Meta Ads Manager'
+                                ) }}
+                              </p>
+                              <a
+                                href="https://business.facebook.com/adsmanager/manage/campaigns"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-block mt-[4px] text-[8px] text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                {{ displayText('前往 Ads Manager →', 'Go to Ads Manager →') }}
+                              </a>
+                            </div>
+                          </div>
+                          
+                          <!-- 错误提示 -->
+                          <p v-if="imagesError" class="mt-[3px] text-[8px] text-red-600 dark:text-red-400">
+                            {{ imagesError }}
+                          </p>
+                          
                           <p v-if="errors.creativeImageHash" class="mt-[3px] text-[8px] text-red-500">{{ errors.creativeImageHash }}</p>
                         </div>
 
-                        <div v-if="formData.creativeFormat === 'video'">
+                        <div v-if="formData.creativeFormat === 'video'" class="col-span-2">
                           <label class="block text-[9px] font-medium text-slate-700 dark:text-slate-300 mb-[5px]">
                             Video ID *
                           </label>
-                          <input
-                            v-model="formData.creativeVideoId"
-                            type="text"
-                            :placeholder="displayText('Meta 视频 ID', 'Meta video ID')"
-                            class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[9px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-blue-500"
-                            :class="{ 'border-red-500': errors.creativeVideoId }"
-                          />
+                          
+                          <!-- 加载中状态 -->
+                          <div v-if="loadingVideos" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-800 text-[9px] text-slate-500">
+                            {{ displayText('正在加载视频素材...', 'Loading videos...') }}
+                          </div>
+                          
+                          <!-- 视频列表选择 -->
+                          <div v-else-if="videos.length > 0" class="space-y-[6px]">
+                            <div class="max-h-[400px] overflow-y-auto space-y-[8px] p-[4px] border border-slate-300 dark:border-slate-600 rounded-md bg-slate-50 dark:bg-slate-900">
+                              <div
+                                v-for="video in videos"
+                                :key="video.id"
+                                @click="formData.creativeVideoId = video.id"
+                                class="flex items-center gap-[12px] p-[8px] cursor-pointer rounded-md hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                                :class="{
+                                  'bg-blue-50 dark:bg-blue-900/20 ring-2 ring-blue-500': formData.creativeVideoId === video.id
+                                }"
+                              >
+                                <!-- 封面图 -->
+                                <div class="flex-shrink-0 relative">
+                                  <img
+                                    v-if="video.picture"
+                                    :src="video.picture"
+                                    :alt="video.title || 'Video'"
+                                    class="w-[120px] h-[68px] object-cover rounded"
+                                    loading="lazy"
+                                  />
+                                  <div v-else class="w-[120px] h-[68px] bg-slate-200 dark:bg-slate-700 rounded flex items-center justify-center">
+                                    <span class="text-[24px]">🎬</span>
+                                  </div>
+                                  <!-- 时长标签 -->
+                                  <div v-if="video.length" class="absolute bottom-[4px] right-[4px] bg-black bg-opacity-75 text-white text-[7px] px-[4px] py-[2px] rounded">
+                                    {{ Math.floor(video.length / 60) }}:{{ String(Math.floor(video.length % 60)).padStart(2, '0') }}
+                                  </div>
+                                  <!-- 选中标记 -->
+                                  <div v-if="formData.creativeVideoId === video.id" class="absolute top-[4px] left-[4px] bg-blue-500 text-white text-[12px] w-[20px] h-[20px] rounded-full flex items-center justify-center">
+                                    ✓
+                                  </div>
+                                </div>
+                                
+                                <!-- 视频信息 -->
+                                <div class="flex-1 min-w-0">
+                                  <p class="text-[9px] font-medium text-slate-900 dark:text-white truncate" :title="video.title">
+                                    {{ video.title || displayText('无标题', 'Untitled') }}
+                                  </p>
+                                  <p v-if="video.description" class="text-[8px] text-slate-600 dark:text-slate-400 line-clamp-2 mt-[2px]">
+                                    {{ video.description }}
+                                  </p>
+                                  <div class="flex items-center gap-[8px] mt-[4px]">
+                                    <span class="text-[7px] text-slate-500">ID: {{ video.id }}</span>
+                                    <span v-if="video.status" class="text-[7px] px-[4px] py-[1px] rounded" :class="{
+                                      'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400': video.status === 'ready',
+                                      'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': video.status === 'processing',
+                                      'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-400': video.status !== 'ready' && video.status !== 'processing'
+                                    }">
+                                      {{ video.status }}
+                                    </span>
+                                  </div>
+                                </div>
+                              </div>
+                            </div>
+                            
+                            <!-- 已选视频信息 -->
+                            <div v-if="formData.creativeVideoId" class="p-[6px] bg-slate-50 dark:bg-slate-800 rounded-md">
+                              <template v-for="vid in videos" :key="vid.id">
+                                <div v-if="vid.id === formData.creativeVideoId" class="flex items-center gap-[8px]">
+                                  <img v-if="vid.picture" :src="vid.picture" :alt="vid.title" class="w-[60px] h-[34px] object-cover rounded" />
+                                  <div v-else class="w-[60px] h-[34px] bg-slate-200 dark:bg-slate-700 rounded flex items-center justify-center text-[16px]">🎬</div>
+                                  <div class="flex-1 min-w-0">
+                                    <p class="text-[8px] text-slate-700 dark:text-slate-300 font-medium truncate">{{ vid.title || 'Untitled' }}</p>
+                                    <p class="text-[7px] text-slate-500">
+                                      <span v-if="vid.length">{{ Math.floor(vid.length / 60) }}:{{ String(Math.floor(vid.length % 60)).padStart(2, '0') }}</span>
+                                      <span v-if="vid.length"> • </span>
+                                      <span>ID: {{ vid.id }}</span>
+                                    </p>
+                                  </div>
+                                </div>
+                              </template>
+                            </div>
+                          </div>
+                          
+                          <!-- 空列表或禁用输入 -->
+                          <div v-else class="space-y-[6px]">
+                            <input
+                              v-model="formData.creativeVideoId"
+                              type="text"
+                              disabled
+                              :placeholder="displayText('无可用视频', 'No videos available')"
+                              class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-slate-100 dark:bg-slate-800 text-[9px] text-slate-500 dark:text-slate-500 placeholder:text-slate-400 cursor-not-allowed"
+                            />
+                            <div class="p-[8px] bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 rounded-md">
+                              <p class="text-[8px] text-amber-800 dark:text-amber-200 mb-[4px]">
+                                {{ displayText('未找到可用的视频素材', 'No videos found') }}
+                              </p>
+                              <p class="text-[8px] text-amber-700 dark:text-amber-300">
+                                {{ displayText(
+                                  '请前往 Meta Ads Manager 上传视频素材：',
+                                  'Please upload videos in Meta Ads Manager:'
+                                ) }}
+                              </p>
+                              <a
+                                href="https://business.facebook.com/adsmanager/manage/campaigns"
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                class="inline-block mt-[4px] text-[8px] text-blue-600 dark:text-blue-400 hover:underline"
+                              >
+                                {{ displayText('前往 Ads Manager →', 'Go to Ads Manager →') }}
+                              </a>
+                            </div>
+                          </div>
+                          
+                          <!-- 错误提示 -->
+                          <p v-if="videosError" class="mt-[3px] text-[8px] text-red-600 dark:text-red-400">
+                            {{ videosError }}
+                          </p>
+                          
                           <p v-if="errors.creativeVideoId" class="mt-[3px] text-[8px] text-red-500">{{ errors.creativeVideoId }}</p>
                         </div>
 

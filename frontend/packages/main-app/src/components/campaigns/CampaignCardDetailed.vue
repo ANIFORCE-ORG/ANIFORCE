@@ -21,6 +21,7 @@ interface Emits {
   (e: 'view', id: string): void
   (e: 'addCreative', id: string): void
   (e: 'edit', campaign: Campaign): void
+  (e: 'delete', id: string): void
 }
 
 const props = defineProps<Props>()
@@ -70,6 +71,10 @@ const handleView = () => {
 const handleEdit = () => {
   emit('edit', props.campaign)
 }
+
+const handleDelete = () => {
+  emit('delete', props.campaign.id)
+}
 </script>
 
 <template>
@@ -87,18 +92,24 @@ const handleEdit = () => {
           BuyingType - {{ campaign.buying_type }} · Objective - {{ campaign.objective }}
         </p>
       </div>
-      <div class="shrink-0 flex flex-col gap-[6px]">
+      <div class="shrink-0 flex items-center gap-[6px] w-[240px]">
         <button
-          class="px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-primary hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+          class="flex-1 px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-primary hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors whitespace-nowrap"
           @click="handleView"
         >
-          查看详情
+          查看
         </button>
         <button
-          class="px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-primary hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+          class="flex-1 px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-primary hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors whitespace-nowrap"
           @click="handleEdit"
         >
           编辑
+        </button>
+        <button
+          class="flex-1 px-[9px] py-[6px] rounded-md border border-red-200 dark:border-red-800 bg-white dark:bg-slate-700 text-[11px] font-medium text-red-600 dark:text-red-400 hover:border-red-500 hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors whitespace-nowrap"
+          @click="handleDelete"
+        >
+          删除
         </button>
       </div>
     </div>
