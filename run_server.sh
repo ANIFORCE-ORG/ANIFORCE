@@ -545,7 +545,7 @@ fi
   UVICORN_WORKERS_FLAG=""
   if [ "$MODE" = "cloud" ]; then
     UVICORN_RELOAD_FLAG=""
-    UVICORN_WORKERS_FLAG="--workers 2"
+    UVICORN_WORKERS_FLAG="--workers 1"  # TODO: 临时调整为1, Agent部份支持多workers服务后改为多workers
   fi
 
   # 启动后端并重定向日志
