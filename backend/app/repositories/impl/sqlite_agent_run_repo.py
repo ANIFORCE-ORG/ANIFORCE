@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import select, update, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AgentRun
@@ -17,6 +17,18 @@ class SqliteAgentRunRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
+    async def _ensure_checkpoint_ref_column(self) -> None:
+        if self.session.bind and self.session.bind.dialect.name != "sqlite":
+            return
+        try:
+            await self.session.execute(text("ALTER TABLE agent_runs ADD COLUMN checkpoint_ref VARCHAR(128)"))
+            await self.session.flush()
+        except Exception as exc:
+            if "duplicate column" not in str(exc).lower():
+                await self.session.rollback()
+                raise
+            await self.session.rollback()
+
     def _to_dict(self, item: AgentRun) -> dict:
         return {
             "run_id": item.run_id,
@@ -29,6 +41,7 @@ class SqliteAgentRunRepository:
             "usage": json.loads(item.usage_json) if item.usage_json else None,
             "error": json.loads(item.error_json) if item.error_json else None,
             "pending_approval": json.loads(item.pending_approval_json) if item.pending_approval_json else None,
+            "checkpoint_ref": item.checkpoint_ref,
             "started_at": item.started_at.isoformat(),
             "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         }
@@ -98,7 +111,9 @@ class SqliteAgentRunRepository:
         *,
         usage: dict | None = None,
         error: dict | None = None,
+        checkpoint_ref: str | None = None,
     ) -> dict | None:
+        await self._ensure_checkpoint_ref_column()
         values: dict = {"status": status}
         if status in {"completed", "error", "cancelled"}:
             values["completed_at"] = datetime.utcnow()
@@ -106,10 +121,12 @@ class SqliteAgentRunRepository:
             values["usage_json"] = json.dumps(usage, ensure_ascii=False)
         if error is not None:
             values["error_json"] = json.dumps(error, ensure_ascii=False)
+        if checkpoint_ref is not None:
+            values["checkpoint_ref"] = checkpoint_ref
         stmt = update(AgentRun).where(AgentRun.run_id == run_id, AgentRun.user_id == user_id)
         if status == "cancelled":
             stmt = stmt.where(AgentRun.status.in_(ACTIVE_RUN_STATUSES))
-        elif status in {"running", "completed", "error"}:
+        elif status in {"running", "completed", "error", "requires_action"}:
             stmt = stmt.where(~AgentRun.status.in_(TERMINAL_RUN_STATUSES))
         result = await self.session.execute(stmt.values(**values))
         if result.rowcount != 1:

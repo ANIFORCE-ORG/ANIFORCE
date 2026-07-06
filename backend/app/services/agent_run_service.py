@@ -72,6 +72,12 @@ class AgentRunService:
             return run
         return await self.repo.mark_status(run_id, user_id, "completed", usage=usage)
 
+    async def mark_requires_action(self, run_id: str, user_id: str, checkpoint_ref: str) -> dict | None:
+        run = await self.get(run_id, user_id)
+        if run["status"] in TERMINAL_RUN_STATUSES:
+            return run
+        return await self.repo.mark_status(run_id, user_id, "requires_action", checkpoint_ref=checkpoint_ref)
+
     async def mark_error(self, run_id: str, user_id: str, error: dict) -> dict | None:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:

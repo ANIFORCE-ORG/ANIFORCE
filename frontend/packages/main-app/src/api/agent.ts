@@ -20,7 +20,14 @@ export interface AgentUsage {
 export interface TextContentBlock { type: 'text'; text: string }
 export interface ImageContentBlock { type: 'image'; data?: string; mimeType?: string; source?: Record<string, unknown> }
 export interface ThinkingContentBlock { type: 'thinking'; thinking: string }
-export type AgentContentBlock = TextContentBlock | ImageContentBlock | ThinkingContentBlock | Record<string, unknown>
+export interface ApprovalContentBlock {
+  type: 'approval'
+  runId: string
+  checkpointId: string
+  status?: 'pending' | 'approved' | 'rejected' | 'running'
+  interruptions?: Array<{ tool_name?: string; arguments?: string; call_id?: string; agent_name?: string }>
+}
+export type AgentContentBlock = TextContentBlock | ImageContentBlock | ThinkingContentBlock | ApprovalContentBlock | Record<string, unknown>
 
 export interface AgentMessage {
   id?: string
@@ -277,6 +284,45 @@ function normalizeAgentMessage(raw: any): AgentMessage {
     id: raw?.id || raw?.message_id,
     content,
     timestamp: raw?.timestamp || raw?.created_at,
+  }
+}
+
+export async function* resolveAgentRunApproval(runId: string, checkpointId: string, decision: 'approve' | 'reject', rejectionMessage?: string, signal?: AbortSignal): AsyncGenerator<AgentStreamEvent, void, unknown> {
+  const token = getValidAgentToken()
+  const response = await fetch(`/api/v1/agent/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(checkpointId)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ decision, rejection_message: rejectionMessage }),
+    signal,
+  })
+  if (!response.ok) {
+    await throwAgentError(response, `Agent approval failed: ${response.status}`)
+  }
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error('Agent approval response is not readable')
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        const raw = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        const event = parseSseEvent(raw)
+        if (event) yield event
+        boundary = buffer.indexOf('\n\n')
+      }
+    }
+  } finally {
+    reader.releaseLock()
   }
 }
 

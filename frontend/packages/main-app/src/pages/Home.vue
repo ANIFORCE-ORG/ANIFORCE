@@ -535,6 +535,7 @@ watch(
             :tool-results="toolResults"
             :model-names="agent.modelNames.value"
             :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
+            @approval="payload => agent.resolveApproval(payload.runId, payload.checkpointId, payload.decision)"
           />
         </template>
 
@@ -544,6 +545,7 @@ watch(
           is-streaming
           :tool-results="toolResults"
           :model-names="agent.modelNames.value"
+          @approval="payload => agent.resolveApproval(payload.runId, payload.checkpointId, payload.decision)"
         />
         
         <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="flex items-center justify-center gap-[9px] py-[19px]">

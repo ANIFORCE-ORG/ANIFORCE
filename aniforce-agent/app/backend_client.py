@@ -65,6 +65,9 @@ class BackendClient:
     async def create_project(self, token: str, data: dict, extra_headers: dict | None = None) -> dict:
         return await self._request("POST", "/api/v1/projects", token=token, json=data, extra_headers=extra_headers)
 
+    async def delete_project(self, token: str, project_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("DELETE", f"/api/v1/projects/{project_id}", token=token, extra_headers=extra_headers)
+
     # ---- Campaigns ----
 
     async def list_campaigns(self, token: str, project_id: str | None = None, limit: int = 20) -> dict:
@@ -81,6 +84,9 @@ class BackendClient:
 
     async def update_campaign_status(self, token: str, campaign_id: str, status: str, extra_headers: dict | None = None) -> dict:
         return await self._request("PUT", f"/api/v1/campaigns/{campaign_id}/status", token=token, json={"status": status}, extra_headers=extra_headers)
+
+    async def delete_campaign(self, token: str, campaign_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("DELETE", f"/api/v1/campaigns/{campaign_id}", token=token, extra_headers=extra_headers)
 
     # ---- Materials ----
 

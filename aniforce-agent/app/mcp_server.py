@@ -143,6 +143,24 @@ async def create_project(
     )
 
 
+@mcp.tool()
+async def delete_project(ctx: Context, project_id: str) -> dict:
+    """删除指定广告投放项目。
+
+    Args:
+        project_id: 项目 ID
+
+    Returns:
+        删除结果
+    """
+    token = _get_token(ctx)
+    return await backend_client.delete_project(
+        token=token,
+        project_id=project_id,
+        extra_headers=_get_backend_headers(ctx, "delete_project", {"project_id": project_id}),
+    )
+
+
 # ============ Campaign 工具 ============
 
 @mcp.tool()
@@ -228,6 +246,24 @@ async def update_campaign_status(ctx: Context, campaign_id: str, status: str) ->
         campaign_id=campaign_id,
         status=status,
         extra_headers=_get_backend_headers(ctx, "update_campaign_status", {"campaign_id": campaign_id, "status": status}),
+    )
+
+
+@mcp.tool()
+async def delete_campaign(ctx: Context, campaign_id: str) -> dict:
+    """删除指定广告计划。
+
+    Args:
+        campaign_id: 计划 ID
+
+    Returns:
+        删除结果
+    """
+    token = _get_token(ctx)
+    return await backend_client.delete_campaign(
+        token=token,
+        campaign_id=campaign_id,
+        extra_headers=_get_backend_headers(ctx, "delete_campaign", {"campaign_id": campaign_id}),
     )
 
 

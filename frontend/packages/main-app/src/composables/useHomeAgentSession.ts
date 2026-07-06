@@ -7,6 +7,7 @@ import {
   listAgentSessions,
   startAgentRun,
   streamAgentRunEvents,
+  resolveAgentRunApproval,
   cancelAgentRun,
   updateAgentSession,
   deleteAgentSession,
@@ -409,6 +410,19 @@ export function useHomeAgentSession() {
           markRunningToolsCompleted()
         }
 
+        if (event.event === 'runtime.requires_action') {
+          drainTypewriter(false)
+          ensureAssistantMessage(assistant)
+          store.appendApprovalToStreaming({
+            runId: String(event.data.run_id || run.run_id),
+            checkpointId: String(event.data.checkpoint_id || ''),
+            interruptions: Array.isArray(event.data.interruptions) ? event.data.interruptions as any : [],
+          })
+          store.agentPhase = null
+          // 重要：requires_action 时流已结束，必须清理 agentRunning，否则 resolveApproval 会 early return
+          streamCompletedSuccessfully = true
+        }
+
         if (event.event === 'runtime.error' || event.event === 'error') {
           throw new Error(String(event.data.message || 'Agent 流式响应错误'))
         }
@@ -546,6 +560,7 @@ export function useHomeAgentSession() {
       if (block.type === 'text') return String(block.text || '').trim().length > 0
       if (block.type === 'thinking') return String(block.thinking || '').trim().length > 0
       if (block.type === 'toolCall') return true
+      if (block.type === 'approval') return true
       return false
     })
   }
@@ -780,7 +795,7 @@ export function useHomeAgentSession() {
       if (dataType === 'response.output_text.delta' && delta) {
         ensureAssistantMessage(options.assistant)
         options.markFirstMessageDelta(delta.length)
-        enqueueTypewriter(delta)
+        store.appendDeltaToStreaming('text', 'text', delta)
       } else if ((dataType === 'response.reasoning_text.delta' || dataType === 'response.reasoning_summary_text.delta') && delta) {
         drainTypewriter(false)
         if (!streamingMessage.value) return
@@ -905,24 +920,6 @@ export function useHomeAgentSession() {
     }
   }
 
-  function enqueueTypewriter(delta: string): void {
-    if (!delta) return
-    store.appendTypewriterBuffer(delta)
-    if (store.hasTypewriterTimer()) return
-    store.setTypewriterTick(() => {
-      if (!streamingMessage.value) { drainTypewriter(); return }
-      const buffer = store.getTypewriterBuffer()
-      const chunkSize = buffer.length > 80 ? 6 : buffer.length > 24 ? 3 : 1
-      const chunk = buffer.slice(0, chunkSize)
-      store.setTypewriterBuffer(buffer.slice(chunkSize))
-      appendTextToStreamMessage(chunk)
-      if (!store.getTypewriterBuffer()) {
-        store.stopTypewriter()
-        store.runDeferredStreamFinalizer()
-      }
-    })
-  }
-
   function drainTypewriter(runDeferredFinalizer = true): void {
     const buffer = store.getTypewriterBuffer()
     if (buffer && streamingMessage.value) {
@@ -931,6 +928,93 @@ export function useHomeAgentSession() {
     store.setTypewriterBuffer('')
     store.stopTypewriter()
     if (runDeferredFinalizer) store.runDeferredStreamFinalizer()
+  }
+
+  async function resolveApproval(runId: string, checkpointId: string, decision: 'approve' | 'reject'): Promise<void> {
+    if (!activeSession.value) {
+      console.warn('[resolveApproval] early return: no active session')
+      return
+    }
+    const sessionId = activeSession.value.id
+
+    drainTypewriter(false)
+    store.stopTypewriter()
+    store.setTypewriterBuffer('')
+    store.setDeferredStreamFinalizer(null)
+    
+    // 保存并清空当前流式消息（含审批卡片）
+    if (store.streamingMessage && hasMessageContent(store.streamingMessage)) {
+      store.appendMessage(sessionId, { ...store.streamingMessage })
+    }
+    store.streamingMessage = null
+    
+    store.agentRunning = true
+    store.agentPhase = { kind: 'waiting_model' }
+    store.updateApprovalStatus(checkpointId, decision === 'approve' ? 'approved' : 'rejected')
+    // Resume 流也必须绑定 activeRunSessionId，否则 streamingMessage computed 不会渲染。
+    store.resetStreamRuntime(sessionId, runId)
+
+    // 为 approval resume 创建独立的 AbortController
+    const approvalAbortController = new AbortController()
+    store.setAbortController(approvalAbortController)
+
+    const assistant: AgentMessage = {
+      id: `local_assistant_resume_${Date.now()}`,
+      role: 'assistant',
+      content: '',
+      timestamp: Date.now(),
+      provider: selectedModel.value?.provider,
+      model: selectedModel.value?.modelId,
+    }
+    store.streamingMessage = assistant
+    let completedAssistantContent = ''
+    try {
+      for await (const event of resolveAgentRunApproval(runId, checkpointId, decision, undefined, approvalAbortController.signal)) {
+        if (event.event === 'raw_response_event' || event.event === 'run_item_stream_event' || event.event === 'agent_updated_stream_event') {
+          handleSdkRawEvent(event.data as unknown as AgentSdkStreamEvent, sessionId, {
+            assistant,
+            perfMs: () => 0,
+            markFirstMessageDelta() {},
+            markFirstThinkingDelta() {},
+          })
+        }
+        if (event.event === 'runtime.completed') {
+          const finalOutput = event.data.final_output
+          if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
+          const usage = event.data.usage
+          if (usage && typeof usage === 'object') assistant.usage = usage as any
+          markRunningToolsCompleted()
+        }
+        if (event.event === 'runtime.requires_action') {
+          drainTypewriter(false)
+          ensureAssistantMessage(assistant)
+          store.appendApprovalToStreaming({
+            runId: String(event.data.run_id || runId),
+            checkpointId: String(event.data.checkpoint_id || ''),
+            interruptions: Array.isArray(event.data.interruptions) ? event.data.interruptions as any : [],
+          })
+        }
+        if (event.event === 'runtime.error' || event.event === 'error') {
+          throw new Error(String(event.data.message || '审批恢复失败'))
+        }
+      }
+      drainTypewriter(false)
+      if (completedAssistantContent && store.streamingMessage && !hasTextContent(store.streamingMessage)) {
+        store.appendDeltaToStreaming('text', 'text', completedAssistantContent)
+      }
+      if (store.streamingMessage) {
+        if (hasMessageContent(store.streamingMessage)) store.appendMessage(sessionId, { ...store.streamingMessage })
+        store.streamingMessage = null
+      }
+    } catch (err: any) {
+      store.error = err?.message || '审批恢复失败'
+      store.updateApprovalStatus(checkpointId, 'pending')
+    } finally {
+      store.agentRunning = false
+      store.agentPhase = null
+      store.clearStreamRuntime()
+      markRunningToolsCompleted()
+    }
   }
 
   // 注意：不再在 onUnmounted 里 abort。
@@ -965,6 +1049,7 @@ export function useHomeAgentSession() {
     renameSession,
     deleteSession,
     send,
+    resolveApproval,
     abort,
     pauseTypewriter: store.pauseTypewriter,
     resumeTypewriter: store.resumeTypewriter,

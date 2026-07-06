@@ -16,10 +16,8 @@ from app.api.deps import get_current_user
 from app.config.database import get_db, get_session_maker
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
-from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
-from app.services.agent_message_service import AgentMessageService
 from app.services.agent_run_service import AgentRunError, AgentRunService
 from app.services.agent_session_service import AgentSessionError, AgentSessionService
 from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
@@ -77,11 +75,14 @@ def get_session_state_repo(session: AsyncSession = Depends(get_db)) -> SqliteSes
     return SqliteSessionStateRepository(session)
 
 
-def get_agent_session_service(session: AsyncSession = Depends(get_db)) -> AgentSessionService:
+def get_agent_session_service(
+    session: AsyncSession = Depends(get_db),
+    gateway: AgentGatewayService = Depends(get_agent_gateway),
+) -> AgentSessionService:
     return AgentSessionService(
         session_repo=SqliteAgentSessionRepository(session),
         state_repo=SqliteSessionStateRepository(session),
-        message_repo=SqliteAgentMessageRepository(session),
+        gateway=gateway,
     )
 
 
@@ -126,7 +127,7 @@ async def _create_agent_session_short_tx(user_id: str, title: str | None = None)
         service = AgentSessionService(
             session_repo=SqliteAgentSessionRepository(session),
             state_repo=SqliteSessionStateRepository(session),
-            message_repo=SqliteAgentMessageRepository(session),
+
         )
         return await service.create_session(user_id=user_id, title=title)
     return await _with_session(callback)
@@ -137,7 +138,7 @@ async def _require_active_agent_session_short_tx(session_id: str, user_id: str) 
         service = AgentSessionService(
             session_repo=SqliteAgentSessionRepository(session),
             state_repo=SqliteSessionStateRepository(session),
-            message_repo=SqliteAgentMessageRepository(session),
+
         )
         return await service.require_active(session_id=session_id, user_id=user_id)
     return await _with_session(callback)
@@ -148,7 +149,7 @@ async def _touch_agent_session_short_tx(session_id: str, user_id: str) -> None:
         service = AgentSessionService(
             session_repo=SqliteAgentSessionRepository(session),
             state_repo=SqliteSessionStateRepository(session),
-            message_repo=SqliteAgentMessageRepository(session),
+
         )
         await service.touch(session_id=session_id, user_id=user_id)
     await _with_session(callback)
@@ -220,6 +221,7 @@ async def _mark_run_status_short_tx(
     *,
     usage: dict | None = None,
     error: dict | None = None,
+    checkpoint_ref: str | None = None,
 ) -> dict | None:
     async def callback(session: AsyncSession):
         service = AgentRunService(SqliteAgentRunRepository(session))
@@ -229,27 +231,9 @@ async def _mark_run_status_short_tx(
             return await service.mark_completed(run_id, user_id, usage=usage)
         if status == "cancelled":
             return await service.mark_cancelled(run_id, user_id)
+        if status == "requires_action":
+            return await service.mark_requires_action(run_id, user_id, checkpoint_ref or "")
         return await service.mark_error(run_id, user_id, error or {})
-    return await _with_session(callback)
-
-
-async def _append_agent_message_short_tx(
-    *,
-    session_id: str,
-    user_id: str,
-    role: str,
-    content_json: dict,
-    run_id: str | None = None,
-) -> dict:
-    async def callback(session: AsyncSession):
-        service = AgentMessageService(SqliteAgentMessageRepository(session))
-        return await service.append(
-            session_id=session_id,
-            user_id=user_id,
-            role=role,
-            content_json=content_json,
-            run_id=run_id,
-        )
     return await _with_session(callback)
 
 
@@ -283,11 +267,16 @@ async def list_agent_sessions(
 @router.get("/sessions/{session_id}")
 async def get_agent_session(
     session_id: str,
+    request: Request,
     current_user: dict = Depends(get_current_user),
     service: AgentSessionService = Depends(get_agent_session_service),
 ):
     try:
-        return await service.get_session_detail(session_id=session_id, user_id=current_user["id"])
+        return await service.get_session_detail(
+            session_id=session_id,
+            user_id=current_user["id"],
+            authorization=_authorization(request),
+        )
     except AgentSessionError as exc:
         raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
@@ -366,6 +355,65 @@ async def get_agent_run(
         return await AgentRunService(SqliteAgentRunRepository(session)).get(run_id, current_user["id"])
     except AgentRunError as exc:
         raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
+
+
+@router.post("/runs/{run_id}/approvals/{checkpoint_id}")
+async def resolve_run_approval(
+    run_id: str,
+    checkpoint_id: str,
+    request: Request,
+    current_user: dict = Depends(get_current_user),
+    gateway: AgentGatewayService = Depends(get_agent_gateway),
+):
+    body = await request.json()
+    decision = body.get("decision")
+    if decision not in {"approve", "reject"}:
+        raise HTTPException(status_code=422, detail=_error_payload("INVALID_DECISION", "decision must be approve or reject"))
+
+    user_id = current_user["id"]
+    run = await _get_run_short_tx(run_id, user_id)
+    if run.get("checkpoint_ref") != checkpoint_id:
+        raise HTTPException(status_code=409, detail=_error_payload("CHECKPOINT_MISMATCH", "Checkpoint does not belong to run"))
+
+    payload = {
+        "decision": decision,
+        "rejection_message": body.get("rejection_message"),
+        "always": bool(body.get("always", False)),
+        "auth_token": _authorization(request),
+    }
+
+    async def event_generator():
+        stream_buffer = ""
+        try:
+            await _mark_run_status_short_tx(run_id, user_id, "running")
+            await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "running"})
+            async for chunk in gateway.stream_checkpoint_resume(_authorization(request), checkpoint_id, payload):
+                yield chunk
+                stream_buffer += chunk.decode("utf-8", errors="ignore")
+                events, stream_buffer = _parse_sse_events(stream_buffer)
+                for event_name, data in events:
+                    await agent_run_event_bus.publish(run_id, event_name, data)
+                    if event_name == "runtime.completed":
+                        usage = data.get("usage") if isinstance(data, dict) else None
+                        await _mark_run_status_short_tx(run_id, user_id, "completed", usage=usage)
+                        await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "completed"}, terminal=True)
+                    elif event_name == "runtime.requires_action":
+                        next_checkpoint = data.get("checkpoint_id") if isinstance(data, dict) else None
+                        await _mark_run_status_short_tx(run_id, user_id, "requires_action", checkpoint_ref=str(next_checkpoint or ""))
+                        await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "requires_action", "checkpoint_ref": next_checkpoint}, terminal=True)
+                    elif event_name == "runtime.error":
+                        await _mark_run_status_short_tx(run_id, user_id, "error", error=data if isinstance(data, dict) else {"message": str(data)})
+                        await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "error"}, terminal=True)
+        except Exception as exc:
+            await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "RESUME_FAILED", "message": str(exc)})
+            yield "event: runtime.error\n"
+            yield f"data: {json.dumps({'run_id': run_id, 'message': str(exc)}, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        event_generator(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "Connection": "keep-alive", "X-Accel-Buffering": "no"},
+    )
 
 
 @router.post("/runs/{run_id}/cancel")
@@ -466,13 +514,6 @@ async def run_agent(
     )
 
     await agent_run_event_bus.create_run(run_id=run_id, session_id=session_id, user_id=user_id)
-    await _append_agent_message_short_tx(
-        session_id=session_id,
-        user_id=user_id,
-        role="user",
-        content_json=ChatEventAssembler().user_message(prompt),
-        run_id=run_id,
-    )
     await _touch_agent_session_short_tx(session_id, user_id)
 
     agent_payload = {
@@ -483,8 +524,9 @@ async def run_agent(
         "task_type": task_type,
         "auth_token": authorization or "",
         "business_context_summary": business_context_summary,
+        "ui_snapshot": context_snapshot or {},
+        "session_state": state,
         "run_meta": {"run_id": run_id, "user_id": user_id},
-        "context": {"auth_token": (authorization or "").removeprefix("Bearer ")},
     }
 
     asyncio.create_task(
@@ -615,12 +657,52 @@ async def _consume_agent_run_background(
                             )
                         persisted_events.append((event_name, data))
                         await agent_run_event_bus.publish(run_id, event_name, data)
+                        if event_name == "runtime.requires_action":
+                            checkpoint_id = data.get("checkpoint_id") if isinstance(data, dict) else None
+                            await _mark_run_status_short_tx(
+                                run_id,
+                                user_id,
+                                "requires_action",
+                                checkpoint_ref=str(checkpoint_id or ""),
+                            )
+                            await agent_run_event_bus.publish(
+                                run_id,
+                                "run_status",
+                                {
+                                    "run_id": run_id,
+                                    "session_id": session_id,
+                                    "status": "requires_action",
+                                    "checkpoint_ref": checkpoint_id,
+                                },
+                                terminal=True,
+                            )
+                            return
 
                 # Flush any final event if upstream did not end with a blank line.
                 events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
                 for event_name, data in events:
                     persisted_events.append((event_name, data))
                     await agent_run_event_bus.publish(run_id, event_name, data)
+                    if event_name == "runtime.requires_action":
+                        checkpoint_id = data.get("checkpoint_id") if isinstance(data, dict) else None
+                        await _mark_run_status_short_tx(
+                            run_id,
+                            user_id,
+                            "requires_action",
+                            checkpoint_ref=str(checkpoint_id or ""),
+                        )
+                        await agent_run_event_bus.publish(
+                            run_id,
+                            "run_status",
+                            {
+                                "run_id": run_id,
+                                "session_id": session_id,
+                                "status": "requires_action",
+                                "checkpoint_ref": checkpoint_id,
+                            },
+                            terminal=True,
+                        )
+                        return
 
                 perf_log.info(
                     "[PERF][agent_first_token] backend.agent_stream_done total_ms={} gateway_total_ms={} upstream_bytes={} first_delta_seen={}",
@@ -647,14 +729,6 @@ async def _consume_agent_run_background(
                     return
 
                 assistant_content = ChatEventAssembler().assemble_assistant_message(persisted_events)
-                if assistant_content.get("blocks"):
-                    await _append_agent_message_short_tx(
-                        session_id=session_id,
-                        user_id=user_id,
-                        role="assistant",
-                        content_json=assistant_content,
-                        run_id=run_id,
-                    )
                 await _mark_run_status_short_tx(run_id, user_id, "completed", usage=assistant_content.get("usage"))
                 await agent_run_event_bus.publish(
                     run_id,
@@ -673,13 +747,6 @@ async def _consume_agent_run_background(
                     )
                 error_payload = {"code": exc.code, "message": exc.message, "retryable": exc.retryable, "at": datetime.utcnow().isoformat()}
                 await _mark_run_status_short_tx(run_id, user_id, "error", error=error_payload)
-                await _append_agent_message_short_tx(
-                    session_id=session_id,
-                    user_id=user_id,
-                    role="assistant",
-                    content_json=ChatEventAssembler().error_message(exc.code, exc.message),
-                    run_id=run_id,
-                )
                 await agent_run_event_bus.publish(run_id, "error", _error_payload(exc.code, exc.message, exc.retryable), terminal=True)
     except SessionBusyError:
         await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "SESSION_BUSY", "message": "当前会话正在执行，请稍后再试"})

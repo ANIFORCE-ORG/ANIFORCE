@@ -5,9 +5,15 @@ System Prompt 管理
 1. Plan-Execute 模式（带执行计划）
 2. ReAct 模式（纯工具循环）
 3. Conversation 模式（纯对话）
+4. Workspace dynamic instructions（Phase 3）
 """
 
+import json
 from typing import List, Optional
+
+from agents import RunContextWrapper, Agent
+
+from app.agent.workspace_context import WorkspaceRunContext
 
 
 class SystemPromptManager:
@@ -279,3 +285,65 @@ class SystemPromptManager:
             result.extend([f"  - {t}" for t in other_tools])
         
         return "\n".join(result)
+
+
+def workspace_instructions(
+    ctx: RunContextWrapper[WorkspaceRunContext],
+    agent: Agent[WorkspaceRunContext],
+) -> str:
+    """Dynamic instructions：把 Workspace 现场注入 LLM 可见上下文。
+
+    参见 notebooks/06-context/study_note.md §3.3 / §8。
+    """
+    base_prompt = SystemPromptManager.get_plan_execute_prompt(
+        available_mcp_tools=[
+            "list_projects",
+            "create_project",
+            "get_project_detail",
+            "update_project",
+            "delete_project",
+            "list_campaigns",
+            "create_campaign",
+            "get_campaign_detail",
+            "update_campaign",
+            "delete_campaign",
+        ]
+    )
+
+    wctx = ctx.context
+    snapshot = wctx.ui_snapshot or {}
+    selected = snapshot.get("selectedEntities") or []
+    draft = snapshot.get("draftEdits") or {}
+
+    parts = [base_prompt, "", "---", "# Backend Business Context"]
+    if wctx.business_context_summary:
+        parts.append(
+            "以下内容由 backend Session State Manager 构建，用于说明当前业务现场。"
+            "backend DB 是业务事实源；如需修改业务数据，必须通过 MCP 工具调用 backend REST。"
+        )
+        parts.append("")
+        parts.append(wctx.business_context_summary)
+    else:
+        parts.append("（暂无业务上下文摘要）")
+
+    parts.append("")
+    parts.append("---")
+    parts.append("# Frontend Workspace Snapshot")
+    parts.append(f"- 当前路由：{snapshot.get('route') or '(未知)'}")
+    parts.append(f"- 当前面板：{snapshot.get('activePanel') or '(无)'}")
+    parts.append(f"- 当前项目 ID：{snapshot.get('activeProjectId') or '(无)'}")
+    parts.append(f"- 当前 Campaign ID：{snapshot.get('activeCampaignId') or '(无)'}")
+    if selected:
+        parts.append(f"- 当前选中实体：{json.dumps(selected, ensure_ascii=False)}")
+    if draft:
+        parts.append(f"- 当前草稿编辑：{json.dumps(draft, ensure_ascii=False)}")
+
+    parts.append("")
+    parts.append("---")
+    parts.append("# 行为规则")
+    parts.append("- 如果用户问“当前状态”“下一步”“缺什么”，必须优先分析当前 workspace snapshot。")
+    parts.append("- 如果用户选中了实体或 @mention 了项目/素材，优先针对这些实体回答。")
+    parts.append("- 如果需要业务事实，调用 MCP 工具查询 backend，不要编造。")
+    parts.append("- 写操作、预算、上线、删除等高风险动作需要用户确认。")
+
+    return "\n".join(parts)

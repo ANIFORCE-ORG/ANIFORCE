@@ -29,5 +29,6 @@ class AgentRun(Base):
     error_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     pending_approval_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     run_state_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    checkpoint_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

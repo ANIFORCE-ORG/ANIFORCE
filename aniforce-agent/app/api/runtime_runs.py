@@ -43,6 +43,8 @@ async def run_runtime(
     user_id = body.get("user_id") or user["id"]
     auth_token = body.get("auth_token") or ""
     business_context_summary = body.get("business_context_summary", "")
+    ui_snapshot = body.get("ui_snapshot") or {}
+    session_state = body.get("session_state") or {}
     task_type = body.get("task_type", "conversation")
 
     if not run_id:
@@ -74,6 +76,8 @@ async def run_runtime(
                 task_type=task_type,
                 auth_token=str(auth_token).removeprefix("Bearer "),
                 business_context_summary=business_context_summary,
+                ui_snapshot=ui_snapshot,
+                session_state=session_state,
                 run_id=run_id,
             ):
                 payload = dict(event.get("data") or {})

@@ -12,6 +12,10 @@ const props = defineProps<{
   prevTimestamp?: number
 }>()
 
+const emit = defineEmits<{
+  approval: [payload: { runId: string; checkpointId: string; decision: 'approve' | 'reject' }]
+}>()
+
 const hovered = ref(false)
 const copied = ref(false)
 const expandedThinking = ref<Record<number, boolean>>({})
@@ -187,6 +191,38 @@ function contentBlocks(message: AgentMessage): Record<string, unknown>[] {
   if (Array.isArray(content)) return content as Record<string, unknown>[]
   const text = typeof content === 'string' ? content : messageText(message)
   return text ? [{ type: 'text', text }] : []
+}
+
+function approvalTitle(block: Record<string, unknown>): string {
+  const interruptions = Array.isArray(block.interruptions) ? block.interruptions : []
+  const first = interruptions[0] as Record<string, unknown> | undefined
+  return String(first?.tool_name || 'tool approval')
+}
+
+function approvalArgs(block: Record<string, unknown>): string {
+  const interruptions = Array.isArray(block.interruptions) ? block.interruptions : []
+  const first = interruptions[0] as Record<string, unknown> | undefined
+  const args = first?.arguments
+  if (!args) return '{}'
+  if (typeof args === 'string') return args
+  return formatPayload(args)
+}
+
+function approvalStatus(block: Record<string, unknown>): string {
+  const status = String(block.status || 'pending')
+  if (status === 'approved') return '已批准，正在继续执行'
+  if (status === 'rejected') return '已拒绝'
+  if (status === 'running') return '正在提交审批结果'
+  return '等待人工确认'
+}
+
+function canResolveApproval(block: Record<string, unknown>): boolean {
+  return String(block.status || 'pending') === 'pending' && Boolean(block.runId && block.checkpointId)
+}
+
+function resolveApproval(block: Record<string, unknown>, decision: 'approve' | 'reject'): void {
+  if (!canResolveApproval(block)) return
+  emit('approval', { runId: String(block.runId), checkpointId: String(block.checkpointId), decision })
 }
 
 function toolId(block: Record<string, unknown>): string {
@@ -383,6 +419,22 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
               <pre><code>{{ part.code }}</code></pre>
             </div>
           </template>
+        </div>
+
+        <!-- Approval Block: SDK HITL / MCP approval -->
+        <div v-else-if="block.type === 'approval'" class="approval-block" :class="String(block.status || 'pending')">
+          <div class="approval-head">
+            <span class="material-symbols-outlined approval-icon">verified_user</span>
+            <div class="approval-title-wrap">
+              <div class="approval-title">需要人工确认</div>
+              <div class="approval-subtitle">{{ approvalTitle(block) }} · {{ approvalStatus(block) }}</div>
+            </div>
+          </div>
+          <pre class="approval-args">{{ approvalArgs(block) }}</pre>
+          <div v-if="canResolveApproval(block)" class="approval-actions">
+            <button class="approval-button secondary" type="button" @click="resolveApproval(block, 'reject')">拒绝</button>
+            <button class="approval-button primary" type="button" @click="resolveApproval(block, 'approve')">批准执行</button>
+          </div>
         </div>
 
         <!-- Tool Call Block: 紧凑卡片，运行中带脉冲 -->
@@ -851,6 +903,116 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   animation: cursor-blink 1s steps(2) infinite;
   margin-left: 1px;
   font-size: 0.9em;
+}
+
+/* Approval Block - SDK HITL */
+.approval-block {
+  overflow: hidden;
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  border-radius: 8px;
+  background: #fffaf0;
+  color: var(--text, #202124);
+}
+
+.approval-block.approved {
+  border-color: rgba(24, 128, 56, 0.22);
+  background: #f3faf5;
+}
+
+.approval-block.rejected {
+  border-color: rgba(217, 48, 37, 0.22);
+  background: #fff5f5;
+}
+
+.approval-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.approval-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.approval-title-wrap {
+  min-width: 0;
+  flex: 1;
+}
+
+.approval-title {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.approval-subtitle {
+  margin-top: 2px;
+  color: var(--text-muted, #5f6368);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.approval-args {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  border-top: 1px solid rgba(217, 119, 6, 0.18);
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text-muted, #5f6368);
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(217, 119, 6, 0.18);
+  padding: 10px 12px;
+}
+
+.approval-button {
+  height: 30px;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.approval-button.secondary {
+  border: 1px solid var(--outline-variant, #e8eaed);
+  background: #fff;
+  color: var(--text-muted, #5f6368);
+}
+
+.approval-button.secondary:hover {
+  background: #f8fafc;
+}
+
+.approval-button.primary {
+  border: 1px solid #b45309;
+  background: #b45309;
+  color: #fff;
+}
+
+.approval-button.primary:hover {
+  background: #92400e;
 }
 
 /* Tool Call Block - 紧凑卡片 */

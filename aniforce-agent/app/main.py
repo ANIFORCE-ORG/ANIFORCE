@@ -96,8 +96,12 @@ async def health():
 
 # 路由
 from app.api.runtime_runs import router as runtime_runs_router
+from app.api.runtime_sessions import router as runtime_sessions_router
+from app.api.runtime_checkpoints import router as runtime_checkpoints_router
 
 app.include_router(runtime_runs_router, prefix="/api")
+app.include_router(runtime_sessions_router, prefix="/api")
+app.include_router(runtime_checkpoints_router, prefix="/api")
 
 # 挂载 MCP server（路径 B：agent-service 内部的 FastMCP server）
 # Agent 通过 MCPServerStreamableHttp 连本进程的 /mcp 端点

@@ -9,7 +9,7 @@ OpenAI Agents SDK 适配器
 
 import os
 from pathlib import Path
-from typing import AsyncIterator, Optional
+from typing import Any, AsyncIterator, Optional
 from loguru import logger
 from openai import AsyncOpenAI
 
@@ -144,10 +144,14 @@ class OpenAISDKAdapter:
     def create_agent(
         self,
         name: str,
-        instructions: str,
+        instructions,
         mcp_servers: list = None,
     ) -> Agent:
-        """创建 WorkspaceAgent。当前主链路固定使用普通 Agent。"""
+        """创建 WorkspaceAgent。当前主链路固定使用普通 Agent。
+
+        instructions 可以是字符串或 dynamic instructions 函数
+        (RunContextWrapper, Agent) -> str。
+        """
         
         if self.api_mode == "chat_completions":
             sdk_model = OpenAIChatCompletionsModel(
@@ -213,16 +217,20 @@ class OpenAISDKAdapter:
     async def run_streamed(
         self,
         agent: Agent,
-        input_text: str,
+        input_text: Any,
         session: Optional[SessionABC] = None,
+        context: Any = None,
+        hooks: Any = None,
     ) -> RunResult:
         """
         流式执行 Agent
         
         Args:
             agent: Agent 实例
-            input_text: 用户输入
+            input_text: 用户输入或 SDK RunState
             session: SDK Session（可选）
+            context: RunContextWrapper.context 本地上下文（可选）
+            hooks: Agents SDK RunHooks（可选）
             
         Returns:
             RunResult（可以流式读取事件）
@@ -232,7 +240,7 @@ class OpenAISDKAdapter:
             self.tracer.log_sdk_call(
                 method="run_streamed",
                 agent_name=getattr(agent, "name", "unknown"),
-                input_text=input_text,
+                input_text=input_text if isinstance(input_text, str) else type(input_text).__name__,
                 session_id=getattr(session, "session_id", None) if session else None,
             )
         
@@ -241,6 +249,8 @@ class OpenAISDKAdapter:
                 agent,
                 input=input_text,
                 session=session,
+                context=context,
+                hooks=hooks,
             )
         except Exception as e:
             logger.exception(f"SDK run_streamed error: {e}")

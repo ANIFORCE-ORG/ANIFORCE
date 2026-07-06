@@ -312,6 +312,45 @@ export const useAgentStore = defineStore('agent', () => {
     msg.content = [...blocks]
   }
 
+  function appendApprovalToStreaming(approval: { runId: string; checkpointId: string; interruptions?: Array<Record<string, unknown>> }): void {
+    const msg = streamingMessage.value
+    if (!msg) return
+    const blocks = ensureStreamingContentBlocks()
+    if (!blocks) return
+    const existing = blocks.find(
+      (b): b is Record<string, unknown> => b && typeof b === 'object' && b.type === 'approval' && b.checkpointId === approval.checkpointId
+    )
+    if (existing) {
+      existing.status = 'pending'
+      existing.interruptions = approval.interruptions || []
+    } else {
+      blocks.push({
+        type: 'approval',
+        runId: approval.runId,
+        checkpointId: approval.checkpointId,
+        status: 'pending',
+        interruptions: approval.interruptions || [],
+      } as AgentContentBlock)
+    }
+    msg.content = [...blocks]
+  }
+
+  function updateApprovalStatus(checkpointId: string, status: 'pending' | 'approved' | 'rejected' | 'running'): void {
+    const allMessages = [...messagesBySession.value.values()].flat()
+    const candidates = streamingMessage.value ? [streamingMessage.value, ...allMessages] : allMessages
+    for (const msg of candidates) {
+      if (!Array.isArray(msg.content)) continue
+      let changed = false
+      for (const block of msg.content as AgentContentBlock[]) {
+        if (block && typeof block === 'object' && block.type === 'approval' && block.checkpointId === checkpointId) {
+          ;(block as Record<string, unknown>).status = status
+          changed = true
+        }
+      }
+      if (changed) msg.content = [...(msg.content as AgentContentBlock[])]
+    }
+  }
+
   function updateToolCallResultInStreaming(toolId: string, result: unknown): void {
     const msg = streamingMessage.value
     if (!msg || !Array.isArray(msg.content)) return
@@ -386,6 +425,8 @@ export const useAgentStore = defineStore('agent', () => {
     runDeferredStreamFinalizer,
     appendDeltaToStreaming,
     appendToolCallToStreaming,
+    appendApprovalToStreaming,
+    updateApprovalStatus,
     updateToolCallResultInStreaming,
   }
 })

@@ -1,9 +1,9 @@
 """Backend Agent product session service."""
 
+from typing import Any
 from uuid import uuid4
 
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
-from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 
 
@@ -25,11 +25,11 @@ class AgentSessionService:
         self,
         session_repo: SqliteAgentSessionRepository,
         state_repo: SqliteSessionStateRepository,
-        message_repo: SqliteAgentMessageRepository | None = None,
+        gateway: Any = None,
     ) -> None:
         self.session_repo = session_repo
         self.state_repo = state_repo
-        self.message_repo = message_repo
+        self.gateway = gateway
 
     async def create_session(self, user_id: str, title: str | None = None) -> dict:
         normalized_title = self._normalize_title(title, fallback="新对话")
@@ -52,15 +52,21 @@ class AgentSessionService:
             offset=max(0, offset),
         )
 
-    async def get_session_detail(self, session_id: str, user_id: str) -> dict:
+    async def get_session_detail(self, session_id: str, user_id: str, authorization: str | None = None) -> dict:
         item = await self.session_repo.get(session_id, user_id)
         if not item:
             raise AgentSessionError("SESSION_NOT_FOUND", "Session not found", status_code=404)
         state = await self._ensure_state(session_id, user_id)
+        messages: list[dict] = []
+        if self.gateway is not None:
+            try:
+                messages = await self.gateway.get_session_history(authorization, session_id)
+            except Exception:
+                messages = []
         return {
             **item,
             "state": self._state_summary(state),
-            "messages": await self.message_repo.list_by_session(session_id, user_id) if self.message_repo else [],
+            "messages": messages,
         }
 
     async def rename_session(self, session_id: str, user_id: str, title: str | None) -> dict:

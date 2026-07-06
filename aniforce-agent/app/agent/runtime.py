@@ -11,11 +11,28 @@ from uuid import uuid4
 from contextlib import asynccontextmanager
 
 from loguru import logger
+from agents import RunState
 
 from app.agent.openai_adapter import OpenAISDKAdapter
+from app.agent.workspace_context import WorkspaceRunContext
+from app.agent.lifecycle_hooks import WorkspaceRunHooks
+from app.agent.prompts import workspace_instructions
+from app.agent.checkpoints import (
+    RuntimeCheckpointStore,
+    interruption_to_dict,
+    serialize_workspace_context_for_checkpoint,
+)
 from app.core.errors import AppError, AgentErrorCode
 from app.core.tracing import get_tracer
-from app.agent.prompts import SystemPromptManager
+
+
+APPROVAL_REQUIRED_TOOL_NAMES = [
+    "create_project",
+    "delete_project",
+    "create_campaign",
+    "delete_campaign",
+    "update_campaign_status",
+]
 
 
 def _elapsed_ms(start: float) -> int:
@@ -82,6 +99,9 @@ class AgentRuntime:
                 },
                 cache_tools_list=True,
                 max_retry_attempts=2,
+                require_approval={
+                    "always": {"tool_names": APPROVAL_REQUIRED_TOOL_NAMES},
+                },
                 tool_meta_resolver=_meta_resolver,
             )
             await mcp_server.__aenter__()
@@ -111,6 +131,8 @@ class AgentRuntime:
         task_type: str = "conversation",
         auth_token: str = "",
         business_context_summary: str = "",
+        ui_snapshot: dict | None = None,
+        session_state: dict | None = None,
         run_id: str = "",
     ) -> AsyncIterator[dict]:
         """运行 WorkspaceAgent，直接输出 SDK 原生事件 envelope。"""
@@ -148,17 +170,25 @@ class AgentRuntime:
                 user_id=user_id,
             ) as mcp_servers:
                 agent_create_start = perf_counter()
-                instructions = self._get_system_prompt(business_context_summary)
+                workspace_context = WorkspaceRunContext(
+                    user_id=user_id,
+                    session_id=effective_session_id,
+                    run_id=run_id,
+                    auth_token=auth_token,
+                    business_context_summary=business_context_summary,
+                    ui_snapshot=ui_snapshot or {},
+                    session_state=session_state or {},
+                    task_type=task_type,
+                )
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",
-                    instructions=instructions,
+                    instructions=workspace_instructions,
                     mcp_servers=mcp_servers,
                 )
                 run_logger.debug(
-                    "[PERF][agent_first_token] runtime.agent_ready total_ms={} agent_create_ms={} prompt_chars={}",
+                    "[PERF][agent_first_token] runtime.agent_ready total_ms={} agent_create_ms={}",
                     _elapsed_ms(run_start),
                     _elapsed_ms(agent_create_start),
-                    len(instructions),
                 )
 
                 run_logger.debug("[RUNTIME] Executing Agent...")
@@ -167,6 +197,8 @@ class AgentRuntime:
                     agent=agent,
                     input_text=user_input,
                     session=session,
+                    context=workspace_context,
+                    hooks=WorkspaceRunHooks(),
                 )
                 run_logger.debug(
                     "[PERF][agent_first_token] runtime.run_streamed_returned total_ms={} run_streamed_wait_ms={}",
@@ -191,6 +223,29 @@ class AgentRuntime:
                         "data": sdk_event,
                         "sequence": sequence,
                     }
+
+            interruptions = list(getattr(result, "interruptions", []) or []) if result else []
+            if interruptions:
+                checkpoint = await self._create_hitl_checkpoint(
+                    result=result,
+                    workspace_context=workspace_context,
+                    session_id=effective_session_id,
+                    user_id=user_id,
+                    run_id=run_id,
+                )
+                sequence += 1
+                yield {
+                    "event": "runtime.requires_action",
+                    "data": {
+                        "run_id": run_id,
+                        "session_id": effective_session_id,
+                        "checkpoint_id": checkpoint["id"],
+                        "interruptions": checkpoint["interruptions"],
+                    },
+                    "sequence": sequence,
+                }
+                run_logger.debug("[RUNTIME] Run requires action: checkpoint={}", checkpoint["id"])
+                return
 
             usage = self.adapter._extract_usage(result) if result else {}
             sequence += 1
@@ -232,31 +287,150 @@ class AgentRuntime:
             if trace_ctx:
                 trace_ctx.__exit__(None, None, None)
 
-    def _get_system_prompt(self, business_context_summary: str = "") -> str:
-        """返回 LLM 可见的 system prompt。"""
-        available_mcp_tools = [
-            "list_projects",
-            "create_project",
-            "get_project_detail",
-            "update_project",
-            "delete_project",
-            "list_campaigns",
-            "create_campaign",
-            "get_campaign_detail",
-            "update_campaign",
-            "delete_campaign",
-        ]
-        base_prompt = SystemPromptManager.get_plan_execute_prompt(
-            available_mcp_tools=available_mcp_tools
+    async def _create_hitl_checkpoint(
+        self,
+        *,
+        result,
+        workspace_context: WorkspaceRunContext,
+        session_id: str,
+        user_id: str,
+        run_id: str,
+    ) -> dict:
+        state = result.to_state()
+        run_state = state.to_json(
+            context_serializer=serialize_workspace_context_for_checkpoint,
+            strict_context=True,
         )
-        if not business_context_summary:
-            return base_prompt
-        return (
-            f"{base_prompt}\n\n"
-            "---\n"
-            "# Backend Business Context\n"
-            "以下内容由 backend Session State Manager 构建，用于说明当前业务现场。"
-            "backend DB 是业务事实源；如需修改业务数据，必须通过 MCP 工具调用 backend REST。\n\n"
-            f"{business_context_summary}\n"
-            "---"
+        interruptions = [interruption_to_dict(item) for item in (getattr(result, "interruptions", []) or [])]
+        engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
+        store = RuntimeCheckpointStore(engine)
+        return await store.create(
+            run_id=run_id,
+            session_id=session_id,
+            user_id=user_id,
+            interruptions=interruptions,
+            run_state=run_state,
         )
+
+    async def resume_checkpoint(
+        self,
+        *,
+        checkpoint_id: str,
+        user_id: str,
+        decision: str,
+        auth_token: str = "",
+        rejection_message: str | None = None,
+        always: bool = False,
+    ) -> AsyncIterator[dict]:
+        """Resume a paused SDK HITL checkpoint."""
+        engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
+        store = RuntimeCheckpointStore(engine)
+        checkpoint = await store.get(checkpoint_id, user_id)
+        if not checkpoint:
+            raise AppError(AgentErrorCode.UNKNOWN_ERROR, "Checkpoint not found")
+        if checkpoint["status"] != "pending":
+            raise AppError(AgentErrorCode.UNKNOWN_ERROR, f"Checkpoint is {checkpoint['status']}")
+
+        safe_context = checkpoint["run_state"].get("context", {}).get("value") or {}
+        workspace_context = WorkspaceRunContext(
+            user_id=checkpoint["user_id"],
+            session_id=checkpoint["session_id"],
+            run_id=checkpoint["run_id"],
+            auth_token=auth_token,
+            business_context_summary=safe_context.get("business_context_summary", ""),
+            ui_snapshot=safe_context.get("ui_snapshot") or {},
+            session_state=safe_context.get("session_state") or {},
+            task_type=safe_context.get("task_type", "conversation"),
+        )
+
+        sequence = 0
+        run_logger = logger.bind(user_id=user_id, session_id=checkpoint["session_id"], run_id=checkpoint["run_id"], checkpoint_id=checkpoint_id)
+        try:
+            async with self._mcp_connection(
+                auth_token=auth_token,
+                session_id=checkpoint["session_id"],
+                run_id=checkpoint["run_id"],
+                user_id=user_id,
+            ) as mcp_servers:
+                agent = self.adapter.create_agent(
+                    name="ANIFORCE Assistant",
+                    instructions=workspace_instructions,
+                    mcp_servers=mcp_servers,
+                )
+                session = self.adapter.create_session(checkpoint["session_id"], self.agent_runtime_db_url)
+                state = await RunState.from_json(
+                    agent,
+                    checkpoint["run_state"],
+                    context_override=workspace_context,
+                    strict_context=True,
+                )
+                for item in state.get_interruptions():
+                    if decision == "approve":
+                        state.approve(item, always_approve=always)
+                    elif decision == "reject":
+                        state.reject(item, rejection_message=rejection_message, always_reject=always)
+                    else:
+                        raise AppError(AgentErrorCode.UNKNOWN_ERROR, "decision must be approve or reject")
+
+                await store.mark_status(checkpoint_id, user_id, "approved" if decision == "approve" else "rejected")
+                result = await self.adapter.run_streamed(
+                    agent=agent,
+                    input_text=state,
+                    session=session,
+                    hooks=WorkspaceRunHooks(),
+                )
+                async for sdk_event in self.adapter.stream_events(result):
+                    sequence += 1
+                    yield {
+                        "event": str(sdk_event.get("type") or "sdk.event"),
+                        "data": sdk_event,
+                        "sequence": sequence,
+                    }
+
+                if getattr(result, "interruptions", None):
+                    new_checkpoint = await self._create_hitl_checkpoint(
+                        result=result,
+                        workspace_context=workspace_context,
+                        session_id=checkpoint["session_id"],
+                        user_id=user_id,
+                        run_id=checkpoint["run_id"],
+                    )
+                    sequence += 1
+                    yield {
+                        "event": "runtime.requires_action",
+                        "data": {
+                            "run_id": checkpoint["run_id"],
+                            "session_id": checkpoint["session_id"],
+                            "checkpoint_id": new_checkpoint["id"],
+                            "interruptions": new_checkpoint["interruptions"],
+                        },
+                        "sequence": sequence,
+                    }
+                    return
+
+                await store.mark_status(checkpoint_id, user_id, "resumed")
+                usage = self.adapter._extract_usage(result)
+                sequence += 1
+                yield {
+                    "event": "runtime.completed",
+                    "data": {"final_output": getattr(result, "final_output", None), "usage": usage},
+                    "sequence": sequence,
+                }
+                run_logger.debug("[RUNTIME] Checkpoint resumed")
+        except Exception as exc:
+            await store.mark_status(checkpoint_id, user_id, "failed", error={"message": str(exc)})
+            raise
+
+    async def get_session_history(self, session_id: str) -> list[dict]:
+        """从 agent.db SQLAlchemySession 读取 SDK 原生对话历史。"""
+        from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
+
+        sdk_session_id = session_id
+        if self.adapter.api_mode == "chat_completions":
+            sdk_session_id = f"chat_completions:{session_id}"
+
+        engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
+        session = SQLAlchemySession(sdk_session_id, engine=engine, create_tables=False)
+        items = await session.get_items()
+        return [item if isinstance(item, dict) else dict(item) for item in items]
+

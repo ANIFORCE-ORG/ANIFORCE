@@ -33,6 +33,19 @@ class AgentGatewayService:
         except httpx.HTTPError as exc:
             raise AgentGatewayError("AGENT_UNAVAILABLE", f"Agent service unavailable: {exc}", True) from exc
 
+    async def get_session_history(self, authorization: str | None, session_id: str) -> list[dict[str, Any]]:
+        try:
+            async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+                response = await client.get(
+                    f"{self.base_url}/api/runtime/sessions/{session_id}/history",
+                    headers=self._headers(authorization),
+                )
+                response.raise_for_status()
+                data = response.json()
+                return data.get("messages") if isinstance(data, dict) else []
+        except httpx.HTTPError as exc:
+            raise AgentGatewayError("AGENT_UNAVAILABLE", f"Get session history failed: {exc}", True) from exc
+
     async def cancel_run(self, authorization: str | None, run_id: str) -> dict[str, Any]:
         try:
             async with httpx.AsyncClient(timeout=httpx.Timeout(15.0, connect=5.0)) as client:
@@ -45,6 +58,27 @@ class AgentGatewayService:
                 return data if isinstance(data, dict) else {}
         except httpx.HTTPError as exc:
             raise AgentGatewayError("AGENT_UNAVAILABLE", f"Cancel runtime run failed: {exc}", True) from exc
+
+    async def stream_checkpoint_resume(
+        self,
+        authorization: str | None,
+        checkpoint_id: str,
+        payload: dict[str, Any],
+    ) -> AsyncIterator[bytes]:
+        try:
+            async with httpx.AsyncClient(timeout=self.timeout) as client:
+                async with client.stream(
+                    "POST",
+                    f"{self.base_url}/api/runtime/checkpoints/{checkpoint_id}/resume",
+                    json=payload,
+                    headers={**self._headers(authorization), "Accept": "text/event-stream"},
+                ) as response:
+                    response.raise_for_status()
+                    async for chunk in response.aiter_bytes():
+                        if chunk:
+                            yield chunk
+        except httpx.HTTPError as exc:
+            raise AgentGatewayError("AGENT_UNAVAILABLE", f"Resume checkpoint failed: {exc}", True) from exc
 
     async def stream_run(
         self,
