@@ -1606,7 +1606,7 @@ const handleSave = async () => {
                             <div v-if="formData.creativeImageHash" class="p-[6px] bg-slate-50 dark:bg-slate-800 rounded-md">
                               <template v-for="img in images" :key="img.id">
                                 <div v-if="img.hash === formData.creativeImageHash" class="flex items-center gap-[8px]">
-                                  <img :src="img.url_128 || img.url" :alt="img.name" class="w-[40px] h-[40px] object-cover rounded" />
+                                  <img :src="img.url_128 || img.url" :alt="img.name" class="w-[40px] h-[40px] object-cover rounded-md" />
                                   <div class="flex-1 min-w-0">
                                     <p class="text-[8px] text-slate-700 dark:text-slate-300 font-medium truncate">{{ img.name || 'Unnamed' }}</p>
                                     <p class="text-[7px] text-slate-500">{{ img.width }}×{{ img.height }} • Hash: {{ img.hash.substring(0, 12) }}...</p>
@@ -1682,10 +1682,10 @@ const handleSave = async () => {
                                     v-if="video.picture"
                                     :src="video.picture"
                                     :alt="video.title || 'Video'"
-                                    class="w-[120px] h-[68px] object-cover rounded"
+                                    class="w-[120px] h-[68px] object-cover rounded-md"
                                     loading="lazy"
                                   />
-                                  <div v-else class="w-[120px] h-[68px] bg-slate-200 dark:bg-slate-700 rounded flex items-center justify-center">
+                                  <div v-else class="w-[120px] h-[68px] bg-slate-200 dark:bg-slate-700 rounded-md flex items-center justify-center">
                                     <span class="text-[24px]">🎬</span>
                                   </div>
                                   <!-- 时长标签 -->
@@ -1724,8 +1724,8 @@ const handleSave = async () => {
                             <div v-if="formData.creativeVideoId" class="p-[6px] bg-slate-50 dark:bg-slate-800 rounded-md">
                               <template v-for="vid in videos" :key="vid.id">
                                 <div v-if="vid.id === formData.creativeVideoId" class="flex items-center gap-[8px]">
-                                  <img v-if="vid.picture" :src="vid.picture" :alt="vid.title" class="w-[60px] h-[34px] object-cover rounded" />
-                                  <div v-else class="w-[60px] h-[34px] bg-slate-200 dark:bg-slate-700 rounded flex items-center justify-center text-[16px]">🎬</div>
+                                  <img v-if="vid.picture" :src="vid.picture" :alt="vid.title" class="w-[60px] h-[34px] object-cover rounded-md" />
+                                  <div v-else class="w-[60px] h-[34px] bg-slate-200 dark:bg-slate-700 rounded-md flex items-center justify-center text-[16px]">🎬</div>
                                   <div class="flex-1 min-w-0">
                                     <p class="text-[8px] text-slate-700 dark:text-slate-300 font-medium truncate">{{ vid.title || 'Untitled' }}</p>
                                     <p class="text-[7px] text-slate-500">
