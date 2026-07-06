@@ -48,6 +48,15 @@ class RuntimeCheckpointStore:
         async with self.engine.begin() as conn:
             await conn.execute(text(CHECKPOINTS_TABLE_SQL))
             await conn.execute(text(CHECKPOINTS_INDEX_SQL))
+            # Migration: 添加新列（如果不存在）
+            try:
+                await conn.execute(text("ALTER TABLE runtime_checkpoints ADD COLUMN approved_arguments_json TEXT"))
+            except Exception:
+                pass  # 列已存在，忽略
+            try:
+                await conn.execute(text("ALTER TABLE runtime_checkpoints ADD COLUMN argument_diff_json TEXT"))
+            except Exception:
+                pass
 
     async def create(
         self,
