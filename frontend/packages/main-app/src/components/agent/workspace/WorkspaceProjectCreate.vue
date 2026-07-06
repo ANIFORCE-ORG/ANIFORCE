@@ -23,13 +23,14 @@ const emit = defineEmits<{
   reject: []
 }>()
 
-const formModel = ref<ProjectFormModel>(
-  props.draft.formModel || fromCreateProjectArgs(props.draft.originalArguments),
-)
+const formModel = ref<ProjectFormModel>(fromCreateProjectArgs(props.draft.originalArguments))
 
-watch(() => props.draft.checkpointId, () => {
-  formModel.value = props.draft.formModel || fromCreateProjectArgs(props.draft.originalArguments)
-})
+watch(
+  () => props.draft.checkpointId,
+  () => {
+    formModel.value = fromCreateProjectArgs(props.draft.originalArguments)
+  },
+)
 
 const diff = computed(() =>
   diffProjectArgs(props.draft.originalArguments, toCreateProjectPayload(formModel.value) as unknown as CreateProjectPayload),

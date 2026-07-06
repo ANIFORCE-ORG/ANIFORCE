@@ -1049,6 +1049,7 @@ export function useHomeAgentSession() {
         // approval resume 流返回的是 SDK 原生事件，event.event 是 type（如 'tool_called'、'tool_output'）
         const eventType = event.event
         const raw = event.data as unknown as AgentSdkStreamEvent
+        console.log('[resolveApproval] event:', eventType, raw)
 
         // SDK 原生事件：处理对话消息
         if (eventType === 'raw_response_event' || eventType === 'run_item_stream_event' || eventType === 'agent_updated_stream_event') {
@@ -1064,6 +1065,7 @@ export function useHomeAgentSession() {
         if (eventType === 'tool_called' && raw.data?.tool_name) {
           const toolName = String(raw.data.tool_name)
           const config = (await import('@/store/workspace')).toolProjectionRegistry[toolName]
+          console.log('[resolveApproval] tool_called:', toolName, 'config:', config)
           if (config) {
             workspace.upsertProjection(sessionId, {
               id: String(raw.data.tool_call_id || `tool_${Date.now()}`),
@@ -1088,6 +1090,7 @@ export function useHomeAgentSession() {
 
         if (eventType === 'tool_output' && raw.data?.tool_call_id) {
           const result = (raw.data.output || {}) as Record<string, unknown>
+          console.log('[resolveApproval] tool_output:', raw.data.tool_call_id, 'result:', result)
           workspace.setProjectionReady(sessionId, String(raw.data.tool_call_id), result)
           // 同时调用 handleSdkRawEvent 处理对话消息
           handleSdkRawEvent(raw, sessionId, {
@@ -1097,7 +1100,8 @@ export function useHomeAgentSession() {
             markFirstThinkingDelta() {},
           })
         }
-        if (event.event === 'runtime.completed') {
+        if (eventType === 'runtime.completed') {
+          console.log('[resolveApproval] runtime.completed, checkpointId:', checkpointId)
           const finalOutput = event.data.final_output
           if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
           const usage = event.data.usage
@@ -1105,6 +1109,7 @@ export function useHomeAgentSession() {
           markRunningToolsCompleted()
           // 标记当前 approval draft 为 completed
           workspace.setApprovalDraftStatus(checkpointId, 'completed')
+          console.log('[resolveApproval] set approval draft completed')
         }
         if (event.event === 'runtime.requires_action') {
           drainTypewriter(false)
