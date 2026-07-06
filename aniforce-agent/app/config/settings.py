@@ -26,11 +26,8 @@ class Settings(BaseSettings):
     OPENAI_AGENTS_MODEL: str = "deepseek/deepseek-v4-pro"
     OPENAI_AGENTS_API: str = "responses"
 
-    # Agents SDK runtime database
-    AGENT_RUNTIME_DB_URL: str = "sqlite+aiosqlite:///runtime/agent/agent.db"
-
-    # Runtime 配置
-    RUNTIME_DIR: str = "runtime/sessions"
+    # Agents SDK runtime database（调试 SQLite，生产换 PostgreSQL）
+    AGENT_RUNTIME_DB_URL: str = "sqlite+aiosqlite:///data/agent.db"
     AGENT_TRACING_ENABLED: bool = True
 
     # CORS

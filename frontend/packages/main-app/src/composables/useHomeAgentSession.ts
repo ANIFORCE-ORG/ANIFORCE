@@ -834,14 +834,8 @@ export function useHomeAgentSession() {
         ? { kind: 'running_tools', tools: running.map(item => ({ id: item.id, name: item.name })) }
         : { kind: 'waiting_model' }
     } else if (event.name === 'reasoning_item_created') {
-      const reasoning = readSdkReasoningText(item)
-      if (reasoning) {
-        drainTypewriter(false)
-        if (!streamingMessage.value) return
-        ensureAssistantMessage(streamingMessage.value)
-        options.markFirstThinkingDelta(reasoning.length)
-        store.appendDeltaToStreaming('thinking', 'thinking', reasoning)
-      }
+      // reasoning 内容已通过 reasoning_summary_text.delta 实时累积，这里不再重复追加
+      return
     }
   }
 
@@ -872,15 +866,6 @@ export function useHomeAgentSession() {
     const id = String(item?.call_id || raw?.call_id || raw?.id || '')
     const result = item && 'output' in item ? item.output : raw && 'output' in raw ? raw.output : raw?.content
     return { id, result }
-  }
-
-  function readSdkReasoningText(item?: Record<string, unknown>): string {
-    const raw = normalizeRecord(item?.raw_item) || item
-    const summary = Array.isArray(raw?.summary) ? raw.summary : []
-    return summary
-      .map(entry => normalizeRecord(entry)?.text)
-      .filter(text => typeof text === 'string' && text)
-      .join('\n\n')
   }
 
   function markRunningToolsCompleted(): void {

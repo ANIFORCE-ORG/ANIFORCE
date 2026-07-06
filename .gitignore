@@ -61,12 +61,16 @@ htmlcov/
 backend/data/images/
 backend/data/sqlite/*
 !backend/data/sqlite/animagus.db
+aniforce-agent/data/
 
 # ==== 日志/临时文件 =====
 log/
 logs/
 drafts/
 aniforce-agent/tests/
+
+# ===== 旧 runtime 目录已废弃 =====
+runtime/
 npm_cache/
 uv_cache/
 resources/

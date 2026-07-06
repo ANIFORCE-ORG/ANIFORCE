@@ -72,9 +72,8 @@ class ChatEventAssembler:
                         block["status"] = "completed"
                         block["result"] = result
                     elif name == "reasoning_item_created":
-                        reasoning = self._reasoning_text(sdk_item)
-                        if reasoning:
-                            thinking_parts.append(reasoning)
+                        # reasoning 内容已通过 reasoning_summary_text.delta 实时累积，不再重复追加
+                        pass
             elif event_name == "runtime.completed":
                 usage = data.get("usage") or usage
 
@@ -123,15 +122,3 @@ class ChatEventAssembler:
             result = raw.get("output") if "output" in raw else raw.get("content")
         return call_id, result
 
-    def _reasoning_text(self, item: dict[str, Any]) -> str:
-        raw = self._as_dict(item.get("raw_item")) or item
-        summary = raw.get("summary") or []
-        if not isinstance(summary, list):
-            return ""
-        texts = []
-        for entry in summary:
-            record = self._as_dict(entry)
-            text = record.get("text")
-            if text:
-                texts.append(str(text))
-        return "\n\n".join(texts).strip()

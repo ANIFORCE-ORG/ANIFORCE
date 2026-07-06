@@ -24,7 +24,7 @@ from loguru import logger
 class LocalTracer:
     """本地 Tracing 系统"""
     
-    def __init__(self, trace_dir: str = "runtime/agent/traces"):
+    def __init__(self, trace_dir: str = "data/traces"):
         self.trace_dir = Path(trace_dir)
         self.trace_dir.mkdir(parents=True, exist_ok=True)
         self._current_trace_id: Optional[str] = None
