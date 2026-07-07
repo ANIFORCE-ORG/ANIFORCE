@@ -367,6 +367,31 @@ export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
     surface: 'project.detail',
     mode: 'readonly',
     requiresApproval: false,
+    resultToPayload: result => ({ project: firstRecord(result, ['project', 'data']) }),
+  },
+  list_campaigns: {
+    surface: 'campaign.list',
+    mode: 'readonly',
+    requiresApproval: false,
+    resultToPayload: result => parseCollectionResult(result, 'campaigns'),
+  },
+  get_campaign_detail: {
+    surface: 'campaign.list',
+    mode: 'readonly',
+    requiresApproval: false,
+    resultToPayload: result => ({ campaigns: compactRecords([firstRecord(result, ['campaign', 'data'])]) }),
+  },
+  list_materials: {
+    surface: 'material.list',
+    mode: 'readonly',
+    requiresApproval: false,
+    resultToPayload: result => parseCollectionResult(result, 'materials'),
+  },
+  get_material_detail: {
+    surface: 'material.list',
+    mode: 'readonly',
+    requiresApproval: false,
+    resultToPayload: result => ({ materials: compactRecords([firstRecord(result, ['material', 'data'])]) }),
   },
   create_project: {
     surface: 'project.create',
@@ -416,6 +441,41 @@ function parseProjectsResult(result: unknown): Record<string, unknown> {
     })
   }
   return { projects: projects.length ? projects : [] }
+}
+
+function parseCollectionResult(result: unknown, key: string): Record<string, unknown> {
+  if (!result) return { [key]: [] }
+  if (Array.isArray(result)) return { [key]: result.filter(isRecord) }
+  if (typeof result === 'object') {
+    const record = result as Record<string, unknown>
+    const candidates = [record[key], record.items, record.list, record.data]
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) return { [key]: candidate.filter(isRecord) }
+    }
+    if (isBusinessRecord(record)) return { [key]: [record] }
+    if (typeof record.text === 'string') return parseCollectionResult(record.text, key)
+  }
+  return { [key]: [] }
+}
+
+function firstRecord(result: unknown, keys: string[]): Record<string, unknown> | null {
+  if (!result) return null
+  if (isRecord(result)) {
+    for (const key of keys) {
+      const value = result[key]
+      if (isRecord(value)) return value
+    }
+    if (isBusinessRecord(result)) return result
+  }
+  return null
+}
+
+function compactRecords(records: Array<Record<string, unknown> | null>): Record<string, unknown>[] {
+  return records.filter((item): item is Record<string, unknown> => Boolean(item))
+}
+
+function isBusinessRecord(value: Record<string, unknown>): boolean {
+  return typeof value.id === 'string' || typeof value.name === 'string'
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {

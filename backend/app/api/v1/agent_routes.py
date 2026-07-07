@@ -22,6 +22,7 @@ from app.services.agent_run_service import AgentRunError, AgentRunService
 from app.services.agent_session_service import AgentSessionError, AgentSessionService
 from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
 from app.services.agent_run_event_bus import agent_run_event_bus
+from app.services.agent_run_event_processor import AgentRunEventProcessor
 from app.services.business_context_builder import BusinessContextBuilder
 from app.services.chat_event_assembler import ChatEventAssembler
 from app.services.session_lock import SessionBusyError, session_lock_manager
@@ -386,41 +387,33 @@ async def resolve_run_approval(
 
     async def event_generator():
         stream_buffer = ""
+        event_processor = AgentRunEventProcessor(
+            event_bus=agent_run_event_bus,
+            mark_run_status=_mark_run_status_short_tx,
+        )
         try:
             await _mark_run_status_short_tx(run_id, user_id, "running")
-            await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "running"})
+            await event_processor.publish_running(run_id=run_id)
             async for chunk in gateway.stream_checkpoint_resume(_authorization(request), checkpoint_id, payload):
                 yield chunk
                 stream_buffer += chunk.decode("utf-8", errors="ignore")
                 events, stream_buffer = _parse_sse_events(stream_buffer)
                 for event_name, data in events:
-                    await agent_run_event_bus.publish(run_id, event_name, data)
-                    if event_name == "runtime.completed":
-                        usage = data.get("usage") if isinstance(data, dict) else None
-                        await _mark_run_status_short_tx(run_id, user_id, "completed", usage=usage)
-                        await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "completed"}, terminal=True)
-                    elif event_name == "runtime.requires_action":
-                        next_checkpoint = data.get("checkpoint_id") if isinstance(data, dict) else None
-                        await _mark_run_status_short_tx(run_id, user_id, "requires_action", checkpoint_ref=str(next_checkpoint or ""))
-                        await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "requires_action", "checkpoint_ref": next_checkpoint}, terminal=True)
-                    elif event_name == "runtime.error":
-                        await _mark_run_status_short_tx(run_id, user_id, "error", error=data if isinstance(data, dict) else {"message": str(data)})
-                        await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "error"}, terminal=True)
+                    await event_processor.handle_runtime_event(
+                        run_id=run_id,
+                        user_id=user_id,
+                        event_name=event_name,
+                        data=data,
+                    )
 
             events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
             for event_name, data in events:
-                await agent_run_event_bus.publish(run_id, event_name, data)
-                if event_name == "runtime.completed":
-                    usage = data.get("usage") if isinstance(data, dict) else None
-                    await _mark_run_status_short_tx(run_id, user_id, "completed", usage=usage)
-                    await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "completed"}, terminal=True)
-                elif event_name == "runtime.requires_action":
-                    next_checkpoint = data.get("checkpoint_id") if isinstance(data, dict) else None
-                    await _mark_run_status_short_tx(run_id, user_id, "requires_action", checkpoint_ref=str(next_checkpoint or ""))
-                    await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "requires_action", "checkpoint_ref": next_checkpoint}, terminal=True)
-                elif event_name == "runtime.error":
-                    await _mark_run_status_short_tx(run_id, user_id, "error", error=data if isinstance(data, dict) else {"message": str(data)})
-                    await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "error"}, terminal=True)
+                await event_processor.handle_runtime_event(
+                    run_id=run_id,
+                    user_id=user_id,
+                    event_name=event_name,
+                    data=data,
+                )
         except Exception as exc:
             await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "RESUME_FAILED", "message": str(exc)})
             yield "event: runtime.error\n"
@@ -610,6 +603,10 @@ async def _consume_agent_run_background(
     first_message_logged = False
     upstream_bytes = 0
     stream_buffer = ""
+    event_processor = AgentRunEventProcessor(
+        event_bus=agent_run_event_bus,
+        mark_run_status=_mark_run_status_short_tx,
+    )
 
     try:
         lock_start = perf_counter()
@@ -636,7 +633,7 @@ async def _consume_agent_run_background(
                     terminal=True,
                 )
                 return
-            await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "session_id": session_id, "status": "running"})
+            await event_processor.publish_running(run_id=run_id, session_id=session_id)
 
             gateway_start = perf_counter()
             persisted_events: list[tuple[str, dict]] = []
@@ -673,52 +670,30 @@ async def _consume_agent_run_background(
                                 upstream_bytes,
                             )
                         persisted_events.append((event_name, data))
-                        await agent_run_event_bus.publish(run_id, event_name, data)
-                        if event_name == "runtime.requires_action":
-                            checkpoint_id = data.get("checkpoint_id") if isinstance(data, dict) else None
-                            await _mark_run_status_short_tx(
-                                run_id,
-                                user_id,
-                                "requires_action",
-                                checkpoint_ref=str(checkpoint_id or ""),
-                            )
-                            await agent_run_event_bus.publish(
-                                run_id,
-                                "run_status",
-                                {
-                                    "run_id": run_id,
-                                    "session_id": session_id,
-                                    "status": "requires_action",
-                                    "checkpoint_ref": checkpoint_id,
-                                },
-                                terminal=True,
-                            )
+                        result = await event_processor.handle_runtime_event(
+                            run_id=run_id,
+                            user_id=user_id,
+                            session_id=session_id,
+                            event_name=event_name,
+                            data=data,
+                            complete_immediately=False,
+                        )
+                        if result.requires_action:
                             return
 
                 # Flush any final event if upstream did not end with a blank line.
                 events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
                 for event_name, data in events:
                     persisted_events.append((event_name, data))
-                    await agent_run_event_bus.publish(run_id, event_name, data)
-                    if event_name == "runtime.requires_action":
-                        checkpoint_id = data.get("checkpoint_id") if isinstance(data, dict) else None
-                        await _mark_run_status_short_tx(
-                            run_id,
-                            user_id,
-                            "requires_action",
-                            checkpoint_ref=str(checkpoint_id or ""),
-                        )
-                        await agent_run_event_bus.publish(
-                            run_id,
-                            "run_status",
-                            {
-                                "run_id": run_id,
-                                "session_id": session_id,
-                                "status": "requires_action",
-                                "checkpoint_ref": checkpoint_id,
-                            },
-                            terminal=True,
-                        )
+                    result = await event_processor.handle_runtime_event(
+                        run_id=run_id,
+                        user_id=user_id,
+                        session_id=session_id,
+                        event_name=event_name,
+                        data=data,
+                        complete_immediately=False,
+                    )
+                    if result.requires_action:
                         return
 
                 perf_log.info(
@@ -746,12 +721,11 @@ async def _consume_agent_run_background(
                     return
 
                 assistant_content = ChatEventAssembler().assemble_assistant_message(persisted_events)
-                await _mark_run_status_short_tx(run_id, user_id, "completed", usage=assistant_content.get("usage"))
-                await agent_run_event_bus.publish(
-                    run_id,
-                    "run_status",
-                    {"run_id": run_id, "session_id": session_id, "status": "completed"},
-                    terminal=True,
+                await event_processor.complete_run(
+                    run_id=run_id,
+                    user_id=user_id,
+                    session_id=session_id,
+                    usage=assistant_content.get("usage"),
                 )
             except AgentGatewayError as exc:
                 current = await _get_session_state_short_tx(session_id, user_id)
