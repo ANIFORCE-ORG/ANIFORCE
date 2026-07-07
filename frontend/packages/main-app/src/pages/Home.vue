@@ -371,14 +371,25 @@ function entityTypeIcon(type: MentionEntity['type']): string {
   return 'video_library'
 }
 
-function selectMentionCandidate(entity: MentionEntity) {
+function appendMentionToInput(entity: MentionEntity) {
   agent.selectWorkspaceEntity(entity)
   const label = entity.name || entity.id
-  inputText.value = inputText.value.replace(/(?:^|\s)@[^\s@]*$/, match => `${match.startsWith(' ') ? ' ' : ''}@${label} `)
+  const mention = `@${label}`
+  if (inputText.value.match(/(?:^|\s)@[^\s@]*$/)) {
+    inputText.value = inputText.value.replace(/(?:^|\s)@[^\s@]*$/, match => `${match.startsWith(' ') ? ' ' : ''}${mention} `)
+  } else if (!inputText.value.trim()) {
+    inputText.value = `${mention} `
+  } else if (!inputText.value.includes(mention)) {
+    inputText.value = `${inputText.value.trimEnd()} ${mention} `
+  }
   nextTick(() => {
     const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
     input?.focus()
   })
+}
+
+function selectMentionCandidate(entity: MentionEntity) {
+  appendMentionToInput(entity)
 }
 
 function removeContextEntity(entity: MentionEntity) {
@@ -766,6 +777,7 @@ watch(
           @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
           @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
           @select-entity="entity => agent.selectWorkspaceEntity(entity)"
+          @mention-entity="appendMentionToInput"
           @view-project="(projectId: string) => openProject({ id: projectId })"
           @view-campaign="openCampaign"
           @view-material="openMaterial"

@@ -20,6 +20,7 @@ const emit = defineEmits<{
   viewTasks: [project: Project]
   createTask: [project: Project]
   select: [project: Project, selected: boolean]
+  mention: [project: Project]
 }>()
 
 function handleSelect(project: Project, selected: boolean) {
@@ -37,6 +38,7 @@ function handleSelect(project: Project, selected: boolean) {
         :embedded="embedded"
         @edit="emit('edit', $event)"
         @view-detail="emit('viewDetail', $event)"
+        @mention="emit('mention', $event)"
         @view-tasks="emit('viewTasks', $event)"
         @create-task="emit('createTask', $event)"
         @select="handleSelect"

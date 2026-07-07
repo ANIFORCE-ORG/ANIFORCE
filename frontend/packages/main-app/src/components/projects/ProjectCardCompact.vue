@@ -14,6 +14,7 @@ const emit = defineEmits<{
   viewTasks: [project: Project]
   createTask: [project: Project]
   select: [project: Project, selected: boolean]
+  mention: [project: Project]
 }>()
 
 const router = useRouter()
@@ -53,9 +54,19 @@ const handleViewDetail = () => {
 </script>
 
 <template>
-  <article class="project-card">
+  <article class="project-card group">
+    <button
+      v-if="embedded"
+      class="absolute right-[12px] top-[12px] rounded border border-primary/20 bg-white/90 px-2 py-1 text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/90"
+      type="button"
+      title="引用到对话"
+      @click="emit('mention', project)"
+    >
+      @ 引用
+    </button>
+
     <!-- Checkbox -->
-    <label class="select-check">
+    <label v-if="!embedded" class="select-check">
       <input
         type="checkbox"
         class="w-[12px] h-[12px] rounded border-slate-300 text-primary focus:ring-primary/20"
@@ -93,9 +104,9 @@ const handleViewDetail = () => {
     <!-- Actions -->
     <div class="project-card-actions">
       <template v-if="embedded">
-        <button class="btn-primary" type="button" @click="emit('select', project, true)">
+        <button class="btn-primary" type="button" @click="emit('mention', project)">
           <span class="material-symbols-outlined text-[14px]">alternate_email</span>
-          设为上下文
+          @ 引用到对话
         </button>
         <button class="btn-soft" type="button" @click="handleViewDetail">
           <span class="material-symbols-outlined text-[14px]">open_in_new</span>
@@ -123,6 +134,7 @@ const handleViewDetail = () => {
 <style scoped>
 /* Project Card */
 .project-card {
+  position: relative;
   min-height: 228px;
   display: flex;
   flex-direction: column;

@@ -14,6 +14,7 @@ const emit = defineEmits<{
   view: [campaignId: string]
   toggleStatus: [campaign: Campaign]
   select: [campaign: Campaign]
+  mention: [campaign: Campaign]
 }>()
 
 function getStatusText(status: string) {
@@ -41,7 +42,7 @@ function getStatusColor(status: string) {
       <div
         v-for="campaign in campaigns"
         :key="campaign.id"
-        class="rounded border border-slate-200 bg-white p-4 transition-all hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
+        class="group rounded border border-slate-200 bg-white p-4 transition-all hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
       >
         <div class="mb-2 flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
@@ -53,6 +54,14 @@ function getStatusColor(status: string) {
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
+            <button
+              v-if="embedded"
+              class="rounded border border-primary/20 bg-primary/5 px-2 py-1 text-xs font-semibold text-primary opacity-0 transition-opacity hover:bg-primary/10 group-hover:opacity-100"
+              title="引用到对话"
+              @click="emit('mention', campaign)"
+            >
+              @ 引用
+            </button>
             <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
               {{ campaign.platform }}
             </span>
@@ -81,9 +90,9 @@ function getStatusColor(status: string) {
           <button
             v-if="embedded"
             class="flex-1 rounded border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300"
-            @click="emit('select', campaign)"
+            @click="emit('mention', campaign)"
           >
-            设为上下文
+            @ 引用到对话
           </button>
           <button
             class="flex-1 rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"

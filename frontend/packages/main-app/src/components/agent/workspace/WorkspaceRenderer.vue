@@ -24,6 +24,7 @@ const emit = defineEmits<{
   reject: [checkpointId: string]
   updateApprovalForm: [payload: { checkpointId: string; formModel: import('@/components/projects/projectFormModel').ProjectFormModel }]
   selectEntity: [entity: { type: 'project' | 'campaign' | 'material'; id: string; name?: string }]
+  mentionEntity: [entity: { type: 'project' | 'campaign' | 'material'; id: string; name?: string }]
   viewProject: [projectId: string]
   viewCampaign: [campaignId: string]
   viewMaterial: [materialId: string]
@@ -82,12 +83,24 @@ function handleSelectProject(project: Project): void {
   emit('selectEntity', { type: 'project', id: project.id, name: project.name })
 }
 
+function handleMentionProject(project: Project): void {
+  emit('mentionEntity', { type: 'project', id: project.id, name: project.name })
+}
+
 function handleSelectCampaign(campaign: Campaign): void {
   emit('selectEntity', { type: 'campaign', id: campaign.id, name: campaign.name })
 }
 
+function handleMentionCampaign(campaign: Campaign): void {
+  emit('mentionEntity', { type: 'campaign', id: campaign.id, name: campaign.name })
+}
+
 function handleSelectMaterial(material: Material): void {
   emit('selectEntity', { type: 'material', id: material.id, name: material.name })
+}
+
+function handleMentionMaterial(material: Material): void {
+  emit('mentionEntity', { type: 'material', id: material.id, name: material.name })
 }
 
 function handlePreviewMaterial(material: Material): void {
@@ -123,6 +136,7 @@ function materialPreviewSrc(material: Material): string {
         embedded
         @view-detail="handleViewDetail"
         @select="(project: Project) => handleSelectProject(project)"
+        @mention="handleMentionProject"
       />
     </div>
 
@@ -145,6 +159,7 @@ function materialPreviewSrc(material: Material): string {
         :campaigns="campaigns"
         embedded
         @select="handleSelectCampaign"
+        @mention="handleMentionCampaign"
         @view="campaignId => emit('viewCampaign', campaignId)"
       />
     </div>
@@ -168,6 +183,7 @@ function materialPreviewSrc(material: Material): string {
         :materials="materials"
         embedded
         @select="handleSelectMaterial"
+        @mention="handleMentionMaterial"
         @preview="handlePreviewMaterial"
       />
     </div>
@@ -213,7 +229,7 @@ function materialPreviewSrc(material: Material): string {
             <div>审核：{{ previewMaterial.review_status || '-' }}</div>
           </div>
           <div class="mt-[14px] flex gap-[8px]">
-            <button class="flex-1 rounded border border-slate-200 px-[10px] py-[7px] text-[11px] font-medium text-slate-600 hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300" @click="handleSelectMaterial(previewMaterial)">设为上下文</button>
+            <button class="flex-1 rounded border border-slate-200 px-[10px] py-[7px] text-[11px] font-medium text-slate-600 hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300" @click="handleMentionMaterial(previewMaterial)">@ 引用到对话</button>
             <button class="flex-1 rounded bg-primary px-[10px] py-[7px] text-[11px] font-semibold text-white hover:bg-primary/90" @click="emit('viewMaterial', previewMaterial.id)">打开完整页</button>
           </div>
         </div>

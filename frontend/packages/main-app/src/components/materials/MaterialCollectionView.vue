@@ -9,6 +9,7 @@ defineProps<{
 
 const emit = defineEmits<{
   select: [material: Material]
+  mention: [material: Material]
   preview: [material: Material]
 }>()
 
@@ -58,7 +59,15 @@ function getStatusLabel(status: string) {
           <div v-else class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800">
             <span class="material-symbols-outlined text-6xl text-slate-400 dark:text-slate-500">video_library</span>
           </div>
-          <div class="absolute right-2 top-2">
+          <div class="absolute right-2 top-2 flex items-center gap-2">
+            <button
+              v-if="embedded"
+              class="rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-primary opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100"
+              title="引用到对话"
+              @click.stop="emit('mention', creative)"
+            >
+              @ 引用
+            </button>
             <span class="rounded-md px-2 py-1 text-xs font-semibold backdrop-blur-sm" :class="getStatusColor(creative.status)">
               {{ getStatusLabel(creative.status) }}
             </span>
@@ -88,8 +97,8 @@ function getStatusLabel(status: string) {
             </div>
           </div>
           <div v-if="embedded" class="mt-3 flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-700" @click.stop>
-            <button class="flex-1 rounded border border-slate-200 px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300" @click="emit('select', creative)">
-              设为上下文
+            <button class="flex-1 rounded border border-slate-200 px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300" @click="emit('mention', creative)">
+              @ 引用到对话
             </button>
             <button class="flex-1 rounded bg-primary/10 px-2 py-1.5 text-[11px] font-semibold text-primary hover:bg-primary/15" @click="emit('preview', creative)">
               预览
