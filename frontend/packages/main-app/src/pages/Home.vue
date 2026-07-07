@@ -778,7 +778,6 @@ watch(
           :projection="agent.workspaceProjection.value"
           :approval-draft="agent.workspaceApprovalDraft.value"
           :session-id="agent.activeSession.value?.id || ''"
-          :selected-entities="selectedContextEntities"
           @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: agent.workspaceApprovalDraft.value?.runId || '' })"
           @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
           @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
