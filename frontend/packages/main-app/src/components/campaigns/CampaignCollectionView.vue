@@ -42,7 +42,7 @@ function getStatusColor(status: string) {
       <div
         v-for="campaign in campaigns"
         :key="campaign.id"
-        class="group rounded border border-slate-200 bg-white p-4 transition-all hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
+        class="group relative rounded border border-slate-200 bg-white p-4 transition-all hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
       >
         <div class="mb-2 flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
@@ -56,11 +56,11 @@ function getStatusColor(status: string) {
           <div class="flex shrink-0 items-center gap-2">
             <button
               v-if="embedded"
-              class="rounded border border-primary/20 bg-primary/5 px-2 py-1 text-xs font-semibold text-primary opacity-0 transition-opacity hover:bg-primary/10 group-hover:opacity-100"
+              class="absolute left-[12px] top-[12px] z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full border border-primary/20 bg-white/95 text-primary opacity-0 shadow-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
               title="引用到对话"
               @click="emit('mention', campaign)"
             >
-              @ 引用
+              <span class="material-symbols-outlined text-[15px]">alternate_email</span>
             </button>
             <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
               {{ campaign.platform }}

@@ -57,12 +57,12 @@ const handleViewDetail = () => {
   <article class="project-card group">
     <button
       v-if="embedded"
-      class="absolute right-[12px] top-[12px] rounded border border-primary/20 bg-white/90 px-2 py-1 text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/90"
+      class="absolute left-[12px] top-[12px] z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full border border-primary/20 bg-white/95 text-primary opacity-0 shadow-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
       type="button"
       title="引用到对话"
       @click="emit('mention', project)"
     >
-      @ 引用
+      <span class="material-symbols-outlined text-[15px]">alternate_email</span>
     </button>
 
     <!-- Checkbox -->

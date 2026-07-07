@@ -59,15 +59,15 @@ function getStatusLabel(status: string) {
           <div v-else class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800">
             <span class="material-symbols-outlined text-6xl text-slate-400 dark:text-slate-500">video_library</span>
           </div>
-          <div class="absolute right-2 top-2 flex items-center gap-2">
-            <button
-              v-if="embedded"
-              class="rounded-md bg-white/90 px-2 py-1 text-xs font-semibold text-primary opacity-0 shadow-sm backdrop-blur-sm transition-opacity group-hover:opacity-100"
-              title="引用到对话"
-              @click.stop="emit('mention', creative)"
-            >
-              @ 引用
-            </button>
+          <button
+            v-if="embedded"
+            class="absolute left-2 top-2 z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full border border-primary/20 bg-white/95 text-primary opacity-0 shadow-sm backdrop-blur-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
+            title="引用到对话"
+            @click.stop="emit('mention', creative)"
+          >
+            <span class="material-symbols-outlined text-[15px]">alternate_email</span>
+          </button>
+          <div class="absolute right-2 top-2">
             <span class="rounded-md px-2 py-1 text-xs font-semibold backdrop-blur-sm" :class="getStatusColor(creative.status)">
               {{ getStatusLabel(creative.status) }}
             </span>
