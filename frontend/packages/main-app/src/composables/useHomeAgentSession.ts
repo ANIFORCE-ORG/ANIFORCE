@@ -861,11 +861,21 @@ export function useHomeAgentSession() {
       executionTools.value = [...executionTools.value, tool].slice(-8)
       store.appendToolCallToStreaming({ id, name, arguments: args })
       upsertTimelineTool({ id, toolName: name, status: 'running', arguments: args })
-      // Workspace 投影：查询类工具也产生 loading 投影
+      // Workspace 投影：多上下文任务优先归组；普通查询仍走单工具投影。
       const sessionId = activeSession.value?.id
       if (sessionId) {
+        const selectedEntities = workspace.getSelectedEntities(sessionId)
+        const grouped = isMultiContextTool(name) && workspace.upsertMultiContextTool(
+          sessionId,
+          store.currentRunId || '',
+          selectedEntities,
+          name,
+          id,
+          args,
+          'loading',
+        )
         const config = toolProjectionRegistry[name]
-        if (config) {
+        if (!grouped && config) {
           workspace.setProjectionLoading(sessionId, store.currentRunId || '', config.surface, name, id)
         }
       }
@@ -892,11 +902,23 @@ export function useHomeAgentSession() {
         if (id) store.updateToolCallResultInStreaming(id, result)
         upsertTimelineTool({ id: id || `${toolName}_${Date.now()}`, toolName, status: 'completed', result })
         appendBusinessResultBlock(id, toolName, result)
-        // Workspace 投影：查询类工具输出转 projection ready
+        // Workspace 投影：多上下文任务归组更新；普通查询输出转 projection ready。
         const sessionId = activeSession.value?.id
         if (sessionId) {
+          const selectedEntities = workspace.getSelectedEntities(sessionId)
+          const toolArgs = index >= 0 ? executionTools.value[index].arguments : undefined
+          const grouped = isMultiContextTool(toolName) && workspace.upsertMultiContextTool(
+            sessionId,
+            store.currentRunId || '',
+            selectedEntities,
+            toolName,
+            id,
+            toolArgs,
+            'ready',
+            result,
+          )
           const config = toolProjectionRegistry[toolName]
-          if (config && config.resultToPayload && !config.requiresApproval) {
+          if (!grouped && config && config.resultToPayload && !config.requiresApproval) {
             const payload = config.resultToPayload(result)
             workspace.setProjectionReady(sessionId, id || '', payload, config.mode)
           }
@@ -910,6 +932,16 @@ export function useHomeAgentSession() {
       // reasoning 内容已通过 reasoning_summary_text.delta 实时累积，这里不再重复追加
       return
     }
+  }
+
+  function isMultiContextTool(toolName: string): boolean {
+    return [
+      'get_project_detail',
+      'list_campaigns',
+      'get_campaign_detail',
+      'get_material_detail',
+      'list_materials',
+    ].includes(toolName)
   }
 
   function ensureAssistantMessage(message: AgentMessage): void {

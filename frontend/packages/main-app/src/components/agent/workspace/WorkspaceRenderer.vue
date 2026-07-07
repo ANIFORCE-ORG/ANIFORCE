@@ -8,7 +8,7 @@ import ProjectCollectionView from '@/components/projects/ProjectCollectionView.v
 import CampaignCollectionView from '@/components/campaigns/CampaignCollectionView.vue'
 import MaterialCollectionView from '@/components/materials/MaterialCollectionView.vue'
 import WorkspaceProjectCreate from './WorkspaceProjectCreate.vue'
-import type { WorkspaceProjection, WorkspaceApprovalDraft } from '@/store/workspace'
+import type { SelectedEntity, WorkspaceMultiContextPayload, WorkspaceProjection, WorkspaceApprovalDraft } from '@/store/workspace'
 import type { Project } from '@/api/projects'
 import type { Campaign } from '@/api/campaigns'
 import type { Material } from '@/api/materials'
@@ -17,6 +17,7 @@ const props = defineProps<{
   projection: WorkspaceProjection | null
   approvalDraft: WorkspaceApprovalDraft | null
   sessionId: string
+  selectedEntities?: SelectedEntity[]
 }>()
 
 const emit = defineEmits<{
@@ -53,6 +54,16 @@ const materials = computed<Material[]>(() => {
   const data = props.projection.payload
   if (Array.isArray(data.materials)) return data.materials as Material[]
   return []
+})
+
+const multiContext = computed<WorkspaceMultiContextPayload | null>(() => {
+  if (props.projection?.surface !== 'multi.context') return null
+  const payload = props.projection.payload as Partial<WorkspaceMultiContextPayload>
+  if (!Array.isArray(payload.groups)) return null
+  return {
+    entities: Array.isArray(payload.entities) ? payload.entities : props.selectedEntities || [],
+    groups: payload.groups,
+  }
 })
 
 function handleApprove(payload: { editedArguments: Record<string, unknown>; argumentDiff: Array<{ field: string; before: unknown; after: unknown }> }): void {
@@ -111,12 +122,104 @@ function handlePreviewMaterial(material: Material): void {
 function materialPreviewSrc(material: Material): string {
   return material.preview_url || material.thumbnail_url || material.poster_url || material.url || ''
 }
+
+function entityTypeLabel(type: SelectedEntity['type']): string {
+  if (type === 'project') return '项目'
+  if (type === 'campaign') return '广告计划'
+  return '素材'
+}
+
+function entityTypeIcon(type: SelectedEntity['type']): string {
+  if (type === 'project') return 'folder_managed'
+  if (type === 'campaign') return 'campaign'
+  return 'video_library'
+}
+
+function groupToolStates(group: WorkspaceMultiContextPayload['groups'][number]) {
+  return Object.values(group.tools || {})
+}
+
+function resultCount(result: unknown, key: string): number | null {
+  if (!result) return null
+  if (Array.isArray(result)) return result.length
+  if (typeof result === 'object') {
+    const record = result as Record<string, unknown>
+    const value = record[key] || record.items || record.list
+    return Array.isArray(value) ? value.length : null
+  }
+  return null
+}
 </script>
 
 <template>
   <div class="h-full overflow-y-auto">
+    <div v-if="selectedEntities?.length" class="border-b border-slate-100 px-[16px] py-[10px] dark:border-slate-800">
+      <div class="mb-[6px] text-[10px] font-medium text-slate-400">当前引用上下文</div>
+      <div class="flex flex-wrap gap-[6px]">
+        <button
+          v-for="entity in selectedEntities"
+          :key="`${entity.type}:${entity.id}`"
+          class="inline-flex max-w-full items-center gap-[4px] rounded-full bg-primary/5 px-[8px] py-[4px] text-[10px] font-medium text-primary hover:bg-primary/10"
+          @click="emit('mentionEntity', entity)"
+        >
+          <span class="material-symbols-outlined text-[12px]">{{ entityTypeIcon(entity.type) }}</span>
+          <span class="truncate">{{ entity.name || entity.id }}</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- 多上下文任务聚合视图 -->
+    <div v-if="projection?.surface === 'multi.context' && multiContext" class="p-[16px]">
+      <div class="mb-[12px] flex items-center justify-between">
+        <div>
+          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">多上下文任务</h3>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400">
+            {{ projection.mode === 'loading' ? '正在准备数据...' : `已归组 ${multiContext.groups.length} 个对象` }}
+          </p>
+        </div>
+        <span class="rounded-full bg-primary/10 px-[8px] py-[3px] text-[10px] font-medium text-primary">{{ multiContext.entities.length }} 个引用</span>
+      </div>
+      <div class="space-y-[10px]">
+        <div
+          v-for="group in multiContext.groups"
+          :key="`${group.entity.type}:${group.entity.id}`"
+          class="rounded-lg border border-slate-200 bg-white p-[12px] dark:border-slate-700 dark:bg-slate-800"
+        >
+          <div class="mb-[8px] flex items-start justify-between gap-[8px]">
+            <div class="min-w-0">
+              <div class="flex items-center gap-[6px]">
+                <span class="material-symbols-outlined text-[15px] text-slate-400">{{ entityTypeIcon(group.entity.type) }}</span>
+                <h4 class="truncate text-[12px] font-semibold text-slate-900 dark:text-white">{{ group.entity.name || group.entity.id }}</h4>
+              </div>
+              <p class="mt-[2px] text-[10px] text-slate-400">{{ entityTypeLabel(group.entity.type) }} · {{ group.entity.id }}</p>
+            </div>
+            <span class="rounded-full px-[7px] py-[2px] text-[10px] font-medium" :class="group.status === 'loading' ? 'bg-blue-50 text-blue-600 dark:bg-blue-900/30' : 'bg-emerald-50 text-emerald-600 dark:bg-emerald-900/30'">
+              {{ group.status === 'loading' ? '处理中' : '已就绪' }}
+            </span>
+          </div>
+          <div class="space-y-[6px]">
+            <div v-for="tool in groupToolStates(group)" :key="`${tool.toolName}:${tool.toolCallId}`" class="flex items-center justify-between rounded bg-slate-50 px-[8px] py-[6px] text-[10px] dark:bg-slate-900/60">
+              <span class="font-medium text-slate-600 dark:text-slate-300">{{ tool.toolName }}</span>
+              <span class="text-slate-400">
+                <template v-if="tool.status === 'loading'">获取中...</template>
+                <template v-else-if="tool.toolName === 'list_campaigns'">{{ resultCount(tool.result, 'campaigns') ?? 0 }} 个计划</template>
+                <template v-else-if="tool.toolName === 'list_materials'">{{ resultCount(tool.result, 'materials') ?? 0 }} 个素材</template>
+                <template v-else>已返回</template>
+              </span>
+            </div>
+          </div>
+          <div class="mt-[10px] flex gap-[8px]">
+            <button class="flex-1 rounded border border-slate-200 px-[8px] py-[6px] text-[10px] font-medium text-slate-600 hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300" @click="emit('mentionEntity', group.entity)">@ 引用</button>
+            <button v-if="group.entity.type === 'project'" class="flex-1 rounded bg-primary/10 px-[8px] py-[6px] text-[10px] font-semibold text-primary hover:bg-primary/15" @click="emit('viewProject', group.entity.id)">打开完整页</button>
+            <button v-else-if="group.entity.type === 'campaign'" class="flex-1 rounded bg-primary/10 px-[8px] py-[6px] text-[10px] font-semibold text-primary hover:bg-primary/15" @click="emit('viewCampaign', group.entity.id)">打开完整页</button>
+            <button v-else class="flex-1 rounded bg-primary/10 px-[8px] py-[6px] text-[10px] font-semibold text-primary hover:bg-primary/15" @click="emit('viewMaterial', group.entity.id)">打开完整页</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 项目列表（查询类工具，无需审批） -->
-    <div v-if="projection?.surface === 'project.list'" class="p-[16px]">
+    <div v-else-if="projection?.surface === 'project.list'" class="p-[16px]">
       <div class="mb-[12px] flex items-center justify-between">
         <div>
           <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">项目库</h3>

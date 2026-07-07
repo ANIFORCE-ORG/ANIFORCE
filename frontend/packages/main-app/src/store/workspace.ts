@@ -42,6 +42,7 @@ export type WorkspaceSurface =
   | 'project.detail'
   | 'project.create'
   | 'project.delete'
+  | 'multi.context'
   | 'campaign.list'
   | 'campaign.create'
   | 'campaign.status'
@@ -92,6 +93,27 @@ export interface SelectedEntity {
   type: 'project' | 'campaign' | 'material'
   id: string
   name?: string
+}
+
+export interface WorkspaceMultiContextToolState {
+  toolName: string
+  toolCallId: string
+  status: 'loading' | 'ready' | 'failed'
+  args?: Record<string, unknown>
+  result?: unknown
+  updatedAt: number
+}
+
+export interface WorkspaceMultiContextGroup {
+  entity: SelectedEntity
+  status: 'loading' | 'ready' | 'failed'
+  tools: Record<string, WorkspaceMultiContextToolState>
+  updatedAt: number
+}
+
+export interface WorkspaceMultiContextPayload extends Record<string, unknown> {
+  entities: SelectedEntity[]
+  groups: WorkspaceMultiContextGroup[]
 }
 
 // ==================== Store ====================
@@ -166,6 +188,67 @@ export const useWorkspaceStore = defineStore('workspace', () => {
       p.surface === surface ? { ...p, mode: 'stale' as const, updatedAt: Date.now() } : p,
     )
     projectionsBySession.value.set(sessionId, [...updated])
+  }
+
+  function upsertMultiContextTool(
+    sessionId: string,
+    runId: string,
+    entities: SelectedEntity[],
+    toolName: string,
+    toolCallId: string,
+    args: Record<string, unknown> | undefined,
+    status: WorkspaceMultiContextToolState['status'],
+    result?: unknown,
+  ): boolean {
+    if (entities.length < 2) return false
+    const entity = resolveToolEntity(entities, args, result)
+    if (!entity) return false
+
+    const projectionId = `proj_multi_${runId || sessionId}`
+    const current = getProjections(sessionId).find(p => p.id === projectionId)
+    const payload = normalizeMultiContextPayload(current?.payload, entities)
+    const groupIndex = payload.groups.findIndex(group => group.entity.type === entity.type && group.entity.id === entity.id)
+    const now = Date.now()
+    const toolKey = `${toolName}:${toolCallId || now}`
+    const toolState: WorkspaceMultiContextToolState = {
+      toolName,
+      toolCallId,
+      status,
+      args,
+      result,
+      updatedAt: now,
+    }
+
+    if (groupIndex >= 0) {
+      const group = payload.groups[groupIndex]
+      const tools = { ...group.tools, [toolKey]: toolState }
+      payload.groups[groupIndex] = {
+        ...group,
+        tools,
+        status: Object.values(tools).some(tool => tool.status === 'loading') ? 'loading' : 'ready',
+        updatedAt: now,
+      }
+    } else {
+      payload.groups.push({
+        entity,
+        status,
+        tools: { [toolKey]: toolState },
+        updatedAt: now,
+      })
+    }
+
+    upsertProjection(sessionId, {
+      id: projectionId,
+      sessionId,
+      runId,
+      surface: 'multi.context',
+      sourceToolName: toolName,
+      sourceToolCallId: toolCallId,
+      mode: payload.groups.some(group => group.status === 'loading') ? 'loading' : 'readonly',
+      payload,
+      updatedAt: now,
+    })
+    return true
   }
 
   // ==================== Approval Draft 操作 ====================
@@ -341,6 +424,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     setProjectionLoading,
     setProjectionReady,
     markProjectionStale,
+    upsertMultiContextTool,
     // approval draft
     createApprovalDraft,
     getApprovalDraft,
@@ -417,6 +501,48 @@ export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
     mode: 'review',
     requiresApproval: true,
   },
+}
+
+function normalizeMultiContextPayload(payload: Record<string, unknown> | undefined, entities: SelectedEntity[]): WorkspaceMultiContextPayload {
+  const existing = payload as Partial<WorkspaceMultiContextPayload> | undefined
+  const groups = Array.isArray(existing?.groups) ? existing.groups : []
+  return {
+    entities: [...entities],
+    groups: groups.filter(isMultiContextGroup),
+  }
+}
+
+function resolveToolEntity(entities: SelectedEntity[], args?: Record<string, unknown>, result?: unknown): SelectedEntity | null {
+  const record = isRecord(args) ? args : {}
+  const parsedResult = parseJsonLikeResult(result)
+  const resultRecord = isRecord(parsedResult) ? parsedResult : {}
+  const candidates = [
+    { type: 'project' as const, id: firstString(record.project_id, record.projectId, resultRecord.project_id, resultRecord.projectId) },
+    { type: 'campaign' as const, id: firstString(record.campaign_id, record.campaignId, resultRecord.campaign_id, resultRecord.campaignId) },
+    { type: 'material' as const, id: firstString(record.material_id, record.materialId, resultRecord.material_id, resultRecord.materialId) },
+    { type: 'project' as const, id: isRecord(resultRecord.project) ? firstString(resultRecord.project.id) : firstString(resultRecord.id) },
+    { type: 'campaign' as const, id: isRecord(resultRecord.campaign) ? firstString(resultRecord.campaign.id) : '' },
+    { type: 'material' as const, id: isRecord(resultRecord.material) ? firstString(resultRecord.material.id) : '' },
+  ]
+  for (const candidate of candidates) {
+    if (!candidate.id) continue
+    const matched = entities.find(entity => entity.type === candidate.type && entity.id === candidate.id)
+    if (matched) return matched
+  }
+  return null
+}
+
+function firstString(...values: unknown[]): string {
+  for (const value of values) {
+    if (typeof value === 'string' && value.trim()) return value.trim()
+  }
+  return ''
+}
+
+function isMultiContextGroup(value: unknown): value is WorkspaceMultiContextGroup {
+  if (!isRecord(value)) return false
+  const entity = value.entity
+  return isRecord(entity) && typeof entity.type === 'string' && typeof entity.id === 'string'
 }
 
 function parseProjectsResult(result: unknown): Record<string, unknown> {
