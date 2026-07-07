@@ -122,7 +122,7 @@ class SqliteAgentRunRepository:
         if error is not None:
             values["error_json"] = json.dumps(error, ensure_ascii=False)
         if checkpoint_ref is not None:
-            values["checkpoint_ref"] = checkpoint_ref
+            values["checkpoint_ref"] = checkpoint_ref or None
         stmt = update(AgentRun).where(AgentRun.run_id == run_id, AgentRun.user_id == user_id)
         if status == "cancelled":
             stmt = stmt.where(AgentRun.status.in_(ACTIVE_RUN_STATUSES))

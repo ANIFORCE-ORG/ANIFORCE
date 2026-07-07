@@ -70,7 +70,7 @@ class AgentRunService:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
-        return await self.repo.mark_status(run_id, user_id, "completed", usage=usage)
+        return await self.repo.mark_status(run_id, user_id, "completed", usage=usage, checkpoint_ref="")
 
     async def mark_requires_action(self, run_id: str, user_id: str, checkpoint_ref: str) -> dict | None:
         run = await self.get(run_id, user_id)
@@ -82,10 +82,10 @@ class AgentRunService:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
-        return await self.repo.mark_status(run_id, user_id, "error", error=error)
+        return await self.repo.mark_status(run_id, user_id, "error", error=error, checkpoint_ref="")
 
     async def mark_cancelled(self, run_id: str, user_id: str) -> dict | None:
         run = await self.get(run_id, user_id)
         if run["status"] not in ACTIVE_RUN_STATUSES:
             return run
-        return await self.repo.mark_status(run_id, user_id, "cancelled")
+        return await self.repo.mark_status(run_id, user_id, "cancelled", checkpoint_ref="")

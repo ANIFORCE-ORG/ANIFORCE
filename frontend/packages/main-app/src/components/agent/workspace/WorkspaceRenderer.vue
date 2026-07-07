@@ -18,6 +18,7 @@ const props = defineProps<{
 const emit = defineEmits<{
   approve: [payload: { checkpointId: string; editedArguments: Record<string, unknown>; argumentDiff: Array<{ field: string; before: unknown; after: unknown }> }]
   reject: [checkpointId: string]
+  updateApprovalForm: [payload: { checkpointId: string; formModel: import('@/components/projects/projectFormModel').ProjectFormModel }]
   selectEntity: [entity: { type: 'project' | 'campaign' | 'material'; id: string; name?: string }]
   viewProject: [projectId: string]
 }>()
@@ -41,6 +42,11 @@ function handleApprove(payload: { editedArguments: Record<string, unknown>; argu
 function handleReject(): void {
   if (!props.approvalDraft) return
   emit('reject', props.approvalDraft.checkpointId)
+}
+
+function handleUpdateApprovalForm(formModel: import('@/components/projects/projectFormModel').ProjectFormModel): void {
+  if (!props.approvalDraft) return
+  emit('updateApprovalForm', { checkpointId: props.approvalDraft.checkpointId, formModel })
 }
 
 function handleViewDetail(project: Project): void {
@@ -76,11 +82,22 @@ function handleViewDetail(project: Project): void {
 
     <!-- 项目创建审批（高风险工具，可编辑） -->
     <WorkspaceProjectCreate
-      v-else-if="projection?.surface === 'project.create' && approvalDraft"
+      v-else-if="projection?.surface === 'project.create' && approvalDraft && approvalDraft.status !== 'completed'"
       :draft="approvalDraft"
       @approve="handleApprove"
       @reject="handleReject"
+      @update-form="handleUpdateApprovalForm"
     />
+
+    <div v-else-if="projection?.surface === 'project.create' && approvalDraft?.status === 'completed'" class="p-[16px]">
+      <div class="flex items-center gap-[8px] mb-[12px]">
+        <span class="material-symbols-outlined text-[18px] text-emerald-500">check_circle</span>
+        <div>
+          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">项目创建已完成</h3>
+          <p class="text-[10px] text-slate-500 dark:text-slate-400">审批已执行，结果已返回对话区</p>
+        </div>
+      </div>
+    </div>
 
     <!-- 空状态 -->
     <div v-else class="flex flex-col items-center justify-center h-full py-[60px] px-[20px] text-center">

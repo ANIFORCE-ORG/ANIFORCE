@@ -32,12 +32,28 @@ const emit = defineEmits<Emits>()
 
 const formData = ref<ProjectFormModel>({ ...props.modelValue })
 
+function isSameProjectForm(a: ProjectFormModel, b: ProjectFormModel): boolean {
+  return a.name === b.name
+    && a.product === b.product
+    && a.countries === b.countries
+    && a.status === b.status
+    && a.start === b.start
+    && a.end === b.end
+    && Number(a.total_budget) === Number(b.total_budget)
+    && a.description === b.description
+}
+
 watch(() => props.modelValue, (val) => {
-  formData.value = { ...val }
+  if (!isSameProjectForm(formData.value, val)) {
+    formData.value = { ...val }
+  }
 }, { deep: true })
 
 function emitUpdate(): void {
-  emit('update:modelValue', { ...formData.value })
+  const next = { ...formData.value }
+  if (!isSameProjectForm(next, props.modelValue)) {
+    emit('update:modelValue', next)
+  }
 }
 
 watch(formData, emitUpdate, { deep: true })

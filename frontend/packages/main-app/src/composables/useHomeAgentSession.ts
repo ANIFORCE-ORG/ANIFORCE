@@ -1049,7 +1049,6 @@ export function useHomeAgentSession() {
         // approval resume 流返回的是 SDK 原生事件，event.event 是 type（如 'tool_called'、'tool_output'）
         const eventType = event.event
         const raw = event.data as unknown as AgentSdkStreamEvent
-        console.log('[resolveApproval] event:', eventType, raw)
 
         // SDK 原生事件：处理对话消息
         if (eventType === 'raw_response_event' || eventType === 'run_item_stream_event' || eventType === 'agent_updated_stream_event') {
@@ -1064,18 +1063,18 @@ export function useHomeAgentSession() {
         // SDK 原生事件：处理 Workspace 投影
         if (eventType === 'tool_called' && raw.data?.tool_name) {
           const toolName = String(raw.data.tool_name)
-          const config = (await import('@/store/workspace')).toolProjectionRegistry[toolName]
-          console.log('[resolveApproval] tool_called:', toolName, 'config:', config)
+          const config = toolProjectionRegistry[toolName]
           if (config) {
             workspace.upsertProjection(sessionId, {
-              id: String(raw.data.tool_call_id || `tool_${Date.now()}`),
+              id: `proj_approval_${checkpointId}`,
               runId,
               sessionId,
               surface: config.surface,
-              mode: config.mode,
+              mode: 'executing',
               sourceToolName: toolName,
               sourceToolCallId: String(raw.data.tool_call_id || ''),
               payload: (raw.data.arguments || {}) as Record<string, unknown>,
+              approval: { runId, checkpointId, decisionStatus: 'approved' },
               updatedAt: Date.now(),
             })
           }
@@ -1090,8 +1089,7 @@ export function useHomeAgentSession() {
 
         if (eventType === 'tool_output' && raw.data?.tool_call_id) {
           const result = (raw.data.output || {}) as Record<string, unknown>
-          console.log('[resolveApproval] tool_output:', raw.data.tool_call_id, 'result:', result)
-          workspace.setProjectionReady(sessionId, String(raw.data.tool_call_id), result)
+          workspace.setProjectionReady(sessionId, String(raw.data.tool_call_id), result, 'completed')
           // 同时调用 handleSdkRawEvent 处理对话消息
           handleSdkRawEvent(raw, sessionId, {
             assistant,
@@ -1101,7 +1099,6 @@ export function useHomeAgentSession() {
           })
         }
         if (eventType === 'runtime.completed') {
-          console.log('[resolveApproval] runtime.completed, checkpointId:', checkpointId)
           const finalOutput = event.data.final_output
           if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
           const usage = event.data.usage
@@ -1109,7 +1106,6 @@ export function useHomeAgentSession() {
           markRunningToolsCompleted()
           // 标记当前 approval draft 为 completed
           workspace.setApprovalDraftStatus(checkpointId, 'completed')
-          console.log('[resolveApproval] set approval draft completed')
         }
         if (event.event === 'runtime.requires_action') {
           drainTypewriter(false)
@@ -1132,9 +1128,11 @@ export function useHomeAgentSession() {
         if (hasMessageContent(store.streamingMessage)) store.appendMessage(sessionId, { ...store.streamingMessage })
         store.streamingMessage = null
       }
+      workspace.setApprovalDraftStatus(checkpointId, decision === 'approve' ? 'completed' : 'rejected')
     } catch (err: any) {
       store.error = err?.message || '审批恢复失败'
       store.updateApprovalStatus(checkpointId, 'pending')
+      workspace.setApprovalDraftStatus(checkpointId, decision === 'approve' ? 'pending' : 'rejected')
     } finally {
       store.agentRunning = false
       store.agentPhase = null
@@ -1153,8 +1151,13 @@ export function useHomeAgentSession() {
   })
   const workspaceApprovalDraft = computed(() => {
     const projection = workspaceProjection.value
-    if (!projection?.approval) return null
-    return workspace.getApprovalDraft(projection.approval.checkpointId) || null
+    if (projection?.approval) {
+      return workspace.getApprovalDraft(projection.approval.checkpointId) || null
+    }
+    const drafts = Array.from(workspace.approvalDrafts.values())
+    return drafts.find(draft => draft.status === 'pending' || draft.status === 'executing')
+      || drafts.find(draft => draft.status === 'completed')
+      || null
   })
 
   function updateApprovalDraftForm(checkpointId: string, formModel: import('@/components/projects/projectFormModel').ProjectFormModel): void {

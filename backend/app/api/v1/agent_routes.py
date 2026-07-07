@@ -406,6 +406,21 @@ async def resolve_run_approval(
                     elif event_name == "runtime.error":
                         await _mark_run_status_short_tx(run_id, user_id, "error", error=data if isinstance(data, dict) else {"message": str(data)})
                         await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "error"}, terminal=True)
+
+            events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
+            for event_name, data in events:
+                await agent_run_event_bus.publish(run_id, event_name, data)
+                if event_name == "runtime.completed":
+                    usage = data.get("usage") if isinstance(data, dict) else None
+                    await _mark_run_status_short_tx(run_id, user_id, "completed", usage=usage)
+                    await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "completed"}, terminal=True)
+                elif event_name == "runtime.requires_action":
+                    next_checkpoint = data.get("checkpoint_id") if isinstance(data, dict) else None
+                    await _mark_run_status_short_tx(run_id, user_id, "requires_action", checkpoint_ref=str(next_checkpoint or ""))
+                    await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "requires_action", "checkpoint_ref": next_checkpoint}, terminal=True)
+                elif event_name == "runtime.error":
+                    await _mark_run_status_short_tx(run_id, user_id, "error", error=data if isinstance(data, dict) else {"message": str(data)})
+                    await agent_run_event_bus.publish(run_id, "run_status", {"run_id": run_id, "status": "error"}, terminal=True)
         except Exception as exc:
             await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "RESUME_FAILED", "message": str(exc)})
             yield "event: runtime.error\n"

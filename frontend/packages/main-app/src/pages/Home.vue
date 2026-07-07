@@ -668,6 +668,7 @@ watch(
           :session-id="agent.activeSession.value?.id || ''"
           @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: agent.workspaceApprovalDraft.value?.runId || '' })"
           @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
+          @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
           @select-entity="entity => agent.selectWorkspaceEntity(entity)"
           @view-project="(projectId: string) => openProject({ id: projectId })"
         />

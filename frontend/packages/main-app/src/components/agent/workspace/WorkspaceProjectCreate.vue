@@ -21,16 +21,25 @@ const props = defineProps<{
 const emit = defineEmits<{
   approve: [payload: { editedArguments: Record<string, unknown>; argumentDiff: Array<{ field: string; before: unknown; after: unknown }> }]
   reject: []
+  updateForm: [formModel: ProjectFormModel]
 }>()
 
-const formModel = ref<ProjectFormModel>(fromCreateProjectArgs(props.draft.originalArguments))
+function draftToFormModel(): ProjectFormModel {
+  return props.draft.formModel || fromCreateProjectArgs(props.draft.editedArguments || props.draft.originalArguments)
+}
+
+const formModel = ref<ProjectFormModel>(draftToFormModel())
 
 watch(
   () => props.draft.checkpointId,
   () => {
-    formModel.value = fromCreateProjectArgs(props.draft.originalArguments)
+    formModel.value = draftToFormModel()
   },
 )
+
+watch(formModel, (value) => {
+  if (props.draft.status === 'pending') emit('updateForm', { ...value })
+}, { deep: true })
 
 const diff = computed(() =>
   diffProjectArgs(props.draft.originalArguments, toCreateProjectPayload(formModel.value) as unknown as CreateProjectPayload),
