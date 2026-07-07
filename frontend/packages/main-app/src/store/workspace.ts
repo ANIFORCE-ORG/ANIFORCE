@@ -408,6 +408,8 @@ export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
 function parseProjectsResult(result: unknown): Record<string, unknown> {
   // 复用 useHomeAgentSession 已有的 extractProjects 逻辑
   if (!result) return { projects: [] }
+  const parsed = parseJsonLikeResult(result)
+  if (parsed !== result) return parseProjectsResult(parsed)
   if (typeof result === 'object') {
     const record = result as Record<string, unknown>
     const candidates = [record.projects, record.items, record.list]
@@ -445,6 +447,8 @@ function parseProjectsResult(result: unknown): Record<string, unknown> {
 
 function parseCollectionResult(result: unknown, key: string): Record<string, unknown> {
   if (!result) return { [key]: [] }
+  const parsed = parseJsonLikeResult(result)
+  if (parsed !== result) return parseCollectionResult(parsed, key)
   if (Array.isArray(result)) return { [key]: result.filter(isRecord) }
   if (typeof result === 'object') {
     const record = result as Record<string, unknown>
@@ -460,6 +464,8 @@ function parseCollectionResult(result: unknown, key: string): Record<string, unk
 
 function firstRecord(result: unknown, keys: string[]): Record<string, unknown> | null {
   if (!result) return null
+  const parsed = parseJsonLikeResult(result)
+  if (parsed !== result) return firstRecord(parsed, keys)
   if (isRecord(result)) {
     for (const key of keys) {
       const value = result[key]
@@ -468,6 +474,17 @@ function firstRecord(result: unknown, keys: string[]): Record<string, unknown> |
     if (isBusinessRecord(result)) return result
   }
   return null
+}
+
+function parseJsonLikeResult(result: unknown): unknown {
+  if (typeof result !== 'string') return result
+  const trimmed = result.trim()
+  if (!trimmed || !['{', '['].includes(trimmed[0])) return result
+  try {
+    return JSON.parse(trimmed)
+  } catch {
+    return result
+  }
 }
 
 function compactRecords(records: Array<Record<string, unknown> | null>): Record<string, unknown>[] {
