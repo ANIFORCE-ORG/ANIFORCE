@@ -642,7 +642,7 @@ watch(
     <!-- Floating Command Bar (always below output content) -->
     <div class="max-w-[671px] w-full px-[12px] mb-[19px]">
       <div class="relative group">
-        <div v-if="selectedContextEntities.length" class="mb-[8px] flex flex-wrap items-center gap-[6px] px-[8px]">
+        <div v-if="selectedContextEntities.length" class="relative z-10 mb-[8px] flex flex-wrap items-center gap-[6px] px-[8px]">
           <span class="text-[10px] font-medium text-slate-400">上下文</span>
           <span
             v-for="entity in selectedContextEntities"
@@ -679,7 +679,7 @@ watch(
         </div>
 
         <!-- Glow effect -->
-        <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-blue-400/20 rounded-full blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+        <div class="pointer-events-none absolute -inset-1 bg-gradient-to-r from-primary/20 to-blue-400/20 rounded-full blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200"></div>
         <!-- Input bar -->
         <div class="relative flex items-center bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-200/50 dark:shadow-none p-[6px] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
           <button class="flex items-center justify-center p-[9px] text-slate-400 hover:text-primary transition-colors">
