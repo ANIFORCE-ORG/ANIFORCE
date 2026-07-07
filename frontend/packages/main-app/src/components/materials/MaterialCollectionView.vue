@@ -97,9 +97,6 @@ function getStatusLabel(status: string) {
             </div>
           </div>
           <div v-if="embedded" class="mt-3 flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-700" @click.stop>
-            <button class="flex-1 rounded border border-slate-200 px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300" @click="emit('mention', creative)">
-              @ 引用到对话
-            </button>
             <button class="flex-1 rounded bg-primary/10 px-2 py-1.5 text-[11px] font-semibold text-primary hover:bg-primary/15" @click="emit('preview', creative)">
               预览
             </button>

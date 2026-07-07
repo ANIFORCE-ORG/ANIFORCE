@@ -88,13 +88,6 @@ function getStatusColor(status: string) {
 
         <div class="flex items-center gap-2">
           <button
-            v-if="embedded"
-            class="flex-1 rounded border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300"
-            @click="emit('mention', campaign)"
-          >
-            @ 引用到对话
-          </button>
-          <button
             class="flex-1 rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
             @click="emit('view', campaign.id)"
           >

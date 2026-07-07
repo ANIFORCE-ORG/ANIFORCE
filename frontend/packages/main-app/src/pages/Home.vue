@@ -638,16 +638,21 @@ watch(
       <div class="relative group">
         <div v-if="selectedContextEntities.length" class="mb-[8px] flex flex-wrap items-center gap-[6px] px-[8px]">
           <span class="text-[10px] font-medium text-slate-400">上下文</span>
-          <button
+          <span
             v-for="entity in selectedContextEntities"
             :key="`${entity.type}:${entity.id}`"
-            class="inline-flex items-center gap-[4px] rounded-full border border-primary/20 bg-primary/5 px-[8px] py-[4px] text-[10px] font-medium text-primary hover:bg-primary/10"
-            @click="removeContextEntity(entity)"
+            class="inline-flex items-center gap-[4px] rounded-full border border-primary/20 bg-primary/5 pl-[8px] pr-[4px] py-[4px] text-[10px] font-medium text-primary"
           >
             <span class="material-symbols-outlined text-[12px]">{{ entityTypeIcon(entity.type) }}</span>
             <span class="max-w-[140px] truncate">{{ entity.name || entity.id }}</span>
-            <span class="material-symbols-outlined text-[12px]">close</span>
-          </button>
+            <button
+              class="ml-[2px] flex h-[16px] w-[16px] items-center justify-center rounded-full hover:bg-primary/15"
+              title="移除上下文"
+              @click="removeContextEntity(entity)"
+            >
+              <span class="material-symbols-outlined text-[12px]">close</span>
+            </button>
+          </span>
         </div>
 
         <div v-if="showMentionPanel" class="absolute bottom-[58px] left-[44px] right-[56px] z-20 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">

@@ -104,10 +104,6 @@ const handleViewDetail = () => {
     <!-- Actions -->
     <div class="project-card-actions">
       <template v-if="embedded">
-        <button class="btn-primary" type="button" @click="emit('mention', project)">
-          <span class="material-symbols-outlined text-[14px]">alternate_email</span>
-          @ 引用到对话
-        </button>
         <button class="btn-soft" type="button" @click="handleViewDetail">
           <span class="material-symbols-outlined text-[14px]">open_in_new</span>
           打开完整页
