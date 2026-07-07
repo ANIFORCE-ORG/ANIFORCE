@@ -394,6 +394,12 @@ function selectMentionCandidate(entity: MentionEntity) {
 
 function removeContextEntity(entity: MentionEntity) {
   agent.unselectWorkspaceEntity(entity)
+  const label = entity.name || entity.id
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  inputText.value = inputText.value
+    .replace(new RegExp(`(^|\\s)@${escaped}(?=\\s|$)`, 'g'), ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trimStart()
 }
 
 function handleTaskAction(action: string) {
@@ -646,9 +652,10 @@ watch(
             <span class="material-symbols-outlined text-[12px]">{{ entityTypeIcon(entity.type) }}</span>
             <span class="max-w-[140px] truncate">{{ entity.name || entity.id }}</span>
             <button
+              type="button"
               class="ml-[2px] flex h-[16px] w-[16px] items-center justify-center rounded-full hover:bg-primary/15"
               title="移除上下文"
-              @click="removeContextEntity(entity)"
+              @click.stop.prevent="removeContextEntity(entity)"
             >
               <span class="material-symbols-outlined text-[12px]">close</span>
             </button>

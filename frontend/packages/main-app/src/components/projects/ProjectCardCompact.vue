@@ -4,7 +4,6 @@ import type { Project } from '@/api/projects'
 
 interface Props {
   project: Project
-  embedded?: boolean
 }
 
 const props = defineProps<Props>()
@@ -14,7 +13,6 @@ const emit = defineEmits<{
   viewTasks: [project: Project]
   createTask: [project: Project]
   select: [project: Project, selected: boolean]
-  mention: [project: Project]
 }>()
 
 const router = useRouter()
@@ -45,28 +43,14 @@ const handleCheckboxChange = (event: Event) => {
 }
 
 const handleViewDetail = () => {
-  if (props.embedded) {
-    emit('viewDetail', props.project)
-    return
-  }
   router.push(`/projects/${props.project.id}`)
 }
 </script>
 
 <template>
-  <article class="project-card group">
-    <button
-      v-if="embedded"
-      class="absolute left-[12px] top-[12px] z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full border border-primary/20 bg-white/95 text-primary opacity-0 shadow-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
-      type="button"
-      title="引用到对话"
-      @click="emit('mention', project)"
-    >
-      <span class="material-symbols-outlined text-[15px]">alternate_email</span>
-    </button>
-
+  <article class="project-card">
     <!-- Checkbox -->
-    <label v-if="!embedded" class="select-check">
+    <label class="select-check">
       <input
         type="checkbox"
         class="w-[12px] h-[12px] rounded border-slate-300 text-primary focus:ring-primary/20"
@@ -103,26 +87,18 @@ const handleViewDetail = () => {
 
     <!-- Actions -->
     <div class="project-card-actions">
-      <template v-if="embedded">
-        <button class="btn-soft" type="button" @click="handleViewDetail">
-          <span class="material-symbols-outlined text-[14px]">open_in_new</span>
-          打开完整页
-        </button>
-      </template>
-      <template v-else>
-        <button class="btn-soft" type="button" @click="emit('createTask', project)">
-          <span class="material-symbols-outlined text-[14px]">add_task</span>
-          创建新任务
-        </button>
-        <button class="btn-primary" type="button" @click="emit('edit', project)">
-          <span class="material-symbols-outlined text-[14px]">edit</span>
-          编辑项目
-        </button>
-        <button class="btn-soft" type="button" @click="handleViewDetail">
-          <span class="material-symbols-outlined text-[14px]">assignment</span>
-          查看任务
-        </button>
-      </template>
+      <button class="btn-soft" type="button" @click="emit('createTask', project)">
+        <span class="material-symbols-outlined text-[14px]">add_task</span>
+        创建新任务
+      </button>
+      <button class="btn-primary" type="button" @click="emit('edit', project)">
+        <span class="material-symbols-outlined text-[14px]">edit</span>
+        编辑项目
+      </button>
+      <button class="btn-soft" type="button" @click="handleViewDetail">
+        <span class="material-symbols-outlined text-[14px]">assignment</span>
+        查看任务
+      </button>
     </div>
   </article>
 </template>

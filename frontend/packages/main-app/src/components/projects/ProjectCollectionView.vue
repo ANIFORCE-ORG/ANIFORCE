@@ -31,18 +31,24 @@ function handleSelect(project: Project, selected: boolean) {
 <template>
   <div>
     <div v-if="projects.length && view === 'compact'" class="grid gap-4" :class="embedded ? 'grid-cols-1' : 'md:grid-cols-2 lg:grid-cols-3'">
-      <ProjectCardCompact
-        v-for="project in projects"
-        :key="project.id"
-        :project="project"
-        :embedded="embedded"
-        @edit="emit('edit', $event)"
-        @view-detail="emit('viewDetail', $event)"
-        @mention="emit('mention', $event)"
-        @view-tasks="emit('viewTasks', $event)"
-        @create-task="emit('createTask', $event)"
-        @select="handleSelect"
-      />
+      <div v-for="project in projects" :key="project.id" class="group relative">
+        <ProjectCardCompact
+          :project="project"
+          @edit="emit('edit', $event)"
+          @view-detail="emit('viewDetail', $event)"
+          @view-tasks="emit('viewTasks', $event)"
+          @create-task="emit('createTask', $event)"
+          @select="handleSelect"
+        />
+        <button
+          v-if="embedded"
+          class="absolute bottom-[12px] right-[12px] z-10 rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
+          title="引用到对话"
+          @click="emit('mention', project)"
+        >
+          @mention
+        </button>
+      </div>
     </div>
 
     <div v-else-if="projects.length" class="grid gap-4">

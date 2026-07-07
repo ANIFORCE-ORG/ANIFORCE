@@ -54,14 +54,6 @@ function getStatusColor(status: string) {
             </div>
           </div>
           <div class="flex shrink-0 items-center gap-2">
-            <button
-              v-if="embedded"
-              class="absolute left-[12px] top-[12px] z-10 flex h-[26px] w-[26px] items-center justify-center rounded-full border border-primary/20 bg-white/95 text-primary opacity-0 shadow-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
-              title="引用到对话"
-              @click="emit('mention', campaign)"
-            >
-              <span class="material-symbols-outlined text-[15px]">alternate_email</span>
-            </button>
             <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
               {{ campaign.platform }}
             </span>
@@ -109,6 +101,14 @@ function getStatusColor(status: string) {
             {{ campaign.status === 'running' ? '暂停' : '启动' }}
           </button>
         </div>
+        <button
+          v-if="embedded"
+          class="absolute bottom-[12px] right-[12px] z-10 rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-opacity hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
+          title="引用到对话"
+          @click="emit('mention', campaign)"
+        >
+          @mention
+        </button>
       </div>
     </div>
 
