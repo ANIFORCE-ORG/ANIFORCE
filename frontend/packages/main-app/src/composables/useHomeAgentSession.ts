@@ -865,7 +865,7 @@ export function useHomeAgentSession() {
       const sessionId = activeSession.value?.id
       if (sessionId) {
         const selectedEntities = workspace.getSelectedEntities(sessionId)
-        const grouped = isMultiContextTool(name) && typeof workspace.upsertMultiContextTool === 'function' && workspace.upsertMultiContextTool(
+        const grouped = isMultiContextTool(name) && workspace.upsertMultiContextTool(
           sessionId,
           store.currentRunId || '',
           selectedEntities,
@@ -907,7 +907,7 @@ export function useHomeAgentSession() {
         if (sessionId) {
           const selectedEntities = workspace.getSelectedEntities(sessionId)
           const toolArgs = index >= 0 ? executionTools.value[index].arguments : undefined
-          const grouped = isMultiContextTool(toolName) && typeof workspace.upsertMultiContextTool === 'function' && workspace.upsertMultiContextTool(
+          const grouped = isMultiContextTool(toolName) && workspace.upsertMultiContextTool(
             sessionId,
             store.currentRunId || '',
             selectedEntities,
