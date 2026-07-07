@@ -28,6 +28,8 @@ const renameDialog = ref<{ id: string; name: string } | null>(null)
 const renameValue = ref('')
 const deleteDialog = ref<{ id: string; name: string } | null>(null)
 
+type MentionEntity = { type: 'project' | 'campaign' | 'material'; id: string; name?: string }
+
 const intentModes: Array<{
   key: 'chat' | 'project'
   label: string
@@ -223,6 +225,34 @@ const taskPhaseLabel = computed(() => {
   return definition.phases.find(item => item.key === phase)?.label || phase
 })
 const taskArtifacts = computed<TaskPanelArtifact[]>(() => currentTask.value?.artifacts || [])
+const selectedContextEntities = computed(() => agent.workspaceSelectedEntities.value)
+const mentionCandidates = computed<MentionEntity[]>(() => {
+  const projection = agent.workspaceProjection.value
+  if (!projection) return []
+  const payload = projection.payload || {}
+  if (Array.isArray(payload.projects)) {
+    return payload.projects.map((item: any) => ({ type: 'project' as const, id: String(item.id || ''), name: String(item.name || item.id || '') })).filter(item => item.id)
+  }
+  if (Array.isArray(payload.campaigns)) {
+    return payload.campaigns.map((item: any) => ({ type: 'campaign' as const, id: String(item.id || ''), name: String(item.name || item.id || '') })).filter(item => item.id)
+  }
+  if (Array.isArray(payload.materials)) {
+    return payload.materials.map((item: any) => ({ type: 'material' as const, id: String(item.id || ''), name: String(item.name || item.id || '') })).filter(item => item.id)
+  }
+  return []
+})
+const mentionQuery = computed(() => {
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(inputText.value)
+  return match ? match[1].toLowerCase() : null
+})
+const filteredMentionCandidates = computed(() => {
+  if (mentionQuery.value === null) return []
+  const query = mentionQuery.value
+  return mentionCandidates.value
+    .filter(item => !query || (item.name || item.id).toLowerCase().includes(query) || item.id.toLowerCase().includes(query))
+    .slice(0, 6)
+})
+const showMentionPanel = computed(() => mentionQuery.value !== null && filteredMentionCandidates.value.length > 0)
 
 function scrollToBottom() {
   nextTick(() => {
@@ -317,6 +347,42 @@ async function analyzeProject(project: { id: string; name: string }) {
 function openProject(project: { id: string }) {
   if (!project?.id) return
   navigateTo(`/projects/${encodeURIComponent(project.id)}`)
+}
+
+function openCampaign(campaignId: string) {
+  if (!campaignId) return
+  navigateTo(`/campaigns/${encodeURIComponent(campaignId)}`)
+}
+
+function openMaterial(materialId: string) {
+  if (!materialId) return
+  navigateTo(`/material?material_id=${encodeURIComponent(materialId)}`)
+}
+
+function entityTypeLabel(type: MentionEntity['type']): string {
+  if (type === 'project') return '项目'
+  if (type === 'campaign') return '广告计划'
+  return '素材'
+}
+
+function entityTypeIcon(type: MentionEntity['type']): string {
+  if (type === 'project') return 'folder_managed'
+  if (type === 'campaign') return 'campaign'
+  return 'video_library'
+}
+
+function selectMentionCandidate(entity: MentionEntity) {
+  agent.selectWorkspaceEntity(entity)
+  const label = entity.name || entity.id
+  inputText.value = inputText.value.replace(/(?:^|\s)@[^\s@]*$/, match => `${match.startsWith(' ') ? ' ' : ''}@${label} `)
+  nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
+    input?.focus()
+  })
+}
+
+function removeContextEntity(entity: MentionEntity) {
+  agent.unselectWorkspaceEntity(entity)
 }
 
 function handleTaskAction(action: string) {
@@ -559,6 +625,36 @@ watch(
     <!-- Floating Command Bar (always below output content) -->
     <div class="max-w-[671px] w-full px-[12px] mb-[19px]">
       <div class="relative group">
+        <div v-if="selectedContextEntities.length" class="mb-[8px] flex flex-wrap items-center gap-[6px] px-[8px]">
+          <span class="text-[10px] font-medium text-slate-400">上下文</span>
+          <button
+            v-for="entity in selectedContextEntities"
+            :key="`${entity.type}:${entity.id}`"
+            class="inline-flex items-center gap-[4px] rounded-full border border-primary/20 bg-primary/5 px-[8px] py-[4px] text-[10px] font-medium text-primary hover:bg-primary/10"
+            @click="removeContextEntity(entity)"
+          >
+            <span class="material-symbols-outlined text-[12px]">{{ entityTypeIcon(entity.type) }}</span>
+            <span class="max-w-[140px] truncate">{{ entity.name || entity.id }}</span>
+            <span class="material-symbols-outlined text-[12px]">close</span>
+          </button>
+        </div>
+
+        <div v-if="showMentionPanel" class="absolute bottom-[58px] left-[44px] right-[56px] z-20 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          <div class="border-b border-slate-100 px-[12px] py-[8px] text-[10px] font-medium text-slate-400 dark:border-slate-800">
+            从当前工作台选择上下文
+          </div>
+          <button
+            v-for="entity in filteredMentionCandidates"
+            :key="`${entity.type}:${entity.id}`"
+            class="flex w-full items-center gap-[8px] px-[12px] py-[9px] text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+            @click="selectMentionCandidate(entity)"
+          >
+            <span class="material-symbols-outlined text-[16px] text-slate-400">{{ entityTypeIcon(entity.type) }}</span>
+            <span class="min-w-0 flex-1 truncate text-[12px] font-medium text-slate-800 dark:text-slate-100">{{ entity.name || entity.id }}</span>
+            <span class="rounded-full bg-slate-100 px-[6px] py-[2px] text-[10px] text-slate-500 dark:bg-slate-800">{{ entityTypeLabel(entity.type) }}</span>
+          </button>
+        </div>
+
         <!-- Glow effect -->
         <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-blue-400/20 rounded-full blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200"></div>
         <!-- Input bar -->
@@ -570,7 +666,7 @@ watch(
             v-model="inputText"
             data-agent-input="home"
             class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-[15px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 py-[9px] px-[6px]"
-            placeholder="描述您的投放目标或上传素材..."
+            placeholder="描述目标，或输入 @ 选择工作台上下文..."
             type="text"
             @keydown.enter="handleSubmit"
           />
@@ -671,6 +767,8 @@ watch(
           @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
           @select-entity="entity => agent.selectWorkspaceEntity(entity)"
           @view-project="(projectId: string) => openProject({ id: projectId })"
+          @view-campaign="openCampaign"
+          @view-material="openMaterial"
         />
       </div>
     </aside>

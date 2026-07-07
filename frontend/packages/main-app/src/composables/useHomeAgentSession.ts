@@ -1149,6 +1149,11 @@ export function useHomeAgentSession() {
     const sessionId = activeSession.value?.id || ''
     return workspace.getActiveProjection(sessionId)
   })
+  const workspaceSelectedEntities = computed(() => {
+    const sessionId = activeSession.value?.id
+    return sessionId ? workspace.getSelectedEntities(sessionId) : []
+  })
+
   const workspaceApprovalDraft = computed(() => {
     const projection = workspaceProjection.value
     if (projection?.approval) {
@@ -1183,6 +1188,12 @@ export function useHomeAgentSession() {
     workspace.selectEntity(sessionId, entity)
   }
 
+  function unselectWorkspaceEntity(entity: { type: 'project' | 'campaign' | 'material'; id: string; name?: string }): void {
+    const sessionId = activeSession.value?.id
+    if (!sessionId) return
+    workspace.unselectEntity(sessionId, entity)
+  }
+
   return {
     sessions,
     activeSession,
@@ -1201,6 +1212,7 @@ export function useHomeAgentSession() {
     currentTask,
     workspaceToolResults,
     workspaceProjection,
+    workspaceSelectedEntities,
     workspaceApprovalDraft,
     executionPlan,
     executionTools,
@@ -1219,6 +1231,7 @@ export function useHomeAgentSession() {
     rejectWorkspaceApproval,
     updateApprovalDraftForm,
     selectWorkspaceEntity,
+    unselectWorkspaceEntity,
     abort,
     pauseTypewriter: store.pauseTypewriter,
     resumeTypewriter: store.resumeTypewriter,

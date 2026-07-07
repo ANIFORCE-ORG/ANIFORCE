@@ -7,6 +7,11 @@ defineProps<{
   embedded?: boolean
 }>()
 
+const emit = defineEmits<{
+  select: [material: Material]
+  preview: [material: Material]
+}>()
+
 function getMaterialImageSrc(materialImages: Map<string, string> | undefined, materialId: string): string | undefined {
   return materialImages?.get(materialId)
 }
@@ -41,6 +46,7 @@ function getStatusLabel(status: string) {
         v-for="creative in materials"
         :key="creative.id"
         class="group cursor-pointer overflow-hidden rounded-md border border-slate-200 bg-white transition-all hover:shadow-lg dark:border-slate-700 dark:bg-slate-800"
+        @click="emit('preview', creative)"
       >
         <div class="relative aspect-[9/16] overflow-hidden bg-slate-100 dark:bg-slate-800">
           <img
@@ -59,7 +65,7 @@ function getStatusLabel(status: string) {
           </div>
           <div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
             <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 text-primary backdrop-blur-sm">
-              <span class="material-symbols-outlined text-2xl">play_arrow</span>
+              <span class="material-symbols-outlined text-2xl">visibility</span>
             </div>
           </div>
         </div>
@@ -80,6 +86,14 @@ function getStatusLabel(status: string) {
               <div class="mb-0.5 text-[10px] text-slate-400">文件大小</div>
               <div class="text-xs font-bold text-slate-900 dark:text-white">{{ creative.file_size ? (creative.file_size / 1024).toFixed(0) + 'KB' : 'N/A' }}</div>
             </div>
+          </div>
+          <div v-if="embedded" class="mt-3 flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-700" @click.stop>
+            <button class="flex-1 rounded border border-slate-200 px-2 py-1.5 text-[11px] font-medium text-slate-600 hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300" @click="emit('select', creative)">
+              设为上下文
+            </button>
+            <button class="flex-1 rounded bg-primary/10 px-2 py-1.5 text-[11px] font-semibold text-primary hover:bg-primary/15" @click="emit('preview', creative)">
+              预览
+            </button>
           </div>
         </div>
       </div>

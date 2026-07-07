@@ -4,11 +4,13 @@ import type { Project } from '@/api/projects'
 
 interface Props {
   project: Project
+  embedded?: boolean
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<{
   edit: [project: Project]
+  viewDetail: [project: Project]
   viewTasks: [project: Project]
   createTask: [project: Project]
   select: [project: Project, selected: boolean]
@@ -42,6 +44,10 @@ const handleCheckboxChange = (event: Event) => {
 }
 
 const handleViewDetail = () => {
+  if (props.embedded) {
+    emit('viewDetail', props.project)
+    return
+  }
   router.push(`/projects/${props.project.id}`)
 }
 </script>
@@ -86,18 +92,30 @@ const handleViewDetail = () => {
 
     <!-- Actions -->
     <div class="project-card-actions">
-      <button class="btn-soft" type="button" @click="emit('createTask', project)">
-        <span class="material-symbols-outlined text-[14px]">add_task</span>
-        创建新任务
-      </button>
-      <button class="btn-primary" type="button" @click="emit('edit', project)">
-        <span class="material-symbols-outlined text-[14px]">edit</span>
-        编辑项目
-      </button>
-      <button class="btn-soft" type="button" @click="handleViewDetail">
-        <span class="material-symbols-outlined text-[14px]">assignment</span>
-        查看任务
-      </button>
+      <template v-if="embedded">
+        <button class="btn-primary" type="button" @click="emit('select', project, true)">
+          <span class="material-symbols-outlined text-[14px]">alternate_email</span>
+          设为上下文
+        </button>
+        <button class="btn-soft" type="button" @click="handleViewDetail">
+          <span class="material-symbols-outlined text-[14px]">open_in_new</span>
+          打开完整页
+        </button>
+      </template>
+      <template v-else>
+        <button class="btn-soft" type="button" @click="emit('createTask', project)">
+          <span class="material-symbols-outlined text-[14px]">add_task</span>
+          创建新任务
+        </button>
+        <button class="btn-primary" type="button" @click="emit('edit', project)">
+          <span class="material-symbols-outlined text-[14px]">edit</span>
+          编辑项目
+        </button>
+        <button class="btn-soft" type="button" @click="handleViewDetail">
+          <span class="material-symbols-outlined text-[14px]">assignment</span>
+          查看任务
+        </button>
+      </template>
     </div>
   </article>
 </template>

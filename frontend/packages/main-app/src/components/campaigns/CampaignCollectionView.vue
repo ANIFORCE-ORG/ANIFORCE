@@ -13,6 +13,7 @@ withDefaults(defineProps<{
 const emit = defineEmits<{
   view: [campaignId: string]
   toggleStatus: [campaign: Campaign]
+  select: [campaign: Campaign]
 }>()
 
 function getStatusText(status: string) {
@@ -76,14 +77,22 @@ function getStatusColor(status: string) {
           </div>
         </div>
 
-        <div v-if="!embedded" class="flex items-center gap-2">
+        <div class="flex items-center gap-2">
+          <button
+            v-if="embedded"
+            class="flex-1 rounded border border-slate-200 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:border-primary hover:text-primary dark:border-slate-700 dark:text-slate-300"
+            @click="emit('select', campaign)"
+          >
+            设为上下文
+          </button>
           <button
             class="flex-1 rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
             @click="emit('view', campaign.id)"
           >
-            查看详情
+            {{ embedded ? '打开完整页' : '查看详情' }}
           </button>
           <button
+            v-if="!embedded"
             class="flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
             :class="[
               campaign.status === 'running'

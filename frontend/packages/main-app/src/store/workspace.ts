@@ -77,6 +77,7 @@ export interface WorkspaceInteractionEvent {
   runId?: string
   type:
     | 'entity.selected'
+    | 'entity.unselected'
     | 'draft.field_changed'
     | 'approval.confirmed'
     | 'approval.rejected'
@@ -250,6 +251,18 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     })
   }
 
+  function unselectEntity(sessionId: string, entity: SelectedEntity): void {
+    const current = selectedEntitiesBySession.value.get(sessionId) || []
+    const filtered = current.filter(e => !(e.type === entity.type && e.id === entity.id))
+    selectedEntitiesBySession.value.set(sessionId, filtered)
+    recordInteraction(sessionId, {
+      type: 'entity.unselected',
+      surface: entity.type,
+      field: entity.id,
+      before: entity.name,
+    })
+  }
+
   function getSelectedEntities(sessionId: string): SelectedEntity[] {
     return selectedEntitiesBySession.value.get(sessionId) || []
   }
@@ -336,6 +349,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     getApprovalDiff,
     // selected entities
     selectEntity,
+    unselectEntity,
     getSelectedEntities,
     // interactions
     recordInteraction,
