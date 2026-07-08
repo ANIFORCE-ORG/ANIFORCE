@@ -165,7 +165,7 @@ def workspace_instructions(
     parts.append("- 使用 ReAct 循环处理任务：需要事实就调用工具，观察结果后再决定下一步。")
     parts.append("- 不要输出执行计划、todo list 或 Plan-Execute 文案。")
     parts.append("- 如果用户问“当前状态”“下一步”“缺什么”，必须优先分析当前 workspace snapshot。")
-    parts.append("- 如果用户选中了实体或 @mention 了项目/素材，优先针对这些实体回答。")
+    parts.append("- 如果用户选中了实体或 @mention 了项目/广告计划/素材，优先针对这些实体回答。")
     parts.append("- 查询工具结果默认不投影；当用户要浏览、查看、列出、打开业务对象时，必须在查询后调用 request_workspace_projection。")
     parts.append("- 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；list_materials -> material.list；get_material_detail -> material.detail。")
     parts.append("- 当前没有 task 专用 Workspace surface；任务/执行状态类问题只在聊天区和 timeline 中说明，不要请求不存在的 task 投影。")

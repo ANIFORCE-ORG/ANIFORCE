@@ -212,11 +212,11 @@ function handlePreviewMaterial(material: Material): void {
       </div>
     </div>
 
-    <div v-else-if="projection?.surface === 'project.create' && approvalDraft?.status === 'completed'" class="p-[16px]">
+    <div v-else-if="approvalDraft?.status === 'completed'" class="p-[16px]">
       <div class="flex items-center gap-[8px] mb-[12px]">
         <span class="material-symbols-outlined text-[18px] text-emerald-500">check_circle</span>
         <div>
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">项目创建已完成</h3>
+          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">操作已完成</h3>
           <p class="text-[10px] text-slate-500 dark:text-slate-400">审批已执行，结果已返回对话区</p>
         </div>
       </div>
