@@ -252,6 +252,9 @@ export function useHomeAgentSession() {
       executionPlan.value = null
       executionTools.value = []
       store.clearStreamRuntime()
+      // 清理 Workspace projection 状态
+      pendingWorkspaceProjectionRequests.value = []
+      recentWorkspaceToolOutputs.value = []
     }
     try {
       if (!selectingActiveRun) {
@@ -259,6 +262,10 @@ export function useHomeAgentSession() {
         store.setMessages(session.id, detail.messages)
         restoreTimelineFromCache()
         restoreWorkspaceFromCache()
+        // 如果是新会话（无历史消息），清空 Workspace projection
+        if (!detail.messages || detail.messages.length === 0) {
+          workspace.clearSession(session.id)
+        }
       }
     } catch (err: any) {
       store.error = err?.message || '加载 Agent 会话失败'

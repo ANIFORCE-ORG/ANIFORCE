@@ -182,6 +182,7 @@ def workspace_instructions(
     parts.append("- 如果用户选中了实体或 @mention 了项目/广告计划/素材，优先针对这些实体回答。")
     parts.append("- 查询工具结果默认不投影；当用户要浏览、查看、列出、打开业务对象时，必须在查询后调用 request_workspace_projection。")
     parts.append("- 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；get_campaign_materials -> campaign.materials；list_materials -> material.list；get_material_detail -> material.detail；get_material_image -> material.image。")
+    parts.append("- 素材关联场景：当用户需要为 Campaign 关联素材时，必须先调用 get_campaign_materials 或 list_materials 查询可用素材，然后调用 request_workspace_projection 把素材列表投影到右侧，再在聊天区提示用户可以 @mention 素材名来关联。不要在聊天区输出文字表格让用户回复'第一个''第二个'。")
     parts.append("- 当前没有 task 专用 Workspace surface；任务/执行状态类问题只在聊天区和 timeline 中说明，不要请求不存在的 task 投影。")
     parts.append("- 分析、诊断、对比、多上下文任务不要投影中间查询结果。")
     parts.append("- 如果右侧 Workspace 已经展示了查询结果，不要逐条复述；只概括重点并引导用户查看右侧面板。")
