@@ -47,7 +47,7 @@ const isUser = computed(() => props.message.role === 'user')
 const isAssistant = computed(() => props.message.role === 'assistant')
 const isActivity = computed(() => props.message.role === 'activity')
 const textContent = computed(() => messageText(props.message))
-const blocks = computed(() => contentBlocks(props.message))
+const blocks = computed(() => contentBlocks(props.message).filter(block => block.type !== 'approval'))
 const userImageBlocks = computed(() => {
   const content = props.message.content
   if (!Array.isArray(content)) return []

@@ -6,6 +6,8 @@ interface Props {
   show: boolean
   projectId?: string
   initialData?: any
+  embedded?: boolean
+  embeddedReadonly?: boolean
 }
 
 interface Emits {
@@ -411,10 +413,103 @@ defineExpose({
 </script>
 
 <template>
+  <div v-if="embedded && show" class="flex h-full flex-col bg-white dark:bg-slate-800">
+    <div class="flex items-center justify-between px-[15px] py-[10px] border-b border-slate-200 dark:border-slate-700">
+      <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">
+        {{ isEditMode ? '编辑 Campaign' : '创建 Campaign' }}
+      </h3>
+    </div>
+
+    <div class="flex-1 overflow-y-auto px-[15px] py-[10px]">
+      <div class="mb-[13px] p-[10px] bg-slate-50 dark:bg-slate-700/30 rounded-md">
+        <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed">
+          <strong class="text-slate-700 dark:text-slate-300">Meta Campaign 框架</strong><br>
+          项目对应 Meta Campaign 层级；下层计划对应 Meta Ad Set，素材对应 Meta Ad 素材配置。这里配置项目归属与 Campaign 字段。
+        </p>
+      </div>
+
+      <form @submit.prevent="handleSave" class="space-y-[10px]" :class="{ 'pointer-events-none opacity-70': embeddedReadonly }">
+        <div class="grid grid-cols-2 gap-[10px]">
+          <div>
+            <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">投放渠道</label>
+            <select v-model="formData.channel" @change="handleChannelChange" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+              <option v-for="channel in channelOptions" :key="channel" :value="channel" :disabled="channel === 'TikTok'" :class="{ 'text-slate-400': channel === 'TikTok' }">
+                {{ channel }}{{ channel === 'TikTok' ? ' (暂未支持)' : '' }}
+              </option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">广告账户 *</label>
+            <select v-model="formData.account" :disabled="loadingAccounts || formData.channel === 'TikTok'" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500 disabled:opacity-50 disabled:cursor-not-allowed" :class="{ 'border-red-500': errors.account }">
+              <option value="" disabled>{{ loadingAccounts ? '加载中...' : '请选择广告账户' }}</option>
+              <option v-for="acc in accountOptions" :key="acc.accountId" :value="acc.accountId">{{ acc.accountName }} ({{ acc.accountId }})</option>
+            </select>
+            <p v-if="errors.account" class="mt-[3px] text-[9px] text-red-500">{{ errors.account }}</p>
+          </div>
+        </div>
+
+        <div>
+          <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">Campaign 名称 *</label>
+          <input v-model="formData.campaignName" type="text" placeholder="Meta Campaign Name" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" :class="{ 'border-red-500': errors.campaignName }" />
+          <p v-if="errors.campaignName" class="mt-[3px] text-[9px] text-red-500">{{ errors.campaignName }}</p>
+        </div>
+
+        <div class="grid grid-cols-2 gap-[10px]">
+          <div>
+            <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">Objective</label>
+            <select v-model="formData.objective" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+              <option v-for="opt in filteredObjectiveOptions" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">Buying Type</label>
+            <select v-model="formData.buyingType" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+              <option v-for="opt in buyingTypeOptions" :key="opt" :value="opt">{{ opt }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-[10px]">
+          <div>
+            <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">Campaign Status</label>
+            <select v-model="formData.campaignStatus" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500">
+              <option value="draft">Draft</option>
+              <option value="running">Running</option>
+              <option value="paused">Paused</option>
+            </select>
+          </div>
+          <div>
+            <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">Daily/Lifetime budget(USD) *</label>
+            <input v-model="formData.budget" type="text" placeholder="例如 800 USD" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" :class="{ 'border-red-500': errors.budget }" />
+            <p v-if="errors.budget" class="mt-[3px] text-[9px] text-red-500">{{ errors.budget }}</p>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-[10px]">
+          <div>
+            <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">Start Date</label>
+            <input v-model="formData.start_date" type="datetime-local" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
+          </div>
+          <div>
+            <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">End Date</label>
+            <input v-model="formData.end_date" type="datetime-local" class="w-full px-[8px] py-[6px] rounded-md border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-[10px] text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-blue-500 focus:border-blue-500" />
+          </div>
+        </div>
+      </form>
+    </div>
+
+    <div v-if="!embeddedReadonly" class="flex items-center justify-end gap-[8px] px-[15px] py-[10px] border-t border-slate-200 dark:border-slate-700">
+      <button type="button" class="px-[12px] py-[6px] text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors" @click="handleClose" :disabled="submitting">拒绝</button>
+      <button type="button" class="px-[12px] py-[6px] text-[11px] font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed" @click="handleSave" :disabled="submitting">
+        {{ submitting ? (isEditMode ? '保存中...' : '创建中...') : (isEditMode ? '确认修改' : '确认创建') }}
+      </button>
+    </div>
+  </div>
+
   <!-- 遮罩层 -->
   <Transition name="fade">
     <div
-      v-if="show"
+      v-if="show && !embedded"
       class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
       @click.self="handleClose"
     >

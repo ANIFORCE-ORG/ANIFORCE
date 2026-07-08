@@ -20,7 +20,7 @@ import {
   type SideEffectEvent,
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
-import { useWorkspaceStore, toolProjectionRegistry, type WorkspaceSurface } from '@/store/workspace'
+import { useWorkspaceStore, workspaceResultProjectionRegistry, type WorkspaceSurface } from '@/store/workspace'
 
 export type AgentPhase =
   | { kind: 'queued' }
@@ -148,7 +148,7 @@ export function useHomeAgentSession() {
   const contextUsage = ref<ContextUsage | null>(null)
   const currentTask = ref<AgentCurrentTask | null>(null)
   const pendingWorkspaceProjectionRequests = ref<Array<{ runId?: string; surface: WorkspaceSurface; reason?: string }>>([])
-  const recentWorkspaceToolOutputs = ref<Array<{ id: string; runId?: string; toolName: string; surface: WorkspaceSurface; payload: Record<string, unknown>; mode: any }>>([])
+  const recentWorkspaceToolOutputs = ref<Array<{ id: string; runId?: string; toolName: string; surface: WorkspaceSurface; payload: Record<string, unknown>; mode: 'readonly' }>>([])
 
   // 流式运行时状态全部从 store 读写（不再用闭包变量）
   // currentRunId / currentAbortController / typewriter 都在 store
@@ -422,18 +422,11 @@ export function useHomeAgentSession() {
           const checkpointId = String(event.data.checkpoint_id || '')
           const runIdStr = String(event.data.run_id || run.run_id)
           const interruptions = Array.isArray(event.data.interruptions) ? event.data.interruptions as any : []
-          store.appendApprovalToStreaming({
-            runId: runIdStr,
-            checkpointId,
-            interruptions,
-          })
           // Workspace 投影：高风险工具产生可编辑审批草稿 + review projection
           const sessionId = activeSession.value?.id
           if (sessionId) {
             for (const interruption of interruptions) {
               const toolName = String(interruption?.tool_name || '')
-              const config = toolProjectionRegistry[toolName]
-              if (!config) continue
               let originalArgs: Record<string, unknown> = {}
               const rawArgs = interruption?.arguments
               if (typeof rawArgs === 'string') {
@@ -441,12 +434,12 @@ export function useHomeAgentSession() {
               } else if (rawArgs && typeof rawArgs === 'object') {
                 originalArgs = rawArgs as Record<string, unknown>
               }
-              workspace.createApprovalDraft(checkpointId, runIdStr, toolName, config.surface, originalArgs)
+              workspace.createApprovalDraft(checkpointId, runIdStr, toolName, 'approval.review', originalArgs)
               workspace.upsertProjection(sessionId, {
                 id: `proj_approval_${checkpointId}`,
                 sessionId,
                 runId: runIdStr,
-                surface: config.surface,
+                surface: 'approval.review',
                 sourceToolName: toolName,
                 mode: 'review',
                 payload: { originalArguments: originalArgs },
@@ -709,17 +702,7 @@ export function useHomeAgentSession() {
       surfaceId: `project-list-${toolCallId}`,
     }
     if (!activeSession.value) return
-    const sessionId = activeSession.value.id
-    store.upsertTimelineBlock(sessionId, block)
-    store.setWorkspace(sessionId, [{
-      id: `workspace_${blockId}`,
-      name: 'project_list',
-      result: {
-        type: 'project_list',
-        projects,
-        summary: block.summary,
-      },
-    }])
+    store.upsertTimelineBlock(activeSession.value.id, block)
   }
 
   function summarizeProjectResult(result: unknown): string {
@@ -830,18 +813,9 @@ export function useHomeAgentSession() {
       window.location.href = `/campaign/create?project_id=${encodeURIComponent(String(payload.projectId))}`
       return
     }
-    if (action === 'open_in_workspace' && payload.type === 'project_list') {
-      if (!activeSession.value) return
-      const projects = Array.isArray(payload.projects) ? payload.projects : []
-      store.setWorkspace(activeSession.value.id, [{
-        id: `workspace_${Date.now()}`,
-        name: 'project_list',
-        result: {
-          type: 'project_list',
-          projects,
-          summary: payload.summary || `共 ${projects.length} 个项目`
-        }
-      }])
+    if (action === 'open_in_workspace') {
+      // Workspace 投影统一由 Agent 调用 request_workspace_projection 触发。
+      return
     }
   }
 
@@ -937,8 +911,8 @@ export function useHomeAgentSession() {
       return
     }
 
-    const config = toolProjectionRegistry[toolName]
-    if (!config || !config.resultToPayload || config.requiresApproval) return
+    const config = workspaceResultProjectionRegistry[toolName]
+    if (!config) return
     const payload = config.resultToPayload(result)
     recentWorkspaceToolOutputs.value = [
       ...recentWorkspaceToolOutputs.value,
@@ -1149,21 +1123,18 @@ export function useHomeAgentSession() {
         // SDK 原生事件：处理 Workspace 投影
         if (eventType === 'tool_called' && raw.data?.tool_name) {
           const toolName = String(raw.data.tool_name)
-          const config = toolProjectionRegistry[toolName]
-          if (config) {
-            workspace.upsertProjection(sessionId, {
-              id: `proj_approval_${checkpointId}`,
-              runId,
-              sessionId,
-              surface: config.surface,
-              mode: 'executing',
-              sourceToolName: toolName,
-              sourceToolCallId: String(raw.data.tool_call_id || ''),
-              payload: (raw.data.arguments || {}) as Record<string, unknown>,
-              approval: { runId, checkpointId, decisionStatus: 'approved' },
-              updatedAt: Date.now(),
-            })
-          }
+          workspace.upsertProjection(sessionId, {
+            id: `proj_approval_${checkpointId}`,
+            runId,
+            sessionId,
+            surface: 'approval.review',
+            mode: 'executing',
+            sourceToolName: toolName,
+            sourceToolCallId: String(raw.data.tool_call_id || ''),
+            payload: (raw.data.arguments || {}) as Record<string, unknown>,
+            approval: { runId, checkpointId, decisionStatus: 'approved' },
+            updatedAt: Date.now(),
+          })
           // 同时调用 handleSdkRawEvent 处理对话消息
           handleSdkRawEvent(raw, sessionId, {
             assistant,
@@ -1196,11 +1167,6 @@ export function useHomeAgentSession() {
         if (event.event === 'runtime.requires_action') {
           drainTypewriter(false)
           ensureAssistantMessage(assistant)
-          store.appendApprovalToStreaming({
-            runId: String(event.data.run_id || runId),
-            checkpointId: String(event.data.checkpoint_id || ''),
-            interruptions: Array.isArray(event.data.interruptions) ? event.data.interruptions as any : [],
-          })
         }
         if (event.event === 'runtime.error' || event.event === 'error') {
           throw new Error(String(event.data.message || '审批恢复失败'))
