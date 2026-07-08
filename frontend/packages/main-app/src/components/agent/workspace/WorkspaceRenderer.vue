@@ -114,12 +114,12 @@ function handlePreviewMaterial(material: Material): void {
 <template>
   <div class="h-full overflow-y-auto">
     <!-- 项目列表（查询类工具，无需审批） -->
-    <div v-if="projection?.surface === 'project.list'" class="p-[16px]">
+    <div v-if="projection?.surface === 'project.list' || projection?.surface === 'project.detail'" class="p-[16px]">
       <div class="mb-[12px] flex items-center justify-between">
         <div>
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">项目库</h3>
+          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ projection.surface === 'project.detail' ? '项目详情' : '项目库' }}</h3>
           <p class="text-[10px] text-slate-500 dark:text-slate-400">
-            {{ projection.mode === 'loading' ? '正在查询...' : `共 ${projects.length} 个项目` }}
+            {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'project.detail' ? '已加载 1 个项目' : `共 ${projects.length} 个项目` }}
           </p>
         </div>
         <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-500">数据已更新，可刷新</span>
