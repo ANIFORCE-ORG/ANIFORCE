@@ -48,7 +48,9 @@ async def request_workspace_projection(
 ) -> str:
     """请求把刚刚查询到的业务结果展示到右侧 Workspace。
 
-    浏览/查看/列出/打开某类业务数据时，在完成对应查询工具后必须调用本工具。
+    浏览、查看、列出、打开业务对象时，在完成对应查询工具后必须调用本工具。
+    surface 映射：项目列表/详情用 project.list/project.detail；广告计划列表/详情用 campaign.list；素材列表/详情用 material.list。
+    当前没有 task 专用 surface；任务/执行状态类问题不要调用本工具。
     分析、诊断、对比、多上下文任务不要调用本工具，除非用户明确要求把某个结果放到右侧查看。
     """
     allowed_surfaces = {"project.list", "project.detail", "campaign.list", "material.list"}
