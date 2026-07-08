@@ -57,6 +57,12 @@ const materials = computed<Material[]>(() => {
   return []
 })
 
+const materialImage = computed<Record<string, unknown> | null>(() => {
+  if (!props.projection || props.projection.surface !== 'material.image') return null
+  const image = props.projection.payload.image
+  return image && typeof image === 'object' ? image as Record<string, unknown> : null
+})
+
 function handleApprove(payload: { editedArguments: Record<string, unknown>; argumentDiff: Array<{ field: string; before: unknown; after: unknown }> }): void {
   if (!props.approvalDraft) return
   emit('approve', {
@@ -163,10 +169,10 @@ function handlePreviewMaterial(material: Material): void {
     </div>
 
     <!-- 素材列表（查询类工具，无需审批） -->
-    <div v-else-if="projection?.surface === 'material.list' || projection?.surface === 'material.detail'" class="p-[16px]">
+    <div v-else-if="projection?.surface === 'material.list' || projection?.surface === 'material.detail' || projection?.surface === 'campaign.materials'" class="p-[16px]">
       <div class="mb-[12px] flex items-center justify-between">
         <div>
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ projection.surface === 'material.detail' ? '素材详情' : '素材库' }}</h3>
+          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ projection.surface === 'campaign.materials' ? '广告计划素材' : projection.surface === 'material.detail' ? '素材详情' : '素材库' }}</h3>
           <p class="text-[10px] text-slate-500 dark:text-slate-400">
             {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'material.detail' ? '已加载 1 个素材' : `共 ${materials.length} 个素材` }}
           </p>
@@ -186,6 +192,20 @@ function handlePreviewMaterial(material: Material): void {
       />
     </div>
 
+    <div v-else-if="projection?.surface === 'material.image'" class="p-[16px]">
+      <div class="mb-[12px]">
+        <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">素材预览资源</h3>
+        <p class="text-[10px] text-slate-500 dark:text-slate-400">{{ projection.mode === 'loading' ? '正在查询...' : '已加载预览资源信息' }}</p>
+      </div>
+      <div v-if="projection.mode === 'loading'" class="flex items-center justify-center py-[40px]">
+        <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+      <div v-else class="rounded-md border border-slate-200 bg-white p-[14px] dark:border-slate-700 dark:bg-slate-800">
+        <img v-if="typeof materialImage?.url === 'string'" :src="materialImage.url" class="mb-[12px] max-h-[360px] w-full rounded object-contain bg-slate-100 dark:bg-slate-900" />
+        <pre class="max-h-[260px] overflow-auto rounded bg-slate-50 p-[10px] text-[10px] leading-relaxed text-slate-600 dark:bg-slate-900 dark:text-slate-300">{{ JSON.stringify(materialImage || projection.payload, null, 2) }}</pre>
+      </div>
+    </div>
+
     <!-- 项目创建审批（高风险工具，可编辑） -->
     <WorkspaceProjectCreate
       v-else-if="projection?.surface === 'project.create' && approvalDraft && approvalDraft.status !== 'completed'"
@@ -195,7 +215,7 @@ function handlePreviewMaterial(material: Material): void {
       @update-form="handleUpdateApprovalForm"
     />
 
-    <div v-else-if="approvalDraft && ['campaign.create', 'campaign.status', 'campaign.delete', 'project.delete'].includes(projection?.surface || '') && approvalDraft.status !== 'completed'" class="p-[16px]">
+    <div v-else-if="approvalDraft && ['project.update', 'project.delete', 'campaign.create', 'campaign.update', 'campaign.status', 'campaign.material.add', 'campaign.material.remove', 'campaign.delete', 'material.create', 'material.update', 'material.project.add', 'material.project.remove', 'material.delete'].includes(projection?.surface || '') && approvalDraft.status !== 'completed'" class="p-[16px]">
       <div class="rounded-md border border-slate-200 bg-white p-[14px] dark:border-slate-700 dark:bg-slate-800">
         <div class="mb-[12px] flex items-start justify-between gap-[12px]">
           <div>

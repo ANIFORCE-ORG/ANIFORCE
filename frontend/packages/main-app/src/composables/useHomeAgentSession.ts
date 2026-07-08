@@ -975,8 +975,10 @@ export function useHomeAgentSession() {
       || value === 'project.detail'
       || value === 'campaign.list'
       || value === 'campaign.detail'
+      || value === 'campaign.materials'
       || value === 'material.list'
       || value === 'material.detail'
+      || value === 'material.image'
   }
 
   function projectRecentWorkspaceToolOutput(sessionId: string, surface: WorkspaceSurface): void {

@@ -41,14 +41,25 @@ export type WorkspaceSurface =
   | 'project.list'
   | 'project.detail'
   | 'project.create'
+  | 'project.update'
   | 'project.delete'
   | 'campaign.list'
   | 'campaign.detail'
   | 'campaign.create'
+  | 'campaign.update'
   | 'campaign.status'
+  | 'campaign.materials'
+  | 'campaign.material.add'
+  | 'campaign.material.remove'
   | 'campaign.delete'
   | 'material.list'
   | 'material.detail'
+  | 'material.image'
+  | 'material.create'
+  | 'material.update'
+  | 'material.project.add'
+  | 'material.project.remove'
+  | 'material.delete'
 
 export type WorkspaceProjectionMode =
   | 'loading'
@@ -410,8 +421,25 @@ export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
     requiresApproval: false,
     resultToPayload: result => ({ material: firstRecord(result, ['material', 'data']) }),
   },
+  get_campaign_materials: {
+    surface: 'campaign.materials',
+    mode: 'readonly',
+    requiresApproval: false,
+    resultToPayload: result => parseCollectionResult(result, 'materials'),
+  },
+  get_material_image: {
+    surface: 'material.image',
+    mode: 'readonly',
+    requiresApproval: false,
+    resultToPayload: result => ({ image: firstRecord(result, ['image', 'data']) || parseJsonLikeResult(result) }),
+  },
   create_project: {
     surface: 'project.create',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  update_project: {
+    surface: 'project.update',
     mode: 'review',
     requiresApproval: true,
   },
@@ -425,13 +453,53 @@ export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
     mode: 'review',
     requiresApproval: true,
   },
+  update_campaign: {
+    surface: 'campaign.update',
+    mode: 'review',
+    requiresApproval: true,
+  },
   update_campaign_status: {
     surface: 'campaign.status',
     mode: 'review',
     requiresApproval: true,
   },
+  add_material_to_campaign: {
+    surface: 'campaign.material.add',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  remove_material_from_campaign: {
+    surface: 'campaign.material.remove',
+    mode: 'review',
+    requiresApproval: true,
+  },
   delete_campaign: {
     surface: 'campaign.delete',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  create_material: {
+    surface: 'material.create',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  update_material: {
+    surface: 'material.update',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  add_material_to_project: {
+    surface: 'material.project.add',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  remove_material_from_project: {
+    surface: 'material.project.remove',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  delete_material: {
+    surface: 'material.delete',
     mode: 'review',
     requiresApproval: true,
   },

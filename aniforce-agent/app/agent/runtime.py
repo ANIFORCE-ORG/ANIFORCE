@@ -29,10 +29,19 @@ from app.core.tracing import get_tracer
 
 APPROVAL_REQUIRED_TOOL_NAMES = [
     "create_project",
+    "update_project",
     "delete_project",
     "create_campaign",
-    "delete_campaign",
+    "update_campaign",
     "update_campaign_status",
+    "add_material_to_campaign",
+    "remove_material_from_campaign",
+    "delete_campaign",
+    "create_material",
+    "update_material",
+    "add_material_to_project",
+    "remove_material_from_project",
+    "delete_material",
 ]
 
 
@@ -43,17 +52,17 @@ def _elapsed_ms(start: float) -> int:
 @function_tool
 async def request_workspace_projection(
     ctx: RunContextWrapper[WorkspaceRunContext],
-    surface: Annotated[str, "必须匹配刚刚查询结果的 Workspace surface：project.list、project.detail、campaign.list、campaign.detail、material.list、material.detail"],
+    surface: Annotated[str, "必须匹配刚刚查询结果的 Workspace surface：project.list、project.detail、campaign.list、campaign.detail、campaign.materials、material.list、material.detail、material.image"],
     reason: Annotated[str, "为什么用户需要在右侧 Workspace 查看这个结果"],
 ) -> str:
     """请求把刚刚查询到的业务结果展示到右侧 Workspace。
 
     浏览、查看、列出、打开业务对象时，在完成对应查询工具后必须调用本工具。
-    surface 映射：项目列表/详情用 project.list/project.detail；广告计划列表/详情用 campaign.list/campaign.detail；素材列表/详情用 material.list/material.detail。
+    surface 映射：项目列表/详情用 project.list/project.detail；广告计划列表/详情用 campaign.list/campaign.detail；广告计划素材用 campaign.materials；素材列表/详情/预览用 material.list/material.detail/material.image。
     当前没有 task 专用 surface；任务/执行状态类问题不要调用本工具。
     分析、诊断、对比、多上下文任务不要调用本工具，除非用户明确要求把某个结果放到右侧查看。
     """
-    allowed_surfaces = {"project.list", "project.detail", "campaign.list", "campaign.detail", "material.list", "material.detail"}
+    allowed_surfaces = {"project.list", "project.detail", "campaign.list", "campaign.detail", "campaign.materials", "material.list", "material.detail", "material.image"}
     if surface not in allowed_surfaces:
         return json.dumps(
             {
