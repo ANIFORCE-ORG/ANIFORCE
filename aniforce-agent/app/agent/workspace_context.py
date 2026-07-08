@@ -34,3 +34,7 @@ class WorkspaceRunContext:
     approved_arguments_by_call_id: dict[str, dict[str, Any]] = field(default_factory=dict)
     # 用户修改 diff 摘要，供 dynamic instructions 注入 LLM
     argument_diff: list[dict[str, Any]] = field(default_factory=list)
+
+    # Agent 显式请求把某个业务结果投影到右侧 Workspace。
+    # 查询工具默认只作为推理材料；只有记录了请求的 surface 才允许前端投影。
+    workspace_projection_requests: list[dict[str, Any]] = field(default_factory=list)

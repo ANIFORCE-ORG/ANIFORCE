@@ -146,6 +146,7 @@ class OpenAISDKAdapter:
         name: str,
         instructions,
         mcp_servers: list = None,
+        tools: list | None = None,
     ) -> Agent:
         """创建 WorkspaceAgent。当前主链路固定使用普通 Agent。
 
@@ -169,6 +170,7 @@ class OpenAISDKAdapter:
             instructions=instructions,
             model=sdk_model,
             mcp_servers=mcp_servers or [],
+            tools=tools or [],
         )
     
     def create_session(

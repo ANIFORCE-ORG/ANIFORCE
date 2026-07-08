@@ -20,7 +20,7 @@ import {
   type SideEffectEvent,
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
-import { useWorkspaceStore, toolProjectionRegistry } from '@/store/workspace'
+import { useWorkspaceStore, toolProjectionRegistry, type WorkspaceSurface } from '@/store/workspace'
 
 export type AgentPhase =
   | { kind: 'queued' }
@@ -147,6 +147,8 @@ export function useHomeAgentSession() {
   const commandStatus = ref<string | null>(null)
   const contextUsage = ref<ContextUsage | null>(null)
   const currentTask = ref<AgentCurrentTask | null>(null)
+  const pendingWorkspaceProjectionRequests = ref<Array<{ runId?: string; surface: WorkspaceSurface; reason?: string }>>([])
+  const recentWorkspaceToolOutputs = ref<Array<{ id: string; runId?: string; toolName: string; surface: WorkspaceSurface; payload: Record<string, unknown>; mode: any }>>([])
 
   // 流式运行时状态全部从 store 读写（不再用闭包变量）
   // currentRunId / currentAbortController / typewriter 都在 store
@@ -311,6 +313,8 @@ export function useHomeAgentSession() {
     store.agentPhase = { kind: 'waiting_model' }
     executionPlan.value = null
     executionTools.value = []
+    pendingWorkspaceProjectionRequests.value = []
+    recentWorkspaceToolOutputs.value = []
     // 初始用临时 runId，后续替换为 backend-owned run_id
     const tempRunId = `run_${Date.now()}`
     store.resetStreamRuntime(sessionId, tempRunId)
@@ -879,14 +883,6 @@ export function useHomeAgentSession() {
       executionTools.value = [...executionTools.value, tool].slice(-8)
       store.appendToolCallToStreaming({ id, name, arguments: args })
       upsertTimelineTool({ id, toolName: name, status: 'running', arguments: args })
-      // Workspace 投影：查询类工具也产生 loading 投影
-      const sessionId = activeSession.value?.id
-      if (sessionId) {
-        const config = toolProjectionRegistry[name]
-        if (config) {
-          workspace.setProjectionLoading(sessionId, store.currentRunId || '', config.surface, name, id)
-        }
-      }
       store.agentPhase = {
         kind: 'running_tools',
         tools: executionTools.value
@@ -910,14 +906,9 @@ export function useHomeAgentSession() {
         if (id) store.updateToolCallResultInStreaming(id, result)
         upsertTimelineTool({ id: id || `${toolName}_${Date.now()}`, toolName, status: 'completed', result })
         appendBusinessResultBlock(id, toolName, result)
-        // Workspace 投影：查询类工具输出转 projection ready
         const sessionId = activeSession.value?.id
         if (sessionId) {
-          const config = toolProjectionRegistry[toolName]
-          if (config && config.resultToPayload && !config.requiresApproval) {
-            const payload = config.resultToPayload(result)
-            workspace.setProjectionReady(sessionId, id || '', payload, config.mode)
-          }
+          handleWorkspaceProjectionToolOutput(sessionId, id, toolName, result)
         }
       }
       const running = executionTools.value.filter(item => item.status === 'running')
@@ -935,6 +926,79 @@ export function useHomeAgentSession() {
     message.id = `msg_${Date.now()}`
     store.currentAssistantMessageId = message.id
     attachCurrentRunTimelineBlocks(message.id)
+  }
+
+  function handleWorkspaceProjectionToolOutput(sessionId: string, toolCallId: string, toolName: string, result: unknown): void {
+    if (toolName === 'request_workspace_projection') {
+      const request = parseWorkspaceProjectionRequest(result)
+      if (!request) return
+      pendingWorkspaceProjectionRequests.value = [...pendingWorkspaceProjectionRequests.value, { runId: store.currentRunId || undefined, ...request }].slice(-8)
+      projectRecentWorkspaceToolOutput(sessionId, request.surface)
+      return
+    }
+
+    const config = toolProjectionRegistry[toolName]
+    if (!config || !config.resultToPayload || config.requiresApproval) return
+    const payload = config.resultToPayload(result)
+    recentWorkspaceToolOutputs.value = [
+      ...recentWorkspaceToolOutputs.value,
+      {
+        id: toolCallId || `${toolName}_${Date.now()}`,
+        runId: store.currentRunId || undefined,
+        toolName,
+        surface: config.surface,
+        payload,
+        mode: config.mode,
+      },
+    ].slice(-12)
+    projectRecentWorkspaceToolOutput(sessionId, config.surface)
+  }
+
+  function parseWorkspaceProjectionRequest(result: unknown): { surface: WorkspaceSurface; reason?: string } | null {
+    const parsed = typeof result === 'string' ? parseJsonString(result) : result
+    const record = normalizeRecord(parsed)
+    if (!record || record.accepted !== true || typeof record.surface !== 'string') return null
+    if (!isWorkspaceSurface(record.surface)) return null
+    return { surface: record.surface, reason: typeof record.reason === 'string' ? record.reason : undefined }
+  }
+
+  function parseJsonString(value: string): unknown {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return null
+    }
+  }
+
+  function isWorkspaceSurface(value: string): value is WorkspaceSurface {
+    return value === 'project.list'
+      || value === 'project.detail'
+      || value === 'campaign.list'
+      || value === 'material.list'
+  }
+
+  function projectRecentWorkspaceToolOutput(sessionId: string, surface: WorkspaceSurface): void {
+    const requestIndex = [...pendingWorkspaceProjectionRequests.value]
+      .reverse()
+      .findIndex(request => request.surface === surface && (!request.runId || request.runId === store.currentRunId))
+    if (requestIndex < 0) return
+    const output = [...recentWorkspaceToolOutputs.value]
+      .reverse()
+      .find(item => item.surface === surface && (!item.runId || item.runId === store.currentRunId))
+    if (!output) return
+    workspace.upsertProjection(sessionId, {
+      id: `proj_${output.id}`,
+      sessionId,
+      runId: store.currentRunId || '',
+      surface: output.surface,
+      mode: output.mode,
+      sourceToolName: output.toolName,
+      sourceToolCallId: output.id,
+      payload: output.payload,
+      updatedAt: Date.now(),
+    })
+    const actualIndex = pendingWorkspaceProjectionRequests.value.length - 1 - requestIndex
+    pendingWorkspaceProjectionRequests.value = pendingWorkspaceProjectionRequests.value.filter((_, index) => index !== actualIndex)
   }
 
   function readSdkToolCall(item?: Record<string, unknown>): { id: string; name: string; args: Record<string, unknown> | undefined } {

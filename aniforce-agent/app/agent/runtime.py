@@ -5,13 +5,14 @@ Agent Runtime
 """
 
 import asyncio
+import json
 from time import perf_counter
-from typing import AsyncIterator, Optional
+from typing import Annotated, AsyncIterator, Optional
 from uuid import uuid4
 from contextlib import asynccontextmanager
 
 from loguru import logger
-from agents import RunState
+from agents import RunContextWrapper, RunState, function_tool
 
 from app.agent.openai_adapter import OpenAISDKAdapter
 from app.agent.workspace_context import WorkspaceRunContext
@@ -37,6 +38,35 @@ APPROVAL_REQUIRED_TOOL_NAMES = [
 
 def _elapsed_ms(start: float) -> int:
     return int((perf_counter() - start) * 1000)
+
+
+@function_tool
+async def request_workspace_projection(
+    ctx: RunContextWrapper[WorkspaceRunContext],
+    surface: Annotated[str, "Workspace surface，例如 project.list、campaign.list、material.list"],
+    reason: Annotated[str, "为什么需要把结果展示到右侧 Workspace"],
+) -> str:
+    """当用户需要在右侧 Workspace 浏览、选择或校准业务结果时，请求投影当前任务焦点。"""
+    allowed_surfaces = {"project.list", "project.detail", "campaign.list", "material.list"}
+    if surface not in allowed_surfaces:
+        return json.dumps(
+            {
+                "accepted": False,
+                "surface": surface,
+                "reason": "unsupported_surface",
+                "message": "当前 Workspace 不支持该投影类型。",
+            },
+            ensure_ascii=False,
+        )
+
+    request = {
+        "surface": surface,
+        "reason": reason,
+        "run_id": ctx.context.run_id,
+        "session_id": ctx.context.session_id,
+    }
+    ctx.context.workspace_projection_requests.append(request)
+    return json.dumps({"accepted": True, **request}, ensure_ascii=False)
 
 
 class AgentRuntime:
@@ -186,6 +216,7 @@ class AgentRuntime:
                     name="ANIFORCE Assistant",
                     instructions=workspace_instructions,
                     mcp_servers=mcp_servers,
+                    tools=[request_workspace_projection],
                 )
                 run_logger.debug(
                     "[PERF][agent_first_token] runtime.agent_ready total_ms={} agent_create_ms={}",
@@ -379,6 +410,7 @@ class AgentRuntime:
                     name="ANIFORCE Assistant",
                     instructions=workspace_instructions,
                     mcp_servers=mcp_servers,
+                    tools=[request_workspace_projection],
                 )
                 session = self.adapter.create_session(checkpoint["session_id"], self.agent_runtime_db_url)
                 state = await RunState.from_json(

@@ -59,6 +59,10 @@ class SystemPromptManager:
 
 5. Workspace 协同。
    - 右侧 Workspace 是任务校准与确认面板，不是聊天内容的复制品。
+   - 查询工具返回的数据默认只是内部推理材料，不会自动更新右侧 Workspace。
+   - 只有当用户需要在右侧 Workspace 浏览、选择或校准查询结果时，才调用 request_workspace_projection。
+   - 分析、诊断、对比、多上下文任务不要调用 request_workspace_projection，除非用户明确要求把某个结果放到右侧查看。
+   - 审批类操作不需要 request_workspace_projection，系统会自动投影审批草稿。
    - 如果工具结果已投影到右侧 Workspace，不要在最终回答里逐条重复列表或详情。
    - 对已投影内容，只需要概括数量、状态、异常点、建议操作，并提示用户可在右侧查看完整内容。
    - 如果用户选中了上下文实体或 @mention 了实体，优先围绕这些实体处理。
@@ -160,6 +164,8 @@ def workspace_instructions(
     parts.append("- 不要输出执行计划、todo list 或 Plan-Execute 文案。")
     parts.append("- 如果用户问“当前状态”“下一步”“缺什么”，必须优先分析当前 workspace snapshot。")
     parts.append("- 如果用户选中了实体或 @mention 了项目/素材，优先针对这些实体回答。")
+    parts.append("- 查询工具结果默认不投影；只有需要右侧浏览、选择或校准时，才调用 request_workspace_projection。")
+    parts.append("- 分析、诊断、对比、多上下文任务不要投影中间查询结果。")
     parts.append("- 如果右侧 Workspace 已经展示了查询结果，不要逐条复述；只概括重点并引导用户查看右侧面板。")
     parts.append("- 如果需要业务事实，调用 MCP 工具查询 backend，不要编造。")
     parts.append("- 写操作、预算、上线、删除等高风险动作需要用户确认。")
