@@ -43,10 +43,14 @@ def _elapsed_ms(start: float) -> int:
 @function_tool
 async def request_workspace_projection(
     ctx: RunContextWrapper[WorkspaceRunContext],
-    surface: Annotated[str, "Workspace surface，例如 project.list、campaign.list、material.list"],
-    reason: Annotated[str, "为什么需要把结果展示到右侧 Workspace"],
+    surface: Annotated[str, "必须匹配刚刚查询结果的 Workspace surface：project.list、project.detail、campaign.list、material.list"],
+    reason: Annotated[str, "为什么用户需要在右侧 Workspace 查看这个结果"],
 ) -> str:
-    """当用户需要在右侧 Workspace 浏览、选择或校准业务结果时，请求投影当前任务焦点。"""
+    """请求把刚刚查询到的业务结果展示到右侧 Workspace。
+
+    浏览/查看/列出/打开某类业务数据时，在完成对应查询工具后必须调用本工具。
+    分析、诊断、对比、多上下文任务不要调用本工具，除非用户明确要求把某个结果放到右侧查看。
+    """
     allowed_surfaces = {"project.list", "project.detail", "campaign.list", "material.list"}
     if surface not in allowed_surfaces:
         return json.dumps(
