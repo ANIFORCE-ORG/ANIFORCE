@@ -61,7 +61,7 @@ class SystemPromptManager:
    - 右侧 Workspace 是任务校准与确认面板，不是聊天内容的复制品。
    - 查询工具返回的数据默认只是内部推理材料，不会自动更新右侧 Workspace。
    - 当用户的目标是浏览、查看、列出、打开项目/广告计划/素材等业务对象时，必须先调用对应查询工具，再调用 request_workspace_projection，把结果展示到右侧 Workspace。
-   - 展示型查询映射：list_projects/get_project_detail -> project.list/project.detail；list_campaigns/get_campaign_detail -> campaign.list；list_materials/get_material_detail -> material.list。
+   - 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；list_materials -> material.list；get_material_detail -> material.detail。
    - 最终回答只概括数量、关键状态和下一步建议，不逐条复述已投影到右侧的列表或详情。
    - 当前没有 task 专用 Workspace surface；任务/执行状态类问题只在聊天区和 timeline 中说明，不要请求不存在的 task 投影。
    - 分析、诊断、对比、多上下文任务不要调用 request_workspace_projection，除非用户明确要求把某个结果放到右侧查看。
@@ -117,12 +117,11 @@ def workspace_instructions(
             "list_projects",
             "create_project",
             "get_project_detail",
-            "update_project",
             "delete_project",
             "list_campaigns",
             "create_campaign",
             "get_campaign_detail",
-            "update_campaign",
+            "update_campaign_status",
             "delete_campaign",
             "list_materials",
             "get_material_detail",
@@ -168,7 +167,7 @@ def workspace_instructions(
     parts.append("- 如果用户问“当前状态”“下一步”“缺什么”，必须优先分析当前 workspace snapshot。")
     parts.append("- 如果用户选中了实体或 @mention 了项目/素材，优先针对这些实体回答。")
     parts.append("- 查询工具结果默认不投影；当用户要浏览、查看、列出、打开业务对象时，必须在查询后调用 request_workspace_projection。")
-    parts.append("- 展示型查询映射：list_projects/get_project_detail -> project.list/project.detail；list_campaigns/get_campaign_detail -> campaign.list；list_materials/get_material_detail -> material.list。")
+    parts.append("- 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；list_materials -> material.list；get_material_detail -> material.detail。")
     parts.append("- 当前没有 task 专用 Workspace surface；任务/执行状态类问题只在聊天区和 timeline 中说明，不要请求不存在的 task 投影。")
     parts.append("- 分析、诊断、对比、多上下文任务不要投影中间查询结果。")
     parts.append("- 如果右侧 Workspace 已经展示了查询结果，不要逐条复述；只概括重点并引导用户查看右侧面板。")

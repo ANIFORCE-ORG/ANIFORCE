@@ -43,6 +43,8 @@ const campaigns = computed<Campaign[]>(() => {
   if (!props.projection) return []
   const data = props.projection.payload
   if (Array.isArray(data.campaigns)) return data.campaigns as Campaign[]
+  const campaign = data.campaign
+  if (campaign && typeof campaign === 'object') return [campaign as Campaign]
   return []
 })
 
@@ -50,6 +52,8 @@ const materials = computed<Material[]>(() => {
   if (!props.projection) return []
   const data = props.projection.payload
   if (Array.isArray(data.materials)) return data.materials as Material[]
+  const material = data.material
+  if (material && typeof material === 'object') return [material as Material]
   return []
 })
 
@@ -135,12 +139,12 @@ function handlePreviewMaterial(material: Material): void {
     </div>
 
     <!-- 广告计划列表（查询类工具，无需审批） -->
-    <div v-else-if="projection?.surface === 'campaign.list'" class="p-[16px]">
+    <div v-else-if="projection?.surface === 'campaign.list' || projection?.surface === 'campaign.detail'" class="p-[16px]">
       <div class="mb-[12px] flex items-center justify-between">
         <div>
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">广告计划</h3>
+          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ projection.surface === 'campaign.detail' ? '广告计划详情' : '广告计划' }}</h3>
           <p class="text-[10px] text-slate-500 dark:text-slate-400">
-            {{ projection.mode === 'loading' ? '正在查询...' : `共 ${campaigns.length} 个计划` }}
+            {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'campaign.detail' ? '已加载 1 个计划' : `共 ${campaigns.length} 个计划` }}
           </p>
         </div>
         <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-500">数据已更新，可刷新</span>
@@ -159,12 +163,12 @@ function handlePreviewMaterial(material: Material): void {
     </div>
 
     <!-- 素材列表（查询类工具，无需审批） -->
-    <div v-else-if="projection?.surface === 'material.list'" class="p-[16px]">
+    <div v-else-if="projection?.surface === 'material.list' || projection?.surface === 'material.detail'" class="p-[16px]">
       <div class="mb-[12px] flex items-center justify-between">
         <div>
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">素材库</h3>
+          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ projection.surface === 'material.detail' ? '素材详情' : '素材库' }}</h3>
           <p class="text-[10px] text-slate-500 dark:text-slate-400">
-            {{ projection.mode === 'loading' ? '正在查询...' : `共 ${materials.length} 个素材` }}
+            {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'material.detail' ? '已加载 1 个素材' : `共 ${materials.length} 个素材` }}
           </p>
         </div>
         <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-500">数据已更新，可刷新</span>
@@ -190,6 +194,23 @@ function handlePreviewMaterial(material: Material): void {
       @reject="handleReject"
       @update-form="handleUpdateApprovalForm"
     />
+
+    <div v-else-if="approvalDraft && ['campaign.create', 'campaign.status', 'campaign.delete', 'project.delete'].includes(projection?.surface || '') && approvalDraft.status !== 'completed'" class="p-[16px]">
+      <div class="rounded-md border border-slate-200 bg-white p-[14px] dark:border-slate-700 dark:bg-slate-800">
+        <div class="mb-[12px] flex items-start justify-between gap-[12px]">
+          <div>
+            <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">操作确认</h3>
+            <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">{{ approvalDraft.toolName }}</p>
+          </div>
+          <span class="rounded-full bg-amber-50 px-[8px] py-[3px] text-[10px] font-medium text-amber-600 dark:bg-amber-900/20 dark:text-amber-300">待确认</span>
+        </div>
+        <pre class="max-h-[260px] overflow-auto rounded bg-slate-50 p-[10px] text-[10px] leading-relaxed text-slate-600 dark:bg-slate-900 dark:text-slate-300">{{ JSON.stringify(approvalDraft.editedArguments || approvalDraft.originalArguments, null, 2) }}</pre>
+        <div class="mt-[12px] flex gap-[8px]">
+          <button class="flex-1 rounded-md border border-slate-200 px-[10px] py-[7px] text-[11px] font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700" @click="handleReject">拒绝</button>
+          <button class="flex-1 rounded-md bg-primary px-[10px] py-[7px] text-[11px] font-semibold text-white hover:bg-primary/90" @click="emit('approve', { checkpointId: approvalDraft.checkpointId, editedArguments: approvalDraft.editedArguments, argumentDiff: [] })">确认执行</button>
+        </div>
+      </div>
+    </div>
 
     <div v-else-if="projection?.surface === 'project.create' && approvalDraft?.status === 'completed'" class="p-[16px]">
       <div class="flex items-center gap-[8px] mb-[12px]">

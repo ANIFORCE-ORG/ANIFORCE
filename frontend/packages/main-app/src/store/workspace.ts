@@ -43,9 +43,12 @@ export type WorkspaceSurface =
   | 'project.create'
   | 'project.delete'
   | 'campaign.list'
+  | 'campaign.detail'
   | 'campaign.create'
   | 'campaign.status'
+  | 'campaign.delete'
   | 'material.list'
+  | 'material.detail'
 
 export type WorkspaceProjectionMode =
   | 'loading'
@@ -390,10 +393,10 @@ export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
     resultToPayload: result => parseCollectionResult(result, 'campaigns'),
   },
   get_campaign_detail: {
-    surface: 'campaign.list',
+    surface: 'campaign.detail',
     mode: 'readonly',
     requiresApproval: false,
-    resultToPayload: result => ({ campaigns: compactRecords([firstRecord(result, ['campaign', 'data'])]) }),
+    resultToPayload: result => ({ campaign: firstRecord(result, ['campaign', 'data']) }),
   },
   list_materials: {
     surface: 'material.list',
@@ -402,10 +405,10 @@ export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
     resultToPayload: result => parseCollectionResult(result, 'materials'),
   },
   get_material_detail: {
-    surface: 'material.list',
+    surface: 'material.detail',
     mode: 'readonly',
     requiresApproval: false,
-    resultToPayload: result => ({ materials: compactRecords([firstRecord(result, ['material', 'data'])]) }),
+    resultToPayload: result => ({ material: firstRecord(result, ['material', 'data']) }),
   },
   create_project: {
     surface: 'project.create',
@@ -414,6 +417,21 @@ export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
   },
   delete_project: {
     surface: 'project.delete',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  create_campaign: {
+    surface: 'campaign.create',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  update_campaign_status: {
+    surface: 'campaign.status',
+    mode: 'review',
+    requiresApproval: true,
+  },
+  delete_campaign: {
+    surface: 'campaign.delete',
     mode: 'review',
     requiresApproval: true,
   },
