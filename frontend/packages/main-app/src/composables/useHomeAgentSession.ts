@@ -530,6 +530,24 @@ export function useHomeAgentSession() {
         field: e.field,
         at: e.createdAt,
       })),
+      workspaceProjection: summarizeWorkspaceProjection(sessionId),
+    }
+  }
+
+  function summarizeWorkspaceProjection(sessionId: string): AgentContextSnapshot['workspaceProjection'] | undefined {
+    const projection = workspace.getActiveProjection(sessionId)
+    if (!projection) return undefined
+    const payload = projection.payload || {}
+    let itemCount: number | undefined
+    if (Array.isArray(payload.projects)) itemCount = payload.projects.length
+    else if (Array.isArray(payload.campaigns)) itemCount = payload.campaigns.length
+    else if (Array.isArray(payload.materials)) itemCount = payload.materials.length
+    return {
+      surface: projection.surface,
+      mode: projection.mode,
+      sourceToolName: projection.sourceToolName,
+      itemCount,
+      alreadyVisible: projection.mode !== 'loading',
     }
   }
 

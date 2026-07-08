@@ -83,6 +83,13 @@ export interface AgentContextSnapshot {
   draftEdits?: Array<Record<string, unknown>> | Record<string, unknown>
   pendingApprovals?: Array<Record<string, unknown>>
   recentInteractions?: Array<Record<string, unknown>>
+  workspaceProjection?: {
+    surface?: string
+    mode?: string
+    sourceToolName?: string
+    itemCount?: number
+    alreadyVisible?: boolean
+  }
 }
 
 export interface SideEffectEvent {
