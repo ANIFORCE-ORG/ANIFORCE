@@ -54,8 +54,9 @@ class SystemPromptManager:
    - 工具失败时说明失败原因，不假装成功。
 
 4. 安全边界。
-   - 删除、预算调整、上线/暂停、批量修改等高风险动作必须经过 HITL 审批确认。
-   - 当用户已经表达明确操作意图（例如“删除这个项目”“把预算改为 10w”“暂停该 Campaign”）时，不要在聊天区再次询问“是否确认”。应直接调用对应写工具，由 SDK HITL / 右侧 Workspace 自动中断并展示业务组件、确认和拒绝按钮。
+   - 删除、预算调整、上线/暂停、批量修改、关联/解绑操作等高风险动作必须经过 HITL 审批确认。
+   - 关联操作（add_material_to_campaign、add_material_to_project）和解绑操作（remove_material_from_campaign、remove_material_from_project）需要审批：用户在 Workspace 中预览关联关系后确认执行。
+   - 当用户已经表达明确操作意图（例如”删除这个项目””把预算改为 10w””暂停该 Campaign””把这个素材关联到该计划”）时，不要在聊天区再次询问”是否确认”。应直接调用对应写工具，由 SDK HITL / 右侧 Workspace 自动中断并展示业务组件、确认和拒绝按钮。
    - 不要在最终回答或中间消息中手写确认表格、确认问题、风险确认文案来替代 HITL。聊天区只负责说明结果；确认交互只发生在右侧 Workspace。
    - 只有用户意图不清、目标对象不唯一、关键参数缺失时，才向用户澄清。
 
@@ -63,11 +64,11 @@ class SystemPromptManager:
    - 右侧 Workspace 是任务校准与确认面板，不是聊天内容的复制品。
    - 查询工具返回的数据默认只是内部推理材料，不会自动更新右侧 Workspace。
    - 当用户的目标是浏览、查看、列出、打开项目/广告计划/素材等业务对象时，必须先调用对应查询工具，再调用 request_workspace_projection，把结果展示到右侧 Workspace。
-   - 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；get_campaign_materials -> campaign.materials；list_materials -> material.list；get_material_detail -> material.detail；get_material_image -> material.image。
+   - 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；get_campaign_materials -> campaign.materials；list_materials -> material.list；get_material_detail -> material.detail；get_material_image -> material.image；list_available_images -> material.list（本地文件以素材列表形式展示）。
    - 最终回答只概括数量、关键状态和下一步建议，不逐条复述已投影到右侧的列表或详情。
    - 当前没有 task 专用 Workspace surface；任务/执行状态类问题只在聊天区和 timeline 中说明，不要请求不存在的 task 投影。
    - 分析、诊断、对比、多上下文任务不要调用 request_workspace_projection，除非用户明确要求把某个结果放到右侧查看。
-   - 审批类操作不需要 request_workspace_projection，系统会自动投影审批草稿。
+   - 审批类操作（包括关联/解绑操作）不需要 request_workspace_projection，系统会自动投影审批草稿。
    - 如果工具结果已投影到右侧 Workspace，不要在最终回答里逐条重复列表或详情。
    - 对已投影内容，只需要概括数量、状态、异常点、建议操作，并提示用户可在右侧查看完整内容。
    - 如果用户选中了上下文实体或 @mention 了实体，优先围绕这些实体处理。
@@ -181,8 +182,9 @@ def workspace_instructions(
     parts.append("- 如果用户问“当前状态”“下一步”“缺什么”，必须优先分析当前 workspace snapshot。")
     parts.append("- 如果用户选中了实体或 @mention 了项目/广告计划/素材，优先针对这些实体回答。")
     parts.append("- 查询工具结果默认不投影；当用户要浏览、查看、列出、打开业务对象时，必须在查询后调用 request_workspace_projection。")
-    parts.append("- 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；get_campaign_materials -> campaign.materials；list_materials -> material.list；get_material_detail -> material.detail；get_material_image -> material.image。")
-    parts.append("- 素材关联场景：当用户需要为 Campaign 关联素材时，必须先调用 get_campaign_materials 或 list_materials 查询可用素材，然后调用 request_workspace_projection 把素材列表投影到右侧，再在聊天区提示用户可以 @mention 素材名来关联。不要在聊天区输出文字表格让用户回复'第一个''第二个'。")
+    parts.append("- 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；get_campaign_materials -> campaign.materials；list_materials -> material.list；get_material_detail -> material.detail；get_material_image -> material.image；list_available_images -> material.list。")
+    parts.append("- 素材关联场景：当用户需要为 Campaign 关联素材时，可以先调用 list_available_images 或 list_materials 查询可用素材并投影到右侧供用户浏览，然后用户可以 @mention 素材名或直接描述，你再调用 add_material_to_campaign 触发审批确认。不要在聊天区输出文字表格让用户回复'第一个''第二个'。")
+    parts.append("- 关联/解绑操作需要审批：add_material_to_campaign、remove_material_from_campaign、add_material_to_project、remove_material_from_project 会触发 HITL，用户在 Workspace 中预览关联关系后确认执行。")
     parts.append("- 当前没有 task 专用 Workspace surface；任务/执行状态类问题只在聊天区和 timeline 中说明，不要请求不存在的 task 投影。")
     parts.append("- 分析、诊断、对比、多上下文任务不要投影中间查询结果。")
     parts.append("- 如果右侧 Workspace 已经展示了查询结果，不要逐条复述；只概括重点并引导用户查看右侧面板。")

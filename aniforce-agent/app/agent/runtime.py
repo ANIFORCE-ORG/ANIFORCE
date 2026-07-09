@@ -28,20 +28,24 @@ from app.core.tracing import get_tracer
 
 
 APPROVAL_REQUIRED_TOOL_NAMES = [
+    # 项目管理
     "create_project",
     "update_project",
     "delete_project",
+    # 广告计划管理
     "create_campaign",
     "update_campaign",
     "update_campaign_status",
-    "add_material_to_campaign",
-    "remove_material_from_campaign",
     "delete_campaign",
+    # 素材管理
     "create_material",
     "update_material",
+    "delete_material",
+    # 关联/解绑操作（P0 修复：增加审批）
+    "add_material_to_campaign",
+    "remove_material_from_campaign",
     "add_material_to_project",
     "remove_material_from_project",
-    "delete_material",
 ]
 
 
@@ -58,9 +62,14 @@ async def request_workspace_projection(
     """请求把刚刚查询到的业务结果展示到右侧 Workspace。
 
     浏览、查看、列出、打开业务对象时，在完成对应查询工具后必须调用本工具。
-    surface 映射：项目列表/详情用 project.list/project.detail；广告计划列表/详情用 campaign.list/campaign.detail；广告计划素材用 campaign.materials；素材列表/详情/预览用 material.list/material.detail/material.image。
+    surface 映射：
+    - 项目：list_projects -> project.list, get_project_detail -> project.detail
+    - 广告计划：list_campaigns -> campaign.list, get_campaign_detail -> campaign.detail, get_campaign_materials -> campaign.materials
+    - 素材：list_materials -> material.list, get_material_detail -> material.detail, get_material_image -> material.image, list_available_images -> material.list
+
     当前没有 task 专用 surface；任务/执行状态类问题不要调用本工具。
     分析、诊断、对比、多上下文任务不要调用本工具，除非用户明确要求把某个结果放到右侧查看。
+    审批类操作（包括关联/解绑）会自动投影，不需要调用本工具。
     """
     allowed_surfaces = {"project.list", "project.detail", "campaign.list", "campaign.detail", "campaign.materials", "material.list", "material.detail", "material.image"}
     if surface not in allowed_surfaces:

@@ -6,16 +6,14 @@
  */
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
-import type { Project } from '@/api/projects'
 import type {
   ProjectFormModel,
   CreateProjectPayload,
 } from '@/components/projects/projectFormModel'
-  import {
+import {
   fromCreateProjectArgs,
   toCreateProjectPayload,
   diffProjectArgs,
-  emptyProjectForm,
 } from '@/components/projects/projectFormModel'
 
 // ==================== 类型定义 ====================
@@ -40,26 +38,13 @@ export interface WorkspaceProjection {
 export type WorkspaceSurface =
   | 'project.list'
   | 'project.detail'
-  | 'project.create'
-  | 'project.update'
-  | 'project.delete'
   | 'campaign.list'
   | 'campaign.detail'
-  | 'campaign.create'
-  | 'campaign.update'
-  | 'campaign.status'
   | 'campaign.materials'
-  | 'campaign.material.add'
-  | 'campaign.material.remove'
-  | 'campaign.delete'
   | 'material.list'
   | 'material.detail'
   | 'material.image'
-  | 'material.create'
-  | 'material.update'
-  | 'material.project.add'
-  | 'material.project.remove'
-  | 'material.delete'
+  | 'approval.review'
 
 export type WorkspaceProjectionMode =
   | 'loading'
@@ -79,7 +64,7 @@ export interface WorkspaceApprovalDraft {
   surface: WorkspaceSurface
   originalArguments: Record<string, unknown>
   editedArguments: Record<string, unknown>   // API payload 格式
-  formModel?: ProjectFormModel               // 表单格式（project.create 专用）
+  formModel?: ProjectFormModel               // 表单格式（create_project 审批专用）
   dirtyFields: string[]
   status: 'pending' | 'approved' | 'rejected' | 'executing' | 'completed'
   updatedAt: number
@@ -375,133 +360,60 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   }
 })
 
-// ==================== 工具投影注册表 ====================
+// ==================== Agent 显式投影解析 ====================
 
-export interface ToolProjectionConfig {
-  surface: WorkspaceSurface
-  mode: WorkspaceProjectionMode
-  requiresApproval: boolean
-  resultToPayload?: (result: unknown) => Record<string, unknown>
+export interface WorkspaceResultProjectionConfig {
+  surface: Exclude<WorkspaceSurface, 'approval.review'>
+  mode: Extract<WorkspaceProjectionMode, 'readonly'>
+  resultToPayload: (result: unknown) => Record<string, unknown>
 }
 
-export const toolProjectionRegistry: Record<string, ToolProjectionConfig> = {
+export const workspaceResultProjectionRegistry: Record<string, WorkspaceResultProjectionConfig> = {
   list_projects: {
     surface: 'project.list',
     mode: 'readonly',
-    requiresApproval: false,
     resultToPayload: parseProjectsResult,
   },
   get_project_detail: {
     surface: 'project.detail',
     mode: 'readonly',
-    requiresApproval: false,
     resultToPayload: result => ({ project: firstRecord(result, ['project', 'data']) }),
   },
   list_campaigns: {
     surface: 'campaign.list',
     mode: 'readonly',
-    requiresApproval: false,
     resultToPayload: result => parseCollectionResult(result, 'campaigns'),
   },
   get_campaign_detail: {
     surface: 'campaign.detail',
     mode: 'readonly',
-    requiresApproval: false,
     resultToPayload: result => ({ campaign: firstRecord(result, ['campaign', 'data']) }),
   },
   list_materials: {
     surface: 'material.list',
     mode: 'readonly',
-    requiresApproval: false,
     resultToPayload: result => parseCollectionResult(result, 'materials'),
   },
   get_material_detail: {
     surface: 'material.detail',
     mode: 'readonly',
-    requiresApproval: false,
     resultToPayload: result => ({ material: firstRecord(result, ['material', 'data']) }),
   },
   get_campaign_materials: {
     surface: 'campaign.materials',
     mode: 'readonly',
-    requiresApproval: false,
     resultToPayload: result => parseCollectionResult(result, 'materials'),
   },
   get_material_image: {
     surface: 'material.image',
     mode: 'readonly',
-    requiresApproval: false,
     resultToPayload: result => ({ image: firstRecord(result, ['image', 'data']) || parseJsonLikeResult(result) }),
   },
-  create_project: {
-    surface: 'project.create',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  update_project: {
-    surface: 'project.update',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  delete_project: {
-    surface: 'project.delete',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  create_campaign: {
-    surface: 'campaign.create',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  update_campaign: {
-    surface: 'campaign.update',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  update_campaign_status: {
-    surface: 'campaign.status',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  add_material_to_campaign: {
-    surface: 'campaign.material.add',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  remove_material_from_campaign: {
-    surface: 'campaign.material.remove',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  delete_campaign: {
-    surface: 'campaign.delete',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  create_material: {
-    surface: 'material.create',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  update_material: {
-    surface: 'material.update',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  add_material_to_project: {
-    surface: 'material.project.add',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  remove_material_from_project: {
-    surface: 'material.project.remove',
-    mode: 'review',
-    requiresApproval: true,
-  },
-  delete_material: {
-    surface: 'material.delete',
-    mode: 'review',
-    requiresApproval: true,
+  // P0 修复：list_available_images 投影到素材列表
+  list_available_images: {
+    surface: 'material.list',
+    mode: 'readonly',
+    resultToPayload: transformLocalFilesToMaterialsPayload,
   },
 }
 
@@ -566,17 +478,49 @@ function firstRecord(result: unknown, keys: string[]): Record<string, unknown> |
   if (!result) return null
   const parsed = parseJsonLikeResult(result)
   if (parsed !== result) return firstRecord(parsed, keys)
-  if (isRecord(result)) {
-    for (const key of keys) {
-      const value = result[key]
-      if (isRecord(value)) return value
+  if (!isRecord(result)) return null
+
+  for (const key of keys) {
+    const value = result[key]
+    if (isRecord(value)) {
+      if (isBusinessRecord(value)) return value
+      const nested = firstRecord(value, keys)
+      if (nested) return nested
     }
-    if (isBusinessRecord(result)) return result
   }
+
+  for (const key of ['data', 'result', 'item', 'payload']) {
+    const value = result[key]
+    if (!isRecord(value)) continue
+    if (isBusinessRecord(value)) return value
+    const nested = firstRecord(value, keys)
+    if (nested) return nested
+  }
+
+  if (isBusinessRecord(result)) return result
   return null
 }
 
 function parseJsonLikeResult(result: unknown): unknown {
+  if (Array.isArray(result)) {
+    if (result.length === 1) return parseJsonLikeResult(result[0])
+    const textParts = result
+      .map(item => isRecord(item) ? item.text || item.content : item)
+      .filter(item => typeof item === 'string')
+    if (textParts.length === result.length) return parseJsonLikeResult(textParts.join('\n'))
+    return result
+  }
+
+  if (isRecord(result)) {
+    for (const key of ['output', 'content', 'text']) {
+      const value = result[key]
+      if (value === undefined) continue
+      const parsed = parseJsonLikeResult(value)
+      if (parsed !== value || isRecord(parsed) || Array.isArray(parsed)) return parsed
+    }
+    return result
+  }
+
   if (typeof result !== 'string') return result
   const trimmed = result.trim()
   if (!trimmed || !['{', '['].includes(trimmed[0])) return result
@@ -597,4 +541,65 @@ function isBusinessRecord(value: Record<string, unknown>): boolean {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return Boolean(value && typeof value === 'object' && !Array.isArray(value))
+}
+
+/**
+ * P0 修复：将 list_available_images 的本地文件列表转换为素材列表格式
+ * backend 返回格式可能是: { files: [...], images: [...] } 或直接是数组
+ */
+function transformLocalFilesToMaterialsPayload(result: unknown): Record<string, unknown> {
+  const parsed = parseJsonLikeResult(result)
+  let fileList: unknown[] = []
+
+  if (Array.isArray(parsed)) {
+    fileList = parsed
+  } else if (isRecord(parsed)) {
+    // 尝试从各种可能的字段中提取文件列表
+    const candidates = [parsed.files, parsed.images, parsed.items, parsed.list, parsed.data]
+    for (const candidate of candidates) {
+      if (Array.isArray(candidate)) {
+        fileList = candidate
+        break
+      }
+    }
+  }
+
+  // 转换为素材格式
+  const materials = fileList
+    .map((file, index) => {
+      if (typeof file === 'string') {
+        // 简单字符串：文件名或路径
+        const filename = file.split('/').pop() || file
+        const ext = filename.split('.').pop()?.toLowerCase() || ''
+        const isImage = ['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)
+        const isVideo = ['mp4', 'mov', 'avi', 'webm'].includes(ext)
+
+        return {
+          id: `local_file_${index}_${Date.now()}`,
+          name: filename,
+          type: isImage ? 'image' : isVideo ? 'video' : 'unknown',
+          url: file,
+          thumbnail_url: file,
+          status: 'local_available',
+          source: 'local',
+          tags: ['本地文件'],
+        }
+      } else if (isRecord(file)) {
+        // 已经是对象格式
+        return {
+          id: file.id || `local_file_${index}_${Date.now()}`,
+          name: file.name || file.filename || '未命名',
+          type: file.type || 'unknown',
+          url: file.url || file.path || '',
+          thumbnail_url: file.thumbnail_url || file.url || file.path || '',
+          status: file.status || 'local_available',
+          source: 'local',
+          tags: Array.isArray(file.tags) ? file.tags : ['本地文件'],
+        }
+      }
+      return null
+    })
+    .filter((item): item is Record<string, unknown> => item !== null)
+
+  return { materials }
 }
