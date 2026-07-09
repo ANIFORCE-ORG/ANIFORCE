@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import type { AgentMessage } from '@/api/agent'
 import ActivityMessageView from './ActivityMessageView.vue'
+import { getFriendlyToolName, getToolIcon } from '@/utils/toolNameMapping'
 
 const props = defineProps<{
   message: AgentMessage
@@ -229,20 +230,19 @@ function toolId(block: Record<string, unknown>): string {
   return String(block.toolCallId || block.id || '')
 }
 function toolName(block: Record<string, unknown>): string {
-  return String(block.toolName || block.name || 'tool')
+  const rawName = String(block.toolName || block.name || 'tool')
+  return getFriendlyToolName(rawName)
+}
+function toolIconEmoji(block: Record<string, unknown>): string {
+  const rawName = String(block.toolName || block.name || 'tool')
+  return getToolIcon(rawName)
 }
 function toolInput(block: Record<string, unknown>): unknown {
   return block.input || block.arguments || {}
 }
 function toolPreview(block: Record<string, unknown>): string {
-  const input = toolInput(block)
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return ''
-  const record = input as Record<string, unknown>
-  for (const key of ['command', 'path', 'file_path', 'pattern', 'query']) {
-    if (record[key]) return String(record[key]).slice(0, 120)
-  }
-  const first = Object.keys(record)[0]
-  return first ? String(record[first]).slice(0, 120) : ''
+  // 不再显示参数预览
+  return ''
 }
 function imageSrc(block: Record<string, unknown>): string {
   if (typeof block.data === 'string') return `data:${String(block.mimeType || 'image/png')};base64,${block.data}`
@@ -432,20 +432,13 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
           </div>
         </div>
 
-        <!-- Tool Call Block: 紧凑卡片，运行中带脉冲 -->
+        <!-- Tool Call Block: 紧凑卡片，不展示输入输出 -->
         <div v-else-if="block.type === 'toolCall'" class="tool-call-block" :class="{ error: isToolError(block), 'is-running': isStreaming && !hasToolResult(block) }">
-          <button class="tool-header" @click="expandedTools[toolId(block)] = !expandedTools[toolId(block)]">
+          <div class="tool-header">
             <span class="tool-status-dot" :class="hasToolResult(block) ? (isToolError(block) ? 'error' : 'done') : 'running'"></span>
+            <span class="tool-icon">{{ toolIconEmoji(block) }}</span>
             <span class="tool-name">{{ toolName(block) }}</span>
-            <span class="tool-preview">{{ toolPreview(block) }}</span>
-            <svg class="tool-chevron" :class="{ expanded: expandedTools[toolId(block)] }" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="2 3.5 5 6.5 8 3.5" />
-            </svg>
-          </button>
-          <template v-if="expandedTools[toolId(block)]">
-            <pre class="tool-pre">{{ formatPayload(toolInput(block)) }}</pre>
-            <pre v-if="hasToolResult(block)" class="tool-pre result">{{ toolBlockResultText(block) || '(no output)' }}</pre>
-          </template>
+          </div>
         </div>
       </template>
     </div>
@@ -1014,25 +1007,29 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   background: #92400e;
 }
 
-/* Tool Call Block - 紧凑卡片 */
+/* Tool Call Block - 紧凑卡片，不可点击 */
 .tool-call-block {
   overflow: hidden;
   border: 1px solid var(--outline-variant, #e8eaed);
   border-radius: 8px;
   background: var(--surface-container, #f8fafd);
   font-size: 12px;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.3s ease;
 }
 
-/* 运行中：边框高亮 + 轻微脉冲 */
+/* 运行中：边框高亮 + 脉冲发光 */
 .tool-call-block.is-running {
-  border-color: color-mix(in srgb, #f9ab00 40%, var(--outline-variant, #e8eaed));
-  animation: tool-glow 1.8s ease-in-out infinite;
+  border-color: color-mix(in srgb, #3b82f6 40%, var(--outline-variant, #e8eaed));
+  animation: tool-pulse 2s ease-in-out infinite;
 }
 
-@keyframes tool-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 171, 0, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(249, 171, 0, 0.1); }
+@keyframes tool-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0), 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), 0 2px 8px rgba(59, 130, 246, 0.2);
+  }
 }
 
 .tool-call-block.error {
@@ -1044,92 +1041,82 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 7px 12px;
-  border: 0;
-  background: none;
-  color: var(--text-muted, #5f6368);
-  cursor: pointer;
-  text-align: left;
+  padding: 8px 12px;
+  color: var(--text, #202124);
   font-size: 12px;
-  transition: background 0.12s ease;
   min-width: 0;
 }
-
-.tool-header:hover {
-  background: rgba(100, 116, 139, 0.05);
 }
 
 .tool-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
 .tool-status-dot.running {
-  background: var(--accent, #1a73e8);
-  animation: thinking-pulse 1.5s ease-in-out infinite;
+  background: #3b82f6;
+  animation: dot-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
 }
 
 .tool-status-dot.done {
-  background: var(--success, #188038);
+  background: #10b981;
+  animation: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes scale-in {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .tool-status-dot.error {
-  background: var(--error, #d93025);
+  background: #ef4444;
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-2px); }
+  40%, 60% { transform: translateX(2px); }
+}
+
+.tool-icon {
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .tool-name {
-  flex-shrink: 0;
+  flex: 1;
   color: var(--text, #202124);
-  font-family: var(--font-mono, monospace);
-  font-weight: 600;
-  font-size: 11.5px;
+  font-weight: 500;
+  font-size: 12px;
+  line-height: 1.4;
 }
 
 .tool-call-block.error .tool-name {
   color: var(--error, #d93025);
 }
-
-.tool-preview {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-dim, #9aa0a6);
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tool-chevron {
-  flex-shrink: 0;
-  color: var(--text-dim, #9aa0a6);
-  transform: rotate(0deg);
-  transition: transform 0.15s ease;
-}
-
-.tool-chevron.expanded {
-  transform: rotate(180deg);
-}
-
-.tool-pre {
-  overflow: auto;
-  max-height: 400px;
-  margin: 0;
-  border-top: 1px solid var(--outline-variant, #e8eaed);
-  padding: 10px 12px;
-  background: var(--surface, #fff);
-  color: var(--text-muted, #5f6368);
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-  font-family: var(--font-mono, monospace);
-}
-
-.tool-pre.result { background: var(--bg, #fff); }
 
 /* 流式指示器内部元素 */
 .stream-stat { color: var(--text-muted, #5f6368); }
