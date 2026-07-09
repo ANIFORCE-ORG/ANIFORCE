@@ -349,6 +349,21 @@ function openProject(project: { id: string }) {
   navigateTo(`/projects/${encodeURIComponent(project.id)}`)
 }
 
+function editProject(projectId: string) {
+  if (!projectId) return
+  navigateTo(`/projects?editProjectId=${encodeURIComponent(projectId)}`)
+}
+
+function createProjectTask(projectId: string) {
+  if (!projectId) return
+  navigateTo(`/campaigns/create?projectId=${encodeURIComponent(projectId)}`)
+}
+
+function viewProjectTasks(projectId: string) {
+  if (!projectId) return
+  navigateTo(`/projects/${encodeURIComponent(projectId)}`)
+}
+
 function openCampaign(campaignId: string) {
   if (!campaignId) return
   navigateTo(`/campaigns/${encodeURIComponent(campaignId)}`)
@@ -791,6 +806,9 @@ watch(
           @select-entity="entity => agent.selectWorkspaceEntity(entity)"
           @mention-entity="appendMentionToInput"
           @view-project="(projectId: string) => openProject({ id: projectId })"
+          @edit-project="editProject"
+          @create-project-task="createProjectTask"
+          @view-project-tasks="viewProjectTasks"
           @view-campaign="openCampaign"
           @view-material="openMaterial"
         />

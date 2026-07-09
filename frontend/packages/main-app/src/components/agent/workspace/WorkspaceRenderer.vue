@@ -411,6 +411,76 @@ function handlePreviewMaterial(material: Material): void {
       @update-form="handleUpdateApprovalForm"
     />
 
+    <!-- 项目创建已完成：显示创建的项目详情 -->
+    <div
+      v-else-if="projection?.surface === 'approval.review' && approvalDraft?.toolName === 'create_project' && (approvalDraft.status === 'completed' || approvalDraft.status === 'executing' || approvalDraft.status === 'approved')"
+      class="flex h-full flex-col"
+    >
+      <div class="flex items-center justify-between border-b border-slate-200 px-[16px] py-[12px] dark:border-slate-700">
+        <div class="flex items-center gap-[8px]">
+          <span class="material-symbols-outlined text-[18px] text-emerald-500">
+            {{ approvalDraft.status === 'completed' ? 'check_circle' : 'progress_activity' }}
+          </span>
+          <div>
+            <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ approvalTitle }}</h3>
+            <p class="text-[10px] text-slate-500 dark:text-slate-400">{{ approvalDescription }}</p>
+          </div>
+        </div>
+        <span class="rounded-full px-[8px] py-[3px] text-[10px] font-medium" :class="approvalStatusClass">{{ approvalStatusText }}</span>
+      </div>
+
+      <div class="flex-1 overflow-y-auto p-[16px]">
+        <div
+          v-if="approvalDraft.status === 'executing' || approvalDraft.status === 'approved'"
+          class="mb-[12px] flex items-center gap-[8px] rounded-md border border-blue-100 bg-blue-50 p-[10px] text-[11px] text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-300"
+        >
+          <span class="material-symbols-outlined animate-spin text-[16px]">progress_activity</span>
+          正在创建项目...
+        </div>
+
+        <div class="rounded-md border border-slate-200 bg-white p-[14px] dark:border-slate-700 dark:bg-slate-800">
+          <div class="mb-[12px]">
+            <h4 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ approvalArgs.name || '新项目' }}</h4>
+            <p v-if="approvalArgs.description" class="mt-[4px] text-[11px] text-slate-600 dark:text-slate-300">{{ approvalArgs.description }}</p>
+          </div>
+
+          <div class="space-y-[8px] text-[11px]">
+            <div v-if="approvalArgs.target_market" class="flex items-center justify-between">
+              <span class="text-slate-500 dark:text-slate-400">目标市场</span>
+              <span class="font-medium text-slate-900 dark:text-white">{{ approvalArgs.target_market }}</span>
+            </div>
+            <div v-if="approvalArgs.product" class="flex items-center justify-between">
+              <span class="text-slate-500 dark:text-slate-400">产品</span>
+              <span class="font-medium text-slate-900 dark:text-white">{{ approvalArgs.product }}</span>
+            </div>
+            <div v-if="approvalArgs.total_budget" class="flex items-center justify-between">
+              <span class="text-slate-500 dark:text-slate-400">总预算</span>
+              <span class="font-medium text-emerald-600 dark:text-emerald-400">¥{{ Number(approvalArgs.total_budget).toLocaleString() }}</span>
+            </div>
+            <div v-if="approvalArgs.status" class="flex items-center justify-between">
+              <span class="text-slate-500 dark:text-slate-400">状态</span>
+              <span class="rounded-full bg-emerald-50 px-[8px] py-[2px] text-[10px] font-medium text-emerald-600 dark:bg-emerald-900/20 dark:text-emerald-400">
+                {{ approvalArgs.status === 'active' ? '活跃' : approvalArgs.status }}
+              </span>
+            </div>
+            <div v-if="approvalArgs.start_date || approvalArgs.end_date" class="flex items-center justify-between">
+              <span class="text-slate-500 dark:text-slate-400">时间范围</span>
+              <span class="text-slate-600 dark:text-slate-300">
+                {{ approvalArgs.start_date ? String(approvalArgs.start_date).split('T')[0] : '—' }}
+                至
+                {{ approvalArgs.end_date ? String(approvalArgs.end_date).split('T')[0] : '—' }}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div v-if="approvalDraft.status === 'completed'" class="mt-[12px] rounded-md border border-emerald-200 bg-emerald-50 p-[10px] text-[11px] text-emerald-700 dark:border-emerald-900/40 dark:bg-emerald-950/20 dark:text-emerald-300">
+          <span class="material-symbols-outlined mr-[4px] inline-block align-middle text-[14px]">info</span>
+          项目已创建，详细结果见对话区
+        </div>
+      </div>
+    </div>
+
     <div v-else-if="projection?.surface === 'approval.review' && approvalDraft" class="flex h-full flex-col">
       <div class="flex items-center justify-between border-b border-slate-200 px-[16px] py-[12px] dark:border-slate-700">
         <div class="flex items-center gap-[8px]">
