@@ -384,6 +384,22 @@ class AgentRuntime:
             run_state=run_state,
         )
 
+    async def claim_checkpoint_for_resume(
+        self,
+        *,
+        checkpoint_id: str,
+        user_id: str,
+        edited_arguments: dict | None = None,
+        argument_diff: list | None = None,
+    ) -> dict:
+        engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
+        return await RuntimeCheckpointStore(engine).claim_or_raise(
+            checkpoint_id,
+            user_id,
+            approved_arguments=edited_arguments,
+            argument_diff=argument_diff,
+        )
+
     async def resume_checkpoint(
         self,
         *,
@@ -395,21 +411,17 @@ class AgentRuntime:
         always: bool = False,
         edited_arguments: dict | None = None,
         argument_diff: list | None = None,
+        claimed_checkpoint: dict | None = None,
     ) -> AsyncIterator[dict]:
         """Resume a paused SDK HITL checkpoint."""
         engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
         store = RuntimeCheckpointStore(engine)
-        checkpoint = await store.claim_for_resume(
-            checkpoint_id,
-            user_id,
-            approved_arguments=edited_arguments,
+        checkpoint = claimed_checkpoint or await self.claim_checkpoint_for_resume(
+            checkpoint_id=checkpoint_id,
+            user_id=user_id,
+            edited_arguments=edited_arguments,
             argument_diff=argument_diff,
         )
-        if not checkpoint:
-            current = await store.get(checkpoint_id, user_id)
-            if not current:
-                raise AppError(AgentErrorCode.UNKNOWN_ERROR, "Checkpoint not found")
-            raise AppError(AgentErrorCode.UNKNOWN_ERROR, f"Checkpoint is {current['status']}")
 
         safe_context = checkpoint["run_state"].get("context", {}).get("value") or {}
         # 构建 approved_arguments_by_call_id：用 interruption 的 call_id 关联

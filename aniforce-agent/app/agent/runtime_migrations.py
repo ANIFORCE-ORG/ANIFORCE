@@ -68,7 +68,23 @@ async def _migration_1(conn: object) -> None:
     )
 
 
-MIGRATIONS: tuple[tuple[int, Migration], ...] = ((1, _migration_1),)
+async def _migration_2(conn: object) -> None:
+    columns = await _column_names(conn, "runtime_checkpoints")
+    additions = {
+        "version": "INTEGER NOT NULL DEFAULT 1",
+        "claimed_at": "TEXT",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            await conn.execute(
+                text(f"ALTER TABLE runtime_checkpoints ADD COLUMN {name} {definition}")
+            )
+
+
+MIGRATIONS: tuple[tuple[int, Migration], ...] = (
+    (1, _migration_1),
+    (2, _migration_2),
+)
 
 
 class RuntimeSchemaMigrator:

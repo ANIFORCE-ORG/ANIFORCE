@@ -10,6 +10,14 @@ from uuid import uuid4
 from sqlalchemy import text
 
 
+class RuntimeCheckpointClaimError(Exception):
+    def __init__(self, code: str, message: str, status_code: int):
+        self.code = code
+        self.message = message
+        self.status_code = status_code
+        super().__init__(message)
+
+
 class RuntimeCheckpointStore:
     """Stores short-lived SDK RunState checkpoints for HITL resume."""
 
@@ -104,7 +112,9 @@ class RuntimeCheckpointStore:
                     UPDATE runtime_checkpoints
                     SET status = 'resuming',
                         approved_arguments_json = :approved_arguments_json,
-                        argument_diff_json = :argument_diff_json
+                        argument_diff_json = :argument_diff_json,
+                        claimed_at = :now,
+                        version = version + 1
                     WHERE id = :id
                       AND user_id = :user_id
                       AND status = 'pending'
@@ -123,7 +133,7 @@ class RuntimeCheckpointStore:
                 text(
                     """
                     UPDATE runtime_checkpoints
-                    SET status = 'expired', resolved_at = :now
+                    SET status = 'expired', resolved_at = :now, version = version + 1
                     WHERE id = :id
                       AND user_id = :user_id
                       AND status = 'pending'
@@ -133,6 +143,33 @@ class RuntimeCheckpointStore:
                 values,
             )
         return None
+
+    async def claim_or_raise(
+        self,
+        checkpoint_id: str,
+        user_id: str,
+        *,
+        approved_arguments: dict[str, Any] | None = None,
+        argument_diff: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any]:
+        checkpoint = await self.claim_for_resume(
+            checkpoint_id,
+            user_id,
+            approved_arguments=approved_arguments,
+            argument_diff=argument_diff,
+        )
+        if checkpoint:
+            return checkpoint
+        current = await self.get(checkpoint_id, user_id)
+        if not current:
+            raise RuntimeCheckpointClaimError("CHECKPOINT_NOT_FOUND", "Checkpoint not found", 404)
+        if current["status"] == "expired":
+            raise RuntimeCheckpointClaimError("CHECKPOINT_EXPIRED", "Checkpoint has expired", 410)
+        raise RuntimeCheckpointClaimError(
+            "CHECKPOINT_CONFLICT",
+            f"Checkpoint cannot be resumed from status {current['status']}",
+            409,
+        )
 
     async def mark_status(
         self,
@@ -157,13 +194,41 @@ class RuntimeCheckpointStore:
                 text(
                     f"""
                     UPDATE runtime_checkpoints
-                    SET status = :status, resolved_at = :resolved_at, error_json = :error_json
+                    SET status = :status, resolved_at = :resolved_at,
+                        error_json = :error_json, version = version + 1
                     WHERE id = :id AND user_id = :user_id{status_guard}
                     """
                 ),
                 values,
             )
         return await self.get(checkpoint_id, user_id)
+
+    async def recover_stale_resuming(self, cutoff: datetime) -> int:
+        """Fail stale claims; automatic replay could duplicate tool side effects."""
+        now = datetime.utcnow().isoformat()
+        error = json.dumps(
+            {
+                "code": "CHECKPOINT_RESUME_INTERRUPTED",
+                "message": "Checkpoint resume was interrupted",
+                "retryable": True,
+            },
+            ensure_ascii=False,
+        )
+        async with self.engine.begin() as conn:
+            result = await conn.execute(
+                text(
+                    """
+                    UPDATE runtime_checkpoints
+                    SET status = 'failed', resolved_at = :now,
+                        error_json = :error, version = version + 1
+                    WHERE status = 'resuming'
+                      AND claimed_at IS NOT NULL
+                      AND claimed_at < :cutoff
+                    """
+                ),
+                {"now": now, "error": error, "cutoff": cutoff.isoformat()},
+            )
+        return int(result.rowcount or 0)
 
     def _decode(self, item: dict[str, Any]) -> dict[str, Any]:
         decoded = dict(item)

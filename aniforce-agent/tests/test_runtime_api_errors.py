@@ -23,6 +23,9 @@ class ExplodingRuntime:
     def __init__(self) -> None:
         self.auth_token = None
 
+    async def claim_checkpoint_for_resume(self, **kwargs):
+        return {"id": kwargs["checkpoint_id"], "status": "resuming"}
+
     async def resume_checkpoint(self, **kwargs):
         self.auth_token = kwargs["auth_token"]
         raise RuntimeError("sk-secret SELECT * FROM checkpoints /private/agent.db")
@@ -32,12 +35,43 @@ class ExplodingRuntime:
         raise RuntimeError("sk-secret SELECT * FROM sessions /private/agent.db")
 
 
+class ClaimBoundaryRuntime:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    async def claim_checkpoint_for_resume(self, **kwargs):
+        raise self.error
+
+
 class HistoryBoundaryRuntime:
     def __init__(self, error: Exception) -> None:
         self.error = error
 
     async def get_session_history(self, session_id: str, user_id: str):
         raise self.error
+
+
+def test_checkpoint_api_returns_claim_http_status() -> None:
+    from app.agent.checkpoints import RuntimeCheckpointClaimError
+
+    async def scenario() -> None:
+        for status_code, code in ((410, "CHECKPOINT_EXPIRED"), (409, "CHECKPOINT_CONFLICT")):
+            try:
+                await resume_checkpoint(
+                    checkpoint_id="ckpt_1",
+                    request=FakeResumeRequest(),
+                    user={"id": "user_1", "token": "trusted-token"},
+                    runtime=ClaimBoundaryRuntime(
+                        RuntimeCheckpointClaimError(code, "Checkpoint unavailable", status_code)
+                    ),
+                )
+            except HTTPException as exc:
+                assert exc.status_code == status_code
+                assert exc.detail["code"] == code
+            else:
+                raise AssertionError("Expected HTTPException")
+
+    asyncio.run(scenario())
 
 
 def test_checkpoint_api_redacts_unexpected_error() -> None:

@@ -140,6 +140,53 @@ def test_mark_status_respects_expected_status() -> None:
     asyncio.run(scenario())
 
 
+def test_stale_resuming_checkpoint_is_failed_without_replay() -> None:
+    async def scenario() -> None:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        store = RuntimeCheckpointStore(engine)
+        try:
+            await RuntimeSchemaMigrator(engine).migrate()
+            stale = await store.create(
+                run_id="run_stale",
+                session_id="session_1",
+                user_id="user_1",
+                interruptions=[],
+                run_state={},
+            )
+            fresh = await store.create(
+                run_id="run_fresh",
+                session_id="session_1",
+                user_id="user_1",
+                interruptions=[],
+                run_state={},
+            )
+            await store.claim_for_resume(stale["id"], "user_1")
+            await store.claim_for_resume(fresh["id"], "user_1")
+            async with engine.begin() as conn:
+                await conn.execute(
+                    text("UPDATE runtime_checkpoints SET claimed_at=:claimed_at WHERE id=:id"),
+                    {
+                        "claimed_at": (datetime.utcnow() - timedelta(minutes=10)).isoformat(),
+                        "id": stale["id"],
+                    },
+                )
+
+            recovered = await store.recover_stale_resuming(datetime.utcnow() - timedelta(minutes=5))
+            stale_current = await store.get(stale["id"], "user_1")
+            fresh_current = await store.get(fresh["id"], "user_1")
+
+            assert recovered == 1
+            assert stale_current is not None
+            assert stale_current["status"] == "failed"
+            assert stale_current["error"]["code"] == "CHECKPOINT_RESUME_INTERRUPTED"
+            assert fresh_current is not None
+            assert fresh_current["status"] == "resuming"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_claim_persists_edited_arguments_atomically() -> None:
     async def scenario() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")

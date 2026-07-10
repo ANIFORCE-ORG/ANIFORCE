@@ -6,6 +6,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
+from app.agent.checkpoints import RuntimeCheckpointClaimError
 from app.agent.runtime import AgentRuntime
 from app.auth import get_current_user
 from app.core.errors import unexpected_error_payload
@@ -35,6 +36,19 @@ async def resume_checkpoint(
     edited_arguments = body.get("edited_arguments")
     argument_diff = body.get("argument_diff")
 
+    try:
+        claimed_checkpoint = await runtime.claim_checkpoint_for_resume(
+            checkpoint_id=checkpoint_id,
+            user_id=user["id"],
+            edited_arguments=edited_arguments,
+            argument_diff=argument_diff,
+        )
+    except RuntimeCheckpointClaimError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail={"code": exc.code, "message": exc.message},
+        ) from exc
+
     async def event_generator():
         try:
             async for event in runtime.resume_checkpoint(
@@ -46,6 +60,7 @@ async def resume_checkpoint(
                 always=always,
                 edited_arguments=edited_arguments,
                 argument_diff=argument_diff,
+                claimed_checkpoint=claimed_checkpoint,
             ):
                 sequence = int(event.get("sequence") or 0)
                 event_name = str(event.get("event") or "sdk.event")

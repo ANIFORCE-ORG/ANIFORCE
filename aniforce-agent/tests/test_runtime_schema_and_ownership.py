@@ -43,8 +43,13 @@ def test_runtime_migration_upgrades_legacy_checkpoint_schema_idempotently() -> N
                     text("SELECT name FROM sqlite_master WHERE type='table' AND name='runtime_sessions'")
                 )
 
-            assert {"approved_arguments_json", "argument_diff_json"}.issubset(names)
-            assert [row[0] for row in versions.fetchall()] == [1]
+            assert {
+                "approved_arguments_json",
+                "argument_diff_json",
+                "version",
+                "claimed_at",
+            }.issubset(names)
+            assert [row[0] for row in versions.fetchall()] == [1, 2]
             assert sessions.scalar_one() == "runtime_sessions"
         finally:
             await engine.dispose()
