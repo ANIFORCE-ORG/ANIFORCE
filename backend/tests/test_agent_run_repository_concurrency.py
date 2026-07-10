@@ -34,6 +34,7 @@ def test_persistent_event_sequence_and_terminal_marker() -> None:
                 )
                 await service.mark_running("run_sequence", "user_1")
                 paused = await service.mark_requires_action("run_sequence", "user_1", "ckpt_1")
+                resumed = await service.mark_running("run_sequence", "user_1")
                 completed = await service.mark_completed("run_sequence", "user_1")
                 await session.commit()
 
@@ -46,14 +47,16 @@ def test_persistent_event_sequence_and_terminal_marker() -> None:
                 ).mappings().all()
 
             assert paused is not None and paused["terminal_event_id"] is None
-            assert completed is not None and completed["last_event_sequence"] == 3
+            assert resumed is not None and resumed["status"] == "running"
+            assert completed is not None and completed["last_event_sequence"] == 4
             assert [event["event_type"] for event in events] == [
                 "run.started",
                 "run.requires_action",
+                "run.resuming",
                 "run.completed",
             ]
-            assert [event["sequence"] for event in events] == [1, 2, 3]
-            assert [event["is_terminal"] for event in events] == [False, False, True]
+            assert [event["sequence"] for event in events] == [1, 2, 3, 4]
+            assert [event["is_terminal"] for event in events] == [False, False, False, True]
             assert completed["terminal_event_id"] == events[-1]["id"]
         finally:
             await engine.dispose()

@@ -17,8 +17,10 @@ from app.config.database import get_db, get_session_maker
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
+from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 from app.services.agent_run_service import AgentRunError, AgentRunService
+from app.services.agent_approval_service import AgentApprovalError, AgentApprovalService
 from app.services.agent_session_service import AgentSessionError, AgentSessionService
 from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
 from app.services.agent_run_event_bus import agent_run_event_bus
@@ -246,6 +248,87 @@ async def _get_run_short_tx(run_id: str, user_id: str) -> dict:
     return await _with_session(callback)
 
 
+async def _persist_requires_action_short_tx(
+    *,
+    run_id: str,
+    user_id: str,
+    data: dict,
+) -> dict | None:
+    checkpoint_ref = str(data.get("checkpoint_id") or "")
+
+    async def callback(session: AsyncSession):
+        run_service = AgentRunService(SqliteAgentRunRepository(session))
+        approval_repo = SqliteAgentApprovalRepository(session)
+        existing = await approval_repo.list_for_checkpoint(run_id, checkpoint_ref, user_id)
+        if existing:
+            return await run_service.get(run_id, user_id)
+        updated = await run_service.mark_requires_action(run_id, user_id, checkpoint_ref)
+        if not updated or updated.get("status") != "requires_action":
+            return updated
+        if not existing:
+            await AgentApprovalService(approval_repo).create_for_interruption(
+                run_id=run_id,
+                checkpoint_ref=checkpoint_ref,
+                user_id=user_id,
+                interruptions=list(data.get("interruptions") or []),
+                expires_at=data.get("expires_at"),
+            )
+        return updated
+
+    return await _with_session(callback)
+
+
+async def _claim_approvals_short_tx(
+    *,
+    run_id: str,
+    checkpoint_ref: str,
+    user_id: str,
+    decision: str,
+    edited_arguments: dict | None,
+    argument_diff: list | None,
+    rejection_message: str | None,
+) -> list[dict]:
+    async def callback(session: AsyncSession):
+        try:
+            items = await AgentApprovalService(SqliteAgentApprovalRepository(session)).claim(
+                run_id=run_id,
+                checkpoint_ref=checkpoint_ref,
+                user_id=user_id,
+                decision=decision,
+                edited_arguments=edited_arguments,
+                argument_diff=argument_diff,
+                rejection_message=rejection_message,
+            )
+            return items, None
+        except AgentApprovalError as exc:
+            if exc.code == "APPROVAL_EXPIRED":
+                return [], exc
+            raise
+
+    items, error = await _with_session(callback)
+    if error:
+        raise error
+    return items
+
+
+async def _mark_approvals_status_short_tx(
+    *,
+    run_id: str,
+    checkpoint_ref: str,
+    user_id: str,
+    status: str,
+) -> int:
+    async def callback(session: AsyncSession):
+        return await SqliteAgentApprovalRepository(session).mark_checkpoint_status(
+            run_id=run_id,
+            checkpoint_ref=checkpoint_ref,
+            user_id=user_id,
+            status=status,
+        )
+
+    return await _with_session(callback)
+
+
 async def _mark_run_status_short_tx(
     run_id: str,
     user_id: str,
@@ -389,6 +472,29 @@ async def get_agent_run(
         raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
 
+@router.get("/runs/{run_id}/approvals")
+async def list_run_approvals(
+    run_id: str,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        run = await AgentRunService(SqliteAgentRunRepository(session)).get(run_id, current_user["id"])
+    except AgentRunError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_error_payload(exc.code, exc.message, exc.retryable),
+        ) from exc
+    checkpoint_ref = str(run.get("checkpoint_ref") or "")
+    if not checkpoint_ref:
+        return []
+    return await SqliteAgentApprovalRepository(session).list_for_checkpoint(
+        run_id,
+        checkpoint_ref,
+        current_user["id"],
+    )
+
+
 @router.post("/runs/{run_id}/approvals/{checkpoint_id}")
 async def resolve_run_approval(
     run_id: str,
@@ -407,6 +513,22 @@ async def resolve_run_approval(
     if run.get("checkpoint_ref") != checkpoint_id:
         raise HTTPException(status_code=409, detail=_error_payload("CHECKPOINT_MISMATCH", "Checkpoint does not belong to run"))
 
+    try:
+        await _claim_approvals_short_tx(
+            run_id=run_id,
+            checkpoint_ref=checkpoint_id,
+            user_id=user_id,
+            decision=decision,
+            edited_arguments=body.get("edited_arguments"),
+            argument_diff=body.get("argument_diff"),
+            rejection_message=body.get("rejection_message"),
+        )
+    except AgentApprovalError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_error_payload(exc.code, exc.message, retryable=False),
+        ) from exc
+
     payload = {
         "decision": decision,
         "rejection_message": body.get("rejection_message"),
@@ -418,17 +540,27 @@ async def resolve_run_approval(
 
     async def event_generator():
         stream_buffer = ""
+        resolved_status = "rejected" if decision == "reject" else "resolved"
+
+        async def settle_approval(status: str) -> None:
+            await _mark_approvals_status_short_tx(
+                run_id=run_id,
+                checkpoint_ref=checkpoint_id,
+                user_id=user_id,
+                status=status,
+            )
         event_processor = AgentRunEventProcessor(
             event_bus=agent_run_event_bus,
             mark_run_status=_mark_run_status_short_tx,
+            persist_requires_action=_persist_requires_action_short_tx,
         )
         try:
             await _mark_run_status_short_tx(run_id, user_id, "running")
             await event_processor.publish_running(run_id=run_id)
             async for chunk in gateway.stream_checkpoint_resume(_authorization(request), checkpoint_id, payload):
-                yield chunk
                 stream_buffer += chunk.decode("utf-8", errors="ignore")
                 events, stream_buffer = _parse_sse_events(stream_buffer)
+                terminal = False
                 for event_name, data in events:
                     result = await event_processor.handle_runtime_event(
                         run_id=run_id,
@@ -437,7 +569,15 @@ async def resolve_run_approval(
                         data=data,
                     )
                     if result.terminal:
-                        return
+                        approval_status = (
+                            "failed" if event_name in {"runtime.error", "runtime.aborted"} else resolved_status
+                        )
+                        await settle_approval(approval_status)
+                        terminal = True
+                        break
+                yield chunk
+                if terminal:
+                    return
 
             events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
             for event_name, data in events:
@@ -448,10 +588,21 @@ async def resolve_run_approval(
                     data=data,
                 )
                 if result.terminal:
+                    approval_status = (
+                        "failed" if event_name in {"runtime.error", "runtime.aborted"} else resolved_status
+                    )
+                    await settle_approval(approval_status)
                     return
+            await settle_approval("failed")
         except Exception:
             logger.exception("checkpoint resume stream failed: run_id={} checkpoint_id={}", run_id, checkpoint_id)
             error = _unexpected_run_error("RESUME_FAILED")
+            await _mark_approvals_status_short_tx(
+                run_id=run_id,
+                checkpoint_ref=checkpoint_id,
+                user_id=user_id,
+                status="failed",
+            )
             await _mark_run_status_short_tx(run_id, user_id, "error", error=error)
             yield "event: runtime.error\n"
             yield f"data: {json.dumps({'run_id': run_id, **error}, ensure_ascii=False)}\n\n"
@@ -643,6 +794,7 @@ async def _consume_agent_run_background(
     event_processor = AgentRunEventProcessor(
         event_bus=agent_run_event_bus,
         mark_run_status=_mark_run_status_short_tx,
+        persist_requires_action=_persist_requires_action_short_tx,
     )
 
     try:

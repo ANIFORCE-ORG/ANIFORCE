@@ -16,11 +16,11 @@ from app import mcp_server
 
 
 class FakeContext:
-    def __init__(self, *, run_id: str, user_id: str) -> None:
+    def __init__(self, *, run_id: str, user_id: str, checkpoint_id: str = "current") -> None:
         self.request_context = type(
             "RequestContext",
             (),
-            {"meta": {"run_id": run_id, "user_id": user_id}},
+            {"meta": {"run_id": run_id, "user_id": user_id, "checkpoint_id": checkpoint_id}},
         )()
 
 
@@ -48,6 +48,15 @@ async def create_checkpoint_db(db_path: Path) -> None:
                 json.dumps({"budget": 100}),
                 json.dumps([{"tool_name": "create_project"}]),
                 "2026-07-10T10:00:00",
+            ),
+            (
+                "same_tool_other_checkpoint",
+                "run_1",
+                "user_1",
+                "resuming",
+                json.dumps({"budget": 777}),
+                json.dumps([{"tool_name": "create_project"}]),
+                "2026-07-10T10:30:00",
             ),
             (
                 "other_user",
@@ -99,10 +108,15 @@ def test_approved_arguments_are_isolated_by_user_status_and_tool(monkeypatch) ->
                 FakeContext(run_id="run_1", user_id="user_1"),
                 "update_project",
             )
+            missing_checkpoint = await mcp_server._get_approved_arguments(
+                FakeContext(run_id="run_1", user_id="user_1", checkpoint_id=""),
+                "create_project",
+            )
 
             assert approved == {"budget": 100}
             assert wrong_user is None
             assert wrong_tool is None
+            assert missing_checkpoint is None
         finally:
             db_path.unlink(missing_ok=True)
 

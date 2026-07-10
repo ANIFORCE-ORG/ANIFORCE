@@ -94,6 +94,47 @@ def test_live_subscriber_receives_normalized_error_after_runtime_error() -> None
     asyncio.run(scenario())
 
 
+def test_requires_action_persists_bound_approval_payload() -> None:
+    async def scenario() -> None:
+        event_bus = AgentRunEventBus()
+        await event_bus.create_run("run_1", "session_1", "user_1")
+        captured = None
+
+        async def mark_run_status(*args, **kwargs):
+            raise AssertionError("requires_action must use atomic persistence callback")
+
+        async def persist_requires_action(**kwargs):
+            nonlocal captured
+            captured = kwargs
+            return {"run_id": "run_1", "status": "requires_action"}
+
+        data = {
+            "checkpoint_id": "ckpt_1",
+            "expires_at": "2026-07-11T00:00:00",
+            "interruptions": [
+                {"call_id": "call_1", "tool_name": "create_project", "arguments": {"name": "demo"}}
+            ],
+        }
+        processor = AgentRunEventProcessor(
+            event_bus=event_bus,
+            mark_run_status=mark_run_status,
+            persist_requires_action=persist_requires_action,
+        )
+        result = await processor.handle_runtime_event(
+            run_id="run_1",
+            user_id="user_1",
+            event_name="runtime.requires_action",
+            data=data,
+            publish_source_event=False,
+        )
+
+        assert captured == {"run_id": "run_1", "user_id": "user_1", "data": data}
+        assert result.requires_action is True
+        assert result.persisted_status == "requires_action"
+
+    asyncio.run(scenario())
+
+
 def test_requires_action_is_not_published_after_terminal_state() -> None:
     async def scenario() -> None:
         event_bus = AgentRunEventBus()

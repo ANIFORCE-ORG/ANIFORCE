@@ -129,6 +129,11 @@ class SqliteAgentRunRepository:
         )
         if status == "cancelled":
             stmt = stmt.where(AgentRun.status.in_(ACTIVE_RUN_STATUSES))
+        elif status == "requires_action":
+            stmt = stmt.where(
+                ~AgentRun.status.in_(TERMINAL_RUN_STATUSES),
+                AgentRun.status != "requires_action",
+            )
         else:
             stmt = stmt.where(~AgentRun.status.in_(TERMINAL_RUN_STATUSES))
         result = await self.session.execute(stmt.values(**values))

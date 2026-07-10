@@ -64,11 +64,12 @@ class AgentRunService:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
+        event_type = "run.resuming" if run["status"] == "requires_action" else "run.started"
         return await self.repo.transition_with_event(
             run_id,
             user_id,
             "running",
-            event_type="run.started",
+            event_type=event_type,
             payload={"run_id": run_id, "status": "running"},
             is_terminal=False,
         )

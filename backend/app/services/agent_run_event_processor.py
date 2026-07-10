@@ -12,6 +12,7 @@ from typing import Any
 from app.services.agent_run_event_bus import AgentRunEventBus
 
 MarkRunStatus = Callable[..., Awaitable[dict | None]]
+PersistRequiresAction = Callable[..., Awaitable[dict | None]]
 
 
 @dataclass(frozen=True)
@@ -22,9 +23,16 @@ class AgentRunEventResult:
 
 
 class AgentRunEventProcessor:
-    def __init__(self, *, event_bus: AgentRunEventBus, mark_run_status: MarkRunStatus) -> None:
+    def __init__(
+        self,
+        *,
+        event_bus: AgentRunEventBus,
+        mark_run_status: MarkRunStatus,
+        persist_requires_action: PersistRequiresAction | None = None,
+    ) -> None:
         self.event_bus = event_bus
         self.mark_run_status = mark_run_status
+        self.persist_requires_action = persist_requires_action
 
     async def publish_running(self, *, run_id: str, session_id: str | None = None) -> None:
         data: dict[str, Any] = {"run_id": run_id, "status": "running"}
@@ -48,12 +56,19 @@ class AgentRunEventProcessor:
 
         if event_name == "runtime.requires_action":
             checkpoint_id = data.get("checkpoint_id") if isinstance(data, dict) else None
-            updated_run = await self.mark_run_status(
-                run_id,
-                user_id,
-                "requires_action",
-                checkpoint_ref=str(checkpoint_id or ""),
-            )
+            if self.persist_requires_action:
+                updated_run = await self.persist_requires_action(
+                    run_id=run_id,
+                    user_id=user_id,
+                    data=data,
+                )
+            else:
+                updated_run = await self.mark_run_status(
+                    run_id,
+                    user_id,
+                    "requires_action",
+                    checkpoint_ref=str(checkpoint_id or ""),
+                )
             persisted_status = updated_run.get("status") if updated_run else None
             if persisted_status != "requires_action":
                 return AgentRunEventResult(

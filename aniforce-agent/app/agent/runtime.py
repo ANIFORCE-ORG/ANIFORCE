@@ -116,6 +116,7 @@ class AgentRuntime:
         session_id: str,
         run_id: str,
         user_id: str,
+        checkpoint_id: str = "",
     ):
         """MCP 连接上下文管理器（连本进程 /mcp + 多租户隔离）。"""
         from agents.mcp import MCPServerStreamableHttp, MCPToolMetaContext
@@ -136,6 +137,8 @@ class AgentRuntime:
                 meta["run_id"] = run_id
             if user_id:
                 meta["user_id"] = user_id
+            if checkpoint_id:
+                meta["checkpoint_id"] = checkpoint_id
             return meta or None
 
         mcp_server = None
@@ -301,6 +304,7 @@ class AgentRuntime:
                         "session_id": effective_session_id,
                         "checkpoint_id": checkpoint["id"],
                         "interruptions": checkpoint["interruptions"],
+                        "expires_at": checkpoint["expires_at"],
                     },
                     "sequence": sequence,
                 }
@@ -453,6 +457,7 @@ class AgentRuntime:
                 session_id=checkpoint["session_id"],
                 run_id=checkpoint["run_id"],
                 user_id=user_id,
+                checkpoint_id=checkpoint_id,
             ) as mcp_servers:
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",
@@ -506,6 +511,7 @@ class AgentRuntime:
                             "session_id": checkpoint["session_id"],
                             "checkpoint_id": new_checkpoint["id"],
                             "interruptions": new_checkpoint["interruptions"],
+                            "expires_at": new_checkpoint["expires_at"],
                         },
                         "sequence": sequence,
                     }

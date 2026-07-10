@@ -14,6 +14,7 @@ from app.models.agent_session import AgentSession, AgentSessionStatus
 from app.models.agent_message import AgentMessage
 from app.models.agent_run import AgentRun
 from app.models.agent_run_event import AgentRunEvent
+from app.models.agent_approval import AgentApproval
 from app.models.idempotency import IdempotencyRecord
 
 __all__ = [
@@ -36,5 +37,6 @@ __all__ = [
     "AgentMessage",
     "AgentRun",
     "AgentRunEvent",
+    "AgentApproval",
     "IdempotencyRecord",
 ]

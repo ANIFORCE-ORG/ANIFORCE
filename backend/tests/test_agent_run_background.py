@@ -130,11 +130,16 @@ def test_background_stream_settles_terminal_state(
                 run_state["status"] = status
             return {"run_id": run_id, "status": run_state["status"]}
 
+        async def persist_requires_action(**kwargs):
+            assert kwargs == {"run_id": run_id, "user_id": user_id, "data": data}
+            return await mark_run_status(run_id, user_id, "requires_action")
+
         monkeypatch.setattr(agent_routes, "_get_session_state_short_tx", get_session_state)
         monkeypatch.setattr(agent_routes, "_mark_running_short_tx", mark_running)
         monkeypatch.setattr(agent_routes, "_mark_active_short_tx", mark_active)
         monkeypatch.setattr(agent_routes, "_mark_error_short_tx", mark_error)
         monkeypatch.setattr(agent_routes, "_mark_run_status_short_tx", mark_run_status)
+        monkeypatch.setattr(agent_routes, "_persist_requires_action_short_tx", persist_requires_action)
 
         await agent_routes.agent_run_event_bus.create_run(run_id, session_id, user_id)
         await agent_routes._consume_agent_run_background(
