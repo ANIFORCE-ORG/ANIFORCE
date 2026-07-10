@@ -103,11 +103,11 @@ function getStatusColor(status: string) {
         </div>
         <button
           v-if="embedded"
-          class="mention-btn absolute top-[12px] right-[12px] z-10 rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-all hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
-          title="引用到对话"
+          class="absolute top-[12px] right-[12px] z-10 rounded-md border border-slate-200 bg-white/95 px-[8px] py-[5px] text-[10px] font-medium text-slate-600 opacity-0 shadow-sm transition-colors hover:border-primary/30 hover:text-primary group-hover:opacity-100 dark:border-slate-700 dark:bg-slate-900/95 dark:text-slate-300"
+          title="加入当前对话上下文"
           @click="emit('mention', campaign)"
         >
-          @mention
+          加入对话
         </button>
       </div>
     </div>
@@ -118,21 +118,3 @@ function getStatusColor(status: string) {
     </div>
   </div>
 </template>
-
-<style scoped>
-.mention-btn {
-  cursor: pointer;
-}
-
-.mention-btn:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
-  background: white !important;
-  border-color: rgb(var(--color-primary)) !important;
-}
-
-.mention-btn:active {
-  transform: translateY(0) scale(0.95);
-  transition-duration: 0.1s;
-}
-</style>
