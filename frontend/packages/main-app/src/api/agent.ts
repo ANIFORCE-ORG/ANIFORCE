@@ -8,6 +8,17 @@ export interface AgentSession {
   archived_at?: string | null
 }
 
+export interface AgentSessionSnapshot {
+  session: AgentSession
+  messages: AgentMessage[]
+  latest_run: Record<string, any> | null
+  pending_approval: Record<string, any> | null
+  approvals: Array<Record<string, any>>
+  tool_calls: Array<Record<string, any>>
+  artifacts: Array<Record<string, any>>
+  last_persisted_sequence: number
+}
+
 export interface AgentUsage {
   input?: number
   output?: number
@@ -210,6 +221,19 @@ export async function getAgentSession(sessionId: string): Promise<{ session: Age
   const session = normalizeAgentSession(detail)
   const messages = Array.isArray(detail.messages) ? detail.messages.map(normalizeAgentMessage) as AgentMessage[] : []
   return { session, messages }
+}
+
+export async function getAgentSessionSnapshot(sessionId: string): Promise<AgentSessionSnapshot> {
+  const snapshot = await agentJson<any>(`/sessions/${encodeURIComponent(sessionId)}/snapshot`)
+  return {
+    ...snapshot,
+    session: normalizeAgentSession(snapshot.session),
+    messages: Array.isArray(snapshot.messages) ? snapshot.messages.map(normalizeAgentMessage) : [],
+    approvals: Array.isArray(snapshot.approvals) ? snapshot.approvals : [],
+    tool_calls: Array.isArray(snapshot.tool_calls) ? snapshot.tool_calls : [],
+    artifacts: Array.isArray(snapshot.artifacts) ? snapshot.artifacts : [],
+    last_persisted_sequence: Number(snapshot.last_persisted_sequence || 0),
+  }
 }
 
 export async function updateAgentSession(sessionId: string, payload: { title: string }): Promise<AgentSession> {

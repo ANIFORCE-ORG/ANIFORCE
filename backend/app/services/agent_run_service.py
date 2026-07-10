@@ -29,6 +29,7 @@ class AgentRunService:
         user_id: str,
         input_text: str,
         idempotency_key: str | None,
+        execution_context: dict | None = None,
     ) -> tuple[dict, bool]:
         existing = await self.repo.get_by_idempotency(user_id, session_id, idempotency_key)
         if existing:
@@ -51,6 +52,7 @@ class AgentRunService:
             input_text=input_text,
             idempotency_key=idempotency_key,
             status="queued",
+            execution_context=execution_context,
         )
         return run, False
 
@@ -74,7 +76,13 @@ class AgentRunService:
             is_terminal=False,
         )
 
-    async def mark_completed(self, run_id: str, user_id: str, usage: dict | None = None) -> dict | None:
+    async def mark_completed(
+        self,
+        run_id: str,
+        user_id: str,
+        usage: dict | None = None,
+        final_output: str | None = None,
+    ) -> dict | None:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
@@ -83,13 +91,24 @@ class AgentRunService:
             user_id,
             "completed",
             event_type="run.completed",
-            payload={"run_id": run_id, "status": "completed", "usage": usage or {}},
+            payload={
+                "run_id": run_id,
+                "status": "completed",
+                "usage": usage or {},
+                "final_output": final_output,
+            },
             is_terminal=True,
             usage=usage,
             checkpoint_ref="",
         )
 
-    async def mark_requires_action(self, run_id: str, user_id: str, checkpoint_ref: str) -> dict | None:
+    async def mark_requires_action(
+        self,
+        run_id: str,
+        user_id: str,
+        checkpoint_ref: str,
+        event_payload: dict | None = None,
+    ) -> dict | None:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
@@ -98,7 +117,7 @@ class AgentRunService:
             user_id,
             "requires_action",
             event_type="run.requires_action",
-            payload={
+            payload=event_payload or {
                 "run_id": run_id,
                 "status": "requires_action",
                 "checkpoint_ref": checkpoint_ref,

@@ -1,7 +1,7 @@
 """Agent run execution log repository."""
 
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from uuid import uuid4
 
 from sqlalchemy import select, update
@@ -33,6 +33,12 @@ class SqliteAgentRunRepository:
             "checkpoint_ref": item.checkpoint_ref,
             "last_event_sequence": item.last_event_sequence,
             "terminal_event_id": item.terminal_event_id,
+            "version": item.version,
+            "lease_owner": item.lease_owner,
+            "lease_expires_at": item.lease_expires_at.isoformat() if item.lease_expires_at else None,
+            "heartbeat_at": item.heartbeat_at.isoformat() if item.heartbeat_at else None,
+            "runtime_started_at": item.runtime_started_at.isoformat() if item.runtime_started_at else None,
+            "execution_context": json.loads(item.run_state_json) if item.run_state_json else {},
             "started_at": item.started_at.isoformat(),
             "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         }
@@ -46,6 +52,7 @@ class SqliteAgentRunRepository:
         input_text: str,
         idempotency_key: str | None = None,
         status: str = "queued",
+        execution_context: dict | None = None,
     ) -> dict:
         item = AgentRun(
             run_id=run_id,
@@ -54,6 +61,9 @@ class SqliteAgentRunRepository:
             status=status,
             input_text=input_text,
             idempotency_key=idempotency_key,
+            run_state_json=json.dumps(execution_context or {}, ensure_ascii=False),
+            version=1,
+            last_event_sequence=0,
             started_at=datetime.utcnow(),
         )
         self.session.add(item)
@@ -94,6 +104,64 @@ class SqliteAgentRunRepository:
         item = result.scalar_one_or_none()
         return self._to_dict(item) if item else None
 
+    async def claim_next(self, worker_id: str, lease_seconds: int = 60) -> dict | None:
+        now = datetime.utcnow()
+        candidate_result = await self.session.execute(
+            select(AgentRun.run_id)
+            .where(
+                AgentRun.status == "queued",
+                (AgentRun.lease_expires_at.is_(None)) | (AgentRun.lease_expires_at < now),
+            )
+            .order_by(AgentRun.started_at)
+            .limit(1)
+        )
+        run_id = candidate_result.scalar_one_or_none()
+        if not run_id:
+            return None
+        result = await self.session.execute(
+            update(AgentRun)
+            .where(
+                AgentRun.run_id == run_id,
+                AgentRun.status == "queued",
+                (AgentRun.lease_expires_at.is_(None)) | (AgentRun.lease_expires_at < now),
+            )
+            .values(
+                lease_owner=worker_id,
+                lease_expires_at=now + timedelta(seconds=lease_seconds),
+                heartbeat_at=now,
+                version=AgentRun.version + 1,
+            )
+        )
+        if result.rowcount != 1:
+            return None
+        await self.session.flush()
+        item = await self.session.get(AgentRun, run_id)
+        return self._to_dict(item) if item else None
+
+    async def heartbeat(self, run_id: str, worker_id: str, lease_seconds: int = 60) -> bool:
+        now = datetime.utcnow()
+        result = await self.session.execute(
+            update(AgentRun)
+            .where(
+                AgentRun.run_id == run_id,
+                AgentRun.lease_owner == worker_id,
+                AgentRun.status == "running",
+            )
+            .values(
+                heartbeat_at=now,
+                lease_expires_at=now + timedelta(seconds=lease_seconds),
+                version=AgentRun.version + 1,
+            )
+        )
+        return result.rowcount == 1
+
+    async def release_lease(self, run_id: str, worker_id: str) -> None:
+        await self.session.execute(
+            update(AgentRun)
+            .where(AgentRun.run_id == run_id, AgentRun.lease_owner == worker_id)
+            .values(lease_owner=None, lease_expires_at=None, heartbeat_at=None)
+        )
+
     async def transition_with_event(
         self,
         run_id: str,
@@ -111,10 +179,16 @@ class SqliteAgentRunRepository:
         values: dict = {
             "status": status,
             "last_event_sequence": AgentRun.last_event_sequence + 1,
+            "version": AgentRun.version + 1,
         }
+        if status == "running":
+            values["runtime_started_at"] = datetime.utcnow()
         if is_terminal:
             values["completed_at"] = datetime.utcnow()
             values["terminal_event_id"] = event_id
+            values["lease_owner"] = None
+            values["lease_expires_at"] = None
+            values["heartbeat_at"] = None
         if usage is not None:
             values["usage_json"] = json.dumps(usage, ensure_ascii=False)
         if error is not None:

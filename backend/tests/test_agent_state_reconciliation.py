@@ -12,6 +12,7 @@ sys.path.insert(0, str(backend_root))
 
 from app.agent.reconciliation import AgentStateReconciler
 from app.models.agent_run import AgentRun
+from app.models.agent_run_event import AgentRunEvent
 from app.models.session_state import SessionState
 
 
@@ -23,6 +24,7 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
         try:
             async with engine.begin() as conn:
                 await conn.run_sync(AgentRun.__table__.create)
+                await conn.run_sync(AgentRunEvent.__table__.create)
                 await conn.run_sync(SessionState.__table__.create)
             async with sessions() as session:
                 session.add_all(
@@ -81,6 +83,8 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
                 approval_state = await session.get(SessionState, "approval_session")
                 orphan_state = await session.get(SessionState, "orphan_session")
                 assert stale is not None and stale.status == "error"
+                terminal_event = await session.get(AgentRunEvent, stale.terminal_event_id)
+                assert terminal_event is not None and terminal_event.event_type == "run.error"
                 assert stale_state is not None and stale_state.status == "error"
                 assert fresh is not None and fresh.status == "running"
                 assert fresh_state is not None and fresh_state.status == "running"

@@ -599,7 +599,7 @@ function transformLocalFilesToMaterialsPayload(result: unknown): Record<string, 
       }
       return null
     })
-    .filter((item): item is Record<string, unknown> => item !== null)
+    .filter(item => item !== null)
 
   return { materials }
 }

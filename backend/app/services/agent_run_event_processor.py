@@ -128,8 +128,15 @@ class AgentRunEventProcessor:
         user_id: str,
         session_id: str | None = None,
         usage: dict[str, Any] | None = None,
+        final_output: str | None = None,
     ) -> AgentRunEventResult:
-        updated_run = await self.mark_run_status(run_id, user_id, "completed", usage=usage)
+        updated_run = await self.mark_run_status(
+            run_id,
+            user_id,
+            "completed",
+            usage=usage,
+            final_output=final_output,
+        )
         persisted_status = updated_run.get("status") if updated_run else None
         if persisted_status != "completed":
             return AgentRunEventResult(

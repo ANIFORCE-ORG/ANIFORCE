@@ -16,10 +16,14 @@ from app.api.deps import get_current_user
 from app.config.database import get_db, get_session_maker
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
+from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
+from app.repositories.impl.sqlite_agent_run_event_repo import SqliteAgentRunEventRepository
+from app.repositories.impl.sqlite_agent_fact_repo import SqliteAgentArtifactRepository, SqliteAgentToolCallRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 from app.services.agent_run_service import AgentRunError, AgentRunService
+from app.services.agent_snapshot_service import AgentSnapshotService
 from app.services.agent_approval_service import AgentApprovalError, AgentApprovalService
 from app.services.agent_session_service import AgentSessionError, AgentSessionService
 from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
@@ -95,6 +99,7 @@ def get_agent_session_service(
         session_repo=SqliteAgentSessionRepository(session),
         state_repo=SqliteSessionStateRepository(session),
         gateway=gateway,
+        message_repo=SqliteAgentMessageRepository(session),
     )
 
 
@@ -230,21 +235,128 @@ async def _create_or_reuse_run_short_tx(
     user_id: str,
     input_text: str,
     idempotency_key: str | None,
+    execution_context: dict | None = None,
 ) -> tuple[dict, bool]:
     async def callback(session: AsyncSession):
         service = AgentRunService(SqliteAgentRunRepository(session))
-        return await service.create_or_reuse(
+        run, reused = await service.create_or_reuse(
             session_id=session_id,
             user_id=user_id,
             input_text=input_text,
             idempotency_key=idempotency_key,
+            execution_context=execution_context,
         )
+        if not reused:
+            await SqliteAgentMessageRepository(session).create(
+                session_id=session_id,
+                user_id=user_id,
+                role="user",
+                content_json=ChatEventAssembler().user_message(input_text),
+                run_id=run["run_id"],
+            )
+        return run, reused
     return await _with_session(callback)
 
 
 async def _get_run_short_tx(run_id: str, user_id: str) -> dict:
     async def callback(session: AsyncSession):
         return await AgentRunService(SqliteAgentRunRepository(session)).get(run_id, user_id)
+    return await _with_session(callback)
+
+
+async def _list_persisted_run_events_short_tx(
+    run_id: str,
+    user_id: str,
+    after_sequence: int,
+) -> tuple[dict, list[dict]]:
+    async def callback(session: AsyncSession):
+        run = await AgentRunService(SqliteAgentRunRepository(session)).get(run_id, user_id)
+        events = await SqliteAgentRunEventRepository(session).list_after(run_id, after_sequence)
+        return run, events
+
+    return await _with_session(callback)
+
+
+async def _persist_run_output_short_tx(
+    *,
+    run_id: str,
+    session_id: str,
+    user_id: str,
+    events: list[tuple[str, dict]],
+    error: dict | None = None,
+    complete_usage: dict | None = None,
+    final_output: str | None = None,
+) -> dict | None:
+    async def callback(session: AsyncSession):
+        message_repo = SqliteAgentMessageRepository(session)
+        if error:
+            await message_repo.create(
+                session_id=session_id,
+                user_id=user_id,
+                role="assistant",
+                content_json=ChatEventAssembler().error_message(
+                    str(error.get("code") or "RUN_FAILED"),
+                    str(error.get("message") or "Agent run failed"),
+                ),
+                run_id=run_id,
+                status="error",
+                error_code=str(error.get("code") or "RUN_FAILED"),
+            )
+            return None
+
+        assembler = ChatEventAssembler()
+        tool_repo = SqliteAgentToolCallRepository(session)
+        artifact_repo = SqliteAgentArtifactRepository(session)
+        for event_name, data in events:
+            if event_name != "run_item_stream_event":
+                continue
+            sdk_type = str(data.get("type") or "")
+            item = data.get("item") if isinstance(data.get("item"), dict) else {}
+            if sdk_type and sdk_type != "run_item_stream_event":
+                continue
+            name = str(data.get("name") or "")
+            if name == "tool_called":
+                call_id, tool_name, arguments = assembler._tool_call_info(item)
+                if call_id:
+                    await tool_repo.upsert_started(
+                        run_id=run_id,
+                        tool_call_id=call_id,
+                        tool_name=tool_name,
+                        arguments=arguments,
+                    )
+            elif name == "tool_output":
+                call_id, result = assembler._tool_output_info(item)
+                if call_id:
+                    await tool_repo.complete(tool_call_id=call_id, result=result)
+        content = assembler.assemble_assistant_message(events)
+        await message_repo.create(
+            session_id=session_id,
+            user_id=user_id,
+            role="assistant",
+            content_json=content,
+            run_id=run_id,
+        )
+        for request in [
+            data
+            for event_name, data in events
+            if event_name == "workspace.projection" and isinstance(data, dict)
+        ]:
+            await artifact_repo.create_projection(
+                session_id=session_id,
+                run_id=run_id,
+                source_tool_call_id=request.get("tool_call_id"),
+                surface=str(request.get("surface") or "unknown"),
+                payload=request,
+            )
+        if complete_usage is not None or final_output is not None:
+            return await AgentRunService(SqliteAgentRunRepository(session)).mark_completed(
+                run_id,
+                user_id,
+                usage=complete_usage,
+                final_output=final_output,
+            )
+        return None
+
     return await _with_session(callback)
 
 
@@ -262,7 +374,12 @@ async def _persist_requires_action_short_tx(
         existing = await approval_repo.list_for_checkpoint(run_id, checkpoint_ref, user_id)
         if existing:
             return await run_service.get(run_id, user_id)
-        updated = await run_service.mark_requires_action(run_id, user_id, checkpoint_ref)
+        updated = await run_service.mark_requires_action(
+            run_id,
+            user_id,
+            checkpoint_ref,
+            event_payload={**data, "status": "requires_action"},
+        )
         if not updated or updated.get("status") != "requires_action":
             return updated
         if not existing:
@@ -337,13 +454,19 @@ async def _mark_run_status_short_tx(
     usage: dict | None = None,
     error: dict | None = None,
     checkpoint_ref: str | None = None,
+    final_output: str | None = None,
 ) -> dict | None:
     async def callback(session: AsyncSession):
         service = AgentRunService(SqliteAgentRunRepository(session))
         if status == "running":
             return await service.mark_running(run_id, user_id)
         if status == "completed":
-            return await service.mark_completed(run_id, user_id, usage=usage)
+            return await service.mark_completed(
+                run_id,
+                user_id,
+                usage=usage,
+                final_output=final_output,
+            )
         if status == "cancelled":
             return await service.mark_cancelled(run_id, user_id)
         if status == "requires_action":
@@ -646,13 +769,8 @@ async def cancel_agent_run(
 async def run_agent(
     request: Request,
     current_user: dict = Depends(get_current_user),
-    gateway: AgentGatewayService = Depends(get_agent_gateway),
 ):
-    """Start an Agent run and return run metadata.
-
-    Run execution continues in a backend background task. Clients observe the run
-    through GET /api/v1/agent/runs/{run_id}/events.
-    """
+    """Persist a queued run for execution by a database-claiming worker."""
     request_start = perf_counter()
     body = await request.json()
     body_parsed_ms = _elapsed_ms(request_start)
@@ -661,7 +779,6 @@ async def run_agent(
     task_type = body.get("task_type", "conversation")
     context_snapshot = body.get("context_snapshot")
     user_id = current_user["id"]
-    authorization = _authorization(request)
     idempotency_key = body.get("idempotency_key") or request.headers.get("Idempotency-Key")
     if requested_session_id:
         try:
@@ -672,20 +789,6 @@ async def run_agent(
     else:
         created_session = await _create_agent_session_short_tx(user_id, prompt[:50] if prompt else "新对话")
         session_id = created_session["session_id"]
-    try:
-        run, reused = await _create_or_reuse_run_short_tx(
-            session_id=session_id,
-            user_id=user_id,
-            input_text=prompt,
-            idempotency_key=idempotency_key,
-        )
-    except AgentRunError as exc:
-        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable, {"run": exc.run})) from exc
-    run_id = run["run_id"]
-    perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
-    if reused:
-        return {"run_id": run_id, "session_id": session_id, "status": run["status"], "reused": True}
-
     state_start = perf_counter()
     state = await _get_or_create_session_state(session_id, user_id)
     state_ms = _elapsed_ms(state_start)
@@ -700,6 +803,28 @@ async def run_agent(
     business_context_start = perf_counter()
     business_context_summary = await _build_business_context_short_tx(state, user_id)
     business_context_ms = _elapsed_ms(business_context_start)
+    execution_context = {
+        "task_type": task_type,
+        "business_context_summary": business_context_summary,
+        "ui_snapshot": context_snapshot or {},
+        "session_state": state,
+        "changelog_start_index": changelog_start_index,
+    }
+    try:
+        run, reused = await _create_or_reuse_run_short_tx(
+            session_id=session_id,
+            user_id=user_id,
+            input_text=prompt,
+            idempotency_key=idempotency_key,
+            execution_context=execution_context,
+        )
+    except AgentRunError as exc:
+        raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable, {"run": exc.run})) from exc
+    run_id = run["run_id"]
+    perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
+    if reused:
+        return {"run_id": run_id, "session_id": session_id, "status": run["status"], "reused": True}
+
     perf_log.info(
         "[PERF][agent_first_token] backend.run_start total_ms={} body_parse_ms={} state_ms={} ui_snapshot_ms={} business_context_ms={} prompt_chars={} context_chars={}",
         _elapsed_ms(request_start),
@@ -711,36 +836,48 @@ async def run_agent(
         len(business_context_summary or ""),
     )
 
-    await agent_run_event_bus.create_run(run_id=run_id, session_id=session_id, user_id=user_id)
     await _touch_agent_session_short_tx(session_id, user_id)
+    return {"run_id": run_id, "session_id": session_id, "status": "queued"}
 
-    agent_payload = {
-        "run_id": run_id,
-        "prompt": prompt,
-        "session_id": session_id,
-        "user_id": user_id,
-        "task_type": task_type,
-        "auth_token": authorization or "",
-        "business_context_summary": business_context_summary,
-        "ui_snapshot": context_snapshot or {},
-        "session_state": state,
-        "run_meta": {"run_id": run_id, "user_id": user_id},
-    }
 
-    asyncio.create_task(
-        _consume_agent_run_background(
-            run_id=run_id,
-            session_id=session_id,
-            user_id=user_id,
-            authorization=authorization,
-            agent_payload=agent_payload,
-            changelog_start_index=changelog_start_index,
-            gateway=gateway,
-            perf_start=request_start,
-        )
+@router.get("/sessions/{session_id}/snapshot")
+async def get_agent_session_snapshot(
+    session_id: str,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    snapshot = await AgentSnapshotService(session).build(session_id, current_user["id"])
+    if snapshot is None:
+        raise HTTPException(status_code=404, detail=_error_payload("SESSION_NOT_FOUND", "Session not found", False))
+    return snapshot
+
+
+@router.get("/runs/{run_id}/persisted-events")
+async def list_persisted_run_events(
+    run_id: str,
+    after_sequence: int = 0,
+    limit: int = 500,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    try:
+        run = await AgentRunService(SqliteAgentRunRepository(session)).get(run_id, current_user["id"])
+    except AgentRunError as exc:
+        raise HTTPException(
+            status_code=exc.status_code,
+            detail=_error_payload(exc.code, exc.message, exc.retryable),
+        ) from exc
+    events = await SqliteAgentRunEventRepository(session).list_after(
+        run_id,
+        max(0, after_sequence),
+        min(max(1, limit), 500),
     )
-
-    return {"run_id": run_id, "session_id": session_id, "status": "running"}
+    return {
+        "run_id": run_id,
+        "events": events,
+        "last_persisted_sequence": run["last_event_sequence"],
+        "terminal": run["status"] in {"completed", "error", "cancelled"},
+    }
 
 
 @router.get("/runs/{run_id}/events")
@@ -752,11 +889,34 @@ async def stream_run_events(
     """Observe a run through standard SSE with sequence-based replay."""
 
     async def event_generator():
-        try:
-            async for event in agent_run_event_bus.subscribe(run_id, current_user["id"], after_sequence=after_sequence):
-                yield _sse_event(event.event, event.data, event.sequence)
-        except KeyError:
-            yield _sse_event("error", _error_payload("RUN_NOT_FOUND", "Run not found", False))
+        sequence = max(0, after_sequence)
+        while True:
+            try:
+                run, events = await _list_persisted_run_events_short_tx(
+                    run_id,
+                    current_user["id"],
+                    sequence,
+                )
+            except AgentRunError:
+                yield _sse_event("error", _error_payload("RUN_NOT_FOUND", "Run not found", False))
+                return
+            event_name_map = {
+                "run.started": "runtime.started",
+                "run.resuming": "runtime.started",
+                "run.requires_action": "runtime.requires_action",
+                "run.completed": "runtime.completed",
+                "run.error": "runtime.error",
+                "run.cancelled": "runtime.aborted",
+            }
+            for event in events:
+                sequence = event["sequence"]
+                event_name = event_name_map.get(event["event_type"], event["event_type"])
+                yield _sse_event(event_name, event["payload"], sequence)
+            if run["status"] in {"completed", "error", "cancelled"}:
+                return
+            if run["status"] == "requires_action":
+                return
+            await asyncio.sleep(0.2)
 
     return StreamingResponse(
         event_generator(),
@@ -874,6 +1034,14 @@ async def _consume_agent_run_background(
                                 persisted_status=result.persisted_status,
                                 error=data if event_name == "runtime.error" else None,
                             )
+                            if event_name == "runtime.error":
+                                await _persist_run_output_short_tx(
+                                    run_id=run_id,
+                                    session_id=session_id,
+                                    user_id=user_id,
+                                    events=persisted_events,
+                                    error=data,
+                                )
                             return
 
                 # Flush any final event if upstream did not end with a blank line.
@@ -895,6 +1063,14 @@ async def _consume_agent_run_background(
                             persisted_status=result.persisted_status,
                             error=data if event_name == "runtime.error" else None,
                         )
+                        if event_name == "runtime.error":
+                            await _persist_run_output_short_tx(
+                                run_id=run_id,
+                                session_id=session_id,
+                                user_id=user_id,
+                                events=persisted_events,
+                                error=data,
+                            )
                         return
 
                 perf_log.info(
@@ -922,11 +1098,25 @@ async def _consume_agent_run_background(
                     return
 
                 assistant_content = ChatEventAssembler().assemble_assistant_message(persisted_events)
+                final_output = "".join(
+                    str(block.get("text") or block.get("content") or "")
+                    for block in assistant_content.get("blocks", [])
+                    if isinstance(block, dict) and block.get("type") == "text"
+                )
+                await _persist_run_output_short_tx(
+                    run_id=run_id,
+                    session_id=session_id,
+                    user_id=user_id,
+                    events=persisted_events,
+                    complete_usage=assistant_content.get("usage") or {},
+                    final_output=final_output or None,
+                )
                 await event_processor.complete_run(
                     run_id=run_id,
                     user_id=user_id,
                     session_id=session_id,
                     usage=assistant_content.get("usage"),
+                    final_output=final_output or None,
                 )
             except AgentGatewayError as exc:
                 current = await _get_session_state_short_tx(session_id, user_id)
@@ -939,6 +1129,13 @@ async def _consume_agent_run_background(
                     )
                 error_payload = {"code": exc.code, "message": exc.message, "retryable": exc.retryable, "at": datetime.utcnow().isoformat()}
                 await _mark_run_status_short_tx(run_id, user_id, "error", error=error_payload)
+                await _persist_run_output_short_tx(
+                    run_id=run_id,
+                    session_id=session_id,
+                    user_id=user_id,
+                    events=persisted_events,
+                    error=error_payload,
+                )
                 await agent_run_event_bus.publish(run_id, "error", _error_payload(exc.code, exc.message, exc.retryable), terminal=True)
     except SessionBusyError:
         await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "SESSION_BUSY", "message": "当前会话正在执行，请稍后再试"})
@@ -950,6 +1147,13 @@ async def _consume_agent_run_background(
         if current:
             await _mark_error_short_tx(session_id, user_id, current["version"], error)
         await _mark_run_status_short_tx(run_id, user_id, "error", error=error)
+        await _persist_run_output_short_tx(
+            run_id=run_id,
+            session_id=session_id,
+            user_id=user_id,
+            events=[],
+            error=error,
+        )
         await agent_run_event_bus.publish(
             run_id,
             "error",

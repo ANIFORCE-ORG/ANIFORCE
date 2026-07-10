@@ -5,6 +5,7 @@ from uuid import uuid4
 
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
+from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
 
 
 class AgentSessionError(Exception):
@@ -26,10 +27,12 @@ class AgentSessionService:
         session_repo: SqliteAgentSessionRepository,
         state_repo: SqliteSessionStateRepository,
         gateway: Any = None,
+        message_repo: SqliteAgentMessageRepository | None = None,
     ) -> None:
         self.session_repo = session_repo
         self.state_repo = state_repo
         self.gateway = gateway
+        self.message_repo = message_repo
 
     async def create_session(self, user_id: str, title: str | None = None) -> dict:
         normalized_title = self._normalize_title(title, fallback="新对话")
@@ -58,7 +61,9 @@ class AgentSessionService:
             raise AgentSessionError("SESSION_NOT_FOUND", "Session not found", status_code=404)
         state = await self._ensure_state(session_id, user_id)
         messages: list[dict] = []
-        if self.gateway is not None:
+        if self.message_repo is not None:
+            messages = await self.message_repo.list_by_session(session_id, user_id)
+        elif self.gateway is not None:
             try:
                 messages = await self.gateway.get_session_history(authorization, session_id)
             except Exception:

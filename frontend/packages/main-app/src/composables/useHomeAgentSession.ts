@@ -2,7 +2,7 @@ import { computed, onUnmounted, ref } from 'vue'
 import { useRoute } from 'vue-router'
 import {
   createAgentSession,
-  getAgentSession,
+  getAgentSessionSnapshot,
   listAgentModels,
   listAgentSessions,
   startAgentRun,
@@ -258,13 +258,38 @@ export function useHomeAgentSession() {
     }
     try {
       if (!selectingActiveRun) {
-        const detail = await getAgentSession(session.id)
-        store.setMessages(session.id, detail.messages)
+        const snapshot = await getAgentSessionSnapshot(session.id)
+        store.setMessages(session.id, snapshot.messages)
         restoreTimelineFromCache()
         restoreWorkspaceFromCache()
-        // 如果是新会话（无历史消息），清空 Workspace projection
-        if (!detail.messages || detail.messages.length === 0) {
-          workspace.clearSession(session.id)
+        workspace.clearSession(session.id)
+        for (const artifact of snapshot.artifacts) {
+          const payload = normalizeRecord(artifact.payload) || {}
+          const surface = String(artifact.surface || payload.surface || '') as WorkspaceSurface
+          if (!surface) continue
+          workspace.upsertProjection(session.id, {
+            id: String(artifact.artifact_id),
+            sessionId: session.id,
+            runId: String(artifact.run_id || ''),
+            sourceToolCallId: artifact.source_tool_call_id ? String(artifact.source_tool_call_id) : undefined,
+            surface,
+            mode: artifact.status === 'failed' ? 'failed' : 'readonly',
+            payload,
+            updatedAt: Date.parse(String(artifact.updated_at || '')) || Date.now(),
+          })
+        }
+        const approval = snapshot.pending_approval
+        if (approval) {
+          workspace.createApprovalDraft(
+            String(approval.checkpoint_ref || ''),
+            String(approval.run_id || ''),
+            String(approval.tool_name || ''),
+            'approval.review',
+            normalizeRecord(approval.edited_arguments || approval.original_arguments) || {},
+          )
+        }
+        if (snapshot.latest_run && ['queued', 'running'].includes(String(snapshot.latest_run.status))) {
+          commandStatus.value = '任务正在后台执行'
         }
       }
     } catch (err: any) {

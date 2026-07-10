@@ -6,11 +6,13 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
-from sqlalchemy import select, update
+from sqlalchemy import or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent_run import AgentRun
 from app.models.session_state import SessionState
+from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
+from app.services.agent_run_service import AgentRunService
 
 
 @dataclass(frozen=True)
@@ -47,23 +49,25 @@ class AgentStateReconciler:
     async def reconcile(self, *, cutoff: datetime, apply: bool = False) -> ReconciliationReport:
         actions: list[ReconciliationAction] = []
         conflicts = 0
+        now = datetime.utcnow()
         stale_result = await self.session.execute(
             select(AgentRun).where(
-                AgentRun.status.in_(("queued", "running")),
-                AgentRun.started_at < cutoff,
+                AgentRun.status == "running",
+                or_(
+                    AgentRun.lease_expires_at < now,
+                    (AgentRun.lease_expires_at.is_(None)) & (AgentRun.started_at < cutoff),
+                ),
             )
         )
         stale_runs = list(stale_result.scalars())
         stale_ids = {run.run_id for run in stale_runs}
-        error = json.dumps(
-            {
-                "code": "RUN_INTERRUPTED",
-                "message": "Agent run was interrupted before completion",
-                "retryable": True,
-                "reconciled_at": datetime.utcnow().isoformat(),
-            },
-            ensure_ascii=False,
-        )
+        error_payload = {
+            "code": "RUN_INTERRUPTED",
+            "message": "Agent run was interrupted before completion",
+            "retryable": True,
+            "reconciled_at": datetime.utcnow().isoformat(),
+        }
+        error = json.dumps(error_payload, ensure_ascii=False)
         for run in stale_runs:
             actions.append(
                 ReconciliationAction(
@@ -75,16 +79,10 @@ class AgentStateReconciler:
                 )
             )
             if apply:
-                result = await self.session.execute(
-                    update(AgentRun)
-                    .where(
-                        AgentRun.run_id == run.run_id,
-                        AgentRun.status == run.status,
-                        AgentRun.started_at < cutoff,
-                    )
-                    .values(status="error", error_json=error, completed_at=datetime.utcnow())
-                )
-                if result.rowcount != 1:
+                updated = await AgentRunService(
+                    SqliteAgentRunRepository(self.session)
+                ).mark_error(run.run_id, run.user_id, error_payload)
+                if not updated or updated.get("status") != "error":
                     conflicts += 1
 
         state_result = await self.session.execute(

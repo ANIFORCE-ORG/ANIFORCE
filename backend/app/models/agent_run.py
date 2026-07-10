@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import Boolean, DateTime, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.config.database import Base
@@ -15,6 +15,7 @@ class AgentRun(Base):
     __table_args__ = (
         Index("idx_agent_runs_session_started", "session_id", "started_at"),
         Index("idx_agent_runs_user_session_status", "user_id", "session_id", "status"),
+        Index("idx_agent_runs_status_lease", "status", "lease_expires_at"),
         UniqueConstraint("user_id", "session_id", "idempotency_key", name="uq_agent_runs_idempotency"),
     )
 
@@ -32,5 +33,12 @@ class AgentRun(Base):
     checkpoint_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
     last_event_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     terminal_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    lease_owner: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    heartbeat_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    runtime_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    retryable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
