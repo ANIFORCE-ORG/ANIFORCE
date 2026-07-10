@@ -880,7 +880,7 @@ const periodLabel = (period: string) => {
 
         <div v-if="selectedRow" class="flex-1 overflow-y-auto p-[14px]">
           <div class="grid gap-[14px] xl:grid-cols-[230px_minmax(0,1fr)]">
-            <aside class="rounded-xl bg-white p-[18px] dark:bg-slate-900">
+            <aside class="rounded-md bg-white p-[18px] dark:bg-slate-900">
               <h3 class="text-[16px] font-bold text-slate-900 dark:text-white">基本信息</h3>
               <div class="mt-[12px] overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                 <div class="bg-black">
@@ -921,30 +921,30 @@ const periodLabel = (period: string) => {
             </aside>
 
             <main class="space-y-[14px]">
-              <section class="rounded-xl bg-white p-[18px] dark:bg-slate-900">
+              <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
                 <div class="inline-flex border-b-2 border-primary pb-[7px] text-[15px] font-bold text-slate-900 dark:text-white">标准投放</div>
               </section>
 
-              <section class="rounded-xl bg-white p-[18px] dark:bg-slate-900">
+              <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
                 <div class="mb-[18px] flex flex-wrap items-center justify-between gap-[12px]">
                   <h3 class="text-[16px] font-bold text-slate-900 dark:text-white">数据概览</h3>
-                  <div class="inline-flex min-h-[36px] items-center gap-[10px] rounded-lg bg-slate-100 px-[12px] text-[12px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  <div class="inline-flex min-h-[36px] items-center gap-[10px] rounded-md bg-slate-100 px-[12px] text-[12px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
                     <span>{{ periodLabel(periodFilter) }}</span>
                     <span class="material-symbols-outlined text-[15px]">date_range</span>
                   </div>
                 </div>
                 <div class="grid gap-[10px] md:grid-cols-5">
-                  <div class="rounded-lg bg-blue-50 p-[14px] dark:bg-blue-950/30"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">消耗</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatCurrency(selectedRow.metrics.spend) }}</b></div>
-                  <div class="rounded-lg bg-emerald-50 p-[14px] dark:bg-emerald-950/30"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">平均转化成本</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatCurrency(selectedRow.metrics.cpa) }}</b></div>
-                  <div class="rounded-lg bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">点击率</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatPercent(selectedRow.metrics.ctr) }}</b></div>
-                  <div class="rounded-lg bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">ROAS</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatNumber(selectedRow.metrics.roas, 2) }}x</b></div>
-                  <div class="rounded-lg bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">3秒播放率</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ selectedRow.mediaKind === 'video' ? '63%' : '-' }}</b></div>
+                  <div class="rounded-md bg-blue-50 p-[14px] dark:bg-blue-950/30"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">消耗</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatCurrency(selectedRow.metrics.spend) }}</b></div>
+                  <div class="rounded-md bg-emerald-50 p-[14px] dark:bg-emerald-950/30"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">平均转化成本</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatCurrency(selectedRow.metrics.cpa) }}</b></div>
+                  <div class="rounded-md bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">点击率</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatPercent(selectedRow.metrics.ctr) }}</b></div>
+                  <div class="rounded-md bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">ROAS</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatNumber(selectedRow.metrics.roas, 2) }}x</b></div>
+                  <div class="rounded-md bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">3秒播放率</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ selectedRow.mediaKind === 'video' ? '63%' : '-' }}</b></div>
                 </div>
                 <div class="mt-[22px] flex items-center justify-between text-[15px] font-bold text-slate-800 dark:text-slate-100">
                   <span>数据对比</span>
                   <span class="text-[12px] font-medium text-slate-400">消耗 / 转化成本</span>
                 </div>
-                <div class="relative mt-[18px] h-[250px] rounded-lg border border-slate-100 bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_49px,#e2e8f0_50px)] p-[18px] dark:border-slate-800 dark:bg-slate-900">
+                <div class="relative mt-[18px] h-[250px] rounded-md border border-slate-100 bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_49px,#e2e8f0_50px)] p-[18px] dark:border-slate-800 dark:bg-slate-900">
                   <div class="absolute left-[42px] right-[24px] bottom-[54px] h-[3px] rounded-full bg-primary"></div>
                   <div class="absolute left-[42px] right-[24px] bottom-[30px] flex justify-between text-[10px] text-slate-400">
                     <span>06-18</span><span>06-19</span><span>06-20</span><span>06-21</span><span>06-22</span><span>06-23</span><span>06-24</span><span>06-25</span>
@@ -952,12 +952,12 @@ const periodLabel = (period: string) => {
                 </div>
               </section>
 
-              <section class="rounded-xl bg-white p-[18px] dark:bg-slate-900">
+              <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
                 <div class="mb-[14px] flex items-center gap-[28px] text-[15px] font-bold">
                   <span class="border-b-2 border-primary pb-[7px] text-slate-900 dark:text-white">关联账户</span>
                   <span class="pb-[7px] text-slate-500">关联计划</span>
                 </div>
-                <div class="overflow-hidden rounded-lg border border-slate-200 dark:border-slate-800">
+                <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-800">
                   <div class="grid min-h-[44px] grid-cols-[44px_1fr_1.2fr_90px_90px_90px] items-center bg-slate-100 text-[11px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
                     <span class="px-[10px]"><input type="checkbox" /></span><span>素材开关</span><span>账户/计划名称和ID</span><span>操作</span><span>素材状态</span><span>消耗</span>
                   </div>
@@ -980,7 +980,7 @@ const periodLabel = (period: string) => {
     </main>
 
     <div v-if="showUploadModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-[18px]" @click.self="closeUploadModal">
-      <div class="max-h-[calc(100vh-36px)] w-full max-w-[860px] overflow-hidden rounded-xl bg-white shadow-2xl dark:bg-slate-900">
+      <div class="max-h-[calc(100vh-36px)] w-full max-w-[860px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-900">
         <div class="sticky top-0 z-10 flex items-start justify-between gap-[16px] border-b border-slate-200 bg-white px-[18px] py-[16px] dark:border-slate-800 dark:bg-slate-900">
           <div>
             <h2 class="text-[20px] font-bold leading-tight text-slate-900 dark:text-white">手动提交素材</h2>
@@ -996,7 +996,7 @@ const periodLabel = (period: string) => {
               <span class="text-[12px] font-medium text-slate-400">图片 / 视频</span>
             </div>
             <div
-              class="grid min-h-[220px] place-items-center overflow-hidden rounded-lg border border-dashed border-slate-300 bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-800/70"
+              class="grid min-h-[220px] place-items-center overflow-hidden rounded-md border border-dashed border-slate-300 bg-slate-50 transition-colors dark:border-slate-700 dark:bg-slate-800/70"
               :class="isDragging ? 'border-primary bg-primary/5' : ''"
               @drop="handleDrop"
               @dragover="handleDragOver"
@@ -1017,11 +1017,11 @@ const periodLabel = (period: string) => {
                 </div>
               </div>
               <div v-else class="grid w-full gap-[12px] p-[14px] md:grid-cols-[156px_minmax(0,1fr)_auto]">
-                <div class="relative min-h-[112px] overflow-hidden rounded-lg border border-slate-200 bg-black dark:border-slate-700">
+                <div class="relative min-h-[112px] overflow-hidden rounded-md border border-slate-200 bg-black dark:border-slate-700">
                   <video v-if="uploadIsVideo && uploadPreviewUrl" :src="uploadPreviewUrl" class="h-full min-h-[112px] w-full object-contain" controls muted playsinline />
                   <img v-else-if="uploadPreviewUrl" :src="uploadPreviewUrl" :alt="uploadFile.name" class="h-full min-h-[112px] w-full object-cover" />
                   <div v-else class="grid h-full min-h-[112px] place-items-center text-[12px] text-slate-400">素材预览</div>
-                  <span class="absolute left-[8px] top-[8px] rounded-full bg-slate-950/70 px-[8px] py-[3px] text-[10px] font-bold text-white">{{ uploadFiles.length > 1 ? `1 / ${uploadFiles.length}` : uploadIsVideo ? '视频' : '图片' }}</span>
+                  <span class="absolute left-[8px] top-[8px bg-slate-950/70 px-[8px] py-[3px] text-[10px] font-bold text-white">{{ uploadFiles.length > 1 ? `1 / ${uploadFiles.length}` : uploadIsVideo ? '视频' : '图片' }}</span>
                 </div>
                 <div class="grid gap-[7px]">
                   <div v-for="(file, index) in uploadFiles" :key="`${file.name}-${index}`" class="rounded-md border border-slate-100 bg-white p-[8px] dark:border-slate-700 dark:bg-slate-900">
@@ -1079,7 +1079,7 @@ const periodLabel = (period: string) => {
               <div class="md:col-span-2">
                 <span class="mb-[8px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材标签</span>
                 <div class="flex flex-wrap gap-[8px]">
-                  <label v-for="tag in uploadTagOptions" :key="tag" class="inline-flex min-h-[34px] items-center gap-[7px] rounded-full border border-slate-200 px-[12px] text-[12px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
+                  <label v-for="tag in uploadTagOptions" :key="tag" class="inline-flex min-h-[34px] items-center gap-[7px] rounded-md border border-slate-200 px-[12px] text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
                     <input v-model="uploadForm.materialTags" type="checkbox" :value="tag" class="h-[14px] w-[14px] accent-primary" />
                     {{ tag }}
                   </label>

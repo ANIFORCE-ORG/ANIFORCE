@@ -8,7 +8,7 @@ import CampaignCardDetailed from '@/components/campaigns/CampaignCardDetailed.vu
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
 import Toast from '@/components/toasts/Toast.vue'
 import { getProjectDetail, getProjectCampaigns, type Project } from '@/api/projects'
-import { createCampaign, updateCampaign } from '@/api/campaigns'
+import { createCampaign, updateCampaign, deleteCampaign } from '@/api/campaigns'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
@@ -208,6 +208,33 @@ const handleEditCampaign = (campaign: any) => {
   showCampaignModal.value = true
 }
 
+const handleDeleteCampaign = async (campaignId: string) => {
+  // 显示确认对话框
+  const confirmed = confirm('确定要删除这个 Campaign 吗？此操作无法撤销。')
+  
+  if (!confirmed) {
+    return
+  }
+  
+  try {
+    console.log('删除 Campaign:', campaignId)
+    await deleteCampaign(campaignId)
+    
+    // 显示成功提示
+    toastMessage.value = 'Campaign 删除成功！'
+    toastType.value = 'success'
+    showToast.value = true
+    
+    // 重新加载 Campaign 列表
+    await loadCampaigns()
+  } catch (err: any) {
+    console.error('删除 Campaign 失败:', err)
+    toastMessage.value = err.message || '删除 Campaign 失败'
+    toastType.value = 'error'
+    showToast.value = true
+  }
+}
+
 const handleCloseToast = () => {
   showToast.value = false
 }
@@ -335,13 +362,14 @@ const handleCloseToast = () => {
               @view="handleViewCampaign"
               @add-creative="handleAddCreative"
               @edit="handleEditCampaign"
+              @delete="handleDeleteCampaign"
             />
           </div>
 
           <!-- Empty State -->
           <div v-if="campaigns.length === 0" class="flex flex-col items-center justify-center py-[50px]">
             <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">campaign</span>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-[12px]">{{ project?.description || '暂无描述' }}</p>
+            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-[12px]">暂无广告任务</p>
             <button
               class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
               @click="handleCreateCampaign"

@@ -20,6 +20,7 @@ class SqliteCampaignRepository:
             "name": campaign.name,
             "description": campaign.description,
             "platform": campaign.platform.value,
+            "connection_id": campaign.connection_id,
             "account_id": campaign.account_id,
             "budget": campaign.budget,
             "spent": campaign.spent,
