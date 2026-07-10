@@ -64,28 +64,73 @@ class AgentRunService:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
-        return await self.repo.mark_status(run_id, user_id, "running")
+        return await self.repo.transition_with_event(
+            run_id,
+            user_id,
+            "running",
+            event_type="run.started",
+            payload={"run_id": run_id, "status": "running"},
+            is_terminal=False,
+        )
 
     async def mark_completed(self, run_id: str, user_id: str, usage: dict | None = None) -> dict | None:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
-        return await self.repo.mark_status(run_id, user_id, "completed", usage=usage, checkpoint_ref="")
+        return await self.repo.transition_with_event(
+            run_id,
+            user_id,
+            "completed",
+            event_type="run.completed",
+            payload={"run_id": run_id, "status": "completed", "usage": usage or {}},
+            is_terminal=True,
+            usage=usage,
+            checkpoint_ref="",
+        )
 
     async def mark_requires_action(self, run_id: str, user_id: str, checkpoint_ref: str) -> dict | None:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
-        return await self.repo.mark_status(run_id, user_id, "requires_action", checkpoint_ref=checkpoint_ref)
+        return await self.repo.transition_with_event(
+            run_id,
+            user_id,
+            "requires_action",
+            event_type="run.requires_action",
+            payload={
+                "run_id": run_id,
+                "status": "requires_action",
+                "checkpoint_ref": checkpoint_ref,
+            },
+            is_terminal=False,
+            checkpoint_ref=checkpoint_ref,
+        )
 
     async def mark_error(self, run_id: str, user_id: str, error: dict) -> dict | None:
         run = await self.get(run_id, user_id)
         if run["status"] in TERMINAL_RUN_STATUSES:
             return run
-        return await self.repo.mark_status(run_id, user_id, "error", error=error, checkpoint_ref="")
+        return await self.repo.transition_with_event(
+            run_id,
+            user_id,
+            "error",
+            event_type="run.error",
+            payload={"run_id": run_id, "status": "error", "error": error},
+            is_terminal=True,
+            error=error,
+            checkpoint_ref="",
+        )
 
     async def mark_cancelled(self, run_id: str, user_id: str) -> dict | None:
         run = await self.get(run_id, user_id)
         if run["status"] not in ACTIVE_RUN_STATUSES:
             return run
-        return await self.repo.mark_status(run_id, user_id, "cancelled", checkpoint_ref="")
+        return await self.repo.transition_with_event(
+            run_id,
+            user_id,
+            "cancelled",
+            event_type="run.cancelled",
+            payload={"run_id": run_id, "status": "cancelled"},
+            is_terminal=True,
+            checkpoint_ref="",
+        )

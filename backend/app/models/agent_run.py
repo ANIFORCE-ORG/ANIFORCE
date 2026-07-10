@@ -2,7 +2,7 @@
 
 from datetime import datetime
 
-from sqlalchemy import DateTime, Index, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.config.database import Base
@@ -30,5 +30,7 @@ class AgentRun(Base):
     pending_approval_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     run_state_json: Mapped[str | None] = mapped_column(Text, nullable=True)
     checkpoint_ref: Mapped[str | None] = mapped_column(String(128), nullable=True)
+    last_event_sequence: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    terminal_event_id: Mapped[str | None] = mapped_column(String(128), nullable=True, unique=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

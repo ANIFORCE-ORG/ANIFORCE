@@ -2,11 +2,12 @@
 
 import json
 from datetime import datetime
+from uuid import uuid4
 
 from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AgentRun
+from app.models import AgentRun, AgentRunEvent
 
 
 ACTIVE_RUN_STATUSES = {"queued", "running", "requires_action"}
@@ -30,6 +31,8 @@ class SqliteAgentRunRepository:
             "error": json.loads(item.error_json) if item.error_json else None,
             "pending_approval": json.loads(item.pending_approval_json) if item.pending_approval_json else None,
             "checkpoint_ref": item.checkpoint_ref,
+            "last_event_sequence": item.last_event_sequence,
+            "terminal_event_id": item.terminal_event_id,
             "started_at": item.started_at.isoformat(),
             "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         }
@@ -90,6 +93,64 @@ class SqliteAgentRunRepository:
         )
         item = result.scalar_one_or_none()
         return self._to_dict(item) if item else None
+
+    async def transition_with_event(
+        self,
+        run_id: str,
+        user_id: str,
+        status: str,
+        *,
+        event_type: str,
+        payload: dict,
+        is_terminal: bool,
+        usage: dict | None = None,
+        error: dict | None = None,
+        checkpoint_ref: str | None = None,
+    ) -> dict | None:
+        event_id = f"evt_{uuid4().hex}"
+        values: dict = {
+            "status": status,
+            "last_event_sequence": AgentRun.last_event_sequence + 1,
+        }
+        if is_terminal:
+            values["completed_at"] = datetime.utcnow()
+            values["terminal_event_id"] = event_id
+        if usage is not None:
+            values["usage_json"] = json.dumps(usage, ensure_ascii=False)
+        if error is not None:
+            values["error_json"] = json.dumps(error, ensure_ascii=False)
+        if checkpoint_ref is not None:
+            values["checkpoint_ref"] = checkpoint_ref or None
+
+        stmt = update(AgentRun).where(
+            AgentRun.run_id == run_id,
+            AgentRun.user_id == user_id,
+            AgentRun.terminal_event_id.is_(None),
+        )
+        if status == "cancelled":
+            stmt = stmt.where(AgentRun.status.in_(ACTIVE_RUN_STATUSES))
+        else:
+            stmt = stmt.where(~AgentRun.status.in_(TERMINAL_RUN_STATUSES))
+        result = await self.session.execute(stmt.values(**values))
+        if result.rowcount != 1:
+            return await self.get(run_id, user_id)
+
+        run = await self.get(run_id, user_id)
+        if run is None:
+            return None
+        self.session.add(
+            AgentRunEvent(
+                id=event_id,
+                run_id=run_id,
+                sequence=run["last_event_sequence"],
+                event_type=event_type,
+                payload_json=json.dumps(payload, ensure_ascii=False),
+                is_terminal=is_terminal,
+                created_at=datetime.utcnow(),
+            )
+        )
+        await self.session.flush()
+        return run
 
     async def mark_status(
         self,
