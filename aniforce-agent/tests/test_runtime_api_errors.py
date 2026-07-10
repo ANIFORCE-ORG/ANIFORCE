@@ -60,7 +60,7 @@ def test_checkpoint_api_returns_claim_http_status() -> None:
                 await resume_checkpoint(
                     checkpoint_id="ckpt_1",
                     request=FakeResumeRequest(),
-                    user={"id": "user_1", "token": "trusted-token"},
+                    user={"id": "user_1", "token": "trusted-token", "token_type": "agent_worker", "worker_id": "worker_1"},
                     runtime=ClaimBoundaryRuntime(
                         RuntimeCheckpointClaimError(code, "Checkpoint unavailable", status_code)
                     ),
@@ -80,7 +80,7 @@ def test_checkpoint_api_redacts_unexpected_error() -> None:
         response = await resume_checkpoint(
             checkpoint_id="ckpt_1",
             request=FakeResumeRequest(),
-            user={"id": "user_1", "token": "trusted-token"},
+            user={"id": "user_1", "token": "trusted-token", "token_type": "agent_worker", "worker_id": "worker_1"},
             runtime=runtime,
         )
         chunks = []

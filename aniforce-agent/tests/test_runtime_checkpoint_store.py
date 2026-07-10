@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import create_async_engine
 agent_root = Path(__file__).parent.parent
 sys.path.insert(0, str(agent_root))
 
-from app.agent.checkpoints import RuntimeCheckpointStore
+from app.agent.checkpoints import RuntimeCheckpointClaimError, RuntimeCheckpointStore
 from app.agent.runtime_migrations import RuntimeSchemaMigrator
 
 
@@ -125,15 +125,20 @@ def test_mark_status_respects_expected_status() -> None:
                 run_state={},
             )
             await store.mark_status(checkpoint["id"], "user_1", "expired")
-            current = await store.mark_status(
-                checkpoint["id"],
-                "user_1",
-                "completed",
-                expected_status="resuming",
-            )
-
-            assert current is not None
-            assert current["status"] == "expired"
+            try:
+                await store.mark_status(
+                    checkpoint["id"],
+                    "user_1",
+                    "completed",
+                    expected_status="resuming",
+                )
+            except RuntimeCheckpointClaimError as exc:
+                assert exc.code == "CHECKPOINT_FENCED"
+                assert exc.status_code == 409
+            else:
+                raise AssertionError("stale checkpoint completion must be fenced")
+            current = await store.get(checkpoint["id"], "user_1")
+            assert current is not None and current["status"] == "expired"
         finally:
             await engine.dispose()
 

@@ -15,6 +15,7 @@ from app.api.v1.agent_routes import _consume_agent_run_background
 from app.config.database import get_session_maker
 from app.config.settings import get_settings
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
+from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.services.agent_gateway import AgentGatewayService
 from app.services.agent_run_event_bus import agent_run_event_bus
 
@@ -35,6 +36,7 @@ class AgentRunWorker:
                 "iat": int(now.timestamp()),
                 "exp": int((now + timedelta(minutes=10)).timestamp()),
                 "token_type": "agent_worker",
+                "worker_id": self.worker_id,
             },
             settings.JWT_SECRET,
             algorithm=settings.JWT_ALGORITHM,
@@ -92,7 +94,26 @@ class AgentRunWorker:
                 changelog_start_index=int(context.get("changelog_start_index") or 0),
                 gateway=self.gateway,
                 perf_start=perf_counter(),
+                lease_owner=self.worker_id,
+                resume_payload=run.get("resume_payload") if run.get("execution_kind") == "resume" else None,
             )
+            if run.get("execution_kind") == "resume" and run.get("checkpoint_ref"):
+                async with self.session_maker() as session:
+                    current = await SqliteAgentRunRepository(session).get(run_id, user_id)
+                    decision = (run.get("resume_payload") or {}).get("decision")
+                    if current and current["status"] == "completed":
+                        approval_status = "rejected" if decision == "reject" else "resolved"
+                    elif current and current["status"] == "requires_action":
+                        approval_status = "rejected" if decision == "reject" else "resolved"
+                    else:
+                        approval_status = "failed"
+                    await SqliteAgentApprovalRepository(session).mark_checkpoint_status(
+                        run_id=run_id,
+                        checkpoint_ref=run["checkpoint_ref"],
+                        user_id=user_id,
+                        status=approval_status,
+                    )
+                    await session.commit()
         finally:
             heartbeat_stop.set()
             await heartbeat_task

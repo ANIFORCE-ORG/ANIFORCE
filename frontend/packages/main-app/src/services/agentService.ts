@@ -118,7 +118,7 @@ export class AgentService {
   }
 
   async createChatSession(title = '新对话'): Promise<AgentChatSession> {
-    const response = await fetch(apiUrl('/agent/chat/sessions'), {
+    const response = await fetch(apiUrl('/agent/sessions'), {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -131,7 +131,7 @@ export class AgentService {
   }
 
   async getChatSession(sessionId: string): Promise<{ session: AgentChatSession; messages: AgentChatMessage[] }> {
-    const response = await fetch(apiUrl(`/agent/chat/sessions/${encodeURIComponent(sessionId)}`), {
+    const response = await fetch(apiUrl(`/agent/sessions/${encodeURIComponent(sessionId)}`), {
       headers: authHeaders(),
     })
     if (!response.ok) throw new Error(`Get chat session failed: ${response.status}`)
@@ -173,19 +173,22 @@ export class AgentService {
   }
 
   async *streamChat(sessionId: string, message: string): AsyncGenerator<AgentStreamEvent, void, unknown> {
-    const response = await fetch(apiUrl(`/agent/chat/sessions/${encodeURIComponent(sessionId)}/stream`), {
+    const startResponse = await fetch(apiUrl('/agent/runs'), {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Accept: 'text/event-stream',
-        ...authHeaders(),
-      },
-      body: JSON.stringify({ message }),
+      headers: { 'Content-Type': 'application/json', ...authHeaders() },
+      body: JSON.stringify({ session_id: sessionId, prompt: message, task_type: 'conversation' }),
     })
-
+    if (!startResponse.ok) {
+      const errorText = await startResponse.text().catch(() => '')
+      throw new Error(errorText || `Start Agent run failed: ${startResponse.status}`)
+    }
+    const run = await startResponse.json()
+    const response = await fetch(apiUrl(`/agent/runs/${encodeURIComponent(run.run_id)}/events?after_sequence=0`), {
+      headers: { Accept: 'text/event-stream', ...authHeaders() },
+    })
     if (!response.ok) {
       const errorText = await response.text().catch(() => '')
-      throw new Error(errorText || `Stream chat failed: ${response.status}`)
+      throw new Error(errorText || `Stream Agent run failed: ${response.status}`)
     }
 
     const reader = response.body?.getReader()
@@ -250,27 +253,12 @@ export class AgentService {
   }
 
   async sendHITLResponse(
-    sessionId: string,
-    requestId: string,
-    confirmed: boolean,
-    feedback?: string
+    _sessionId: string,
+    _requestId: string,
+    _confirmed: boolean,
+    _feedback?: string
   ): Promise<void> {
-    const response = await fetch(apiUrl(`/agent/chat/sessions/${encodeURIComponent(sessionId)}/hitl`), {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...authHeaders(),
-      },
-      body: JSON.stringify({
-        request_id: requestId,
-        confirmed,
-        user_feedback: feedback,
-      }),
-    })
-
-    if (!response.ok) {
-      throw new Error(`Send HITL response failed: ${response.status}`)
-    }
+    throw new Error('请在 Agent 工作区中处理审批')
   }
 }
 

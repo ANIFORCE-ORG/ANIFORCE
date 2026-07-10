@@ -35,6 +35,10 @@ async def resume_checkpoint(
     always = bool(body.get("always", False))
     edited_arguments = body.get("edited_arguments")
     argument_diff = body.get("argument_diff")
+    context_override = body.get("context_override") or {}
+    worker_id = str(user.get("worker_id") or "")
+    if user.get("token_type") != "agent_worker" or not worker_id:
+        raise HTTPException(status_code=403, detail={"code": "WORKER_ID_REQUIRED", "message": "Worker identity is required"})
 
     try:
         claimed_checkpoint = await runtime.claim_checkpoint_for_resume(
@@ -42,6 +46,7 @@ async def resume_checkpoint(
             user_id=user["id"],
             edited_arguments=edited_arguments,
             argument_diff=argument_diff,
+            claimed_by=worker_id,
         )
     except RuntimeCheckpointClaimError as exc:
         raise HTTPException(
@@ -61,6 +66,8 @@ async def resume_checkpoint(
                 edited_arguments=edited_arguments,
                 argument_diff=argument_diff,
                 claimed_checkpoint=claimed_checkpoint,
+                claimed_by=worker_id,
+                context_override=context_override,
             ):
                 sequence = int(event.get("sequence") or 0)
                 event_name = str(event.get("event") or "sdk.event")

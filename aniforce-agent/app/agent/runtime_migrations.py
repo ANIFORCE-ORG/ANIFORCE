@@ -81,9 +81,28 @@ async def _migration_2(conn: object) -> None:
             )
 
 
+async def _migration_3(conn: object) -> None:
+    columns = await _column_names(conn, "runtime_checkpoints")
+    additions = {
+        "claimed_by": "TEXT",
+        "context_schema_version": "INTEGER NOT NULL DEFAULT 1",
+    }
+    for name, definition in additions.items():
+        if name not in columns:
+            await conn.execute(text(f"ALTER TABLE runtime_checkpoints ADD COLUMN {name} {definition}"))
+    await conn.execute(text(
+        "CREATE TABLE IF NOT EXISTS runtime_run_controls ("
+        "run_id TEXT PRIMARY KEY, user_id TEXT NOT NULL, cancel_requested_at TEXT, updated_at TEXT NOT NULL)"
+    ))
+    await conn.execute(text(
+        "CREATE INDEX IF NOT EXISTS idx_runtime_run_controls_user ON runtime_run_controls(user_id, updated_at)"
+    ))
+
+
 MIGRATIONS: tuple[tuple[int, Migration], ...] = (
     (1, _migration_1),
     (2, _migration_2),
+    (3, _migration_3),
 )
 
 

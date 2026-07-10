@@ -48,8 +48,10 @@ def test_runtime_migration_upgrades_legacy_checkpoint_schema_idempotently() -> N
                 "argument_diff_json",
                 "version",
                 "claimed_at",
+                "claimed_by",
+                "context_schema_version",
             }.issubset(names)
-            assert [row[0] for row in versions.fetchall()] == [1, 2]
+            assert [row[0] for row in versions.fetchall()] == [1, 2, 3]
             assert sessions.scalar_one() == "runtime_sessions"
         finally:
             await engine.dispose()

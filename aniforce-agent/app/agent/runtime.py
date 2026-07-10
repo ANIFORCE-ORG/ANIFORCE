@@ -24,6 +24,7 @@ from app.agent.checkpoints import (
     serialize_workspace_context_for_checkpoint,
 )
 from app.agent.runtime_sessions import RuntimeSessionOwnerMismatch, RuntimeSessionStore
+from app.agent.runtime_controls import RuntimeRunControlStore
 from app.core.errors import AppError, AgentErrorCode, unexpected_error_payload
 from app.core.tracing import get_tracer
 
@@ -363,6 +364,10 @@ class AgentRuntime:
             if trace_ctx:
                 trace_ctx.__exit__(None, None, None)
 
+    def run_control_store(self) -> RuntimeRunControlStore:
+        engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
+        return RuntimeRunControlStore(engine)
+
     async def _create_hitl_checkpoint(
         self,
         *,
@@ -395,6 +400,7 @@ class AgentRuntime:
         user_id: str,
         edited_arguments: dict | None = None,
         argument_diff: list | None = None,
+        claimed_by: str | None = None,
     ) -> dict:
         engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
         return await RuntimeCheckpointStore(engine).claim_or_raise(
@@ -402,6 +408,7 @@ class AgentRuntime:
             user_id,
             approved_arguments=edited_arguments,
             argument_diff=argument_diff,
+            claimed_by=claimed_by,
         )
 
     async def resume_checkpoint(
@@ -416,6 +423,8 @@ class AgentRuntime:
         edited_arguments: dict | None = None,
         argument_diff: list | None = None,
         claimed_checkpoint: dict | None = None,
+        claimed_by: str | None = None,
+        context_override: dict | None = None,
     ) -> AsyncIterator[dict]:
         """Resume a paused SDK HITL checkpoint."""
         engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
@@ -425,9 +434,11 @@ class AgentRuntime:
             user_id=user_id,
             edited_arguments=edited_arguments,
             argument_diff=argument_diff,
+            claimed_by=claimed_by,
         )
 
         safe_context = checkpoint["run_state"].get("context", {}).get("value") or {}
+        latest_context = context_override or {}
         # 构建 approved_arguments_by_call_id：用 interruption 的 call_id 关联
         approved_args_by_call_id: dict[str, dict] = {}
         if edited_arguments:
@@ -441,9 +452,9 @@ class AgentRuntime:
             session_id=checkpoint["session_id"],
             run_id=checkpoint["run_id"],
             auth_token=auth_token,
-            business_context_summary=safe_context.get("business_context_summary", ""),
-            ui_snapshot=safe_context.get("ui_snapshot") or {},
-            session_state=safe_context.get("session_state") or {},
+            business_context_summary=latest_context.get("business_context_summary", safe_context.get("business_context_summary", "")),
+            ui_snapshot=latest_context.get("ui_snapshot", safe_context.get("ui_snapshot")) or {},
+            session_state=latest_context.get("session_state", safe_context.get("session_state")) or {},
             task_type=safe_context.get("task_type", "conversation"),
             approved_arguments_by_call_id=approved_args_by_call_id,
             argument_diff=argument_diff or [],
@@ -502,7 +513,9 @@ class AgentRuntime:
                         user_id=user_id,
                         run_id=checkpoint["run_id"],
                     )
-                    await store.mark_status(checkpoint_id, user_id, "completed", expected_status="resuming")
+                    await store.mark_status(
+                        checkpoint_id, user_id, "completed", expected_status="resuming", claimed_by=claimed_by
+                    )
                     sequence += 1
                     yield {
                         "event": "runtime.requires_action",
@@ -517,7 +530,9 @@ class AgentRuntime:
                     }
                     return
 
-                await store.mark_status(checkpoint_id, user_id, "completed", expected_status="resuming")
+                await store.mark_status(
+                    checkpoint_id, user_id, "completed", expected_status="resuming", claimed_by=claimed_by
+                )
                 usage = self.adapter._extract_usage(result)
                 sequence += 1
                 yield {
@@ -534,6 +549,7 @@ class AgentRuntime:
                 "failed",
                 error=unexpected_error_payload(message="Checkpoint resume failed"),
                 expected_status="resuming",
+                claimed_by=claimed_by,
             )
             raise
 

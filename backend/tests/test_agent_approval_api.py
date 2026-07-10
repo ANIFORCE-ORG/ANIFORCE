@@ -102,12 +102,20 @@ def test_approval_conflict_returns_before_gateway_call(monkeypatch) -> None:
         gateway = CountingGateway()
 
         async def get_run(*args):
-            return {"run_id": "run_1", "checkpoint_ref": "ckpt_1"}
+            return {"run_id": "run_1", "session_id": "session_1", "checkpoint_ref": "ckpt_1"}
+
+        async def get_state(*args):
+            return {"version": 1, "ui_snapshot": {}}
+
+        async def build_context(*args):
+            return "latest context"
 
         async def claim(**kwargs):
             raise AgentApprovalError("APPROVAL_CONFLICT", "already claimed", 409)
 
         monkeypatch.setattr(agent_routes, "_get_run_short_tx", get_run)
+        monkeypatch.setattr(agent_routes, "_get_session_state_short_tx", get_state)
+        monkeypatch.setattr(agent_routes, "_build_business_context_short_tx", build_context)
         monkeypatch.setattr(agent_routes, "_claim_approvals_short_tx", claim)
 
         try:
@@ -128,51 +136,59 @@ def test_approval_conflict_returns_before_gateway_call(monkeypatch) -> None:
     asyncio.run(scenario())
 
 
-def test_approval_stream_settles_persistent_status(monkeypatch) -> None:
+def test_approval_api_queues_resume_without_gateway_call(monkeypatch) -> None:
     async def scenario() -> None:
-        for event_name, expected in (
-            ("runtime.completed", "resolved"),
-            ("runtime.error", "failed"),
-        ):
-            gateway = CountingGateway(event_name)
-            approval_statuses = []
-            run_status = "requires_action"
+        gateway = CountingGateway()
+        captured = None
 
-            async def get_run(*args):
-                return {"run_id": "run_1", "checkpoint_ref": "ckpt_1"}
+        async def get_run(*args):
+            return {
+                "run_id": "run_1",
+                "session_id": "session_1",
+                "checkpoint_ref": "ckpt_1",
+                "last_event_sequence": 2,
+            }
 
-            async def claim(**kwargs):
-                return [{"status": "resuming"}]
+        async def get_state(*args):
+            return {"version": 3, "ui_snapshot": {"route": "/projects"}}
 
-            async def mark_approval(**kwargs):
-                approval_statuses.append(kwargs["status"])
-                return 1
+        async def build_context(*args):
+            return "latest context"
 
-            async def mark_run(run_id, user_id, status, **kwargs):
-                nonlocal run_status
-                run_status = status
-                return {"run_id": run_id, "status": status}
+        async def claim(**kwargs):
+            nonlocal captured
+            captured = kwargs
+            return [{"status": "resuming"}]
 
-            monkeypatch.setattr(agent_routes, "_get_run_short_tx", get_run)
-            monkeypatch.setattr(agent_routes, "_claim_approvals_short_tx", claim)
-            monkeypatch.setattr(agent_routes, "_mark_approvals_status_short_tx", mark_approval)
-            monkeypatch.setattr(agent_routes, "_mark_run_status_short_tx", mark_run)
-
-            await agent_routes.agent_run_event_bus.create_run("run_1", "session_1", "user_1")
-            response = await agent_routes.resolve_run_approval(
-                run_id="run_1",
-                checkpoint_id="ckpt_1",
-                request=FakeRequest(),
-                current_user={"id": "user_1"},
-                gateway=gateway,
+        async def list_events(*args):
+            return (
+                {"status": "completed"},
+                [{
+                    "sequence": 3,
+                    "event_type": "run.completed",
+                    "payload": {"run_id": "run_1", "final_output": "done"},
+                }],
             )
-            chunks = []
-            async for chunk in response.body_iterator:
-                chunks.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
 
-            assert gateway.calls == 1
-            assert approval_statuses == [expected]
-            assert run_status == ("completed" if event_name == "runtime.completed" else "error")
-            assert event_name in "".join(chunks)
+        monkeypatch.setattr(agent_routes, "_get_run_short_tx", get_run)
+        monkeypatch.setattr(agent_routes, "_get_session_state_short_tx", get_state)
+        monkeypatch.setattr(agent_routes, "_build_business_context_short_tx", build_context)
+        monkeypatch.setattr(agent_routes, "_claim_approvals_short_tx", claim)
+        monkeypatch.setattr(agent_routes, "_list_persisted_run_events_short_tx", list_events)
+
+        response = await agent_routes.resolve_run_approval(
+            run_id="run_1",
+            checkpoint_id="ckpt_1",
+            request=FakeRequest(),
+            current_user={"id": "user_1"},
+            gateway=gateway,
+        )
+        chunks = []
+        async for chunk in response.body_iterator:
+            chunks.append(chunk.decode() if isinstance(chunk, bytes) else chunk)
+
+        assert gateway.calls == 0
+        assert captured["resume_payload"]["context_override"]["business_context_summary"] == "latest context"
+        assert "runtime.completed" in "".join(chunks)
 
     asyncio.run(scenario())

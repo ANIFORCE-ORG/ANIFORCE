@@ -15,7 +15,8 @@ PARENT_REVISION = "260629_01_idempotency_records"
 CHECKPOINT_REVISION = "260710_01_run_checkpoint"
 RUN_EVENTS_REVISION = "260710_02_run_events"
 APPROVALS_REVISION = "260710_03_approvals"
-HEAD_REVISION = "260710_04_agent_facts"
+FACTS_REVISION = "260710_04_agent_facts"
+HEAD_REVISION = "260710_05_execution_fencing"
 
 
 def _config(db_path: Path) -> Config:
@@ -113,7 +114,7 @@ def test_agent_facts_migration_upgrades_and_downgrades() -> None:
                 "user_id VARCHAR(128) NOT NULL, role VARCHAR(32) NOT NULL, content_json TEXT NOT NULL, "
                 "run_id VARCHAR(128), sequence INTEGER NOT NULL, created_at DATETIME NOT NULL)"
             )
-        command.upgrade(config, HEAD_REVISION)
+        command.upgrade(config, FACTS_REVISION)
         with sqlite3.connect(db_path) as connection:
             run_columns = {row[1] for row in connection.execute("PRAGMA table_info(agent_runs)")}
             message_columns = {row[1] for row in connection.execute("PRAGMA table_info(agent_messages)")}
@@ -135,6 +136,44 @@ def test_agent_facts_migration_upgrades_and_downgrades() -> None:
             }
         assert "agent_tool_calls" not in tables
         assert "agent_artifacts" not in tables
+    finally:
+        db_path.unlink(missing_ok=True)
+
+
+def test_execution_fencing_migration_upgrades_and_downgrades() -> None:
+    db_path = project_root / "drafts" / "260710" / "260710_13_execution_fencing_migration_test.db"
+    db_path.unlink(missing_ok=True)
+    try:
+        config = _prepare_parent_schema(db_path, checkpoint_ref_exists=False)
+        command.upgrade(config, APPROVALS_REVISION)
+        with sqlite3.connect(db_path) as connection:
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS agent_sessions ("
+                "session_id VARCHAR(128) PRIMARY KEY, user_id VARCHAR(128) NOT NULL)"
+            )
+            connection.execute(
+                "CREATE TABLE IF NOT EXISTS agent_messages ("
+                "message_id VARCHAR(128) PRIMARY KEY, session_id VARCHAR(128) NOT NULL, "
+                "user_id VARCHAR(128) NOT NULL, role VARCHAR(32) NOT NULL, content_json TEXT NOT NULL, "
+                "run_id VARCHAR(128), sequence INTEGER NOT NULL, created_at DATETIME NOT NULL)"
+            )
+        command.upgrade(config, HEAD_REVISION)
+        with sqlite3.connect(db_path) as connection:
+            run_columns = {row[1] for row in connection.execute("PRAGMA table_info(agent_runs)")}
+            approval_columns = {row[1] for row in connection.execute("PRAGMA table_info(agent_approvals)")}
+            lease_table = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='agent_session_leases'"
+            ).fetchone()
+        assert {"execution_kind", "resume_payload_json", "error_code"}.issubset(run_columns)
+        assert {"preconditions_json", "claimed_by", "resolved_by"}.issubset(approval_columns)
+        assert lease_table == ("agent_session_leases",)
+
+        command.downgrade(config, FACTS_REVISION)
+        with sqlite3.connect(db_path) as connection:
+            lease_table = connection.execute(
+                "SELECT name FROM sqlite_master WHERE type='table' AND name='agent_session_leases'"
+            ).fetchone()
+        assert lease_table is None
     finally:
         db_path.unlink(missing_ok=True)
 

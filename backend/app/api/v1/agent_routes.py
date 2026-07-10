@@ -31,7 +31,6 @@ from app.services.agent_run_event_bus import agent_run_event_bus
 from app.services.agent_run_event_processor import AgentRunEventProcessor
 from app.services.business_context_builder import BusinessContextBuilder
 from app.services.chat_event_assembler import ChatEventAssembler
-from app.services.session_lock import SessionBusyError, session_lock_manager
 from app.services.side_effect_service import SideEffectService
 
 router = APIRouter(prefix="/agent", tags=["agent"])
@@ -286,10 +285,15 @@ async def _persist_run_output_short_tx(
     error: dict | None = None,
     complete_usage: dict | None = None,
     final_output: str | None = None,
+    lease_owner: str | None = None,
 ) -> dict | None:
     async def callback(session: AsyncSession):
         message_repo = SqliteAgentMessageRepository(session)
+        run_service = AgentRunService(SqliteAgentRunRepository(session))
+        current = await run_service.get(run_id, user_id)
         if error:
+            if current["status"] != "error":
+                return current
             await message_repo.create(
                 session_id=session_id,
                 user_id=user_id,
@@ -302,7 +306,22 @@ async def _persist_run_output_short_tx(
                 status="error",
                 error_code=str(error.get("code") or "RUN_FAILED"),
             )
-            return None
+            return current
+
+        if complete_usage is not None or final_output is not None:
+            if current["status"] in {"completed", "error", "cancelled"}:
+                return current
+            completed = await run_service.mark_completed(
+                run_id,
+                user_id,
+                usage=complete_usage,
+                final_output=final_output,
+                lease_owner=lease_owner,
+            )
+            if not completed or completed["status"] != "completed":
+                return completed
+        else:
+            completed = None
 
         assembler = ChatEventAssembler()
         tool_repo = SqliteAgentToolCallRepository(session)
@@ -348,14 +367,7 @@ async def _persist_run_output_short_tx(
                 surface=str(request.get("surface") or "unknown"),
                 payload=request,
             )
-        if complete_usage is not None or final_output is not None:
-            return await AgentRunService(SqliteAgentRunRepository(session)).mark_completed(
-                run_id,
-                user_id,
-                usage=complete_usage,
-                final_output=final_output,
-            )
-        return None
+        return completed
 
     return await _with_session(callback)
 
@@ -365,6 +377,7 @@ async def _persist_requires_action_short_tx(
     run_id: str,
     user_id: str,
     data: dict,
+    lease_owner: str | None = None,
 ) -> dict | None:
     checkpoint_ref = str(data.get("checkpoint_id") or "")
 
@@ -379,6 +392,7 @@ async def _persist_requires_action_short_tx(
             user_id,
             checkpoint_ref,
             event_payload={**data, "status": "requires_action"},
+            lease_owner=lease_owner,
         )
         if not updated or updated.get("status") != "requires_action":
             return updated
@@ -404,6 +418,7 @@ async def _claim_approvals_short_tx(
     edited_arguments: dict | None,
     argument_diff: list | None,
     rejection_message: str | None,
+    resume_payload: dict | None = None,
 ) -> list[dict]:
     async def callback(session: AsyncSession):
         try:
@@ -415,7 +430,14 @@ async def _claim_approvals_short_tx(
                 edited_arguments=edited_arguments,
                 argument_diff=argument_diff,
                 rejection_message=rejection_message,
+                claimed_by=user_id,
             )
+            if resume_payload is not None:
+                await AgentRunService(SqliteAgentRunRepository(session)).enqueue_resume(
+                    run_id,
+                    user_id,
+                    resume_payload,
+                )
             return items, None
         except AgentApprovalError as exc:
             if exc.code == "APPROVAL_EXPIRED":
@@ -455,6 +477,7 @@ async def _mark_run_status_short_tx(
     error: dict | None = None,
     checkpoint_ref: str | None = None,
     final_output: str | None = None,
+    lease_owner: str | None = None,
 ) -> dict | None:
     async def callback(session: AsyncSession):
         service = AgentRunService(SqliteAgentRunRepository(session))
@@ -466,12 +489,15 @@ async def _mark_run_status_short_tx(
                 user_id,
                 usage=usage,
                 final_output=final_output,
+                lease_owner=lease_owner,
             )
         if status == "cancelled":
-            return await service.mark_cancelled(run_id, user_id)
+            return await service.mark_cancelled(run_id, user_id, lease_owner=lease_owner)
         if status == "requires_action":
-            return await service.mark_requires_action(run_id, user_id, checkpoint_ref or "")
-        return await service.mark_error(run_id, user_id, error or {})
+            return await service.mark_requires_action(
+                run_id, user_id, checkpoint_ref or "", lease_owner=lease_owner
+            )
+        return await service.mark_error(run_id, user_id, error or {}, lease_owner=lease_owner)
     return await _with_session(callback)
 
 
@@ -636,6 +662,21 @@ async def resolve_run_approval(
     if run.get("checkpoint_ref") != checkpoint_id:
         raise HTTPException(status_code=409, detail=_error_payload("CHECKPOINT_MISMATCH", "Checkpoint does not belong to run"))
 
+    latest_state = await _get_session_state_short_tx(run["session_id"], user_id)
+    latest_context = await _build_business_context_short_tx(latest_state or {}, user_id)
+    resume_payload = {
+        "decision": decision,
+        "rejection_message": body.get("rejection_message"),
+        "always": bool(body.get("always", False)),
+        "edited_arguments": body.get("edited_arguments"),
+        "argument_diff": body.get("argument_diff"),
+        "checkpoint_id": checkpoint_id,
+        "context_override": {
+            "business_context_summary": latest_context,
+            "ui_snapshot": (latest_state or {}).get("ui_snapshot") or {},
+            "session_state": latest_state or {},
+        },
+    }
     try:
         await _claim_approvals_short_tx(
             run_id=run_id,
@@ -645,6 +686,7 @@ async def resolve_run_approval(
             edited_arguments=body.get("edited_arguments"),
             argument_diff=body.get("argument_diff"),
             rejection_message=body.get("rejection_message"),
+            resume_payload=resume_payload,
         )
     except AgentApprovalError as exc:
         raise HTTPException(
@@ -652,83 +694,22 @@ async def resolve_run_approval(
             detail=_error_payload(exc.code, exc.message, retryable=False),
         ) from exc
 
-    payload = {
-        "decision": decision,
-        "rejection_message": body.get("rejection_message"),
-        "always": bool(body.get("always", False)),
-        "auth_token": _authorization(request),
-        "edited_arguments": body.get("edited_arguments"),
-        "argument_diff": body.get("argument_diff"),
-    }
-
     async def event_generator():
-        stream_buffer = ""
-        resolved_status = "rejected" if decision == "reject" else "resolved"
-
-        async def settle_approval(status: str) -> None:
-            await _mark_approvals_status_short_tx(
-                run_id=run_id,
-                checkpoint_ref=checkpoint_id,
-                user_id=user_id,
-                status=status,
-            )
-        event_processor = AgentRunEventProcessor(
-            event_bus=agent_run_event_bus,
-            mark_run_status=_mark_run_status_short_tx,
-            persist_requires_action=_persist_requires_action_short_tx,
-        )
-        try:
-            await _mark_run_status_short_tx(run_id, user_id, "running")
-            await event_processor.publish_running(run_id=run_id)
-            async for chunk in gateway.stream_checkpoint_resume(_authorization(request), checkpoint_id, payload):
-                stream_buffer += chunk.decode("utf-8", errors="ignore")
-                events, stream_buffer = _parse_sse_events(stream_buffer)
-                terminal = False
-                for event_name, data in events:
-                    result = await event_processor.handle_runtime_event(
-                        run_id=run_id,
-                        user_id=user_id,
-                        event_name=event_name,
-                        data=data,
-                    )
-                    if result.terminal:
-                        approval_status = (
-                            "failed" if event_name in {"runtime.error", "runtime.aborted"} else resolved_status
-                        )
-                        await settle_approval(approval_status)
-                        terminal = True
-                        break
-                yield chunk
-                if terminal:
-                    return
-
-            events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
-            for event_name, data in events:
-                result = await event_processor.handle_runtime_event(
-                    run_id=run_id,
-                    user_id=user_id,
-                    event_name=event_name,
-                    data=data,
-                )
-                if result.terminal:
-                    approval_status = (
-                        "failed" if event_name in {"runtime.error", "runtime.aborted"} else resolved_status
-                    )
-                    await settle_approval(approval_status)
-                    return
-            await settle_approval("failed")
-        except Exception:
-            logger.exception("checkpoint resume stream failed: run_id={} checkpoint_id={}", run_id, checkpoint_id)
-            error = _unexpected_run_error("RESUME_FAILED")
-            await _mark_approvals_status_short_tx(
-                run_id=run_id,
-                checkpoint_ref=checkpoint_id,
-                user_id=user_id,
-                status="failed",
-            )
-            await _mark_run_status_short_tx(run_id, user_id, "error", error=error)
-            yield "event: runtime.error\n"
-            yield f"data: {json.dumps({'run_id': run_id, **error}, ensure_ascii=False)}\n\n"
+        sequence = int(run.get("last_event_sequence") or 0)
+        while True:
+            current, events = await _list_persisted_run_events_short_tx(run_id, user_id, sequence)
+            for event in events:
+                sequence = event["sequence"]
+                event_name = {
+                    "run.resuming": "runtime.started",
+                    "run.completed": "runtime.completed",
+                    "run.error": "runtime.error",
+                    "run.cancelled": "runtime.aborted",
+                }.get(event["event_type"], event["event_type"])
+                yield _sse_event(event_name, event["payload"], sequence)
+            if current["status"] in {"completed", "error", "cancelled", "requires_action"}:
+                return
+            await asyncio.sleep(0.2)
 
     return StreamingResponse(
         event_generator(),
@@ -751,18 +732,13 @@ async def cancel_agent_run(
     except AgentRunError as exc:
         raise HTTPException(status_code=exc.status_code, detail=_error_payload(exc.code, exc.message, exc.retryable)) from exc
 
-    updated_run = await service.mark_cancelled(run_id, current_user["id"])
+    updated_run = await service.request_cancel(run_id, current_user["id"])
     await session.commit()
-    current = await _get_session_state_short_tx(run["session_id"], current_user["id"])
-    if current:
-        await _mark_active_short_tx(run["session_id"], current_user["id"], current["version"])
-    if updated_run and updated_run["status"] == "cancelled":
-        try:
-            await gateway.cancel_run(_authorization(request), run_id)
-        except AgentGatewayError:
-            # Runtime cancellation is best-effort; backend run status is already cancelled.
-            pass
-    return {"run_id": run_id, "session_id": run["session_id"], "status": (updated_run or run)["status"]}
+    try:
+        await gateway.cancel_run(_authorization(request), run_id)
+    except AgentGatewayError:
+        pass
+    return {"run_id": run_id, "session_id": run["session_id"], "status": updated_run["status"]}
 
 
 @router.post("/runs")
@@ -939,6 +915,8 @@ async def _consume_agent_run_background(
     changelog_start_index: int,
     gateway: AgentGatewayService,
     perf_start: float,
+    lease_owner: str | None = None,
+    resume_payload: dict | None = None,
 ) -> None:
     perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
     latest_state = await _get_session_state_short_tx(session_id, user_id)
@@ -951,23 +929,29 @@ async def _consume_agent_run_background(
     first_message_logged = False
     upstream_bytes = 0
     stream_buffer = ""
+    async def mark_owned_status(run_id_arg, user_id_arg, status, **kwargs):
+        if lease_owner is not None:
+            kwargs["lease_owner"] = lease_owner
+        return await _mark_run_status_short_tx(run_id_arg, user_id_arg, status, **kwargs)
+
+    async def persist_owned_approval(**kwargs):
+        if lease_owner is not None:
+            kwargs["lease_owner"] = lease_owner
+        return await _persist_requires_action_short_tx(**kwargs)
+
     event_processor = AgentRunEventProcessor(
         event_bus=agent_run_event_bus,
-        mark_run_status=_mark_run_status_short_tx,
-        persist_requires_action=_persist_requires_action_short_tx,
+        mark_run_status=mark_owned_status,
+        persist_requires_action=persist_owned_approval,
     )
 
     try:
-        lock_start = perf_counter()
-        async with session_lock_manager.acquire(session_id):
-            lock_wait_ms = _elapsed_ms(lock_start)
             mark_running_start = perf_counter()
             await _mark_running_short_tx(session_id, user_id, latest_state["version"])
             mark_running_ms = _elapsed_ms(mark_running_start)
             perf_log.info(
-                "[PERF][agent_first_token] backend.background_start total_ms={} lock_wait_ms={} mark_running_ms={}",
+                "[PERF][agent_first_token] backend.background_start total_ms={} mark_running_ms={}",
                 _elapsed_ms(perf_start),
-                lock_wait_ms,
                 mark_running_ms,
             )
             current_run = await _mark_run_status_short_tx(run_id, user_id, "running")
@@ -987,7 +971,16 @@ async def _consume_agent_run_background(
             gateway_start = perf_counter()
             persisted_events: list[tuple[str, dict]] = []
             try:
-                async for chunk in gateway.stream_run(authorization, agent_payload):
+                stream = (
+                    gateway.stream_checkpoint_resume(
+                        authorization,
+                        str((resume_payload or {}).get("checkpoint_id") or ""),
+                        resume_payload or {},
+                    )
+                    if resume_payload is not None
+                    else gateway.stream_run(authorization, agent_payload)
+                )
+                async for chunk in stream:
                     upstream_bytes += len(chunk)
                     if not first_agent_chunk_logged:
                         first_agent_chunk_logged = True
@@ -1088,6 +1081,16 @@ async def _consume_agent_run_background(
                     await _mark_active_short_tx(session_id, user_id, current["version"])
 
                 latest_run = await _get_run_short_tx(run_id, user_id)
+                if latest_run["status"] == "cancel_requested":
+                    await _mark_run_status_short_tx(
+                        run_id, user_id, "cancelled", lease_owner=lease_owner
+                    )
+                    await _settle_session_after_terminal(
+                        session_id=session_id,
+                        user_id=user_id,
+                        persisted_status="cancelled",
+                    )
+                    return
                 if latest_run["status"] == "cancelled":
                     await agent_run_event_bus.publish(
                         run_id,
@@ -1110,6 +1113,7 @@ async def _consume_agent_run_background(
                     events=persisted_events,
                     complete_usage=assistant_content.get("usage") or {},
                     final_output=final_output or None,
+                    lease_owner=lease_owner,
                 )
                 await event_processor.complete_run(
                     run_id=run_id,
@@ -1128,7 +1132,9 @@ async def _consume_agent_run_background(
                         {"code": exc.code, "message": exc.message, "retryable": exc.retryable, "at": datetime.utcnow().isoformat()},
                     )
                 error_payload = {"code": exc.code, "message": exc.message, "retryable": exc.retryable, "at": datetime.utcnow().isoformat()}
-                await _mark_run_status_short_tx(run_id, user_id, "error", error=error_payload)
+                await _mark_run_status_short_tx(
+                    run_id, user_id, "error", error=error_payload, lease_owner=lease_owner
+                )
                 await _persist_run_output_short_tx(
                     run_id=run_id,
                     session_id=session_id,
@@ -1137,16 +1143,15 @@ async def _consume_agent_run_background(
                     error=error_payload,
                 )
                 await agent_run_event_bus.publish(run_id, "error", _error_payload(exc.code, exc.message, exc.retryable), terminal=True)
-    except SessionBusyError:
-        await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "SESSION_BUSY", "message": "当前会话正在执行，请稍后再试"})
-        await agent_run_event_bus.publish(run_id, "error", _error_payload("SESSION_BUSY", "当前会话正在执行，请稍后再试", True), terminal=True)
     except Exception:
         perf_log.exception("backend background run failed")
         error = _unexpected_run_error()
         current = await _get_session_state_short_tx(session_id, user_id)
         if current:
             await _mark_error_short_tx(session_id, user_id, current["version"], error)
-        await _mark_run_status_short_tx(run_id, user_id, "error", error=error)
+        await _mark_run_status_short_tx(
+            run_id, user_id, "error", error=error, lease_owner=lease_owner
+        )
         await _persist_run_output_short_tx(
             run_id=run_id,
             session_id=session_id,

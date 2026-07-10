@@ -571,6 +571,16 @@ fi
   else
     fail "Agent Run Worker 启动失败,请检查日志"
   fi
+
+  info "启动 Agent Reconcile Worker..."
+  LOG_FILE="$BACKEND_APP_LOG" $PY scripts/run_agent_reconcile_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
+  AGENT_RECONCILE_WORKER_PID=$!
+  echo "$AGENT_RECONCILE_WORKER_PID" >> "$PID_FILE"
+  if kill -0 "$AGENT_RECONCILE_WORKER_PID" 2>/dev/null; then
+    ok "Agent Reconcile Worker 已启动 (PID: $AGENT_RECONCILE_WORKER_PID)"
+  else
+    fail "Agent Reconcile Worker 启动失败,请检查日志"
+  fi
 fi
 
 # ============================================================

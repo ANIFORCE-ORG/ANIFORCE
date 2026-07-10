@@ -74,11 +74,10 @@ def test_phase1_facts_replay_snapshot_and_lease_claim() -> None:
 
             async with maker_a() as session:
                 repo = SqliteAgentRunRepository(session)
-                assert await repo.heartbeat(run["run_id"], worker_id) is False
+                assert await repo.heartbeat(run["run_id"], worker_id) is True
                 service = AgentRunService(repo)
                 started = await service.mark_running(run["run_id"], "user_1")
                 assert started and started["status"] == "running"
-                assert await repo.heartbeat(run["run_id"], worker_id) is True
                 await SqliteAgentToolCallRepository(session).upsert_started(
                     run_id=run["run_id"], tool_call_id="call_1", tool_name="search", arguments={"q": "x"}
                 )

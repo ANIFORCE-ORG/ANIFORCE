@@ -4,13 +4,14 @@ import json
 from datetime import datetime, timedelta
 from uuid import uuid4
 
-from sqlalchemy import select, update
+from sqlalchemy import delete, select, update
+from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AgentRun, AgentRunEvent
+from app.models import AgentRun, AgentRunEvent, AgentSessionLease
 
 
-ACTIVE_RUN_STATUSES = {"queued", "running", "requires_action"}
+ACTIVE_RUN_STATUSES = {"queued", "resume_queued", "running", "requires_action", "cancel_requested"}
 TERMINAL_RUN_STATUSES = {"completed", "error", "cancelled"}
 
 
@@ -39,6 +40,9 @@ class SqliteAgentRunRepository:
             "heartbeat_at": item.heartbeat_at.isoformat() if item.heartbeat_at else None,
             "runtime_started_at": item.runtime_started_at.isoformat() if item.runtime_started_at else None,
             "execution_context": json.loads(item.run_state_json) if item.run_state_json else {},
+            "execution_kind": item.execution_kind,
+            "resume_payload": json.loads(item.resume_payload_json) if item.resume_payload_json else None,
+            "error_code": item.error_code,
             "started_at": item.started_at.isoformat(),
             "completed_at": item.completed_at.isoformat() if item.completed_at else None,
         }
@@ -106,60 +110,119 @@ class SqliteAgentRunRepository:
 
     async def claim_next(self, worker_id: str, lease_seconds: int = 60) -> dict | None:
         now = datetime.utcnow()
-        candidate_result = await self.session.execute(
-            select(AgentRun.run_id)
+        expiry = now + timedelta(seconds=lease_seconds)
+        candidates = await self.session.execute(
+            select(AgentRun)
             .where(
-                AgentRun.status == "queued",
+                AgentRun.status.in_(("queued", "resume_queued")),
                 (AgentRun.lease_expires_at.is_(None)) | (AgentRun.lease_expires_at < now),
             )
             .order_by(AgentRun.started_at)
-            .limit(1)
+            .limit(10)
         )
-        run_id = candidate_result.scalar_one_or_none()
-        if not run_id:
-            return None
-        result = await self.session.execute(
-            update(AgentRun)
-            .where(
-                AgentRun.run_id == run_id,
-                AgentRun.status == "queued",
-                (AgentRun.lease_expires_at.is_(None)) | (AgentRun.lease_expires_at < now),
-            )
-            .values(
+        for candidate in candidates.scalars():
+            lease_stmt = sqlite_insert(AgentSessionLease).values(
+                session_id=candidate.session_id,
+                run_id=candidate.run_id,
                 lease_owner=worker_id,
-                lease_expires_at=now + timedelta(seconds=lease_seconds),
+                lease_expires_at=expiry,
                 heartbeat_at=now,
-                version=AgentRun.version + 1,
+                created_at=now,
+            ).on_conflict_do_update(
+                index_elements=[AgentSessionLease.session_id],
+                set_={
+                    "run_id": candidate.run_id,
+                    "lease_owner": worker_id,
+                    "lease_expires_at": expiry,
+                    "heartbeat_at": now,
+                },
+                where=AgentSessionLease.lease_expires_at < now,
             )
-        )
-        if result.rowcount != 1:
-            return None
-        await self.session.flush()
-        item = await self.session.get(AgentRun, run_id)
-        return self._to_dict(item) if item else None
+            lease_result = await self.session.execute(lease_stmt)
+            if lease_result.rowcount != 1:
+                continue
+            event_id = f"evt_{uuid4().hex}"
+            event_type = "run.resuming" if candidate.status == "resume_queued" else "run.started"
+            result = await self.session.execute(
+                update(AgentRun)
+                .where(
+                    AgentRun.run_id == candidate.run_id,
+                    AgentRun.version == candidate.version,
+                    AgentRun.status == candidate.status,
+                )
+                .values(
+                    status="running",
+                    lease_owner=worker_id,
+                    lease_expires_at=expiry,
+                    heartbeat_at=now,
+                    runtime_started_at=now,
+                    last_event_sequence=AgentRun.last_event_sequence + 1,
+                    version=AgentRun.version + 1,
+                )
+            )
+            if result.rowcount != 1:
+                await self.session.execute(
+                    delete(AgentSessionLease).where(
+                        AgentSessionLease.session_id == candidate.session_id,
+                        AgentSessionLease.run_id == candidate.run_id,
+                        AgentSessionLease.lease_owner == worker_id,
+                    )
+                )
+                continue
+            await self.session.flush()
+            item = await self.session.get(AgentRun, candidate.run_id)
+            if not item:
+                return None
+            self.session.add(AgentRunEvent(
+                id=event_id,
+                run_id=item.run_id,
+                sequence=item.last_event_sequence,
+                event_type=event_type,
+                payload_json=json.dumps({"run_id": item.run_id, "status": "running"}),
+                is_terminal=False,
+                created_at=now,
+            ))
+            await self.session.flush()
+            return self._to_dict(item)
+        return None
 
     async def heartbeat(self, run_id: str, worker_id: str, lease_seconds: int = 60) -> bool:
         now = datetime.utcnow()
+        expiry = now + timedelta(seconds=lease_seconds)
         result = await self.session.execute(
             update(AgentRun)
             .where(
                 AgentRun.run_id == run_id,
                 AgentRun.lease_owner == worker_id,
-                AgentRun.status == "running",
+                AgentRun.status.in_(("running", "cancel_requested")),
+                AgentRun.lease_expires_at > now,
             )
-            .values(
-                heartbeat_at=now,
-                lease_expires_at=now + timedelta(seconds=lease_seconds),
-                version=AgentRun.version + 1,
-            )
+            .values(heartbeat_at=now, lease_expires_at=expiry, version=AgentRun.version + 1)
         )
-        return result.rowcount == 1
+        if result.rowcount != 1:
+            return False
+        lease_result = await self.session.execute(
+            update(AgentSessionLease)
+            .where(
+                AgentSessionLease.run_id == run_id,
+                AgentSessionLease.lease_owner == worker_id,
+                AgentSessionLease.lease_expires_at > now,
+            )
+            .values(heartbeat_at=now, lease_expires_at=expiry)
+        )
+        return lease_result.rowcount == 1
 
     async def release_lease(self, run_id: str, worker_id: str) -> None:
         await self.session.execute(
             update(AgentRun)
             .where(AgentRun.run_id == run_id, AgentRun.lease_owner == worker_id)
             .values(lease_owner=None, lease_expires_at=None, heartbeat_at=None)
+        )
+        await self.session.execute(
+            delete(AgentSessionLease).where(
+                AgentSessionLease.run_id == run_id,
+                AgentSessionLease.lease_owner == worker_id,
+            )
         )
 
     async def transition_with_event(
@@ -174,6 +237,7 @@ class SqliteAgentRunRepository:
         usage: dict | None = None,
         error: dict | None = None,
         checkpoint_ref: str | None = None,
+        lease_owner: str | None = None,
     ) -> dict | None:
         event_id = f"evt_{uuid4().hex}"
         values: dict = {
@@ -201,6 +265,11 @@ class SqliteAgentRunRepository:
             AgentRun.user_id == user_id,
             AgentRun.terminal_event_id.is_(None),
         )
+        if lease_owner is not None:
+            stmt = stmt.where(
+                AgentRun.lease_owner == lease_owner,
+                AgentRun.lease_expires_at > datetime.utcnow(),
+            )
         if status == "cancelled":
             stmt = stmt.where(AgentRun.status.in_(ACTIVE_RUN_STATUSES))
         elif status == "requires_action":
@@ -217,6 +286,8 @@ class SqliteAgentRunRepository:
         run = await self.get(run_id, user_id)
         if run is None:
             return None
+        if is_terminal and lease_owner is not None:
+            await self.session.execute(delete(AgentSessionLease).where(AgentSessionLease.run_id == run_id))
         self.session.add(
             AgentRunEvent(
                 id=event_id,
@@ -230,6 +301,47 @@ class SqliteAgentRunRepository:
         )
         await self.session.flush()
         return run
+
+    async def enqueue_resume(self, run_id: str, user_id: str, resume_payload: dict) -> dict | None:
+        result = await self.session.execute(
+            update(AgentRun)
+            .where(
+                AgentRun.run_id == run_id,
+                AgentRun.user_id == user_id,
+                AgentRun.status == "requires_action",
+                AgentRun.terminal_event_id.is_(None),
+            )
+            .values(
+                status="resume_queued",
+                execution_kind="resume",
+                resume_payload_json=json.dumps(resume_payload, ensure_ascii=False),
+                version=AgentRun.version + 1,
+            )
+        )
+        if result.rowcount != 1:
+            return await self.get(run_id, user_id)
+        await self.session.flush()
+        return await self.get(run_id, user_id)
+
+    async def request_cancel(self, run_id: str, user_id: str) -> dict | None:
+        result = await self.session.execute(
+            update(AgentRun)
+            .where(
+                AgentRun.run_id == run_id,
+                AgentRun.user_id == user_id,
+                AgentRun.status.in_(("queued", "resume_queued", "running", "requires_action")),
+                AgentRun.terminal_event_id.is_(None),
+            )
+            .values(
+                status="cancel_requested",
+                cancel_requested_at=datetime.utcnow(),
+                version=AgentRun.version + 1,
+            )
+        )
+        if result.rowcount != 1:
+            return await self.get(run_id, user_id)
+        await self.session.flush()
+        return await self.get(run_id, user_id)
 
     async def mark_status(
         self,

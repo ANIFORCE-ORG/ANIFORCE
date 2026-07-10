@@ -24,6 +24,7 @@ from agents import (
 from agents.extensions.memory import SQLAlchemySession
 from agents.memory.session import SessionABC
 from agents.run import RunResult
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
 from agents.models.openai_responses import OpenAIResponsesModel  # 添加 Responses API
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
@@ -196,6 +197,15 @@ class OpenAISDKAdapter:
         engine = self._agent_db_engines.get(db_url)
         if engine is None:
             engine = create_async_engine(db_url)
+            if db_url.startswith("sqlite"):
+                @event.listens_for(engine.sync_engine, "connect")
+                def configure_sqlite(dbapi_connection, _connection_record):
+                    cursor = dbapi_connection.cursor()
+                    cursor.execute("PRAGMA journal_mode=WAL")
+                    cursor.execute("PRAGMA foreign_keys=ON")
+                    cursor.execute("PRAGMA busy_timeout=5000")
+                    cursor.execute("PRAGMA synchronous=NORMAL")
+                    cursor.close()
             self._agent_db_engines[db_url] = engine
         return engine
 

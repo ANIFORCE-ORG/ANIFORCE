@@ -17,6 +17,7 @@ from app.models.agent_run_event import AgentRunEvent
 from app.models.agent_approval import AgentApproval
 from app.models.agent_tool_call import AgentToolCall
 from app.models.agent_artifact import AgentArtifact
+from app.models.agent_session_lease import AgentSessionLease
 from app.models.idempotency import IdempotencyRecord
 
 __all__ = [
@@ -42,5 +43,6 @@ __all__ = [
     "AgentApproval",
     "AgentToolCall",
     "AgentArtifact",
+    "AgentSessionLease",
     "IdempotencyRecord",
 ]

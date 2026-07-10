@@ -35,6 +35,7 @@ class RuntimeCheckpointStore:
         ttl_hours: int = 24,
         sdk_version: str | None = None,
         agent_version: str | None = "workspace-agent-v1",
+        context_schema_version: int = 1,
     ) -> dict[str, Any]:
         now = datetime.utcnow()
         checkpoint_id = f"ckpt_{uuid4().hex}"
@@ -51,6 +52,7 @@ class RuntimeCheckpointStore:
             "argument_diff_json": None,
             "sdk_version": sdk_version,
             "agent_version": agent_version,
+            "context_schema_version": context_schema_version,
             "expires_at": (now + timedelta(hours=ttl_hours)).isoformat(),
             "created_at": now.isoformat(),
             "resolved_at": None,
@@ -64,13 +66,13 @@ class RuntimeCheckpointStore:
                         id, run_id, session_id, user_id, kind, status,
                         interruptions_json, run_state_json,
                         approved_arguments_json, argument_diff_json,
-                        sdk_version, agent_version,
+                        sdk_version, agent_version, context_schema_version,
                         expires_at, created_at, resolved_at, error_json
                     ) VALUES (
                         :id, :run_id, :session_id, :user_id, :kind, :status,
                         :interruptions_json, :run_state_json,
                         :approved_arguments_json, :argument_diff_json,
-                        :sdk_version, :agent_version,
+                        :sdk_version, :agent_version, :context_schema_version,
                         :expires_at, :created_at, :resolved_at, :error_json
                     )
                     """
@@ -95,6 +97,7 @@ class RuntimeCheckpointStore:
         *,
         approved_arguments: dict[str, Any] | None = None,
         argument_diff: list[dict[str, Any]] | None = None,
+        claimed_by: str | None = None,
     ) -> dict[str, Any] | None:
         """Atomically claim one pending, unexpired checkpoint for resume."""
         now = datetime.utcnow().isoformat()
@@ -104,6 +107,7 @@ class RuntimeCheckpointStore:
             "now": now,
             "approved_arguments_json": json.dumps(approved_arguments or {}, ensure_ascii=False, default=str),
             "argument_diff_json": json.dumps(argument_diff or [], ensure_ascii=False, default=str),
+            "claimed_by": claimed_by,
         }
         async with self.engine.begin() as conn:
             result = await conn.execute(
@@ -113,6 +117,7 @@ class RuntimeCheckpointStore:
                     SET status = 'resuming',
                         approved_arguments_json = :approved_arguments_json,
                         argument_diff_json = :argument_diff_json,
+                        claimed_by = :claimed_by,
                         claimed_at = :now,
                         version = version + 1
                     WHERE id = :id
@@ -151,12 +156,14 @@ class RuntimeCheckpointStore:
         *,
         approved_arguments: dict[str, Any] | None = None,
         argument_diff: list[dict[str, Any]] | None = None,
+        claimed_by: str | None = None,
     ) -> dict[str, Any]:
         checkpoint = await self.claim_for_resume(
             checkpoint_id,
             user_id,
             approved_arguments=approved_arguments,
             argument_diff=argument_diff,
+            claimed_by=claimed_by,
         )
         if checkpoint:
             return checkpoint
@@ -179,29 +186,39 @@ class RuntimeCheckpointStore:
         *,
         error: dict[str, Any] | None = None,
         expected_status: str | None = None,
+        claimed_by: str | None = None,
     ) -> dict[str, Any] | None:
         values = {
             "id": checkpoint_id,
             "user_id": user_id,
             "status": status,
             "expected_status": expected_status,
+            "claimed_by": claimed_by,
             "resolved_at": datetime.utcnow().isoformat(),
             "error_json": json.dumps(error, ensure_ascii=False) if error else None,
         }
         status_guard = " AND status = :expected_status" if expected_status else ""
+        owner_guard = " AND claimed_by = :claimed_by" if claimed_by else ""
         async with self.engine.begin() as conn:
-            await conn.execute(
+            result = await conn.execute(
                 text(
                     f"""
                     UPDATE runtime_checkpoints
                     SET status = :status, resolved_at = :resolved_at,
                         error_json = :error_json, version = version + 1
-                    WHERE id = :id AND user_id = :user_id{status_guard}
+                    WHERE id = :id AND user_id = :user_id{status_guard}{owner_guard}
                     """
                 ),
                 values,
             )
-        return await self.get(checkpoint_id, user_id)
+        current = await self.get(checkpoint_id, user_id)
+        if expected_status and result.rowcount != 1:
+            raise RuntimeCheckpointClaimError(
+                "CHECKPOINT_FENCED",
+                "Checkpoint ownership was lost before completion",
+                409,
+            )
+        return current
 
     async def recover_stale_resuming(self, cutoff: datetime) -> int:
         """Fail stale claims; automatic replay could duplicate tool side effects."""

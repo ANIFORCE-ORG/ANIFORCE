@@ -21,6 +21,8 @@ import {
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
 import { useWorkspaceStore, workspaceResultProjectionRegistry, type WorkspaceSurface } from '@/store/workspace'
+import { connectPersistedRun } from '@/services/runConnectionManager'
+import { hydrateWorkspaceSnapshot } from '@/services/workspaceArtifactStore'
 
 export type AgentPhase =
   | { kind: 'queued' }
@@ -262,34 +264,33 @@ export function useHomeAgentSession() {
         store.setMessages(session.id, snapshot.messages)
         restoreTimelineFromCache()
         restoreWorkspaceFromCache()
-        workspace.clearSession(session.id)
-        for (const artifact of snapshot.artifacts) {
-          const payload = normalizeRecord(artifact.payload) || {}
-          const surface = String(artifact.surface || payload.surface || '') as WorkspaceSurface
-          if (!surface) continue
-          workspace.upsertProjection(session.id, {
-            id: String(artifact.artifact_id),
-            sessionId: session.id,
-            runId: String(artifact.run_id || ''),
-            sourceToolCallId: artifact.source_tool_call_id ? String(artifact.source_tool_call_id) : undefined,
-            surface,
-            mode: artifact.status === 'failed' ? 'failed' : 'readonly',
-            payload,
-            updatedAt: Date.parse(String(artifact.updated_at || '')) || Date.now(),
-          })
-        }
-        const approval = snapshot.pending_approval
-        if (approval) {
-          workspace.createApprovalDraft(
-            String(approval.checkpoint_ref || ''),
-            String(approval.run_id || ''),
-            String(approval.tool_name || ''),
-            'approval.review',
-            normalizeRecord(approval.edited_arguments || approval.original_arguments) || {},
-          )
-        }
-        if (snapshot.latest_run && ['queued', 'running'].includes(String(snapshot.latest_run.status))) {
+        hydrateWorkspaceSnapshot(workspace, session.id, snapshot)
+        if (snapshot.latest_run && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(String(snapshot.latest_run.status))) {
+          const runId = String(snapshot.latest_run.run_id)
           commandStatus.value = '任务正在后台执行'
+          store.agentRunning = true
+          store.agentPhase = { kind: 'waiting_model' }
+          store.resetStreamRuntime(session.id, runId)
+          store.currentRunLastSequence = snapshot.last_persisted_sequence
+          const controller = new AbortController()
+          store.setAbortController(controller)
+          void connectPersistedRun(
+            runId,
+            snapshot.last_persisted_sequence,
+            controller.signal,
+          ).then(async result => {
+            store.currentRunLastSequence = result.lastSequence
+            const refreshed = await getAgentSessionSnapshot(session.id)
+            store.setMessages(session.id, refreshed.messages)
+            hydrateWorkspaceSnapshot(workspace, session.id, refreshed)
+            store.agentRunning = false
+            store.agentPhase = null
+            store.streamingMessage = null
+            store.clearStreamRuntime()
+            commandStatus.value = null
+          }).catch(err => {
+            if (err?.name !== 'AbortError') store.error = err?.message || '恢复 Agent 任务连接失败'
+          })
         }
       }
     } catch (err: any) {

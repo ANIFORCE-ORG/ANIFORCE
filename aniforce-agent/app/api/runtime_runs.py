@@ -53,6 +53,9 @@ async def run_runtime(
     if not session_id:
         raise HTTPException(status_code=422, detail={"code": "SESSION_ID_REQUIRED", "message": "session_id is required"})
 
+    control_store = runtime.run_control_store() if hasattr(runtime, "run_control_store") else None
+    if control_store:
+        await control_store.reset(run_id, user_id)
     _ACTIVE_RUNTIME_RUNS[run_id] = {"user_id": user_id}
     perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
     perf_log.debug(
@@ -81,6 +84,10 @@ async def run_runtime(
                 session_state=session_state,
                 run_id=run_id,
             ):
+                if control_store and await control_store.is_cancel_requested(run_id, user_id):
+                    yield "event: runtime.aborted\n"
+                    yield f"data: {json.dumps({'run_id': run_id, 'status': 'cancelled'}, ensure_ascii=False)}\n\n"
+                    return
                 payload = dict(event.get("data") or {})
                 payload.setdefault("run_id", run_id)
                 sequence = int(event.get("sequence") or 0)
@@ -117,16 +124,13 @@ async def run_runtime(
 async def cancel_runtime_run(
     run_id: str,
     user: dict = Depends(get_current_user),
+    runtime: AgentRuntime = Depends(get_runtime),
 ):
-    active = _ACTIVE_RUNTIME_RUNS.get(run_id)
-    if not active:
+    control_store = runtime.run_control_store()
+    persisted = await control_store.request_cancel(run_id, user["id"])
+    if not persisted:
         return {"run_id": run_id, "status": "not_running"}
-    if active.get("user_id") != user["id"]:
-        raise HTTPException(status_code=404, detail={"code": "RUN_NOT_FOUND", "message": "Run not found"})
-
-    active["cancel_requested"] = True
-    stream_task = active.get("stream_task")
-    if stream_task and not stream_task.done():
-        stream_task.cancel()
-
+    active = _ACTIVE_RUNTIME_RUNS.get(run_id)
+    if active and active.get("user_id") == user["id"]:
+        active["cancel_requested"] = True
     return {"run_id": run_id, "status": "cancel_requested"}

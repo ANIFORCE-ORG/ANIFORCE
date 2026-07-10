@@ -6,11 +6,12 @@ import json
 from dataclasses import asdict, dataclass
 from datetime import datetime
 
-from sqlalchemy import or_, select, update
+from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models.agent_run import AgentRun
 from app.models.session_state import SessionState
+from app.models.agent_session_lease import AgentSessionLease
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.services.agent_run_service import AgentRunService
 
@@ -52,7 +53,7 @@ class AgentStateReconciler:
         now = datetime.utcnow()
         stale_result = await self.session.execute(
             select(AgentRun).where(
-                AgentRun.status == "running",
+                AgentRun.status.in_(("running", "cancel_requested")),
                 or_(
                     AgentRun.lease_expires_at < now,
                     (AgentRun.lease_expires_at.is_(None)) & (AgentRun.started_at < cutoff),
@@ -74,15 +75,20 @@ class AgentStateReconciler:
                     entity="agent_run",
                     entity_id=run.run_id,
                     from_status=run.status,
-                    to_status="error",
-                    reason="stale_active_run",
+                    to_status="cancelled" if run.status == "cancel_requested" else "error",
+                    reason="expired_execution_lease",
                 )
             )
             if apply:
-                updated = await AgentRunService(
-                    SqliteAgentRunRepository(self.session)
-                ).mark_error(run.run_id, run.user_id, error_payload)
-                if not updated or updated.get("status") != "error":
+                service = AgentRunService(SqliteAgentRunRepository(self.session))
+                if run.status == "cancel_requested":
+                    updated = await service.mark_cancelled(run.run_id, run.user_id)
+                    expected = "cancelled"
+                else:
+                    updated = await service.mark_error(run.run_id, run.user_id, error_payload)
+                    expected = "error"
+                await self.session.execute(delete(AgentSessionLease).where(AgentSessionLease.run_id == run.run_id))
+                if not updated or updated.get("status") != expected:
                     conflicts += 1
 
         state_result = await self.session.execute(

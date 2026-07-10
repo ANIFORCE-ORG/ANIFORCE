@@ -34,9 +34,12 @@ class SqliteAgentApprovalRepository:
             "original_arguments": self._loads(item.original_arguments_json, {}),
             "edited_arguments": self._loads(item.edited_arguments_json, None),
             "argument_diff": self._loads(item.argument_diff_json, []),
+            "preconditions": self._loads(item.preconditions_json, {}),
             "rejection_message": item.rejection_message,
             "expires_at": item.expires_at.isoformat(),
+            "claimed_by": item.claimed_by,
             "claimed_at": item.claimed_at.isoformat() if item.claimed_at else None,
+            "resolved_by": item.resolved_by,
             "resolved_at": item.resolved_at.isoformat() if item.resolved_at else None,
             "version": item.version,
             "created_at": item.created_at.isoformat(),
@@ -100,6 +103,7 @@ class SqliteAgentApprovalRepository:
         edited_arguments: dict | None,
         argument_diff: list | None,
         rejection_message: str | None,
+        claimed_by: str | None = None,
     ) -> tuple[str, list[dict]]:
         now = datetime.utcnow()
         count_result = await self.session.execute(
@@ -141,6 +145,7 @@ class SqliteAgentApprovalRepository:
                 ),
                 argument_diff_json=json.dumps(argument_diff or [], ensure_ascii=False),
                 rejection_message=rejection_message,
+                claimed_by=claimed_by,
                 claimed_at=now,
                 updated_at=now,
                 version=AgentApproval.version + 1,

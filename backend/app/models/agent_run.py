@@ -40,5 +40,8 @@ class AgentRun(Base):
     runtime_started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     cancel_requested_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     retryable: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
+    execution_kind: Mapped[str] = mapped_column(String(32), nullable=False, default="initial")
+    resume_payload_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    error_code: Mapped[str | None] = mapped_column(String(64), nullable=True)
     started_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, nullable=False)
     completed_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)

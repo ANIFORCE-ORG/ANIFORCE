@@ -13,6 +13,8 @@ sys.path.insert(0, str(backend_root))
 from app.agent.reconciliation import AgentStateReconciler
 from app.models.agent_run import AgentRun
 from app.models.agent_run_event import AgentRunEvent
+from app.models.agent_session import AgentSession
+from app.models.agent_session_lease import AgentSessionLease
 from app.models.session_state import SessionState
 
 
@@ -23,12 +25,17 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
         cutoff = datetime.utcnow() - timedelta(minutes=30)
         try:
             async with engine.begin() as conn:
+                await conn.run_sync(AgentSession.__table__.create)
                 await conn.run_sync(AgentRun.__table__.create)
                 await conn.run_sync(AgentRunEvent.__table__.create)
+                await conn.run_sync(AgentSessionLease.__table__.create)
                 await conn.run_sync(SessionState.__table__.create)
             async with sessions() as session:
                 session.add_all(
                     [
+                        AgentSession(session_id="stale_session", user_id="user_1", title="stale", status="active"),
+                        AgentSession(session_id="fresh_session", user_id="user_1", title="fresh", status="active"),
+                        AgentSession(session_id="approval_session", user_id="user_1", title="approval", status="active"),
                         AgentRun(
                             run_id="stale_run",
                             session_id="stale_session",

@@ -67,6 +67,7 @@ class AgentApprovalService:
         edited_arguments: dict | None,
         argument_diff: list | None,
         rejection_message: str | None,
+        claimed_by: str | None = None,
     ) -> list[dict]:
         outcome, items = await self.repo.claim_checkpoint(
             run_id=run_id,
@@ -76,6 +77,7 @@ class AgentApprovalService:
             edited_arguments=edited_arguments,
             argument_diff=argument_diff,
             rejection_message=rejection_message,
+            claimed_by=claimed_by,
         )
         if outcome == "not_found":
             raise AgentApprovalError("APPROVAL_NOT_FOUND", "Approval not found", 404)
