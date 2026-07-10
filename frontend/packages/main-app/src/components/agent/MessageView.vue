@@ -1046,7 +1046,6 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   font-size: 12px;
   min-width: 0;
 }
-}
 
 .tool-status-dot {
   width: 7px;
