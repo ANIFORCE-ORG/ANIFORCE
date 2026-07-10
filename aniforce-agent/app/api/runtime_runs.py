@@ -14,6 +14,7 @@ from loguru import logger
 
 from app.auth import get_current_user
 from app.agent.runtime import AgentRuntime
+from app.core.errors import unexpected_error_payload
 
 router = APIRouter(prefix="/runtime/runs", tags=["runtime-runs"])
 
@@ -41,7 +42,7 @@ async def run_runtime(
     session_id = body.get("session_id")
     run_id = body.get("run_id")
     user_id = user["id"]
-    auth_token = body.get("auth_token") or ""
+    auth_token = user.get("token") or ""
     business_context_summary = body.get("business_context_summary", "")
     ui_snapshot = body.get("ui_snapshot") or {}
     session_state = body.get("session_state") or {}
@@ -90,10 +91,11 @@ async def run_runtime(
         except asyncio.CancelledError:
             perf_log.debug("runtime run stream cancelled")
             raise
-        except Exception as exc:
+        except Exception:
             perf_log.exception("runtime run failed")
+            payload = {"run_id": run_id, **unexpected_error_payload()}
             yield "event: runtime.error\n"
-            yield f"data: {json.dumps({'run_id': run_id, 'message': str(exc)}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         finally:
             active = _ACTIVE_RUNTIME_RUNS.get(run_id)
             if active and active.get("stream_task") == asyncio.current_task():

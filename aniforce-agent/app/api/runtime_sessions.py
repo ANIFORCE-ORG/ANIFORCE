@@ -9,9 +9,11 @@
 import json
 
 from fastapi import APIRouter, Depends, HTTPException
+from loguru import logger
 
 from app.agent.runtime import AgentRuntime
 from app.auth import get_current_user
+from app.core.errors import unexpected_error_payload
 
 router = APIRouter(prefix="/runtime/sessions", tags=["runtime-sessions"])
 
@@ -33,7 +35,10 @@ async def get_session_history(
         messages = _items_to_messages(items)
         return {"session_id": session_id, "messages": messages}
     except Exception as exc:
-        raise HTTPException(status_code=500, detail={"code": "HISTORY_ERROR", "message": str(exc)}) from exc
+        logger.exception("runtime session history failed: session_id={} user_id={}", session_id, user["id"])
+        payload = unexpected_error_payload(message="Session history is temporarily unavailable")
+        payload["code"] = "HISTORY_ERROR"
+        raise HTTPException(status_code=500, detail=payload) from exc
 
 
 def _items_to_messages(items: list[dict]) -> list[dict]:

@@ -4,9 +4,11 @@ import json
 
 from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
+from loguru import logger
 
 from app.agent.runtime import AgentRuntime
 from app.auth import get_current_user
+from app.core.errors import unexpected_error_payload
 
 router = APIRouter(prefix="/runtime/checkpoints", tags=["runtime-checkpoints"])
 
@@ -27,7 +29,7 @@ async def resume_checkpoint(
     decision = body.get("decision")
     if decision not in {"approve", "reject"}:
         raise HTTPException(status_code=422, detail={"code": "INVALID_DECISION", "message": "decision must be approve or reject"})
-    auth_token = str(body.get("auth_token") or "").removeprefix("Bearer ")
+    auth_token = str(user.get("token") or "").removeprefix("Bearer ")
     rejection_message = body.get("rejection_message")
     always = bool(body.get("always", False))
     edited_arguments = body.get("edited_arguments")
@@ -51,9 +53,11 @@ async def resume_checkpoint(
                 yield f"id: {sequence}\n"
                 yield f"event: {event_name}\n"
                 yield f"data: {json.dumps(payload, default=str, ensure_ascii=False)}\n\n"
-        except Exception as exc:
+        except Exception:
+            logger.exception("runtime checkpoint resume failed: checkpoint_id={}", checkpoint_id)
+            payload = {"checkpoint_id": checkpoint_id, **unexpected_error_payload()}
             yield "event: runtime.error\n"
-            yield f"data: {json.dumps({'checkpoint_id': checkpoint_id, 'message': str(exc)}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_generator(),

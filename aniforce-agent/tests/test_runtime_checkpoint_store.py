@@ -72,6 +72,69 @@ def test_expired_checkpoint_cannot_be_claimed() -> None:
     asyncio.run(scenario())
 
 
+def test_file_sqlite_allows_only_one_claim_across_engines() -> None:
+    async def scenario() -> None:
+        project_root = agent_root.parent
+        db_path = project_root / "drafts" / "260710" / "260710_03_checkpoint_claim_test.db"
+        db_path.unlink(missing_ok=True)
+        db_url = f"sqlite+aiosqlite:///{db_path}"
+        first_engine = create_async_engine(db_url, connect_args={"timeout": 5})
+        second_engine = create_async_engine(db_url, connect_args={"timeout": 5})
+        first_store = RuntimeCheckpointStore(first_engine)
+        second_store = RuntimeCheckpointStore(second_engine)
+        try:
+            checkpoint = await first_store.create(
+                run_id="run_1",
+                session_id="session_1",
+                user_id="user_1",
+                interruptions=[],
+                run_state={},
+            )
+            first, second = await asyncio.gather(
+                first_store.claim_for_resume(checkpoint["id"], "user_1"),
+                second_store.claim_for_resume(checkpoint["id"], "user_1"),
+            )
+
+            assert len([item for item in (first, second) if item is not None]) == 1
+            current = await first_store.get(checkpoint["id"], "user_1")
+            assert current is not None
+            assert current["status"] == "resuming"
+        finally:
+            await first_engine.dispose()
+            await second_engine.dispose()
+            db_path.unlink(missing_ok=True)
+
+    asyncio.run(scenario())
+
+
+def test_mark_status_respects_expected_status() -> None:
+    async def scenario() -> None:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        store = RuntimeCheckpointStore(engine)
+        try:
+            checkpoint = await store.create(
+                run_id="run_1",
+                session_id="session_1",
+                user_id="user_1",
+                interruptions=[],
+                run_state={},
+            )
+            await store.mark_status(checkpoint["id"], "user_1", "expired")
+            current = await store.mark_status(
+                checkpoint["id"],
+                "user_1",
+                "completed",
+                expected_status="resuming",
+            )
+
+            assert current is not None
+            assert current["status"] == "expired"
+        finally:
+            await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_claim_persists_edited_arguments_atomically() -> None:
     async def scenario() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")

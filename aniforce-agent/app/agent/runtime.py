@@ -23,7 +23,7 @@ from app.agent.checkpoints import (
     interruption_to_dict,
     serialize_workspace_context_for_checkpoint,
 )
-from app.core.errors import AppError, AgentErrorCode
+from app.core.errors import AppError, AgentErrorCode, unexpected_error_payload
 from app.core.tracing import get_tracer
 
 
@@ -336,7 +336,7 @@ class AgentRuntime:
             sequence += 1
             yield {
                 "event": "runtime.error",
-                "data": {"code": AgentErrorCode.UNKNOWN_ERROR.value, "message": str(e)},
+                "data": unexpected_error_payload(),
                 "sequence": sequence,
             }
 
@@ -493,12 +493,13 @@ class AgentRuntime:
                     "sequence": sequence,
                 }
                 run_logger.debug("[RUNTIME] Checkpoint resumed")
-        except Exception as exc:
+        except Exception:
+            run_logger.exception("[RUNTIME] Checkpoint resume failed")
             await store.mark_status(
                 checkpoint_id,
                 user_id,
                 "failed",
-                error={"message": str(exc)},
+                error=unexpected_error_payload(message="Checkpoint resume failed"),
                 expected_status="resuming",
             )
             raise

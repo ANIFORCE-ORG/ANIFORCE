@@ -90,6 +90,20 @@ class AgentRunEventProcessor:
             await self.event_bus.publish(run_id, "run_status", status_data, terminal=True)
             return AgentRunEventResult(terminal=True, persisted_status=persisted_status)
 
+        if event_name == "runtime.aborted":
+            updated_run = await self.mark_run_status(run_id, user_id, "cancelled")
+            persisted_status = updated_run.get("status") if updated_run else None
+            if persisted_status != "cancelled":
+                return AgentRunEventResult(
+                    terminal=persisted_status in {"completed", "error", "cancelled"},
+                    persisted_status=persisted_status,
+                )
+            status_data: dict[str, Any] = {"run_id": run_id, "status": "cancelled"}
+            if session_id:
+                status_data["session_id"] = session_id
+            await self.event_bus.publish(run_id, "run_status", status_data, terminal=True)
+            return AgentRunEventResult(terminal=True, persisted_status=persisted_status)
+
         return AgentRunEventResult()
 
     async def complete_run(

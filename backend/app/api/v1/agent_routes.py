@@ -40,6 +40,15 @@ def _error_payload(code: str, message: str, retryable: bool, details: dict | Non
     return {"error": {"code": code, "message": message, "retryable": retryable, "details": details or {}}}
 
 
+def _unexpected_run_error(code: str = "RUN_FAILED") -> dict:
+    return {
+        "code": code,
+        "message": "Agent run failed unexpectedly",
+        "retryable": True,
+        "at": datetime.utcnow().isoformat(),
+    }
+
+
 def _sse_event(event: str, data: dict, event_id: str | int | None = None) -> bytes:
     parts = []
     if event_id is not None:
@@ -178,6 +187,28 @@ async def _mark_error_short_tx(session_id: str, user_id: str, version: int, erro
     async def callback(session: AsyncSession):
         return await SqliteSessionStateRepository(session).mark_error(session_id, user_id, version, error)
     return await _with_session(callback)
+
+
+async def _settle_session_after_terminal(
+    *,
+    session_id: str,
+    user_id: str,
+    persisted_status: str | None,
+    error: dict | None = None,
+) -> None:
+    current = await _get_session_state_short_tx(session_id, user_id)
+    if not current:
+        return
+    if persisted_status == "error":
+        await _mark_error_short_tx(
+            session_id,
+            user_id,
+            current["version"],
+            error or {"code": "RUN_FAILED", "message": "Agent run failed", "retryable": True},
+        )
+        return
+    if persisted_status in {"completed", "cancelled", "requires_action"}:
+        await _mark_active_short_tx(session_id, user_id, current["version"])
 
 
 async def _build_business_context_short_tx(state: dict, user_id: str) -> str:
@@ -418,10 +449,12 @@ async def resolve_run_approval(
                 )
                 if result.terminal:
                     return
-        except Exception as exc:
-            await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "RESUME_FAILED", "message": str(exc)})
+        except Exception:
+            logger.exception("checkpoint resume stream failed: run_id={} checkpoint_id={}", run_id, checkpoint_id)
+            error = _unexpected_run_error("RESUME_FAILED")
+            await _mark_run_status_short_tx(run_id, user_id, "error", error=error)
             yield "event: runtime.error\n"
-            yield f"data: {json.dumps({'run_id': run_id, 'message': str(exc)}, ensure_ascii=False)}\n\n"
+            yield f"data: {json.dumps({'run_id': run_id, **error}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
         event_generator(),
@@ -683,10 +716,12 @@ async def _consume_agent_run_background(
                             complete_immediately=False,
                         )
                         if result.terminal:
-                            if result.requires_action:
-                                current = await _get_session_state_short_tx(session_id, user_id)
-                                if current:
-                                    await _mark_active_short_tx(session_id, user_id, current["version"])
+                            await _settle_session_after_terminal(
+                                session_id=session_id,
+                                user_id=user_id,
+                                persisted_status=result.persisted_status,
+                                error=data if event_name == "runtime.error" else None,
+                            )
                             return
 
                 # Flush any final event if upstream did not end with a blank line.
@@ -702,10 +737,12 @@ async def _consume_agent_run_background(
                         complete_immediately=False,
                     )
                     if result.terminal:
-                        if result.requires_action:
-                            current = await _get_session_state_short_tx(session_id, user_id)
-                            if current:
-                                await _mark_active_short_tx(session_id, user_id, current["version"])
+                        await _settle_session_after_terminal(
+                            session_id=session_id,
+                            user_id=user_id,
+                            persisted_status=result.persisted_status,
+                            error=data if event_name == "runtime.error" else None,
+                        )
                         return
 
                 perf_log.info(
@@ -754,18 +791,19 @@ async def _consume_agent_run_background(
     except SessionBusyError:
         await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "SESSION_BUSY", "message": "当前会话正在执行，请稍后再试"})
         await agent_run_event_bus.publish(run_id, "error", _error_payload("SESSION_BUSY", "当前会话正在执行，请稍后再试", True), terminal=True)
-    except Exception as exc:
+    except Exception:
         perf_log.exception("backend background run failed")
+        error = _unexpected_run_error()
         current = await _get_session_state_short_tx(session_id, user_id)
         if current:
-            await _mark_error_short_tx(
-                session_id,
-                user_id,
-                current["version"],
-                {"code": "RUN_FAILED", "message": str(exc), "retryable": True, "at": datetime.utcnow().isoformat()},
-            )
-        await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "RUN_FAILED", "message": str(exc), "retryable": True, "at": datetime.utcnow().isoformat()})
-        await agent_run_event_bus.publish(run_id, "error", _error_payload("RUN_FAILED", str(exc), True), terminal=True)
+            await _mark_error_short_tx(session_id, user_id, current["version"], error)
+        await _mark_run_status_short_tx(run_id, user_id, "error", error=error)
+        await agent_run_event_bus.publish(
+            run_id,
+            "error",
+            _error_payload(error["code"], error["message"], error["retryable"]),
+            terminal=True,
+        )
 
 
 def _parse_sse_events(buffer: str) -> tuple[list[tuple[str, dict]], str]:

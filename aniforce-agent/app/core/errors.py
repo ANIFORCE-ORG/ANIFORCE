@@ -84,6 +84,22 @@ def get_error_payload(error: AppError) -> dict:
     }
 
 
+def unexpected_error_payload(
+    *,
+    code: AgentErrorCode = AgentErrorCode.INTERNAL_SERVER_ERROR,
+    message: str = "Agent service failed unexpectedly",
+    retryable: bool = True,
+) -> dict:
+    """Return a stable public error without exposing exception details."""
+    return {
+        "code": code.value,
+        "message": message,
+        "category": ErrorCategory.RUNTIME_ERROR.value,
+        "retryable": retryable,
+        "data": {},
+    }
+
+
 # 错误码到 HTTP 状态码的映射
 ERROR_CODE_TO_HTTP_STATUS = {
     AgentErrorCode.TASK_NOT_FOUND: 404,
