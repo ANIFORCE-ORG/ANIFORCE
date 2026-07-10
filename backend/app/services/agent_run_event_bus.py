@@ -79,9 +79,9 @@ class AgentRunEventBus:
             while True:
                 event = await queue.get()
                 yield event
-                if event.event in {"run_status", "error", "runtime.error"}:
+                if event.event in {"run_status", "error"}:
                     status = event.data.get("status") if isinstance(event.data, dict) else None
-                    if status in {"completed", "failed", "cancelled", "requires_action"} or event.event in {"error", "runtime.error"}:
+                    if status in {"completed", "error", "failed", "cancelled", "requires_action"} or event.event == "error":
                         return
         finally:
             async with self._guard:

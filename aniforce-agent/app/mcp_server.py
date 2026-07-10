@@ -91,7 +91,8 @@ async def _get_approved_arguments(ctx, tool_name: str) -> dict | None:
     """
     meta = _get_meta(ctx)
     run_id = meta.get("run_id")
-    if not run_id:
+    user_id = meta.get("user_id")
+    if not run_id or not user_id:
         return None
     try:
         import aiosqlite
@@ -103,14 +104,22 @@ async def _get_approved_arguments(ctx, tool_name: str) -> dict | None:
         async with aiosqlite.connect(db_path) as db:
             db.row_factory = aiosqlite.Row
             cursor = await db.execute(
-                "SELECT approved_arguments_json FROM runtime_checkpoints "
-                "WHERE run_id = ? AND approved_arguments_json IS NOT NULL "
-                "ORDER BY resolved_at DESC LIMIT 1",
-                (run_id,),
+                "SELECT approved_arguments_json, interruptions_json FROM runtime_checkpoints "
+                "WHERE run_id = ? AND user_id = ? AND status = 'resuming' "
+                "AND approved_arguments_json IS NOT NULL "
+                "ORDER BY created_at DESC LIMIT 2",
+                (run_id, user_id),
             )
-            row = await cursor.fetchone()
-            if row and row["approved_arguments_json"]:
-                return json.loads(row["approved_arguments_json"])
+            rows = await cursor.fetchall()
+            matching_rows = []
+            for row in rows:
+                interruptions = json.loads(row["interruptions_json"] or "[]")
+                if any(item.get("tool_name") == tool_name for item in interruptions if isinstance(item, dict)):
+                    matching_rows.append(row)
+            if len(matching_rows) == 1 and matching_rows[0]["approved_arguments_json"]:
+                return json.loads(matching_rows[0]["approved_arguments_json"])
+            if len(matching_rows) > 1:
+                logger.error("[MCP] Multiple resuming checkpoints matched run_id={} tool={}", run_id, tool_name)
     except Exception as e:
         logger.warning(f"[MCP] 读取 approved_arguments 失败: {e}")
     return None

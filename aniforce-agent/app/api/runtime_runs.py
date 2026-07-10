@@ -40,7 +40,7 @@ async def run_runtime(
     prompt = body.get("prompt", "")
     session_id = body.get("session_id")
     run_id = body.get("run_id")
-    user_id = body.get("user_id") or user["id"]
+    user_id = user["id"]
     auth_token = body.get("auth_token") or ""
     business_context_summary = body.get("business_context_summary", "")
     ui_snapshot = body.get("ui_snapshot") or {}

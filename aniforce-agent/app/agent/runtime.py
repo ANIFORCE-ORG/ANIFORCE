@@ -384,20 +384,17 @@ class AgentRuntime:
         """Resume a paused SDK HITL checkpoint."""
         engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
         store = RuntimeCheckpointStore(engine)
-        checkpoint = await store.get(checkpoint_id, user_id)
+        checkpoint = await store.claim_for_resume(
+            checkpoint_id,
+            user_id,
+            approved_arguments=edited_arguments,
+            argument_diff=argument_diff,
+        )
         if not checkpoint:
-            raise AppError(AgentErrorCode.UNKNOWN_ERROR, "Checkpoint not found")
-        if checkpoint["status"] != "pending":
-            raise AppError(AgentErrorCode.UNKNOWN_ERROR, f"Checkpoint is {checkpoint['status']}")
-
-        # 保存用户编辑后的参数和 diff 到 checkpoint metadata
-        if edited_arguments or argument_diff:
-            await store.save_approval_metadata(
-                checkpoint_id,
-                user_id,
-                approved_arguments=edited_arguments or {},
-                argument_diff=argument_diff or [],
-            )
+            current = await store.get(checkpoint_id, user_id)
+            if not current:
+                raise AppError(AgentErrorCode.UNKNOWN_ERROR, "Checkpoint not found")
+            raise AppError(AgentErrorCode.UNKNOWN_ERROR, f"Checkpoint is {current['status']}")
 
         safe_context = checkpoint["run_state"].get("context", {}).get("value") or {}
         # 构建 approved_arguments_by_call_id：用 interruption 的 call_id 关联
@@ -451,7 +448,6 @@ class AgentRuntime:
                     else:
                         raise AppError(AgentErrorCode.UNKNOWN_ERROR, "decision must be approve or reject")
 
-                await store.mark_status(checkpoint_id, user_id, "approved" if decision == "approve" else "rejected")
                 result = await self.adapter.run_streamed(
                     agent=agent,
                     input_text=state,
@@ -474,6 +470,7 @@ class AgentRuntime:
                         user_id=user_id,
                         run_id=checkpoint["run_id"],
                     )
+                    await store.mark_status(checkpoint_id, user_id, "completed", expected_status="resuming")
                     sequence += 1
                     yield {
                         "event": "runtime.requires_action",
@@ -487,7 +484,7 @@ class AgentRuntime:
                     }
                     return
 
-                await store.mark_status(checkpoint_id, user_id, "resumed")
+                await store.mark_status(checkpoint_id, user_id, "completed", expected_status="resuming")
                 usage = self.adapter._extract_usage(result)
                 sequence += 1
                 yield {
@@ -497,7 +494,13 @@ class AgentRuntime:
                 }
                 run_logger.debug("[RUNTIME] Checkpoint resumed")
         except Exception as exc:
-            await store.mark_status(checkpoint_id, user_id, "failed", error={"message": str(exc)})
+            await store.mark_status(
+                checkpoint_id,
+                user_id,
+                "failed",
+                error={"message": str(exc)},
+                expected_status="resuming",
+            )
             raise
 
     async def get_session_history(self, session_id: str) -> list[dict]:

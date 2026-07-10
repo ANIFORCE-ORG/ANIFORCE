@@ -18,6 +18,7 @@ MarkRunStatus = Callable[..., Awaitable[dict | None]]
 class AgentRunEventResult:
     terminal: bool = False
     requires_action: bool = False
+    persisted_status: str | None = None
 
 
 class AgentRunEventProcessor:
@@ -47,12 +48,18 @@ class AgentRunEventProcessor:
 
         if event_name == "runtime.requires_action":
             checkpoint_id = data.get("checkpoint_id") if isinstance(data, dict) else None
-            await self.mark_run_status(
+            updated_run = await self.mark_run_status(
                 run_id,
                 user_id,
                 "requires_action",
                 checkpoint_ref=str(checkpoint_id or ""),
             )
+            persisted_status = updated_run.get("status") if updated_run else None
+            if persisted_status != "requires_action":
+                return AgentRunEventResult(
+                    terminal=persisted_status in {"completed", "error", "cancelled"},
+                    persisted_status=persisted_status,
+                )
             status_data: dict[str, Any] = {
                 "run_id": run_id,
                 "status": "requires_action",
@@ -61,7 +68,7 @@ class AgentRunEventProcessor:
             if session_id:
                 status_data["session_id"] = session_id
             await self.event_bus.publish(run_id, "run_status", status_data, terminal=True)
-            return AgentRunEventResult(terminal=True, requires_action=True)
+            return AgentRunEventResult(terminal=True, requires_action=True, persisted_status=persisted_status)
 
         if event_name == "runtime.completed":
             if not complete_immediately:
@@ -70,12 +77,18 @@ class AgentRunEventProcessor:
 
         if event_name == "runtime.error":
             error = data if isinstance(data, dict) else {"message": str(data)}
-            await self.mark_run_status(run_id, user_id, "error", error=error)
+            updated_run = await self.mark_run_status(run_id, user_id, "error", error=error)
+            persisted_status = updated_run.get("status") if updated_run else None
+            if persisted_status != "error":
+                return AgentRunEventResult(
+                    terminal=persisted_status in {"completed", "error", "cancelled"},
+                    persisted_status=persisted_status,
+                )
             status_data: dict[str, Any] = {"run_id": run_id, "status": "error"}
             if session_id:
                 status_data["session_id"] = session_id
             await self.event_bus.publish(run_id, "run_status", status_data, terminal=True)
-            return AgentRunEventResult(terminal=True)
+            return AgentRunEventResult(terminal=True, persisted_status=persisted_status)
 
         return AgentRunEventResult()
 
@@ -87,9 +100,15 @@ class AgentRunEventProcessor:
         session_id: str | None = None,
         usage: dict[str, Any] | None = None,
     ) -> AgentRunEventResult:
-        await self.mark_run_status(run_id, user_id, "completed", usage=usage)
+        updated_run = await self.mark_run_status(run_id, user_id, "completed", usage=usage)
+        persisted_status = updated_run.get("status") if updated_run else None
+        if persisted_status != "completed":
+            return AgentRunEventResult(
+                terminal=persisted_status in {"completed", "error", "cancelled"},
+                persisted_status=persisted_status,
+            )
         status_data: dict[str, Any] = {"run_id": run_id, "status": "completed"}
         if session_id:
             status_data["session_id"] = session_id
         await self.event_bus.publish(run_id, "run_status", status_data, terminal=True)
-        return AgentRunEventResult(terminal=True)
+        return AgentRunEventResult(terminal=True, persisted_status=persisted_status)

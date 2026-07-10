@@ -399,21 +399,25 @@ async def resolve_run_approval(
                 stream_buffer += chunk.decode("utf-8", errors="ignore")
                 events, stream_buffer = _parse_sse_events(stream_buffer)
                 for event_name, data in events:
-                    await event_processor.handle_runtime_event(
+                    result = await event_processor.handle_runtime_event(
                         run_id=run_id,
                         user_id=user_id,
                         event_name=event_name,
                         data=data,
                     )
+                    if result.terminal:
+                        return
 
             events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
             for event_name, data in events:
-                await event_processor.handle_runtime_event(
+                result = await event_processor.handle_runtime_event(
                     run_id=run_id,
                     user_id=user_id,
                     event_name=event_name,
                     data=data,
                 )
+                if result.terminal:
+                    return
         except Exception as exc:
             await _mark_run_status_short_tx(run_id, user_id, "error", error={"code": "RESUME_FAILED", "message": str(exc)})
             yield "event: runtime.error\n"
@@ -678,7 +682,11 @@ async def _consume_agent_run_background(
                             data=data,
                             complete_immediately=False,
                         )
-                        if result.requires_action:
+                        if result.terminal:
+                            if result.requires_action:
+                                current = await _get_session_state_short_tx(session_id, user_id)
+                                if current:
+                                    await _mark_active_short_tx(session_id, user_id, current["version"])
                             return
 
                 # Flush any final event if upstream did not end with a blank line.
@@ -693,7 +701,11 @@ async def _consume_agent_run_background(
                         data=data,
                         complete_immediately=False,
                     )
-                    if result.requires_action:
+                    if result.terminal:
+                        if result.requires_action:
+                            current = await _get_session_state_short_tx(session_id, user_id)
+                            if current:
+                                await _mark_active_short_tx(session_id, user_id, current["version"])
                         return
 
                 perf_log.info(

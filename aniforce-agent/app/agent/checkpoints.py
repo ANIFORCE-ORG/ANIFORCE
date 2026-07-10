@@ -124,6 +124,61 @@ class RuntimeCheckpointStore:
             row = result.mappings().first()
         return self._decode(dict(row)) if row else None
 
+    async def claim_for_resume(
+        self,
+        checkpoint_id: str,
+        user_id: str,
+        *,
+        approved_arguments: dict[str, Any] | None = None,
+        argument_diff: list[dict[str, Any]] | None = None,
+    ) -> dict[str, Any] | None:
+        """Atomically claim one pending, unexpired checkpoint for resume."""
+        await self.ensure_tables()
+        now = datetime.utcnow().isoformat()
+        values = {
+            "id": checkpoint_id,
+            "user_id": user_id,
+            "now": now,
+            "approved_arguments_json": json.dumps(approved_arguments or {}, ensure_ascii=False, default=str),
+            "argument_diff_json": json.dumps(argument_diff or [], ensure_ascii=False, default=str),
+        }
+        async with self.engine.begin() as conn:
+            result = await conn.execute(
+                text(
+                    """
+                    UPDATE runtime_checkpoints
+                    SET status = 'resuming',
+                        approved_arguments_json = :approved_arguments_json,
+                        argument_diff_json = :argument_diff_json
+                    WHERE id = :id
+                      AND user_id = :user_id
+                      AND status = 'pending'
+                      AND expires_at > :now
+                    """
+                ),
+                values,
+            )
+            claimed = result.rowcount == 1
+
+        if claimed:
+            return await self.get(checkpoint_id, user_id)
+
+        async with self.engine.begin() as conn:
+            await conn.execute(
+                text(
+                    """
+                    UPDATE runtime_checkpoints
+                    SET status = 'expired', resolved_at = :now
+                    WHERE id = :id
+                      AND user_id = :user_id
+                      AND status = 'pending'
+                      AND expires_at <= :now
+                    """
+                ),
+                values,
+            )
+        return None
+
     async def mark_status(
         self,
         checkpoint_id: str,
@@ -131,52 +186,25 @@ class RuntimeCheckpointStore:
         status: str,
         *,
         error: dict[str, Any] | None = None,
+        expected_status: str | None = None,
     ) -> dict[str, Any] | None:
         await self.ensure_tables()
         values = {
             "id": checkpoint_id,
             "user_id": user_id,
             "status": status,
+            "expected_status": expected_status,
             "resolved_at": datetime.utcnow().isoformat(),
             "error_json": json.dumps(error, ensure_ascii=False) if error else None,
         }
+        status_guard = " AND status = :expected_status" if expected_status else ""
         async with self.engine.begin() as conn:
             await conn.execute(
                 text(
-                    """
+                    f"""
                     UPDATE runtime_checkpoints
                     SET status = :status, resolved_at = :resolved_at, error_json = :error_json
-                    WHERE id = :id AND user_id = :user_id
-                    """
-                ),
-                values,
-            )
-        return await self.get(checkpoint_id, user_id)
-
-    async def save_approval_metadata(
-        self,
-        checkpoint_id: str,
-        user_id: str,
-        *,
-        approved_arguments: dict[str, Any],
-        argument_diff: list[dict[str, Any]],
-    ) -> dict[str, Any] | None:
-        """保存用户编辑后的审批参数和 diff。"""
-        await self.ensure_tables()
-        values = {
-            "id": checkpoint_id,
-            "user_id": user_id,
-            "approved_arguments_json": json.dumps(approved_arguments, ensure_ascii=False, default=str),
-            "argument_diff_json": json.dumps(argument_diff, ensure_ascii=False, default=str),
-        }
-        async with self.engine.begin() as conn:
-            await conn.execute(
-                text(
-                    """
-                    UPDATE runtime_checkpoints
-                    SET approved_arguments_json = :approved_arguments_json,
-                        argument_diff_json = :argument_diff_json
-                    WHERE id = :id AND user_id = :user_id
+                    WHERE id = :id AND user_id = :user_id{status_guard}
                     """
                 ),
                 values,
