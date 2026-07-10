@@ -21,8 +21,7 @@ const inputText = ref('')
 const hasInteracted = ref(false)
 const modelMenuOpen = ref(false)
 const activeIntentMode = ref<'chat' | 'project'>('chat')
-const workspaceOpen = ref(localStorage.getItem('aniforce.workspace.mode') === 'open')
-const workspaceManuallyClosed = ref(false)
+const workspaceCollapsed = ref(localStorage.getItem('aniforce.workspace.collapsed') === '1')
 const workspaceWidth = ref(Number(localStorage.getItem('aniforce.workspace.width') || 560))
 const workspaceDragging = ref(false)
 const renameDialog = ref<{ id: string; name: string } | null>(null)
@@ -112,30 +111,9 @@ const currentTask = computed(() => agent.currentTask.value)
 const hasBusinessTask = computed(() => Boolean(currentTask.value?.task_type && currentTask.value.task_type !== 'conversation' && currentTask.value.task_type !== 'data_query'))
 const hasWorkspaceToolResults = computed(() => agent.workspaceToolResults.value.length > 0)
 const taskPanelVisible = computed(() => true)
-const workspaceStyle = computed(() => ({ width: `${workspaceWidth.value}px` }))
-const workspaceSurfaceTitle = computed(() => {
-  const surface = agent.workspaceProjection.value?.surface || ''
-  const labels: Record<string, string> = {
-    'project.list': '项目',
-    'project.detail': '项目详情',
-    'campaign.list': '广告计划',
-    'campaign.detail': '广告计划详情',
-    'campaign.materials': '计划素材',
-    'material.list': '素材',
-    'material.detail': '素材详情',
-    'material.image': '素材预览',
-    'approval.review': '变更确认'
-  }
-  return labels[surface] || '业务对象'
-})
-const workspaceItemCount = computed(() => {
-  const payload = agent.workspaceProjection.value?.payload || {}
-  for (const key of ['projects', 'campaigns', 'materials']) {
-    const value = payload[key]
-    if (Array.isArray(value)) return value.length
-  }
-  return 0
-})
+const workspaceStyle = computed(() => ({
+  width: workspaceCollapsed.value ? '56px' : `${workspaceWidth.value}px`
+}))
 const taskStatus = computed<TaskPanelStatus>(() => {
   if (currentTask.value?.status) return normalizeTaskStatus(currentTask.value.status)
   if (agent.error.value) return 'failed'
@@ -304,24 +282,17 @@ function normalizeTaskStatus(status: string): TaskPanelStatus {
 }
 
 function clampWorkspaceWidth(value: number): number {
-  const viewportMax = Math.max(420, Math.floor(window.innerWidth * 0.7))
-  return Math.min(Math.max(value, 420), viewportMax)
+  const viewportMax = Math.max(520, Math.floor(window.innerWidth * 0.76))
+  return Math.min(Math.max(value, 520), viewportMax)
 }
 
 function persistWorkspaceState() {
   localStorage.setItem('aniforce.workspace.width', String(workspaceWidth.value))
-  localStorage.setItem('aniforce.workspace.mode', workspaceOpen.value ? 'open' : 'closed')
+  localStorage.setItem('aniforce.workspace.collapsed', workspaceCollapsed.value ? '1' : '0')
 }
 
-function openWorkspace() {
-  workspaceOpen.value = true
-  workspaceManuallyClosed.value = false
-  persistWorkspaceState()
-}
-
-function closeWorkspace() {
-  workspaceOpen.value = false
-  workspaceManuallyClosed.value = true
+function toggleWorkspaceCollapsed() {
+  workspaceCollapsed.value = !workspaceCollapsed.value
   persistWorkspaceState()
 }
 
@@ -338,6 +309,7 @@ function stopWorkspaceResize() {
 }
 
 function startWorkspaceResize(event: PointerEvent) {
+  if (workspaceCollapsed.value) return
   workspaceDragging.value = true
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
@@ -598,27 +570,11 @@ watch(
     void selectSessionFromRoute()
   }
 )
-
-watch(
-  () => agent.workspaceProjection.value?.id,
-  projectionId => {
-    if (!projectionId || workspaceManuallyClosed.value) return
-    workspaceOpen.value = true
-    persistWorkspaceState()
-  }
-)
-
-watch(
-  () => agent.workspaceApprovalDraft.value?.status,
-  status => {
-    if (status === 'pending' || status === 'executing') openWorkspace()
-  }
-)
 </script>
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="relative flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧功能导航 -->
     <SidebarNav 
       :nav-items="navItems"
@@ -757,18 +713,30 @@ watch(
               <span class="material-symbols-outlined text-[19px]">mic</span>
             </button>
             <button
-              class="h-[37px] w-[37px] rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-              :class="agent.agentRunning.value ? 'bg-slate-900 text-white hover:bg-slate-700 dark:bg-white dark:text-slate-900' : 'bg-primary text-white hover:bg-primary/90'"
-              :disabled="!agent.agentRunning.value && (agent.loading.value || !inputText.trim())"
-              :title="agent.agentRunning.value ? '停止当前任务' : '发送'"
-              @click="agent.agentRunning.value ? agent.abort() : handleSubmit()"
+              class="bg-primary text-white h-[37px] w-[37px] rounded-full flex items-center justify-center hover:bg-primary/90 transition-all shadow-lg shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
+              :disabled="agent.loading.value || agent.agentRunning.value || !inputText.trim()"
+              @click="handleSubmit"
             >
-              <span class="material-symbols-outlined text-[19px]">{{ agent.agentRunning.value ? 'stop' : 'arrow_forward' }}</span>
+              <span v-if="agent.loading.value || agent.agentRunning.value" class="h-[16px] w-[16px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span v-else class="material-symbols-outlined text-[19px]">arrow_forward</span>
             </button>
           </div>
         </div>
       </div>
 
+      <!-- Quick Tags (hide after interaction) -->
+      <div v-if="!hasContent" class="flex flex-wrap justify-center gap-[9px] mt-[19px]">
+        <button
+          v-for="(mode, index) in intentModes"
+          :key="mode.key"
+          class="flex items-center gap-[6px] px-[16px] py-[6px] rounded-full bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 hover:border-primary hover:text-primary transition-all shadow-sm"
+          :class="activeIntentMode === mode.key ? 'border-primary text-primary' : ''"
+          @click="activeIntentMode = mode.key"
+        >
+          <span class="text-[15px]">{{ index === 0 ? '💬' : '📁' }}</span>
+          <span class="text-[11px] font-medium">{{ mode.label }}</span>
+        </button>
+      </div>
     </div>
 
     <!-- Tool Cards (only show when no content) -->
@@ -802,36 +770,24 @@ watch(
     </main>
 
     <!-- 右侧 Workspace 投影栏 -->
-    <button
-      v-if="!workspaceOpen && agent.workspaceProjection.value"
-      class="absolute right-[16px] top-[16px] z-20 flex items-center gap-[7px] rounded-lg border border-slate-200 bg-white px-[11px] py-[8px] text-[12px] font-medium text-slate-700 shadow-sm hover:border-primary/40 hover:text-primary dark:border-slate-700 dark:bg-slate-900 dark:text-slate-200"
-      @click="openWorkspace"
-    >
-      <span class="material-symbols-outlined text-[17px]">view_sidebar</span>
-      {{ workspaceSurfaceTitle }}
-      <span v-if="workspaceItemCount" class="rounded-full bg-slate-100 px-[6px] py-[1px] text-[10px] text-slate-500 dark:bg-slate-800">{{ workspaceItemCount }}</span>
-    </button>
-
     <aside
-      v-if="workspaceOpen && agent.workspaceProjection.value"
       class="flex-shrink-0 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
       :style="workspaceStyle"
     >
       <div class="flex items-center justify-between px-[12px] py-[8px] border-b border-slate-200 dark:border-slate-700">
         <div class="flex items-center gap-[6px]">
-          <span class="material-symbols-outlined text-[16px] text-slate-500">view_sidebar</span>
-          <span class="text-[12px] font-semibold text-slate-800 dark:text-slate-200">{{ workspaceSurfaceTitle }}</span>
-          <span v-if="workspaceItemCount" class="text-[10px] text-slate-400">{{ workspaceItemCount }} 项</span>
+          <span class="material-symbols-outlined text-[16px] text-slate-500">workspaces</span>
+          <span class="text-[11px] font-medium text-slate-700 dark:text-slate-300">工作台</span>
         </div>
         <div class="flex items-center gap-[2px]">
           <button
             class="p-[4px] rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            title="关闭工作区"
-            @click="closeWorkspace"
+            @click="toggleWorkspaceCollapsed"
           >
-            <span class="material-symbols-outlined text-[15px] text-slate-400">close</span>
+            <span class="material-symbols-outlined text-[14px] text-slate-400">{{ workspaceCollapsed ? 'left_panel_open' : 'right_panel_close' }}</span>
           </button>
           <div
+            v-if="!workspaceCollapsed"
             class="w-[4px] h-[24px] cursor-col-resize flex items-center"
             @pointerdown="startWorkspaceResize"
           >
@@ -839,7 +795,7 @@ watch(
           </div>
         </div>
       </div>
-      <div class="flex-1 overflow-hidden">
+      <div v-show="!workspaceCollapsed" class="flex-1 overflow-hidden">
         <WorkspaceRenderer
           :projection="agent.workspaceProjection.value"
           :approval-draft="agent.workspaceApprovalDraft.value"

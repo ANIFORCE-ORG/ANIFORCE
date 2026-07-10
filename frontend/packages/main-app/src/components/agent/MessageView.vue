@@ -21,7 +21,6 @@ const hovered = ref(false)
 const copied = ref(false)
 const expandedThinking = ref<Record<number, boolean>>({})
 const expandedTools = ref<Record<string, boolean>>({})
-const traceExpanded = ref(false)
 const codeCopied = ref<Record<number, boolean>>({})
 const streamStartedAt = ref<number | null>(null)
 const tps = ref<number | null>(null)
@@ -142,31 +141,6 @@ function thinkingCharCount(index: number): number {
 const hasTextOutput = computed(() => blocks.value.some(b => b.type === 'text' && String(b.text || '').trim()))
 const hasThinkingOnly = computed(() => props.isStreaming && blocks.value.some(b => b.type === 'thinking') && !hasTextOutput.value && !blocks.value.some(b => b.type === 'toolCall'))
 const hasRunningTools = computed(() => props.isStreaming && blocks.value.some(b => b.type === 'toolCall' && !hasToolResult(b)))
-const textBlocks = computed(() => blocks.value.filter(block => block.type === 'text'))
-const thinkingBlocks = computed(() => blocks.value.filter(block => block.type === 'thinking'))
-const toolBlocks = computed(() => blocks.value.filter(block => block.type === 'toolCall'))
-const approvalBlocks = computed(() => blocks.value.filter(block => block.type === 'approval'))
-const traceStepCount = computed(() => thinkingBlocks.value.length + toolBlocks.value.length)
-const completedToolCount = computed(() => toolBlocks.value.filter(block => hasToolResult(block) && !isToolError(block)).length)
-const failedToolCount = computed(() => toolBlocks.value.filter(block => isToolError(block)).length)
-const runStatusLabel = computed(() => {
-  if (approvalBlocks.value.some(block => String(block.status || 'pending') === 'pending')) return '等待你在工作台确认'
-  if (failedToolCount.value > 0) return `${failedToolCount.value} 个步骤未完成`
-  if (props.isStreaming && hasRunningTools.value) {
-    const running = toolBlocks.value.find(block => !hasToolResult(block))
-    return running ? `正在${toolName(running)}` : '正在执行业务操作'
-  }
-  if (props.isStreaming && thinkingBlocks.value.length > 0 && !hasTextOutput.value) return '正在整理任务与数据'
-  if (props.isStreaming) return '正在生成回复'
-  if (toolBlocks.value.length > 0) return `已完成 ${completedToolCount.value}/${toolBlocks.value.length} 个业务步骤`
-  if (thinkingBlocks.value.length > 0) return '分析已完成'
-  return ''
-})
-const runSummaryDetail = computed(() => {
-  const labels = toolBlocks.value.map(block => toolName(block))
-  if (!labels.length) return thinkingBlocks.value.length ? '分析过程可按需查看' : ''
-  return Array.from(new Set(labels)).slice(0, 3).join(' · ')
-})
 function isLastBlock(index: number): boolean {
   return index === blocks.value.length - 1
 }
@@ -411,21 +385,30 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
       <span class="waiting-dot"></span>
     </div>
 
-    <section v-if="isStreaming && traceStepCount" class="run-summary running" aria-live="polite">
-      <span class="run-status-indicator"></span>
-      <div class="run-summary-copy">
-        <strong>{{ runStatusLabel }}</strong>
-        <span v-if="runSummaryDetail">{{ runSummaryDetail }}</span>
-      </div>
-      <button v-if="traceStepCount" class="run-trace-toggle" @click="traceExpanded = !traceExpanded">
-        {{ traceExpanded ? '收起轨迹' : '查看轨迹' }}
-      </button>
-    </section>
-
-    <!-- Assistant 正文是主内容，技术事件只进入运行轨迹。 -->
+    <!-- Block 列表：thinking / text / toolCall 平级渲染 -->
     <div class="assistant-block-list">
-      <template v-for="(block, i) in textBlocks" :key="i">
-        <div class="markdown-body" :class="{ 'streaming-text': isStreaming && i === textBlocks.length - 1 }">
+      <template v-for="(block, i) in blocks" :key="i">
+        <!-- Thinking Block: 流式时展开，完成后折叠 -->
+        <div v-if="block.type === 'thinking'" class="thinking-block" :class="{ 'is-streaming-thinking': isStreaming }">
+          <button class="thinking-header" @click="expandedThinking[i] = !expandedThinking[i]">
+            <span class="thinking-dot" :class="{ active: isStreaming && isLastBlock(i) }"></span>
+            <span class="thinking-label">Thinking</span>
+            <span v-if="thinkingCharCount(i) > 0 && !isStreaming" class="thinking-char-hint">{{ thinkingCharCount(i) }} 字</span>
+            <span v-if="thinkingDuration(i) !== undefined" class="thinking-duration">{{ thinkingDuration(i) }}s</span>
+            <svg class="thinking-chevron" :class="{ expanded: isThinkingExpanded(i) }" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="2 3.5 5 6.5 8 3.5" />
+            </svg>
+          </button>
+          <transition name="thinking-slide">
+            <div v-if="isThinkingExpanded(i)" class="thinking-content">
+              {{ block.thinking }}
+              <span v-if="isStreaming && isLastBlock(i)" class="thinking-cursor">▍</span>
+            </div>
+          </transition>
+        </div>
+
+        <!-- Text Block: 纯 markdown，无包装，流式时带光标 -->
+        <div v-else-if="block.type === 'text'" class="markdown-body" :class="{ 'streaming-text': isStreaming && isLastBlock(i) }">
           <template v-for="(part, pi) in parseMarkdown(String(block.text || ''))" :key="pi">
             <div v-if="part.type === 'html'" v-html="part.html"></div>
             <div v-else class="code-block">
@@ -437,47 +420,28 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
             </div>
           </template>
         </div>
-      </template>
 
-      <template v-for="(block, i) in approvalBlocks" :key="`approval-${i}`">
-        <div class="approval-block compact" :class="String(block.status || 'pending')">
+        <!-- Approval Block: SDK HITL / MCP approval -->
+        <div v-else-if="block.type === 'approval'" class="approval-block compact" :class="String(block.status || 'pending')">
           <div class="approval-head">
             <span class="material-symbols-outlined approval-icon">verified_user</span>
             <div class="approval-title-wrap">
-              <div class="approval-title">需要确认：{{ getFriendlyToolName(approvalTitle(block)) }}</div>
-              <div class="approval-subtitle">{{ approvalStatus(block) }} · 变更内容已在右侧工作台准备好</div>
+              <div class="approval-title">{{ approvalTitle(block) }}</div>
+              <div class="approval-subtitle">{{ approvalStatus(block) }} · 请在右侧工作台确认</div>
             </div>
+          </div>
+        </div>
+
+        <!-- Tool Call Block: 紧凑卡片，不展示输入输出 -->
+        <div v-else-if="block.type === 'toolCall'" class="tool-call-block" :class="{ error: isToolError(block), 'is-running': isStreaming && !hasToolResult(block) }">
+          <div class="tool-header">
+            <span class="tool-status-dot" :class="hasToolResult(block) ? (isToolError(block) ? 'error' : 'done') : 'running'"></span>
+            <span class="tool-icon">{{ toolIconEmoji(block) }}</span>
+            <span class="tool-name">{{ toolName(block) }}</span>
           </div>
         </div>
       </template>
     </div>
-
-    <section v-if="!isStreaming && traceStepCount" class="run-summary completed">
-      <span class="material-symbols-outlined run-summary-icon">{{ failedToolCount ? 'error' : 'check_circle' }}</span>
-      <div class="run-summary-copy">
-        <strong>{{ runStatusLabel }}</strong>
-        <span v-if="runSummaryDetail">{{ runSummaryDetail }}</span>
-      </div>
-      <button class="run-trace-toggle" @click="traceExpanded = !traceExpanded">
-        {{ traceExpanded ? '收起轨迹' : '查看轨迹' }}
-      </button>
-    </section>
-
-    <transition name="thinking-slide">
-      <section v-if="traceExpanded && traceStepCount" class="run-trace">
-        <div v-for="(block, i) in toolBlocks" :key="`tool-${toolId(block) || i}`" class="run-trace-row">
-          <span class="material-symbols-outlined" :class="isToolError(block) ? 'trace-error' : hasToolResult(block) ? 'trace-done' : 'trace-running'">
-            {{ isToolError(block) ? 'error' : hasToolResult(block) ? 'check_circle' : 'progress_activity' }}
-          </span>
-          <span class="run-trace-name">{{ toolName(block) }}</span>
-          <span class="run-trace-state">{{ isToolError(block) ? '失败' : hasToolResult(block) ? '完成' : '进行中' }}</span>
-        </div>
-        <details v-for="(block, i) in thinkingBlocks" :key="`thinking-${i}`" class="model-note">
-          <summary>模型说明<span v-if="thinkingDuration(blocks.indexOf(block)) !== undefined"> · {{ thinkingDuration(blocks.indexOf(block)) }}s</span></summary>
-          <div class="thinking-content">{{ block.thinking }}</div>
-        </details>
-      </section>
-    </transition>
 
     <!-- 底部行：usage + copy + timestamp（完成时显示） -->
     <div v-if="!isStreaming" class="assistant-footer">
@@ -672,117 +636,6 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   flex-direction: column;
   gap: 8px;
   padding: 0;
-}
-
-.run-summary {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 42px;
-  margin: 0 0 12px;
-  border: 1px solid var(--outline-variant, #e5e7eb);
-  border-radius: 10px;
-  padding: 9px 11px;
-  background: var(--surface-container, #f8fafc);
-}
-
-.run-summary.completed {
-  margin-top: 12px;
-  margin-bottom: 0;
-  background: transparent;
-}
-
-.run-status-indicator {
-  width: 8px;
-  height: 8px;
-  flex: 0 0 auto;
-  border-radius: 999px;
-  background: var(--accent, #2563eb);
-}
-
-.run-summary.running .run-status-indicator {
-  animation: run-status-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes run-status-pulse {
-  0%, 100% { opacity: 0.45; }
-  50% { opacity: 1; }
-}
-
-.run-summary-icon {
-  flex: 0 0 auto;
-  color: #16a34a;
-  font-size: 17px;
-}
-
-.run-summary-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-  color: var(--text-muted, #64748b);
-  font-size: 11px;
-}
-
-.run-summary-copy strong {
-  color: var(--text, #1e293b);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.run-summary-copy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.run-trace-toggle {
-  flex: 0 0 auto;
-  border: 0;
-  background: transparent;
-  color: var(--accent, #2563eb);
-  cursor: pointer;
-  font-size: 11px;
-  font-weight: 500;
-}
-
-.run-trace {
-  display: grid;
-  gap: 2px;
-  margin-top: 8px;
-  border-left: 1px solid var(--outline-variant, #e5e7eb);
-  padding: 4px 0 4px 14px;
-}
-
-.run-trace-row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 28px;
-  color: var(--text-muted, #64748b);
-  font-size: 11.5px;
-}
-
-.run-trace-row .material-symbols-outlined { font-size: 15px; }
-.trace-done { color: #16a34a; }
-.trace-error { color: #dc2626; }
-.trace-running { color: var(--accent, #2563eb); }
-.run-trace-name { flex: 1; color: var(--text, #1e293b); }
-.run-trace-state { color: var(--text-dim, #94a3b8); }
-
-.model-note {
-  padding: 5px 0;
-  color: var(--text-muted, #64748b);
-  font-size: 11.5px;
-}
-
-.model-note summary { cursor: pointer; }
-
-@media (prefers-reduced-motion: reduce) {
-  .run-summary.running .run-status-indicator {
-    animation: none;
-  }
 }
 
 /* Markdown Body - 对齐 CustomPiAgent: 14px/1.7，紧凑间距 */
