@@ -10,53 +10,11 @@ from uuid import uuid4
 from sqlalchemy import text
 
 
-CHECKPOINTS_TABLE_SQL = """
-CREATE TABLE IF NOT EXISTS runtime_checkpoints (
-    id TEXT PRIMARY KEY,
-    run_id TEXT NOT NULL,
-    session_id TEXT NOT NULL,
-    user_id TEXT NOT NULL,
-    kind TEXT NOT NULL,
-    status TEXT NOT NULL,
-    interruptions_json TEXT NOT NULL,
-    run_state_json TEXT NOT NULL,
-    approved_arguments_json TEXT,
-    argument_diff_json TEXT,
-    sdk_version TEXT,
-    agent_version TEXT,
-    expires_at TEXT NOT NULL,
-    created_at TEXT NOT NULL,
-    resolved_at TEXT,
-    error_json TEXT
-)
-"""
-
-
-CHECKPOINTS_INDEX_SQL = """
-CREATE INDEX IF NOT EXISTS idx_runtime_checkpoints_run
-ON runtime_checkpoints(run_id, session_id, user_id, status)
-"""
-
-
 class RuntimeCheckpointStore:
     """Stores short-lived SDK RunState checkpoints for HITL resume."""
 
     def __init__(self, engine):
         self.engine = engine
-
-    async def ensure_tables(self) -> None:
-        async with self.engine.begin() as conn:
-            await conn.execute(text(CHECKPOINTS_TABLE_SQL))
-            await conn.execute(text(CHECKPOINTS_INDEX_SQL))
-            # Migration: 添加新列（如果不存在）
-            try:
-                await conn.execute(text("ALTER TABLE runtime_checkpoints ADD COLUMN approved_arguments_json TEXT"))
-            except Exception:
-                pass  # 列已存在，忽略
-            try:
-                await conn.execute(text("ALTER TABLE runtime_checkpoints ADD COLUMN argument_diff_json TEXT"))
-            except Exception:
-                pass
 
     async def create(
         self,
@@ -70,7 +28,6 @@ class RuntimeCheckpointStore:
         sdk_version: str | None = None,
         agent_version: str | None = "workspace-agent-v1",
     ) -> dict[str, Any]:
-        await self.ensure_tables()
         now = datetime.utcnow()
         checkpoint_id = f"ckpt_{uuid4().hex}"
         item = {
@@ -115,7 +72,6 @@ class RuntimeCheckpointStore:
         return self._decode(item)
 
     async def get(self, checkpoint_id: str, user_id: str) -> dict[str, Any] | None:
-        await self.ensure_tables()
         async with self.engine.begin() as conn:
             result = await conn.execute(
                 text("SELECT * FROM runtime_checkpoints WHERE id = :id AND user_id = :user_id"),
@@ -133,7 +89,6 @@ class RuntimeCheckpointStore:
         argument_diff: list[dict[str, Any]] | None = None,
     ) -> dict[str, Any] | None:
         """Atomically claim one pending, unexpired checkpoint for resume."""
-        await self.ensure_tables()
         now = datetime.utcnow().isoformat()
         values = {
             "id": checkpoint_id,
@@ -188,7 +143,6 @@ class RuntimeCheckpointStore:
         error: dict[str, Any] | None = None,
         expected_status: str | None = None,
     ) -> dict[str, Any] | None:
-        await self.ensure_tables()
         values = {
             "id": checkpoint_id,
             "user_id": user_id,

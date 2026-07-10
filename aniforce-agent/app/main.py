@@ -12,6 +12,7 @@ from loguru import logger
 from app.config.settings import settings
 from app.agent.openai_adapter import OpenAISDKAdapter
 from app.agent.runtime import AgentRuntime
+from app.agent.runtime_migrations import RuntimeSchemaMigrator
 from app.mcp_server import get_mcp_starlette_app, mcp
 from app.core.errors import AppError, get_http_status
 
@@ -42,6 +43,8 @@ async def lifespan(app: FastAPI):
         agent_runtime_db_url=settings.AGENT_RUNTIME_DB_URL,
         enable_tracing=settings.AGENT_TRACING_ENABLED,
     )
+    runtime_engine = _adapter._get_agent_db_engine(settings.AGENT_RUNTIME_DB_URL)
+    await RuntimeSchemaMigrator(runtime_engine).migrate()
 
     logger.info(f"OpenAI Agent Service started on {settings.HOST}:{settings.PORT}")
     logger.info(f"Model: {settings.OPENAI_AGENTS_MODEL}")

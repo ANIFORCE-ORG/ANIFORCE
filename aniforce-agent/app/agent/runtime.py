@@ -23,6 +23,7 @@ from app.agent.checkpoints import (
     interruption_to_dict,
     serialize_workspace_context_for_checkpoint,
 )
+from app.agent.runtime_sessions import RuntimeSessionOwnerMismatch, RuntimeSessionStore
 from app.core.errors import AppError, AgentErrorCode, unexpected_error_payload
 from app.core.tracing import get_tracer
 
@@ -212,6 +213,8 @@ class AgentRuntime:
 
             session_start = perf_counter()
             effective_session_id = session_id or f"session_{uuid4().hex[:16]}"
+            engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
+            await RuntimeSessionStore(engine).register_or_validate(effective_session_id, user_id)
             session = self.adapter.create_session(effective_session_id, self.agent_runtime_db_url)
             run_logger.debug(
                 "[PERF][agent_first_token] runtime.session_ready total_ms={} session_create_ms={}",
@@ -319,6 +322,18 @@ class AgentRuntime:
             yield {
                 "event": "runtime.aborted",
                 "data": {"message": "Run cancelled by user"},
+                "sequence": sequence,
+            }
+
+        except RuntimeSessionOwnerMismatch:
+            run_logger.warning("[RUNTIME] Session ownership mismatch")
+            sequence += 1
+            yield {
+                "event": "runtime.error",
+                "data": AppError(
+                    AgentErrorCode.TASK_PERMISSION_DENIED,
+                    "Session does not belong to current user",
+                ).to_dict(),
                 "sequence": sequence,
             }
 
@@ -504,8 +519,8 @@ class AgentRuntime:
             )
             raise
 
-    async def get_session_history(self, session_id: str) -> list[dict]:
-        """从 agent.db SQLAlchemySession 读取 SDK 原生对话历史。"""
+    async def get_session_history(self, session_id: str, user_id: str) -> list[dict]:
+        """从 agent.db SQLAlchemySession 读取当前用户的 SDK 原生对话历史。"""
         from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
 
         sdk_session_id = session_id
@@ -513,6 +528,7 @@ class AgentRuntime:
             sdk_session_id = f"chat_completions:{session_id}"
 
         engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
+        await RuntimeSessionStore(engine).require_owner(session_id, user_id)
         session = SQLAlchemySession(sdk_session_id, engine=engine, create_tables=False)
         items = await session.get_items()
         return [item if isinstance(item, dict) else dict(item) for item in items]

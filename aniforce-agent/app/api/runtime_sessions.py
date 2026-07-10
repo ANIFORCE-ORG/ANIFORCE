@@ -12,6 +12,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from loguru import logger
 
 from app.agent.runtime import AgentRuntime
+from app.agent.runtime_sessions import RuntimeSessionNotRegistered, RuntimeSessionOwnerMismatch
 from app.auth import get_current_user
 from app.core.errors import unexpected_error_payload
 
@@ -31,9 +32,19 @@ async def get_session_history(
 ):
     """读取 SDK session 历史并转成 blocks 格式。"""
     try:
-        items = await runtime.get_session_history(session_id)
+        items = await runtime.get_session_history(session_id, user["id"])
         messages = _items_to_messages(items)
         return {"session_id": session_id, "messages": messages}
+    except RuntimeSessionOwnerMismatch as exc:
+        raise HTTPException(
+            status_code=403,
+            detail={"code": "SESSION_FORBIDDEN", "message": "Session does not belong to current user"},
+        ) from exc
+    except RuntimeSessionNotRegistered as exc:
+        raise HTTPException(
+            status_code=404,
+            detail={"code": "SESSION_NOT_FOUND", "message": "Runtime session not found"},
+        ) from exc
     except Exception as exc:
         logger.exception("runtime session history failed: session_id={} user_id={}", session_id, user["id"])
         payload = unexpected_error_payload(message="Session history is temporarily unavailable")

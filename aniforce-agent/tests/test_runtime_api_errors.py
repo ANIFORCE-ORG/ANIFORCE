@@ -9,6 +9,7 @@ from fastapi import HTTPException
 agent_root = Path(__file__).parent.parent
 sys.path.insert(0, str(agent_root))
 
+from app.agent.runtime_sessions import RuntimeSessionNotRegistered, RuntimeSessionOwnerMismatch
 from app.api.runtime_checkpoints import resume_checkpoint
 from app.api.runtime_sessions import get_session_history
 
@@ -27,8 +28,16 @@ class ExplodingRuntime:
         raise RuntimeError("sk-secret SELECT * FROM checkpoints /private/agent.db")
         yield
 
-    async def get_session_history(self, session_id: str):
+    async def get_session_history(self, session_id: str, user_id: str):
         raise RuntimeError("sk-secret SELECT * FROM sessions /private/agent.db")
+
+
+class HistoryBoundaryRuntime:
+    def __init__(self, error: Exception) -> None:
+        self.error = error
+
+    async def get_session_history(self, session_id: str, user_id: str):
+        raise self.error
 
 
 def test_checkpoint_api_redacts_unexpected_error() -> None:
@@ -51,6 +60,40 @@ def test_checkpoint_api_redacts_unexpected_error() -> None:
         assert "sk-secret" not in body
         assert "SELECT *" not in body
         assert "/private/agent.db" not in body
+
+    asyncio.run(scenario())
+
+
+def test_history_api_rejects_cross_user_access() -> None:
+    async def scenario() -> None:
+        try:
+            await get_session_history(
+                session_id="session_1",
+                user={"id": "attacker"},
+                runtime=HistoryBoundaryRuntime(RuntimeSessionOwnerMismatch("session_1")),
+            )
+        except HTTPException as exc:
+            assert exc.status_code == 403
+            assert exc.detail["code"] == "SESSION_FORBIDDEN"
+        else:
+            raise AssertionError("Expected HTTPException")
+
+    asyncio.run(scenario())
+
+
+def test_history_api_rejects_unregistered_session() -> None:
+    async def scenario() -> None:
+        try:
+            await get_session_history(
+                session_id="session_1",
+                user={"id": "user_1"},
+                runtime=HistoryBoundaryRuntime(RuntimeSessionNotRegistered("session_1")),
+            )
+        except HTTPException as exc:
+            assert exc.status_code == 404
+            assert exc.detail["code"] == "SESSION_NOT_FOUND"
+        else:
+            raise AssertionError("Expected HTTPException")
 
     asyncio.run(scenario())
 

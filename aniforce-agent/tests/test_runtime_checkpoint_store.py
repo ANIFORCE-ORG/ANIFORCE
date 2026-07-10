@@ -12,6 +12,7 @@ agent_root = Path(__file__).parent.parent
 sys.path.insert(0, str(agent_root))
 
 from app.agent.checkpoints import RuntimeCheckpointStore
+from app.agent.runtime_migrations import RuntimeSchemaMigrator
 
 
 def test_only_one_concurrent_resume_can_claim_checkpoint() -> None:
@@ -19,6 +20,7 @@ def test_only_one_concurrent_resume_can_claim_checkpoint() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         store = RuntimeCheckpointStore(engine)
         try:
+            await RuntimeSchemaMigrator(engine).migrate()
             checkpoint = await store.create(
                 run_id="run_1",
                 session_id="session_1",
@@ -46,6 +48,7 @@ def test_expired_checkpoint_cannot_be_claimed() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         store = RuntimeCheckpointStore(engine)
         try:
+            await RuntimeSchemaMigrator(engine).migrate()
             checkpoint = await store.create(
                 run_id="run_1",
                 session_id="session_1",
@@ -83,6 +86,7 @@ def test_file_sqlite_allows_only_one_claim_across_engines() -> None:
         first_store = RuntimeCheckpointStore(first_engine)
         second_store = RuntimeCheckpointStore(second_engine)
         try:
+            await RuntimeSchemaMigrator(first_engine).migrate()
             checkpoint = await first_store.create(
                 run_id="run_1",
                 session_id="session_1",
@@ -112,6 +116,7 @@ def test_mark_status_respects_expected_status() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         store = RuntimeCheckpointStore(engine)
         try:
+            await RuntimeSchemaMigrator(engine).migrate()
             checkpoint = await store.create(
                 run_id="run_1",
                 session_id="session_1",
@@ -140,6 +145,7 @@ def test_claim_persists_edited_arguments_atomically() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         store = RuntimeCheckpointStore(engine)
         try:
+            await RuntimeSchemaMigrator(engine).migrate()
             checkpoint = await store.create(
                 run_id="run_1",
                 session_id="session_1",

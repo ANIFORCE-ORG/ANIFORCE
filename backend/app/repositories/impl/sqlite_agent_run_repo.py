@@ -3,7 +3,7 @@
 import json
 from datetime import datetime
 
-from sqlalchemy import select, update, text
+from sqlalchemy import select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import AgentRun
@@ -16,18 +16,6 @@ TERMINAL_RUN_STATUSES = {"completed", "error", "cancelled"}
 class SqliteAgentRunRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
-
-    async def _ensure_checkpoint_ref_column(self) -> None:
-        if self.session.bind and self.session.bind.dialect.name != "sqlite":
-            return
-        try:
-            await self.session.execute(text("ALTER TABLE agent_runs ADD COLUMN checkpoint_ref VARCHAR(128)"))
-            await self.session.flush()
-        except Exception as exc:
-            if "duplicate column" not in str(exc).lower():
-                await self.session.rollback()
-                raise
-            await self.session.rollback()
 
     def _to_dict(self, item: AgentRun) -> dict:
         return {
@@ -113,7 +101,6 @@ class SqliteAgentRunRepository:
         error: dict | None = None,
         checkpoint_ref: str | None = None,
     ) -> dict | None:
-        await self._ensure_checkpoint_ref_column()
         values: dict = {"status": status}
         if status in {"completed", "error", "cancelled"}:
             values["completed_at"] = datetime.utcnow()
