@@ -108,9 +108,9 @@ ONLY=all
 SKIP_INSTALL=0
 HOST=0.0.0.0
 DEMO_MODE=false
-BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-1}
-AGENT_API_WORKERS=${AGENT_API_WORKERS:-1}
-AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-1}
+BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-2}
+AGENT_API_WORKERS=${AGENT_API_WORKERS:-2}
+AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-2}
 
 FRONTEND_PORT_EXPLICIT=0
 BACKEND_PORT_EXPLICIT=0
@@ -152,9 +152,9 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "环境变量:"
       echo "  CLOUD_DOMAIN         云端模式的域名（默认: https://www.aniforce.cc）"
-      echo "  BACKEND_API_WORKERS  Backend API 进程数（默认: 1）"
-      echo "  AGENT_API_WORKERS    Agent API 进程数（默认: 1）"
-      echo "  AGENT_RUN_WORKERS    Agent 执行 worker 数（默认: 1）"
+      echo "  BACKEND_API_WORKERS  Backend API 进程数（默认: 2）"
+      echo "  AGENT_API_WORKERS    Agent API 进程数（默认: 2）"
+      echo "  AGENT_RUN_WORKERS    Agent 执行 worker 数（默认: 2）"
       echo ""
       echo "使用场景:"
       echo "  • 本脚本用于开发调试,直接启动前后端服务（无 Nginx）"

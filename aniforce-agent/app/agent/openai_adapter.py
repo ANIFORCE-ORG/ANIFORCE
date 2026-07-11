@@ -8,6 +8,7 @@ OpenAI Agents SDK 适配器
 """
 
 import os
+import sqlite3
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 from loguru import logger
@@ -201,9 +202,15 @@ class OpenAISDKAdapter:
                 @event.listens_for(engine.sync_engine, "connect")
                 def configure_sqlite(dbapi_connection, _connection_record):
                     cursor = dbapi_connection.cursor()
-                    cursor.execute("PRAGMA journal_mode=WAL")
-                    cursor.execute("PRAGMA foreign_keys=ON")
+                    # Set lock waiting before WAL initialization, which can
+                    # briefly require an exclusive lock during cold startup.
                     cursor.execute("PRAGMA busy_timeout=5000")
+                    try:
+                        cursor.execute("PRAGMA journal_mode=WAL")
+                    except sqlite3.OperationalError as exc:
+                        if "database is locked" not in str(exc):
+                            raise
+                    cursor.execute("PRAGMA foreign_keys=ON")
                     cursor.execute("PRAGMA synchronous=NORMAL")
                     cursor.close()
             self._agent_db_engines[db_url] = engine

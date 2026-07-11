@@ -6,6 +6,7 @@ System Prompt 管理。
 """
 
 import json
+from datetime import date
 from typing import List, Optional
 
 from agents import Agent, RunContextWrapper
@@ -149,7 +150,19 @@ def workspace_instructions(
     draft = snapshot.get("draftEdits") or {}
     projection = snapshot.get("workspaceProjection") or {}
 
-    parts = [base_prompt, "", "---", "# Backend Business Context"]
+    parts = [
+        base_prompt,
+        "",
+        "---",
+        "# Runtime Identity and Date",
+        f"- 当前日期：{date.today().isoformat()}",
+        f"- 当前认证用户 ID：{wctx.user_id}",
+        "- 用户说‘我’或‘本人’时，负责人必须使用当前认证用户；如果业务名称无法从可信上下文确定，先澄清，不要原样写入‘我’。",
+        "- 用户提供没有年份的未来业务日期时，以当前日期为基准选择最近的未来日期；若仍有歧义，先澄清。",
+        "",
+        "---",
+        "# Backend Business Context",
+    ]
     if wctx.business_context_summary:
         parts.append(
             "以下内容由 backend Session State Manager 构建，用于说明当前业务现场。"
@@ -189,6 +202,7 @@ def workspace_instructions(
     parts.append("- 分析、诊断、对比、多上下文任务不要投影中间查询结果。")
     parts.append("- 如果右侧 Workspace 已经展示了查询结果，不要逐条复述；只概括重点并引导用户查看右侧面板。")
     parts.append("- 如果需要业务事实，调用 MCP 工具查询 backend，不要编造。")
+    parts.append("- 严格区分事实、推断和建议：只有工具或 Backend 明确返回的事实才能表述为已发生。未来开始日期不得说投放已经开始；spent=0 不得说预算正在空烧或已经造成损失。")
     parts.append("- 写操作、预算、上线、删除等高风险动作必须通过直接调用对应写工具触发 SDK HITL；不要在聊天区二次询问确认。")
     parts.append("- 用户已明确表达操作意图且对象/参数足够时，直接调用写工具；右侧 Workspace 会展示业务组件和确认/拒绝按钮。")
     parts.append("- 只有对象不唯一、参数缺失或意图不清时，才向用户澄清。")

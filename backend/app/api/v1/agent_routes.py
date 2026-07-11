@@ -32,6 +32,7 @@ from app.services.agent_run_event_processor import AgentRunEventProcessor
 from app.services.business_context_builder import BusinessContextBuilder
 from app.services.chat_event_assembler import ChatEventAssembler
 from app.services.side_effect_service import SideEffectService
+from app.services.redis_run_event_stream import RedisRunEventStream
 
 router = APIRouter(prefix="/agent", tags=["agent"])
 
@@ -65,6 +66,20 @@ def _sse_event(event: str, data: dict, event_id: str | int | None = None) -> byt
 
 def _elapsed_ms(start: float) -> int:
     return int((perf_counter() - start) * 1000)
+
+
+def _is_client_stream_event(event_name: str, data: dict) -> bool:
+    if event_name == "raw_response_event":
+        sdk_data = data.get("data") if isinstance(data, dict) else None
+        data_type = sdk_data.get("type") if isinstance(sdk_data, dict) else None
+        return data_type in {
+            "response.output_text.delta",
+            "response.reasoning_text.delta",
+            "response.reasoning_summary_text.delta",
+        }
+    if event_name == "run_item_stream_event":
+        return data.get("name") in {"tool_called", "tool_output", "reasoning_item_created"}
+    return event_name == "agent_updated_stream_event"
 
 
 def _single_sse_response(event: str, data: dict) -> StreamingResponse:
@@ -347,7 +362,11 @@ async def _persist_run_output_short_tx(
                 call_id, result = assembler._tool_output_info(item)
                 if call_id:
                     await tool_repo.complete(tool_call_id=call_id, result=result)
-        content = assembler.assemble_assistant_message(events)
+        tool_facts = await tool_repo.list_by_run(run_id)
+        content = assembler.assemble_assistant_message(
+            events,
+            tool_facts_by_id={item["tool_call_id"]: item for item in tool_facts},
+        )
         await message_repo.create(
             session_id=session_id,
             user_id=user_id,
@@ -397,13 +416,28 @@ async def _persist_requires_action_short_tx(
         if not updated or updated.get("status") != "requires_action":
             return updated
         if not existing:
+            interruptions = list(data.get("interruptions") or [])
             await AgentApprovalService(approval_repo).create_for_interruption(
                 run_id=run_id,
                 checkpoint_ref=checkpoint_ref,
                 user_id=user_id,
-                interruptions=list(data.get("interruptions") or []),
+                interruptions=interruptions,
                 expires_at=data.get("expires_at"),
             )
+            tool_repo = SqliteAgentToolCallRepository(session)
+            for interruption in interruptions:
+                arguments = interruption.get("arguments") or {}
+                if isinstance(arguments, str):
+                    try:
+                        arguments = json.loads(arguments)
+                    except json.JSONDecodeError:
+                        arguments = {"raw": arguments}
+                await tool_repo.upsert_started(
+                    run_id=run_id,
+                    tool_call_id=str(interruption.get("call_id") or ""),
+                    tool_name=str(interruption.get("tool_name") or ""),
+                    arguments=arguments,
+                )
         return updated
 
     return await _with_session(callback)
@@ -432,6 +466,13 @@ async def _claim_approvals_short_tx(
                 rejection_message=rejection_message,
                 claimed_by=user_id,
             )
+            if decision == "reject":
+                tool_repo = SqliteAgentToolCallRepository(session)
+                for item in items:
+                    await tool_repo.reject_before_execution(
+                        tool_call_id=str(item.get("tool_call_id") or ""),
+                        reason=rejection_message,
+                    )
             if resume_payload is not None:
                 await AgentRunService(SqliteAgentRunRepository(session)).enqueue_resume(
                     run_id,
@@ -634,12 +675,8 @@ async def list_run_approvals(
             status_code=exc.status_code,
             detail=_error_payload(exc.code, exc.message, exc.retryable),
         ) from exc
-    checkpoint_ref = str(run.get("checkpoint_ref") or "")
-    if not checkpoint_ref:
-        return []
-    return await SqliteAgentApprovalRepository(session).list_for_checkpoint(
+    return await SqliteAgentApprovalRepository(session).list_for_run(
         run_id,
-        checkpoint_ref,
         current_user["id"],
     )
 
@@ -661,6 +698,15 @@ async def resolve_run_approval(
     run = await _get_run_short_tx(run_id, user_id)
     if run.get("checkpoint_ref") != checkpoint_id:
         raise HTTPException(status_code=409, detail=_error_payload("CHECKPOINT_MISMATCH", "Checkpoint does not belong to run"))
+
+    transient_stream = RedisRunEventStream()
+    resume_after_sequence = 0
+    if transient_stream.enabled:
+        try:
+            resume_after_sequence = await transient_stream.latest_sequence(run_id)
+        except Exception:
+            logger.exception("Read Redis Agent event sequence failed before resume: run_id={}", run_id)
+    use_transient_resume = transient_stream.enabled and resume_after_sequence > 0
 
     latest_state = await _get_session_state_short_tx(run["session_id"], user_id)
     latest_context = await _build_business_context_short_tx(latest_state or {}, user_id)
@@ -695,6 +741,18 @@ async def resolve_run_approval(
         ) from exc
 
     async def event_generator():
+        if use_transient_resume:
+            try:
+                async for event in transient_stream.subscribe(run_id, resume_after_sequence):
+                    yield _sse_event(event.event, event.data, event.sequence)
+                    if event.event in {"runtime.completed", "runtime.error", "runtime.aborted", "runtime.requires_action"}:
+                        return
+                return
+            except Exception:
+                logger.exception("Redis Agent resume subscription failed: run_id={}", run_id)
+            finally:
+                await transient_stream.close()
+
         sequence = int(run.get("last_event_sequence") or 0)
         while True:
             current, events = await _list_persisted_run_events_short_tx(run_id, user_id, sequence)
@@ -863,16 +921,28 @@ async def stream_run_events(
     current_user: dict = Depends(get_current_user),
 ):
     """Observe a run through standard SSE with sequence-based replay."""
+    user_id = current_user["id"]
+    await _get_run_short_tx(run_id, user_id)
+    transient_stream = RedisRunEventStream()
 
-    async def event_generator():
+    async def redis_event_generator():
+        try:
+            async for event in transient_stream.subscribe(run_id, max(0, after_sequence)):
+                yield _sse_event(event.event, event.data, event.sequence)
+                if event.event in {"runtime.completed", "runtime.error", "runtime.aborted", "runtime.requires_action"}:
+                    return
+        except Exception:
+            logger.exception("Redis Agent event subscription failed: run_id={}", run_id)
+            async for chunk in persisted_event_generator():
+                yield chunk
+        finally:
+            await transient_stream.close()
+
+    async def persisted_event_generator():
         sequence = max(0, after_sequence)
         while True:
             try:
-                run, events = await _list_persisted_run_events_short_tx(
-                    run_id,
-                    current_user["id"],
-                    sequence,
-                )
+                run, events = await _list_persisted_run_events_short_tx(run_id, user_id, sequence)
             except AgentRunError:
                 yield _sse_event("error", _error_payload("RUN_NOT_FOUND", "Run not found", False))
                 return
@@ -888,14 +958,12 @@ async def stream_run_events(
                 sequence = event["sequence"]
                 event_name = event_name_map.get(event["event_type"], event["event_type"])
                 yield _sse_event(event_name, event["payload"], sequence)
-            if run["status"] in {"completed", "error", "cancelled"}:
-                return
-            if run["status"] == "requires_action":
+            if run["status"] in {"completed", "error", "cancelled", "requires_action"}:
                 return
             await asyncio.sleep(0.2)
 
     return StreamingResponse(
-        event_generator(),
+        redis_event_generator() if transient_stream.enabled else persisted_event_generator(),
         media_type="text/event-stream",
         headers={
             "Cache-Control": "no-cache",
@@ -917,8 +985,13 @@ async def _consume_agent_run_background(
     perf_start: float,
     lease_owner: str | None = None,
     resume_payload: dict | None = None,
+    transient_stream: RedisRunEventStream | None = None,
 ) -> None:
     perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
+
+    async def publish_transient(event_name: str, data: dict) -> None:
+        if transient_stream is not None:
+            await transient_stream.publish(run_id, event_name, data)
     latest_state = await _get_session_state_short_tx(session_id, user_id)
     if latest_state is None:
         await agent_run_event_bus.publish(run_id, "error", _error_payload("SESSION_NOT_FOUND", "Session State not found", False), terminal=True)
@@ -967,6 +1040,10 @@ async def _consume_agent_run_background(
                 )
                 return
             await event_processor.publish_running(run_id=run_id, session_id=session_id)
+            await publish_transient(
+                "runtime.started",
+                {"run_id": run_id, "session_id": session_id, "status": "running"},
+            )
 
             gateway_start = perf_counter()
             persisted_events: list[tuple[str, dict]] = []
@@ -993,6 +1070,8 @@ async def _consume_agent_run_background(
                     stream_buffer += chunk.decode("utf-8", errors="ignore")
                     events, stream_buffer = _parse_sse_events(stream_buffer)
                     for event_name, data in events:
+                        if _is_client_stream_event(event_name, data):
+                            await publish_transient(event_name, data)
                         sdk_data = data.get("data") if event_name == "raw_response_event" and isinstance(data, dict) else None
                         sdk_data_type = sdk_data.get("type") if isinstance(sdk_data, dict) else None
                         if not first_message_logged and sdk_data_type == "response.output_text.delta":
@@ -1027,6 +1106,7 @@ async def _consume_agent_run_background(
                                 persisted_status=result.persisted_status,
                                 error=data if event_name == "runtime.error" else None,
                             )
+                            await publish_transient(event_name, data)
                             if event_name == "runtime.error":
                                 await _persist_run_output_short_tx(
                                     run_id=run_id,
@@ -1040,6 +1120,8 @@ async def _consume_agent_run_background(
                 # Flush any final event if upstream did not end with a blank line.
                 events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
                 for event_name, data in events:
+                    if _is_client_stream_event(event_name, data):
+                        await publish_transient(event_name, data)
                     persisted_events.append((event_name, data))
                     result = await event_processor.handle_runtime_event(
                         run_id=run_id,
@@ -1056,6 +1138,7 @@ async def _consume_agent_run_background(
                             persisted_status=result.persisted_status,
                             error=data if event_name == "runtime.error" else None,
                         )
+                        await publish_transient(event_name, data)
                         if event_name == "runtime.error":
                             await _persist_run_output_short_tx(
                                 run_id=run_id,
@@ -1090,6 +1173,10 @@ async def _consume_agent_run_background(
                         user_id=user_id,
                         persisted_status="cancelled",
                     )
+                    await publish_transient(
+                        "runtime.aborted",
+                        {"run_id": run_id, "session_id": session_id, "status": "cancelled"},
+                    )
                     return
                 if latest_run["status"] == "cancelled":
                     await agent_run_event_bus.publish(
@@ -1097,6 +1184,10 @@ async def _consume_agent_run_background(
                         "run_status",
                         {"run_id": run_id, "session_id": session_id, "status": "cancelled"},
                         terminal=True,
+                    )
+                    await publish_transient(
+                        "runtime.aborted",
+                        {"run_id": run_id, "session_id": session_id, "status": "cancelled"},
                     )
                     return
 
@@ -1115,13 +1206,24 @@ async def _consume_agent_run_background(
                     final_output=final_output or None,
                     lease_owner=lease_owner,
                 )
-                await event_processor.complete_run(
+                completion = await event_processor.complete_run(
                     run_id=run_id,
                     user_id=user_id,
                     session_id=session_id,
                     usage=assistant_content.get("usage"),
                     final_output=final_output or None,
                 )
+                if completion.persisted_status == "completed":
+                    await publish_transient(
+                        "runtime.completed",
+                        {
+                            "run_id": run_id,
+                            "session_id": session_id,
+                            "status": "completed",
+                            "usage": assistant_content.get("usage") or {},
+                            "final_output": final_output or "",
+                        },
+                    )
             except AgentGatewayError as exc:
                 current = await _get_session_state_short_tx(session_id, user_id)
                 if current:
@@ -1142,7 +1244,9 @@ async def _consume_agent_run_background(
                     events=persisted_events,
                     error=error_payload,
                 )
-                await agent_run_event_bus.publish(run_id, "error", _error_payload(exc.code, exc.message, exc.retryable), terminal=True)
+                error_event = _error_payload(exc.code, exc.message, exc.retryable)
+                await agent_run_event_bus.publish(run_id, "error", error_event, terminal=True)
+                await publish_transient("runtime.error", error_event)
     except Exception:
         perf_log.exception("backend background run failed")
         error = _unexpected_run_error()
@@ -1159,12 +1263,9 @@ async def _consume_agent_run_background(
             events=[],
             error=error,
         )
-        await agent_run_event_bus.publish(
-            run_id,
-            "error",
-            _error_payload(error["code"], error["message"], error["retryable"]),
-            terminal=True,
-        )
+        error_event = _error_payload(error["code"], error["message"], error["retryable"])
+        await agent_run_event_bus.publish(run_id, "error", error_event, terminal=True)
+        await publish_transient("runtime.error", error_event)
 
 
 def _parse_sse_events(buffer: str) -> tuple[list[tuple[str, dict]], str]:

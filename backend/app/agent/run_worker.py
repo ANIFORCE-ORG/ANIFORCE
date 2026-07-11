@@ -18,6 +18,7 @@ from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.services.agent_gateway import AgentGatewayService
 from app.services.agent_run_event_bus import agent_run_event_bus
+from app.services.redis_run_event_stream import RedisRunEventStream
 
 
 class AgentRunWorker:
@@ -84,6 +85,7 @@ class AgentRunWorker:
         }
         heartbeat_stop = asyncio.Event()
         heartbeat_task = asyncio.create_task(self._heartbeat(run_id, heartbeat_stop))
+        transient_stream = RedisRunEventStream()
         try:
             await _consume_agent_run_background(
                 run_id=run_id,
@@ -96,6 +98,7 @@ class AgentRunWorker:
                 perf_start=perf_counter(),
                 lease_owner=self.worker_id,
                 resume_payload=run.get("resume_payload") if run.get("execution_kind") == "resume" else None,
+                transient_stream=transient_stream,
             )
             if run.get("execution_kind") == "resume" and run.get("checkpoint_ref"):
                 async with self.session_maker() as session:
@@ -117,6 +120,7 @@ class AgentRunWorker:
         finally:
             heartbeat_stop.set()
             await heartbeat_task
+            await transient_stream.close()
             async with self.session_maker() as session:
                 await SqliteAgentRunRepository(session).release_lease(run_id, self.worker_id)
                 await session.commit()

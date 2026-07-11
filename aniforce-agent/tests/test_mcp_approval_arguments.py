@@ -16,12 +16,77 @@ from app import mcp_server
 
 
 class FakeContext:
-    def __init__(self, *, run_id: str, user_id: str, checkpoint_id: str = "current") -> None:
-        self.request_context = type(
-            "RequestContext",
-            (),
-            {"meta": {"run_id": run_id, "user_id": user_id, "checkpoint_id": checkpoint_id}},
-        )()
+    def __init__(
+        self,
+        *,
+        run_id: str,
+        user_id: str,
+        checkpoint_id: str = "current",
+        session_id: str = "session_1",
+        tool_call_id: str = "",
+    ) -> None:
+        meta = {
+            "run_id": run_id,
+            "user_id": user_id,
+            "checkpoint_id": checkpoint_id,
+            "session_id": session_id,
+        }
+        if tool_call_id:
+            meta["tool_call_id"] = tool_call_id
+        self.request_context = type("RequestContext", (), {"meta": meta})()
+
+
+def test_backend_headers_separate_sdk_call_id_from_idempotency_key() -> None:
+    arguments = {"campaign_id": "campaign_1", "status": "paused"}
+    context = FakeContext(
+        run_id="run_1",
+        user_id="user_1",
+        tool_call_id="call_00_sdk",
+    )
+
+    headers = mcp_server._get_backend_headers(
+        context,
+        "update_campaign_status",
+        arguments,
+    )
+
+    assert headers["X-Agent-Tool-Call-Id"] == "call_00_sdk"
+    assert headers["Idempotency-Key"].startswith(
+        "session_1:run_1:update_campaign_status:"
+    )
+    assert headers["Idempotency-Key"] != headers["X-Agent-Tool-Call-Id"]
+
+
+def test_backend_headers_do_not_fabricate_sdk_call_id() -> None:
+    headers = mcp_server._get_backend_headers(
+        FakeContext(run_id="run_1", user_id="user_1"),
+        "get_project_detail",
+        {"project_id": "project_1"},
+    )
+
+    assert "X-Agent-Tool-Call-Id" not in headers
+    assert "Idempotency-Key" in headers
+
+
+def test_write_tools_expose_backend_enums() -> None:
+    async def scenario() -> None:
+        tools = {tool.name: tool for tool in await mcp_server.mcp.list_tools()}
+
+        assert tools["update_campaign_status"].inputSchema["properties"]["status"]["enum"] == [
+            "draft",
+            "running",
+            "review",
+            "paused",
+            "completed",
+        ]
+        assert tools["create_material"].inputSchema["properties"]["type"]["enum"] == [
+            "a_segment",
+            "b_segment",
+            "c_segment",
+            "full_video",
+        ]
+
+    asyncio.run(scenario())
 
 
 async def create_checkpoint_db(db_path: Path) -> None:

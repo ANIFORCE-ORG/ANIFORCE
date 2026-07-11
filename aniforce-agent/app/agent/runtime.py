@@ -118,6 +118,7 @@ class AgentRuntime:
         run_id: str,
         user_id: str,
         checkpoint_id: str = "",
+        tool_call_ids_by_name: dict[str, str] | None = None,
     ):
         """MCP 连接上下文管理器（连本进程 /mcp + 多租户隔离）。"""
         from agents.mcp import MCPServerStreamableHttp, MCPToolMetaContext
@@ -140,6 +141,10 @@ class AgentRuntime:
                 meta["user_id"] = user_id
             if checkpoint_id:
                 meta["checkpoint_id"] = checkpoint_id
+            if tool_call_ids_by_name:
+                tool_call_id = tool_call_ids_by_name.get(ctx.tool_name)
+                if tool_call_id:
+                    meta["tool_call_id"] = tool_call_id
             return meta or None
 
         mcp_server = None
@@ -460,6 +465,20 @@ class AgentRuntime:
             argument_diff=argument_diff or [],
         )
 
+        tool_call_ids_by_name: dict[str, str] = {}
+        ambiguous_tool_names: set[str] = set()
+        for interruption in checkpoint.get("interruptions", []):
+            tool_name = str(interruption.get("tool_name") or "")
+            call_id = str(interruption.get("call_id") or "")
+            if not tool_name or not call_id:
+                continue
+            if tool_name in tool_call_ids_by_name:
+                ambiguous_tool_names.add(tool_name)
+            else:
+                tool_call_ids_by_name[tool_name] = call_id
+        for tool_name in ambiguous_tool_names:
+            tool_call_ids_by_name.pop(tool_name, None)
+
         sequence = 0
         run_logger = logger.bind(user_id=user_id, session_id=checkpoint["session_id"], run_id=checkpoint["run_id"], checkpoint_id=checkpoint_id)
         try:
@@ -469,6 +488,7 @@ class AgentRuntime:
                 run_id=checkpoint["run_id"],
                 user_id=user_id,
                 checkpoint_id=checkpoint_id,
+                tool_call_ids_by_name=tool_call_ids_by_name,
             ) as mcp_servers:
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",

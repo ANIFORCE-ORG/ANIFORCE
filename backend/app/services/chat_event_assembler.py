@@ -23,7 +23,11 @@ class ChatEventAssembler:
             "usage": None,
         }
 
-    def assemble_assistant_message(self, events: list[tuple[str, dict[str, Any]]]) -> dict:
+    def assemble_assistant_message(
+        self,
+        events: list[tuple[str, dict[str, Any]]],
+        tool_facts_by_id: dict[str, dict[str, Any]] | None = None,
+    ) -> dict:
         text_parts: list[str] = []
         thinking_parts: list[str] = []
         tool_blocks: list[dict] = []
@@ -62,15 +66,17 @@ class ChatEventAssembler:
                         call_id, result = self._tool_output_info(sdk_item)
                         block = tool_by_id.get(call_id or "")
                         if not block:
+                            fact = (tool_facts_by_id or {}).get(call_id or "", {})
                             block = {
                                 "type": "tool_call",
                                 "toolCallId": call_id or f"tool_{len(tool_blocks) + 1}",
-                                "tool": "unknown",
-                                "args": {},
+                                "tool": str(fact.get("tool_name") or "unknown"),
+                                "args": fact.get("arguments") if isinstance(fact.get("arguments"), dict) else {},
                             }
                             tool_blocks.append(block)
-                        block["status"] = "completed"
-                        block["result"] = result
+                        fact = (tool_facts_by_id or {}).get(call_id or "", {})
+                        block["status"] = str(fact.get("status") or "completed")
+                        block["result"] = fact.get("result") if fact.get("result") is not None else result
                     elif name == "reasoning_item_created":
                         # reasoning 内容已通过 reasoning_summary_text.delta 实时累积，不再重复追加
                         pass

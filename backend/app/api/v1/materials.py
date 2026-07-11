@@ -7,8 +7,8 @@ from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.repositories.protocols import MaterialRepository
-from app.repositories.factory import get_material_repo
+from app.repositories.protocols import CampaignRepository, MaterialRepository, ProjectRepository
+from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
 from app.api.deps import get_current_user
 from app.config.database import get_db
 from app.config.settings import get_settings
@@ -76,11 +76,24 @@ async def list_materials(
     limit: int = 50,
     current_user: dict = Depends(get_current_user),
     material_repo: MaterialRepository = Depends(get_material_repo),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    campaign_repo: CampaignRepository = Depends(get_campaign_repo),
 ):
     """获取素材列表"""
     if project_id:
+        project = await project_repo.get_by_id(project_id)
+        if not project:
+            raise HTTPException(status_code=404, detail="Project not found")
+        if project["user_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Permission denied")
         materials = await material_repo.list_by_project(project_id, limit=limit)
     elif campaign_id:
+        campaign = await campaign_repo.get_by_id(campaign_id)
+        if not campaign:
+            raise HTTPException(status_code=404, detail="Campaign not found")
+        project = await project_repo.get_by_id(campaign["project_id"])
+        if not project or project["user_id"] != current_user["id"]:
+            raise HTTPException(status_code=403, detail="Permission denied")
         materials = await material_repo.list_by_campaign(campaign_id, limit=limit)
     else:
         materials = await material_repo.list_by_user(

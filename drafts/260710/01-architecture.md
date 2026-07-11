@@ -2,18 +2,18 @@
 
 ## 1. 事实归属
 
-| 状态 | 权威服务 | 持久位置 |
-|---|---|---|
-| 产品 Session | Backend | control DB |
-| Run 生命周期 | Backend | control DB |
-| 用户可见消息 | Backend | control DB |
-| ToolCall 与副作用 | Backend | control DB |
-| Approval | Backend | control DB |
-| Workspace Artifact | Backend | control DB/对象存储 |
-| 关键 Run Event | Backend | control DB |
-| SDK Session items | Agent Service | runtime DB |
-| SDK RunState checkpoint | Agent Service | runtime DB |
-| 页面选中项、未提交输入 | Frontend | 内存，可选 localStorage |
+| 状态                    | 权威服务      | 持久位置                |
+| ----------------------- | ------------- | ----------------------- |
+| 产品 Session            | Backend       | control DB              |
+| Run 生命周期            | Backend       | control DB              |
+| 用户可见消息            | Backend       | control DB              |
+| ToolCall 与副作用       | Backend       | control DB              |
+| Approval                | Backend       | control DB              |
+| Workspace Artifact      | Backend       | control DB/对象存储     |
+| 关键 Run Event          | Backend       | control DB              |
+| SDK Session items       | Agent Service | runtime DB              |
+| SDK RunState checkpoint | Agent Service | runtime DB              |
+| 页面选中项、未提交输入  | Frontend      | 内存，可选 localStorage |
 
 Agent runtime DB 不得成为产品消息或审批的唯一来源。Frontend store 不得成为 active run、approval 或 artifact 的唯一来源。
 
@@ -68,7 +68,7 @@ Agent Service 不负责：
 
 `_ACTIVE_RUNTIME_RUNS` 只能加速同进程取消。取消事实来自 Backend 的 `cancel_requested`，正确性不能依赖该 dict。
 
-## 4. Frontend 运行模型
+# 4. Frontend 运行模型
 
 Frontend 启动或刷新时先请求：
 
@@ -115,17 +115,17 @@ frontend/packages/main-app/src/agent/
 
 ## 6. Backend service 收敛
 
-| 当前文件 | 目标 |
-|---|---|
-| `agent_routes.py` | 拆成薄 API，不再执行后台任务 |
-| `agent_run_service.py` | 收敛为唯一 Run application service |
-| `agent_run_event_processor.py` | 纯 runtime event translator/reducer |
-| `agent_run_event_bus.py` | 被持久 event repository 替代 |
-| `session_lock.py` | 被 DB session lease 替代 |
-| `agent_gateway.py` | 改为纯 `RuntimeClient` |
-| `chat_event_assembler.py` | 保留为纯协议函数或并入 event mapper |
-| `session_state_mutation.py` | 拆为 context、snapshot、business change |
-| `side_effect_service.py` | 并入 ToolCall/BusinessChange 事实层 |
+| 当前文件                         | 目标                                    |
+| -------------------------------- | --------------------------------------- |
+| `agent_routes.py`              | 拆成薄 API，不再执行后台任务            |
+| `agent_run_service.py`         | 收敛为唯一 Run application service      |
+| `agent_run_event_processor.py` | 纯 runtime event translator/reducer     |
+| `agent_run_event_bus.py`       | 被持久 event repository 替代            |
+| `session_lock.py`              | 被 DB session lease 替代                |
+| `agent_gateway.py`             | 改为纯`RuntimeClient`                 |
+| `chat_event_assembler.py`      | 保留为纯协议函数或并入 event mapper     |
+| `session_state_mutation.py`    | 拆为 context、snapshot、business change |
+| `side_effect_service.py`       | 并入 ToolCall/BusinessChange 事实层     |
 
 文件数不是指标。验收指标是：一个状态只有一个 owner，一个状态迁移只有一个入口。
 

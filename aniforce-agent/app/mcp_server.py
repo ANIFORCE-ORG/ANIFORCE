@@ -12,7 +12,7 @@ Agent 通过 MCPServerStreamableHttp 连本进程的 /mcp 端点。
 
 import hashlib
 import json
-from typing import Optional
+from typing import Literal, Optional
 
 from loguru import logger
 from mcp.server.fastmcp import FastMCP, Context
@@ -21,7 +21,7 @@ from app.backend_client import backend_client
 
 
 # ---- FastMCP Server ----
-mcp = FastMCP("ANIFORCE Tools")
+mcp = FastMCP("ANIFORCE Tools", stateless_http=True)
 
 
 def _get_meta(ctx) -> dict:
@@ -70,11 +70,13 @@ def _get_backend_headers(ctx, tool_name: str | None = None, arguments: dict | No
         headers["X-Agent-Session-Id"] = str(meta["session_id"])
     if meta.get("run_id"):
         headers["X-Agent-Run-Id"] = str(meta["run_id"])
+    sdk_tool_call_id = meta.get("tool_call_id")
+    if sdk_tool_call_id:
+        headers["X-Agent-Tool-Call-Id"] = str(sdk_tool_call_id)
     if tool_name and arguments is not None:
-        tool_call_id = _make_tool_call_id(ctx, tool_name, arguments)
-        if tool_call_id:
-            headers["X-Agent-Tool-Call-Id"] = tool_call_id
-            headers["Idempotency-Key"] = tool_call_id
+        idempotency_key = _make_tool_call_id(ctx, tool_name, arguments)
+        if idempotency_key:
+            headers["Idempotency-Key"] = idempotency_key
     return headers
 
 
@@ -498,12 +500,16 @@ async def update_campaign(
 
 
 @mcp.tool()
-async def update_campaign_status(ctx: Context, campaign_id: str, status: str) -> dict:
-    """更新广告计划状态（如 active / paused / completed）。
+async def update_campaign_status(
+    ctx: Context,
+    campaign_id: str,
+    status: Literal["draft", "running", "review", "paused", "completed"],
+) -> dict:
+    """更新广告计划状态。
 
     Args:
         campaign_id: 计划 ID
-        status: 新状态
+        status: 新状态，只能是 draft、running、review、paused 或 completed
 
     Returns:
         更新后的计划信息
@@ -620,7 +626,7 @@ async def list_materials(ctx: Context, project_id: str = "", campaign_id: str = 
 async def create_material(
     ctx: Context,
     name: str,
-    type: str,
+    type: Literal["a_segment", "b_segment", "c_segment", "full_video"],
     url: str,
     thumbnail_url: str = "",
     project_ids: Optional[list[str]] = None,
@@ -632,7 +638,7 @@ async def create_material(
 
     Args:
         name: 素材名称
-        type: 素材类型
+        type: 素材类型，只能是 a_segment、b_segment、c_segment 或 full_video；完整视频使用 full_video
         url: 素材 URL
         thumbnail_url: 缩略图 URL
         project_ids: 关联项目 ID 列表

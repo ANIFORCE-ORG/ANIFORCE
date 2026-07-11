@@ -35,8 +35,22 @@ class SqliteAgentToolCallRepository:
         item = await self.session.get(AgentToolCall, tool_call_id)
         if not item:
             return
+        if item.status == "rejected_before_execution":
+            return
         item.status = "completed"
         item.result_json = json.dumps(result, ensure_ascii=False, default=str)
+        item.completed_at = datetime.utcnow()
+        await self.session.flush()
+
+    async def reject_before_execution(self, *, tool_call_id: str, reason: str | None) -> None:
+        item = await self.session.get(AgentToolCall, tool_call_id)
+        if not item or item.status != "running":
+            return
+        item.status = "rejected_before_execution"
+        item.result_json = json.dumps(
+            {"execution_outcome": "rejected_before_execution", "reason": reason},
+            ensure_ascii=False,
+        )
         item.completed_at = datetime.utcnow()
         await self.session.flush()
 

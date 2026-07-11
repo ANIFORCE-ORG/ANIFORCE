@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     MONGODB_URL: str = ""
     MONGODB_DB_NAME: str = "animagus"
     REDIS_URL: str = ""
+    AGENT_EVENT_STREAM_PREFIX: str = "aniforce:agent:run"
+    AGENT_EVENT_STREAM_TTL_SECONDS: int = 15 * 60
+    AGENT_EVENT_STREAM_MAX_LENGTH: int = 5000
 
     # 外部服务
     OPENAI_API_KEY: str = ""

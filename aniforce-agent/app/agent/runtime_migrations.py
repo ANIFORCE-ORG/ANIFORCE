@@ -115,23 +115,32 @@ class RuntimeSchemaMigrator:
     async def migrate(self) -> None:
         if self.engine.dialect.name != "sqlite":
             raise RuntimeError("Runtime migrations currently support SQLite only")
-        async with self.engine.begin() as conn:
-            await conn.execute(
-                text(
-                    "CREATE TABLE IF NOT EXISTS runtime_schema_migrations ("
-                    "version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
-                )
-            )
-            result = await conn.execute(text("SELECT version FROM runtime_schema_migrations"))
-            applied = {int(row[0]) for row in result.fetchall()}
-            for version, migration in MIGRATIONS:
-                if version in applied:
-                    continue
-                await migration(conn)
+        async with self.engine.connect() as conn:
+            # SQLite schema changes must be serialized across API workers. A
+            # immediate transaction prevents two cold-starting workers from
+            # observing and applying the same missing version concurrently.
+            await conn.exec_driver_sql("BEGIN IMMEDIATE")
+            try:
                 await conn.execute(
                     text(
-                        "INSERT INTO runtime_schema_migrations(version, applied_at) "
-                        "VALUES (:version, CURRENT_TIMESTAMP)"
-                    ),
-                    {"version": version},
+                        "CREATE TABLE IF NOT EXISTS runtime_schema_migrations ("
+                        "version INTEGER PRIMARY KEY, applied_at TEXT NOT NULL)"
+                    )
                 )
+                result = await conn.execute(text("SELECT version FROM runtime_schema_migrations"))
+                applied = {int(row[0]) for row in result.fetchall()}
+                for version, migration in MIGRATIONS:
+                    if version in applied:
+                        continue
+                    await migration(conn)
+                    await conn.execute(
+                        text(
+                            "INSERT INTO runtime_schema_migrations(version, applied_at) "
+                            "VALUES (:version, CURRENT_TIMESTAMP)"
+                        ),
+                        {"version": version},
+                    )
+                await conn.commit()
+            except Exception:
+                await conn.rollback()
+                raise

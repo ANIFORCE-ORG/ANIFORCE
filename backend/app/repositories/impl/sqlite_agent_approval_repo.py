@@ -93,6 +93,14 @@ class SqliteAgentApprovalRepository:
         )
         return [self._to_dict(item) for item in result.scalars()]
 
+    async def list_for_run(self, run_id: str, user_id: str) -> list[dict]:
+        result = await self.session.execute(
+            select(AgentApproval)
+            .where(AgentApproval.run_id == run_id, AgentApproval.user_id == user_id)
+            .order_by(AgentApproval.created_at, AgentApproval.approval_id)
+        )
+        return [self._to_dict(item) for item in result.scalars()]
+
     async def claim_checkpoint(
         self,
         *,
