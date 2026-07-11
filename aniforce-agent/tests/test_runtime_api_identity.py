@@ -8,7 +8,7 @@ from pathlib import Path
 agent_root = Path(__file__).parent.parent
 sys.path.insert(0, str(agent_root))
 
-from app.api.runtime_runs import _ACTIVE_RUNTIME_RUNS, run_runtime
+from app.api.runtime_runs import _LOCAL_STREAM_TASKS, run_runtime
 
 
 class FakeRequest:
@@ -79,6 +79,6 @@ def test_runtime_uses_authenticated_identity_not_body_user_id() -> None:
         assert runtime.user_id == "authenticated_user"
         assert runtime.auth_token == "trusted-token"
         assert "attacker" not in "".join(chunks)
-        assert "run_1" not in _ACTIVE_RUNTIME_RUNS
+        assert "run_1" not in _LOCAL_STREAM_TASKS
 
     asyncio.run(scenario())

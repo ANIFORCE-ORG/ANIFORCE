@@ -108,6 +108,9 @@ ONLY=all
 SKIP_INSTALL=0
 HOST=0.0.0.0
 DEMO_MODE=false
+BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-1}
+AGENT_API_WORKERS=${AGENT_API_WORKERS:-1}
+AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-1}
 
 FRONTEND_PORT_EXPLICIT=0
 BACKEND_PORT_EXPLICIT=0
@@ -148,8 +151,10 @@ while [[ $# -gt 0 ]]; do
       echo "  --log-dir        日志目录 (默认: ./logs)"
       echo ""
       echo "环境变量:"
-      echo "  CLOUD_DOMAIN     云端模式的域名（默认: https://www.aniforce.cc）"
-      echo "                   用于自动配置 .env 中的 FRONTEND_BASE_URL、BACKEND_BASE_URL 和 OAUTH_REDIRECT_BASE_URL"
+      echo "  CLOUD_DOMAIN         云端模式的域名（默认: https://www.aniforce.cc）"
+      echo "  BACKEND_API_WORKERS  Backend API 进程数（默认: 1）"
+      echo "  AGENT_API_WORKERS    Agent API 进程数（默认: 1）"
+      echo "  AGENT_RUN_WORKERS    Agent 执行 worker 数（默认: 1）"
       echo ""
       echo "使用场景:"
       echo "  • 本脚本用于开发调试,直接启动前后端服务（无 Nginx）"
@@ -176,6 +181,9 @@ fi
 if [ "$ONLY" != "all" ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
   fail "--only 仅支持 all/agent/backend/frontend,当前: $ONLY"
 fi
+for worker_count in "$BACKEND_API_WORKERS" "$AGENT_API_WORKERS" "$AGENT_RUN_WORKERS"; do
+  [[ "$worker_count" =~ ^[1-9][0-9]*$ ]] || fail "worker 数必须是正整数"
+done
 
 # cloud 模式下,若设置了 PORT 且用户没显式指定 --frontend-port,则使用 PORT 作为前端端口
 if [ "$MODE" = "cloud" ] && [ -n "${PORT:-}" ]; then
@@ -187,6 +195,7 @@ fi
 info "启动模式: MODE=$MODE, ONLY=$ONLY, SKIP_INSTALL=$SKIP_INSTALL, HOST=$HOST"
 info "环境配置: DEMO_MODE=$DEMO_MODE"
 info "端口配置: 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT"
+info "Worker 配置: Backend API=$BACKEND_API_WORKERS, Agent API=$AGENT_API_WORKERS, Agent Run=$AGENT_RUN_WORKERS"
 
 # ---------- 项目根目录 ----------
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -493,8 +502,10 @@ else
 
   info "启动 Agent 服务 (http://localhost:$AGENT_PORT)..."
   AGENT_RELOAD_FLAG="--reload"
+  AGENT_WORKERS_FLAG=""
   if [ "$MODE" = "cloud" ]; then
     AGENT_RELOAD_FLAG=""
+    AGENT_WORKERS_FLAG="--workers $AGENT_API_WORKERS"
   fi
 
   unset VIRTUAL_ENV
@@ -502,7 +513,7 @@ else
   HOST="$HOST" \
   PORT="$AGENT_PORT" \
   BACKEND_BASE_URL="http://localhost:$BACKEND_PORT" \
-  uv run python -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
+  uv run python -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" $AGENT_WORKERS_FLAG $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
   AGENT_PID=$!
   echo "$AGENT_PID" >> "$PID_FILE"
   wait_for_port "$AGENT_PORT" "Agent"
@@ -545,7 +556,7 @@ fi
   UVICORN_WORKERS_FLAG=""
   if [ "$MODE" = "cloud" ]; then
     UVICORN_RELOAD_FLAG=""
-    UVICORN_WORKERS_FLAG="--workers 1"  # TODO: 临时调整为1, Agent部份支持多workers服务后改为多workers
+    UVICORN_WORKERS_FLAG="--workers $BACKEND_API_WORKERS"
   fi
 
   # 启动后端并重定向日志
@@ -562,15 +573,17 @@ fi
     fail "后端启动失败,请检查日志"
   fi
 
-  info "启动 Agent Run Worker..."
-  LOG_FILE="$BACKEND_APP_LOG" AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" $PY scripts/run_agent_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
-  AGENT_RUN_WORKER_PID=$!
-  echo "$AGENT_RUN_WORKER_PID" >> "$PID_FILE"
-  if kill -0 "$AGENT_RUN_WORKER_PID" 2>/dev/null; then
-    ok "Agent Run Worker 已启动 (PID: $AGENT_RUN_WORKER_PID)"
-  else
-    fail "Agent Run Worker 启动失败,请检查日志"
-  fi
+  info "启动 $AGENT_RUN_WORKERS 个 Agent Run Worker..."
+  for ((worker_index=1; worker_index<=AGENT_RUN_WORKERS; worker_index++)); do
+    LOG_FILE="$BACKEND_APP_LOG" AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" $PY scripts/run_agent_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
+    AGENT_RUN_WORKER_PID=$!
+    echo "$AGENT_RUN_WORKER_PID" >> "$PID_FILE"
+    if kill -0 "$AGENT_RUN_WORKER_PID" 2>/dev/null; then
+      ok "Agent Run Worker $worker_index 已启动 (PID: $AGENT_RUN_WORKER_PID)"
+    else
+      fail "Agent Run Worker $worker_index 启动失败,请检查日志"
+    fi
+  done
 
   info "启动 Agent Reconcile Worker..."
   LOG_FILE="$BACKEND_APP_LOG" $PY scripts/run_agent_reconcile_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &

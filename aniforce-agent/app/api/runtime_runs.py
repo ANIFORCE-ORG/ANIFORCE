@@ -18,7 +18,9 @@ from app.core.errors import unexpected_error_payload
 
 router = APIRouter(prefix="/runtime/runs", tags=["runtime-runs"])
 
-_ACTIVE_RUNTIME_RUNS: dict[str, dict] = {}
+# Best-effort same-process task registry only. Persistent cancellation facts in
+# RuntimeRunControlStore are authoritative across Agent API workers.
+_LOCAL_STREAM_TASKS: dict[str, dict] = {}
 
 
 def _elapsed_ms(start: float) -> int:
@@ -56,7 +58,7 @@ async def run_runtime(
     control_store = runtime.run_control_store() if hasattr(runtime, "run_control_store") else None
     if control_store:
         await control_store.reset(run_id, user_id)
-    _ACTIVE_RUNTIME_RUNS[run_id] = {"user_id": user_id}
+    _LOCAL_STREAM_TASKS[run_id] = {"user_id": user_id}
     perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
     perf_log.debug(
         "[PERF][agent_first_token] runtime_api.pre_stream total_ms={} prompt_chars={} context_chars={}",
@@ -66,7 +68,7 @@ async def run_runtime(
     )
 
     async def event_generator():
-        active = _ACTIVE_RUNTIME_RUNS.get(run_id)
+        active = _LOCAL_STREAM_TASKS.get(run_id)
         if active:
             active["stream_task"] = asyncio.current_task()
             if active.get("cancel_requested"):
@@ -104,9 +106,9 @@ async def run_runtime(
             yield "event: runtime.error\n"
             yield f"data: {json.dumps(payload, ensure_ascii=False)}\n\n"
         finally:
-            active = _ACTIVE_RUNTIME_RUNS.get(run_id)
+            active = _LOCAL_STREAM_TASKS.get(run_id)
             if active and active.get("stream_task") == asyncio.current_task():
-                _ACTIVE_RUNTIME_RUNS.pop(run_id, None)
+                _LOCAL_STREAM_TASKS.pop(run_id, None)
 
     return StreamingResponse(
         event_generator(),
@@ -130,7 +132,7 @@ async def cancel_runtime_run(
     persisted = await control_store.request_cancel(run_id, user["id"])
     if not persisted:
         return {"run_id": run_id, "status": "not_running"}
-    active = _ACTIVE_RUNTIME_RUNS.get(run_id)
+    active = _LOCAL_STREAM_TASKS.get(run_id)
     if active and active.get("user_id") == user["id"]:
         active["cancel_requested"] = True
     return {"run_id": run_id, "status": "cancel_requested"}
