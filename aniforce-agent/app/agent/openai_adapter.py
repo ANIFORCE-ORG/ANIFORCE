@@ -27,10 +27,10 @@ from agents.memory.session import SessionABC
 from agents.run import RunResult
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncEngine, create_async_engine
-from agents.models.openai_responses import OpenAIResponsesModel  # 添加 Responses API
-from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 from agents.models.chatcmpl_converter import Converter
 
+from app.agent.event_serializer import extract_usage, serialize_sdk_event, to_jsonable
+from app.agent.model_factory import create_sdk_model
 from app.core.errors import AppError, AgentErrorCode, ErrorCategory
 from app.core.tracing import get_tracer
 
@@ -156,16 +156,11 @@ class OpenAISDKAdapter:
         (RunContextWrapper, Agent) -> str。
         """
         
-        if self.api_mode == "chat_completions":
-            sdk_model = OpenAIChatCompletionsModel(
-                model=self.model,
-                openai_client=self.openai_client,
-            )
-        else:
-            sdk_model = OpenAIResponsesModel(
-                model=self.model,
-                openai_client=self.openai_client,
-            )
+        sdk_model = create_sdk_model(
+            api_mode=self.api_mode,
+            model=self.model,
+            openai_client=self.openai_client,
+        )
         
         return Agent(
             name=name,
@@ -306,70 +301,10 @@ class OpenAISDKAdapter:
             )
     
     def _serialize_sdk_event(self, sdk_event) -> dict:
-        """Serialize one Agents SDK stream event into a JSON-safe envelope."""
-        event_type = getattr(sdk_event, "type", "unknown")
-        payload = {
-            "type": event_type,
-            "class": type(sdk_event).__name__,
-        }
-
-        name = getattr(sdk_event, "name", None)
-        if name is not None:
-            payload["name"] = name
-
-        data = getattr(sdk_event, "data", None)
-        if data is not None:
-            payload["data"] = self._to_jsonable(data)
-
-        item = getattr(sdk_event, "item", None)
-        if item is not None:
-            payload["item"] = self._to_jsonable(item)
-
-        new_agent = getattr(sdk_event, "new_agent", None)
-        if new_agent is not None:
-            payload["new_agent"] = {"name": getattr(new_agent, "name", None)}
-
-        return payload
+        return serialize_sdk_event(sdk_event)
 
     def _to_jsonable(self, value, depth: int = 0):
-        if depth > 6:
-            return str(value)
-        if value is None or isinstance(value, (str, int, float, bool)):
-            return value
-        if isinstance(value, (list, tuple)):
-            return [self._to_jsonable(item, depth + 1) for item in value]
-        if isinstance(value, dict):
-            return {str(key): self._to_jsonable(item, depth + 1) for key, item in value.items()}
-        if hasattr(value, "model_dump"):
-            return self._to_jsonable(value.model_dump(mode="json"), depth + 1)
-        if hasattr(value, "dict"):
-            return self._to_jsonable(value.dict(), depth + 1)
-        if hasattr(value, "__dict__"):
-            public_fields = {
-                key: item
-                for key, item in vars(value).items()
-                if not key.startswith("_")
-            }
-            return self._to_jsonable(public_fields, depth + 1)
-        return str(value)
+        return to_jsonable(value, depth)
 
     def _extract_usage(self, result: RunResult) -> dict:
-        """提取并转换 SDK token usage 为前端兼容格式"""
-        context_wrapper = getattr(result, "context_wrapper", None)
-        usage = getattr(context_wrapper, "usage", None)
-        if not usage:
-            return {}
-
-        input_details = getattr(usage, "input_tokens_details", None)
-        cache_read = getattr(input_details, "cached_tokens", 0) or 0
-        input_tokens = getattr(usage, "input_tokens", 0) or 0
-        output_tokens = getattr(usage, "output_tokens", 0) or 0
-        total_tokens = getattr(usage, "total_tokens", 0) or (input_tokens + output_tokens)
-
-        return {
-            "input": input_tokens,
-            "output": output_tokens,
-            "cacheRead": cache_read,
-            "cacheWrite": 0,
-            "totalTokens": total_tokens,
-        }
+        return extract_usage(result)
