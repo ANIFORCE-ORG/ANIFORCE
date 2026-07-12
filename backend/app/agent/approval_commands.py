@@ -7,8 +7,8 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.repositories.impl.sqlite_agent_fact_repo import SqliteAgentToolCallRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.services.agent_approval_service import AgentApprovalError, AgentApprovalService
-from app.services.agent_run_service import AgentRunService
+from app.agent.services.approval import AgentApprovalError, AgentApprovalService
+from app.agent.services.run import AgentRunService
 
 
 @dataclass(frozen=True)

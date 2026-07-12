@@ -31,14 +31,6 @@ class ProjectRepository(Protocol):
 
 
 @runtime_checkable
-class ChatRepository(Protocol):
-    async def create_session(self, user_id: str, game_info: dict) -> str: ...
-    async def add_message(self, session_id: str, role: str, content: str, metadata: dict | None = None) -> None: ...
-    async def get_session(self, session_id: str) -> dict | None: ...
-    async def list_sessions(self, user_id: str, limit: int = 20) -> list[dict]: ...
-
-
-@runtime_checkable
 class MaterialRepository(Protocol):
     """素材数据访问协议"""
     async def create(

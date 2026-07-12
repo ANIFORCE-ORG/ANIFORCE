@@ -12,8 +12,8 @@ from app.api.deps import get_current_user
 from app.config.database import get_db
 from app.repositories.impl.sqlite_agent_run_event_repo import SqliteAgentRunEventRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.services.agent_run_service import AgentRunError, AgentRunService
-from app.services.redis_run_event_stream import RedisRunEventStream
+from app.agent.services.run import AgentRunError, AgentRunService
+from app.agent.event_stream import RedisRunEventStream
 
 router = APIRouter()
 

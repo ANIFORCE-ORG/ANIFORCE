@@ -9,9 +9,9 @@ from app.config.database import get_db
 from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
-from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
-from app.services.agent_session_service import AgentSessionError, AgentSessionService
-from app.services.agent_snapshot_service import AgentSnapshotService
+from app.agent.gateway import AgentGatewayError, AgentGatewayService
+from app.agent.services.session import AgentSessionError, AgentSessionService
+from app.agent.services.snapshot import AgentSnapshotService
 
 router = APIRouter()
 

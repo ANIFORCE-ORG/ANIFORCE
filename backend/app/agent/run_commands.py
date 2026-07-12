@@ -9,10 +9,10 @@ from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRe
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
-from app.services.agent_run_service import AgentRunService
-from app.services.agent_session_service import AgentSessionService
-from app.services.business_context_builder import BusinessContextBuilder
-from app.services.chat_event_assembler import ChatEventAssembler
+from app.agent.services.run import AgentRunService
+from app.agent.services.session import AgentSessionService
+from app.agent.services.business_context import BusinessContextBuilder
+from app.agent.services.message_assembler import ChatEventAssembler
 
 
 @dataclass(frozen=True)

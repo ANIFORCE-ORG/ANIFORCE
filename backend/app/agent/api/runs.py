@@ -11,9 +11,9 @@ from app.agent.run_commands import AgentRunCommands, CreateRunCommand
 from app.api.deps import get_current_user
 from app.config.database import get_db, get_session_maker
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
-from app.services.agent_run_service import AgentRunError, AgentRunService
-from app.services.agent_session_service import AgentSessionError
+from app.agent.gateway import AgentGatewayError, AgentGatewayService
+from app.agent.services.run import AgentRunError, AgentRunService
+from app.agent.services.session import AgentSessionError
 
 router = APIRouter()
 

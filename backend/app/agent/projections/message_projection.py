@@ -2,7 +2,7 @@
 
 from app.repositories.impl.sqlite_agent_fact_repo import SqliteAgentToolCallRepository
 from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
-from app.services.chat_event_assembler import ChatEventAssembler
+from app.agent.services.message_assembler import ChatEventAssembler
 
 
 class MessageProjection:

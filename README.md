@@ -437,11 +437,6 @@ curl http://localhost:8010/health
 curl -X POST http://localhost:8010/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"demo@example.com","password":"123456"}'
-
-# AI 分析接口
-curl -X POST http://localhost:8010/api/v1/chat/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"game_description":"一款RPG冒险游戏","game_type":"RPG"}'
 ```
 
 ### API 文档

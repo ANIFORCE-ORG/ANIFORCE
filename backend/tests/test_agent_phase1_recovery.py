@@ -17,8 +17,8 @@ from app.repositories.impl.sqlite_agent_fact_repo import SqliteAgentArtifactRepo
 from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
 from app.repositories.impl.sqlite_agent_run_event_repo import SqliteAgentRunEventRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.services.agent_run_service import AgentRunService
-from app.services.agent_snapshot_service import AgentSnapshotService
+from app.agent.services.run import AgentRunService
+from app.agent.services.snapshot import AgentSnapshotService
 
 
 def test_phase1_facts_replay_snapshot_and_lease_claim() -> None:

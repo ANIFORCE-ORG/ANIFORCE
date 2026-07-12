@@ -6,7 +6,7 @@ from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.config.database import Base
 from app.repositories.impl.sqlite_agent_fact_repo import SqliteAgentToolCallRepository
-from app.services.chat_event_assembler import ChatEventAssembler
+from app.agent.services.message_assembler import ChatEventAssembler
 
 
 def test_rejected_tool_fact_is_terminal_and_not_overwritten() -> None:

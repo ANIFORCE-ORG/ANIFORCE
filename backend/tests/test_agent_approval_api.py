@@ -12,7 +12,7 @@ from app.models.agent_approval import AgentApproval
 from app.models.agent_run import AgentRun
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.services.agent_approval_service import AgentApprovalError, AgentApprovalService
+from app.agent.services.approval import AgentApprovalError, AgentApprovalService
 
 
 class FakeRequest:

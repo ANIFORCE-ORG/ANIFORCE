@@ -9,11 +9,11 @@ from loguru import logger
 
 from app.agent.run_execution_store import AgentRunExecutionStore
 from app.agent.runtime_event_protocol import is_client_stream_event, parse_sse_events
-from app.services.agent_gateway import AgentGatewayError, AgentGatewayService
-from app.services.agent_run_event_processor import AgentRunEventProcessor
-from app.services.chat_event_assembler import ChatEventAssembler
-from app.services.redis_run_event_stream import RedisRunEventStream
-from app.services.side_effect_service import SideEffectService
+from app.agent.gateway import AgentGatewayError, AgentGatewayService
+from app.agent.event_reducer import AgentRunEventProcessor
+from app.agent.services.message_assembler import ChatEventAssembler
+from app.agent.event_stream import RedisRunEventStream
+from app.agent.services.side_effect import SideEffectService
 
 
 def _elapsed_ms(start: float) -> int:

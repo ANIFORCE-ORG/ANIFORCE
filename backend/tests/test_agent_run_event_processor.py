@@ -1,4 +1,4 @@
-from app.services.agent_run_event_processor import AgentRunEventProcessor
+from app.agent.event_reducer import AgentRunEventProcessor
 
 
 def test_non_terminal_runtime_event_has_no_transition() -> None:

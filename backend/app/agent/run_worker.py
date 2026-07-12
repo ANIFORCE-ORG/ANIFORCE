@@ -17,8 +17,8 @@ from app.config.database import get_session_maker
 from app.config.settings import get_settings
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
-from app.services.agent_gateway import AgentGatewayService
-from app.services.redis_run_event_stream import RedisRunEventStream
+from app.agent.gateway import AgentGatewayService
+from app.agent.event_stream import RedisRunEventStream
 
 
 class AgentRunWorker:
