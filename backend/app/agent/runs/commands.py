@@ -13,6 +13,7 @@ from app.agent.runs.service import AgentRunService
 from app.agent.sessions.service import AgentSessionService
 from app.agent.sessions.business_context import BusinessContextBuilder
 from app.agent.messages.assembler import ChatEventAssembler
+from app.agent.types import RunExecutionContext
 
 
 @dataclass(frozen=True)
@@ -74,6 +75,13 @@ class AgentRunCommands:
                     campaign_repo=get_campaign_repo(session),
                     material_repo=get_material_repo(session),
                 ).build(state, command.user_id)
+                execution_context: RunExecutionContext = {
+                    "task_type": command.task_type,
+                    "business_context_summary": business_context,
+                    "ui_snapshot": command.context_snapshot or {},
+                    "session_state": state,
+                    "changelog_start_index": changelog_start_index,
+                }
                 run, reused = await AgentRunService(
                     SqliteAgentRunRepository(session)
                 ).create_or_reuse(
@@ -81,13 +89,7 @@ class AgentRunCommands:
                     user_id=command.user_id,
                     input_text=command.prompt,
                     idempotency_key=command.idempotency_key,
-                    execution_context={
-                        "task_type": command.task_type,
-                        "business_context_summary": business_context,
-                        "ui_snapshot": command.context_snapshot or {},
-                        "session_state": state,
-                        "changelog_start_index": changelog_start_index,
-                    },
+                    execution_context=execution_context,
                 )
                 if not reused:
                     await SqliteAgentMessageRepository(session).create(

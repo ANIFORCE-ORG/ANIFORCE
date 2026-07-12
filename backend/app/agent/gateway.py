@@ -6,15 +6,14 @@ from typing import Any
 
 import httpx
 
+from app.agent.errors import AgentModuleError
 
-class AgentGatewayError(Exception):
+
+class AgentGatewayError(AgentModuleError):
     """Base error for agent gateway failures."""
 
     def __init__(self, code: str, message: str, retryable: bool = False) -> None:
-        self.code = code
-        self.message = message
-        self.retryable = retryable
-        super().__init__(message)
+        super().__init__(code, message, status_code=502, retryable=retryable)
 
 
 class AgentGatewayService:

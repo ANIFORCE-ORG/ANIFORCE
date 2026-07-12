@@ -3,20 +3,14 @@
 from typing import Any
 from uuid import uuid4
 
+from app.agent.errors import AgentModuleError
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
 
 
-class AgentSessionError(Exception):
+class AgentSessionError(AgentModuleError):
     """Product session domain error."""
-
-    def __init__(self, code: str, message: str, status_code: int = 400, retryable: bool = False) -> None:
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-        self.retryable = retryable
-        super().__init__(message)
 
 
 class AgentSessionService:

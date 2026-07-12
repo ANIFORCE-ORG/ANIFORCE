@@ -2,6 +2,7 @@
 
 from uuid import uuid4
 
+from app.agent.errors import AgentModuleError
 from app.agent.runs.state import (
     RunStatus,
     can_cancel,
@@ -12,14 +13,17 @@ from app.agent.runs.state import (
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 
 
-class AgentRunError(Exception):
-    def __init__(self, code: str, message: str, status_code: int = 400, retryable: bool = False, run: dict | None = None):
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-        self.retryable = retryable
+class AgentRunError(AgentModuleError):
+    def __init__(
+        self,
+        code: str,
+        message: str,
+        status_code: int = 400,
+        retryable: bool = False,
+        run: dict | None = None,
+    ) -> None:
+        super().__init__(code, message, status_code, retryable)
         self.run = run
-        super().__init__(message)
 
 
 class AgentRunService:

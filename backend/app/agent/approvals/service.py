@@ -5,15 +5,12 @@ from __future__ import annotations
 import json
 from datetime import datetime, timedelta, timezone
 
+from app.agent.errors import AgentModuleError
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 
 
-class AgentApprovalError(Exception):
-    def __init__(self, code: str, message: str, status_code: int):
-        self.code = code
-        self.message = message
-        self.status_code = status_code
-        super().__init__(message)
+class AgentApprovalError(AgentModuleError):
+    pass
 
 
 class AgentApprovalService:
