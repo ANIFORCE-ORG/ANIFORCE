@@ -21,6 +21,7 @@ import {
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
 import { useWorkspaceStore, workspaceResultProjectionRegistry, type WorkspaceSurface } from '@/store/workspace'
+import { parseAgentSdkEvent } from '@/agent/protocol/parser'
 import { connectPersistedRun } from '@/services/runConnectionManager'
 import { hydrateWorkspaceSnapshot } from '@/services/workspaceArtifactStore'
 
@@ -122,7 +123,7 @@ export type AgentTimelineBlock =
       todos: AgentExecutionTodo[]
     })
 
-export function useHomeAgentSession() {
+export function useAgentSessionController() {
   const store = useAgentStore()
   const workspace = useWorkspaceStore()
   const route = useRoute()
@@ -858,29 +859,24 @@ export function useHomeAgentSession() {
     markFirstMessageDelta: (deltaChars: number) => void
     markFirstThinkingDelta: (deltaChars: number) => void
   }): void {
-    if (event.type === 'raw_response_event') {
-      const data = normalizeRecord(event.data)
-      const dataType = String(data?.type || '')
-      const delta = typeof data?.delta === 'string' ? data.delta : ''
-      if (dataType === 'response.output_text.delta' && delta) {
-        ensureAssistantMessage(options.assistant)
-        options.markFirstMessageDelta(delta.length)
-        store.appendDeltaToStreaming('text', 'text', delta)
-      } else if ((dataType === 'response.reasoning_text.delta' || dataType === 'response.reasoning_summary_text.delta') && delta) {
-        drainTypewriter(false)
-        if (!streamingMessage.value) return
-        ensureAssistantMessage(streamingMessage.value)
-        options.markFirstThinkingDelta(delta.length)
-        store.appendDeltaToStreaming('thinking', 'thinking', delta)
-      }
+    const parsed = parseAgentSdkEvent(event)
+    if (parsed.kind === 'text') {
+      ensureAssistantMessage(options.assistant)
+      options.markFirstMessageDelta(parsed.delta.length)
+      store.appendDeltaToStreaming('text', 'text', parsed.delta)
       return
     }
-
-    if (event.type !== 'run_item_stream_event') return
-    const item = normalizeRecord(event.item)
-    if (event.name === 'tool_called') {
+    if (parsed.kind === 'reasoning') {
       drainTypewriter(false)
-      const { id, name, args } = readSdkToolCall(item)
+      if (!streamingMessage.value) return
+      ensureAssistantMessage(streamingMessage.value)
+      options.markFirstThinkingDelta(parsed.delta.length)
+      store.appendDeltaToStreaming('thinking', 'thinking', parsed.delta)
+      return
+    }
+    if (parsed.kind === 'tool_called') {
+      drainTypewriter(false)
+      const { id, name, arguments: args } = parsed
       const tool: AgentExecutionTool = {
         id,
         name,
@@ -896,8 +892,8 @@ export function useHomeAgentSession() {
           .filter(item => item.status === 'running')
           .map(item => ({ id: item.id, name: item.name })),
       }
-    } else if (event.name === 'tool_output') {
-      const { id, result } = readSdkToolOutput(item)
+    } else if (parsed.kind === 'tool_output') {
+      const { id, output: result } = parsed
       let toolName = ''
       const index = executionTools.value.findIndex(t => t.id === id)
       if (index >= 0) {
@@ -922,9 +918,6 @@ export function useHomeAgentSession() {
       store.agentPhase = running.length
         ? { kind: 'running_tools', tools: running.map(item => ({ id: item.id, name: item.name })) }
         : { kind: 'waiting_model' }
-    } else if (event.name === 'reasoning_item_created') {
-      // reasoning 内容已通过 reasoning_summary_text.delta 实时累积，这里不再重复追加
-      return
     }
   }
 
@@ -1010,28 +1003,6 @@ export function useHomeAgentSession() {
     })
     const actualIndex = pendingWorkspaceProjectionRequests.value.length - 1 - requestIndex
     pendingWorkspaceProjectionRequests.value = pendingWorkspaceProjectionRequests.value.filter((_, index) => index !== actualIndex)
-  }
-
-  function readSdkToolCall(item?: Record<string, unknown>): { id: string; name: string; args: Record<string, unknown> | undefined } {
-    const raw = normalizeRecord(item?.raw_item)
-    const name = String(item?.tool_name || raw?.name || item?.name || 'tool')
-    const id = String(item?.call_id || raw?.call_id || raw?.id || `${name}_${Date.now()}`)
-    let args: unknown = raw?.arguments || item?.arguments || {}
-    if (typeof args === 'string') {
-      try {
-        args = args.trim() ? JSON.parse(args) : {}
-      } catch {
-        args = { raw: args }
-      }
-    }
-    return { id, name, args: normalizeRecord(args) }
-  }
-
-  function readSdkToolOutput(item?: Record<string, unknown>): { id: string; result: unknown } {
-    const raw = normalizeRecord(item?.raw_item)
-    const id = String(item?.call_id || raw?.call_id || raw?.id || '')
-    const result = item && 'output' in item ? item.output : raw && 'output' in raw ? raw.output : raw?.content
-    return { id, result }
   }
 
   function markRunningToolsCompleted(): void {

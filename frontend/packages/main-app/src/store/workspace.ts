@@ -418,7 +418,7 @@ export const workspaceResultProjectionRegistry: Record<string, WorkspaceResultPr
 }
 
 function parseProjectsResult(result: unknown): Record<string, unknown> {
-  // 复用 useHomeAgentSession 已有的 extractProjects 逻辑
+  // 复用 Agent session controller 的 extractProjects 逻辑
   if (!result) return { projects: [] }
   const parsed = parseJsonLikeResult(result)
   if (parsed !== result) return parseProjectsResult(parsed)

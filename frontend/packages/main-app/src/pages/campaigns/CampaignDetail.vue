@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import ChatPanel from '@/components/layout/ChatPanel.vue'
+import AgentContextPanel from '@/components/agent/AgentContextPanel.vue'
 import AdUnitCardDetailed from '@/components/campaigns/AdUnitCardDetailed.vue'
 import CreateAdUnitModal from '@/components/campaigns/CreateAdUnitModal.vue'
 import { getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
@@ -12,11 +11,7 @@ import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 const route = useRoute()
-const auth = useAuthStore()
-
 const campaignId = ref(route.params.id as string)
-const activeSession = ref('sess_g001')
-const chatInput = ref('')
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -24,31 +19,6 @@ const campaign = ref<Campaign | null>(null)
 const adUnits = ref<any[]>([])
 const showCreateAdUnitModal = ref(false)
 const createAdUnitModalRef = ref<any>(null)
-
-const sessions = ref([
-  { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
-  { id: 'sess_g002', name: '素材优化建议', active: false },
-  { id: 'sess_g003', name: '东南亚市场测试', active: false },
-  { id: 'sess_d001', name: 'DramaBox新剧推广', active: false }
-])
-
-const messages = ref([
-  {
-    role: 'assistant',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: `您好${auth.user?.name || '李明'}！我是ANIFORCE智能助手。\n\n我可以帮您：\n• 分析素材表现\n• 优化投放策略\n• 素材创意建议\n• 预算调整建议\n\n请告诉我您需要什么帮助？`
-  }
-])
-
-const quickHints = [
-  '分析素材表现',
-  '优化建议',
-  '创意素材推荐',
-  '预算调整',
-  '添加新素材',
-  '数据报表'
-]
 
 onMounted(async () => {
   await loadCampaignData()
@@ -86,20 +56,6 @@ const switchPanel = (item: any) => {
   if (item.path) {
     router.push(item.path)
   }
-}
-
-const switchSession = (session: any) => {
-  activeSession.value = session.id
-  sessions.value.forEach(s => s.active = s.id === session.id)
-}
-
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
 }
 
 const handleBack = () => {
@@ -177,10 +133,8 @@ const formatDate = (dateString?: string) => {
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav
       :nav-items="navItems"
-      :sessions="sessions"
       active-panel="campaigns"
       @switch-panel="switchPanel"
-      @switch-session="switchSession"
     />
 
     <!-- 中间广告详情展示区 -->
@@ -302,13 +256,13 @@ const formatDate = (dateString?: string) => {
     </main>
 
     <!-- 右侧对话区 -->
-    <ChatPanel
-      :messages="messages"
-      :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
+    <AgentContextPanel
+      :context="{
+        task_type: 'conversation',
+        workspace_type: 'campaign.detail',
+        intent: `campaign:${campaignId}`,
+        title: campaign?.name || '广告计划对话',
+      }"
     />
 
     <!-- 创建 Ad Unit 弹窗 -->

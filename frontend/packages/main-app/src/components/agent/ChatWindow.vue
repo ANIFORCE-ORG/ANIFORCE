@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, nextTick, ref, watch } from 'vue'
 import type { AgentMessage } from '@/api/agent'
-import type { AgentPhase, AgentTimelineBlock } from '@/composables/useHomeAgentSession'
+import type { AgentPhase, AgentTimelineBlock } from '@/composables/useAgentSession'
 import MessageView from './MessageView.vue'
 import ChatInput from './ChatInput.vue'
 import TimelineBlockRenderer from './timeline/TimelineBlockRenderer.vue'

@@ -1,9 +1,8 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
-import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import ChatPanel from '@/components/layout/ChatPanel.vue'
+import AgentContextPanel from '@/components/agent/AgentContextPanel.vue'
 import CampaignCardDetailed from '@/components/campaigns/CampaignCardDetailed.vue'
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
 import Toast from '@/components/toasts/Toast.vue'
@@ -13,11 +12,7 @@ import { navItems } from '@/config/navigation'
 
 const router = useRouter()
 const route = useRoute()
-const auth = useAuthStore()
-
 const projectId = ref(route.params.id as string)
-const activeSession = ref('sess_g001')
-const chatInput = ref('')
 const loading = ref(false)
 const error = ref<string | null>(null)
 
@@ -31,31 +26,6 @@ const editingCampaign = ref<any>(null)
 const showToast = ref(false)
 const toastMessage = ref('')
 const toastType = ref<'success' | 'error' | 'warning' | 'info'>('info')
-
-const sessions = ref([
-  { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
-  { id: 'sess_g002', name: '素材优化建议', active: false },
-  { id: 'sess_g003', name: '东南亚市场测试', active: false },
-  { id: 'sess_d001', name: 'DramaBox新剧推广', active: false }
-])
-
-const messages = ref([
-  {
-    role: 'assistant',
-    author: 'ANIFORCE助手',
-    time: '刚刚',
-    content: `您好${auth.user?.name || '李明'}！我是ANIFORCE智能助手。\n\n我可以帮您：\n• 分析广告计划表现\n• 优化投放策略\n• 素材建议\n• 预算调整建议\n\n请告诉我您需要什么帮助？`
-  }
-])
-
-const quickHints = [
-  '分析广告表现',
-  '优化建议',
-  '素材推荐',
-  '预算调整',
-  '创建新广告',
-  '数据报表'
-]
 
 onMounted(async () => {
   await loadProjectData()
@@ -89,20 +59,6 @@ const switchPanel = (item: any) => {
   if (item.path) {
     router.push(item.path)
   }
-}
-
-const switchSession = (session: any) => {
-  activeSession.value = session.id
-  sessions.value.forEach(s => s.active = s.id === session.id)
-}
-
-const handleSendMessage = (message: string) => {
-  console.log('发送消息:', message)
-  chatInput.value = ''
-}
-
-const handleHintClick = (hint: string) => {
-  chatInput.value = hint
 }
 
 const handleBack = () => {
@@ -246,10 +202,8 @@ const handleCloseToast = () => {
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav
       :nav-items="navItems"
-      :sessions="sessions"
       active-panel="projects"
       @switch-panel="switchPanel"
-      @switch-session="switchSession"
     />
 
     <!-- 中间项目详情展示区 -->
@@ -383,13 +337,13 @@ const handleCloseToast = () => {
     </main>
 
     <!-- 右侧对话区 -->
-    <ChatPanel
-      :messages="messages"
-      :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
+    <AgentContextPanel
+      :context="{
+        task_type: 'conversation',
+        workspace_type: 'project.detail',
+        intent: `project:${projectId}`,
+        title: project?.name || '项目对话',
+      }"
     />
 
     <!-- Campaign 创建/编辑模态框 -->

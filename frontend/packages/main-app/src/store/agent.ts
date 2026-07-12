@@ -1,7 +1,7 @@
 import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AgentSession, AgentMessage, AgentModel, AgentContentBlock, SideEffectEvent } from '@/api/agent'
-import type { AgentTimelineBlock, AgentPhase } from '@/composables/useHomeAgentSession'
+import type { AgentTimelineBlock, AgentPhase } from '@/composables/useAgentSession'
 
 export const useAgentStore = defineStore('agent', () => {
   // 核心状态 - 使用 ref 而不是 reactive，确保可以直接赋值

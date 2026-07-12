@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { AgentTimelineBlock } from '@/composables/useHomeAgentSession'
+import type { AgentTimelineBlock } from '@/composables/useAgentSession'
 import ToolActivityBlock from './ToolActivityBlock.vue'
 import ProjectListBlock from './ProjectListBlock.vue'
 import PlanTimelineBlock from './PlanTimelineBlock.vue'

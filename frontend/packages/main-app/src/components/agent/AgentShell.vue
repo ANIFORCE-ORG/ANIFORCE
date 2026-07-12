@@ -1,9 +1,9 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useHomeAgentSession } from '@/composables/useHomeAgentSession'
+import { useAgentSession } from '@/composables/useAgentSession'
 import ChatWindow from './ChatWindow.vue'
 
-const agent = useHomeAgentSession()
+const agent = useAgentSession()
 const renamingId = ref<string | null>(null)
 const renameValue = ref('')
 const pendingDeleteId = ref<string | null>(null)
