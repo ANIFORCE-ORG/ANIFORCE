@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import AgentContextPanel from '@/components/agent/AgentContextPanel.vue'
 import AdUnitCardDetailed from '@/components/campaigns/AdUnitCardDetailed.vue'
 import CreateAdUnitModal from '@/components/campaigns/CreateAdUnitModal.vue'
 import { getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
@@ -254,16 +253,6 @@ const formatDate = (dateString?: string) => {
         </div>
       </div>
     </main>
-
-    <!-- 右侧对话区 -->
-    <AgentContextPanel
-      :context="{
-        task_type: 'conversation',
-        workspace_type: 'campaign.detail',
-        intent: `campaign:${campaignId}`,
-        title: campaign?.name || '广告计划对话',
-      }"
-    />
 
     <!-- 创建 Ad Unit 弹窗 -->
     <CreateAdUnitModal

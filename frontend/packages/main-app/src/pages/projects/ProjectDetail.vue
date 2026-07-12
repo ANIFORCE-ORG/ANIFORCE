@@ -2,7 +2,6 @@
 import { ref, onMounted } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
-import AgentContextPanel from '@/components/agent/AgentContextPanel.vue'
 import CampaignCardDetailed from '@/components/campaigns/CampaignCardDetailed.vue'
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
 import Toast from '@/components/toasts/Toast.vue'
@@ -335,16 +334,6 @@ const handleCloseToast = () => {
         </div>
       </div>
     </main>
-
-    <!-- 右侧对话区 -->
-    <AgentContextPanel
-      :context="{
-        task_type: 'conversation',
-        workspace_type: 'project.detail',
-        intent: `project:${projectId}`,
-        title: project?.name || '项目对话',
-      }"
-    />
 
     <!-- Campaign 创建/编辑模态框 -->
     <CreateCampaignModal
