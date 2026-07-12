@@ -13,6 +13,7 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import get_current_user
+from app.agent.runtime_event_protocol import is_client_stream_event, parse_sse_events
 from app.config.database import get_db, get_session_maker
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
@@ -66,20 +67,6 @@ def _sse_event(event: str, data: dict, event_id: str | int | None = None) -> byt
 
 def _elapsed_ms(start: float) -> int:
     return int((perf_counter() - start) * 1000)
-
-
-def _is_client_stream_event(event_name: str, data: dict) -> bool:
-    if event_name == "raw_response_event":
-        sdk_data = data.get("data") if isinstance(data, dict) else None
-        data_type = sdk_data.get("type") if isinstance(sdk_data, dict) else None
-        return data_type in {
-            "response.output_text.delta",
-            "response.reasoning_text.delta",
-            "response.reasoning_summary_text.delta",
-        }
-    if event_name == "run_item_stream_event":
-        return data.get("name") in {"tool_called", "tool_output", "reasoning_item_created"}
-    return event_name == "agent_updated_stream_event"
 
 
 def _single_sse_response(event: str, data: dict) -> StreamingResponse:
@@ -1068,9 +1055,9 @@ async def _consume_agent_run_background(
                             len(chunk),
                         )
                     stream_buffer += chunk.decode("utf-8", errors="ignore")
-                    events, stream_buffer = _parse_sse_events(stream_buffer)
+                    events, stream_buffer = parse_sse_events(stream_buffer)
                     for event_name, data in events:
-                        if _is_client_stream_event(event_name, data):
+                        if is_client_stream_event(event_name, data):
                             await publish_transient(event_name, data)
                         sdk_data = data.get("data") if event_name == "raw_response_event" and isinstance(data, dict) else None
                         sdk_data_type = sdk_data.get("type") if isinstance(sdk_data, dict) else None
@@ -1118,9 +1105,9 @@ async def _consume_agent_run_background(
                             return
 
                 # Flush any final event if upstream did not end with a blank line.
-                events, stream_buffer = _parse_sse_events(stream_buffer + "\n\n")
+                events, stream_buffer = parse_sse_events(stream_buffer + "\n\n")
                 for event_name, data in events:
-                    if _is_client_stream_event(event_name, data):
+                    if is_client_stream_event(event_name, data):
                         await publish_transient(event_name, data)
                     persisted_events.append((event_name, data))
                     result = await event_processor.handle_runtime_event(
@@ -1266,27 +1253,3 @@ async def _consume_agent_run_background(
         error_event = _error_payload(error["code"], error["message"], error["retryable"])
         await agent_run_event_bus.publish(run_id, "error", error_event, terminal=True)
         await publish_transient("runtime.error", error_event)
-
-
-def _parse_sse_events(buffer: str) -> tuple[list[tuple[str, dict]], str]:
-    events: list[tuple[str, dict]] = []
-    while "\n\n" in buffer:
-        raw, buffer = buffer.split("\n\n", 1)
-        event_name = "message"
-        data_lines: list[str] = []
-        for line in raw.splitlines():
-            if line.startswith("event:"):
-                event_name = line[6:].strip()
-            elif line.startswith("data:"):
-                data_lines.append(line[5:].strip())
-        data_text = "\n".join(data_lines)
-        if not data_text:
-            data: dict = {}
-        else:
-            try:
-                parsed = json.loads(data_text)
-                data = parsed if isinstance(parsed, dict) else {"value": parsed}
-            except json.JSONDecodeError:
-                data = {"message": data_text}
-        events.append((event_name, data))
-    return events, buffer
