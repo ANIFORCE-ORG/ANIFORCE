@@ -34,7 +34,7 @@ def get_engine():
         
         _engine = create_async_engine(
             database_url,
-            echo=settings.DEBUG,
+            echo=False,
             connect_args=connect_args,
         )
         if "sqlite" in database_url:

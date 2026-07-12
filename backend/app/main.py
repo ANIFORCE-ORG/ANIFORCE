@@ -3,6 +3,8 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from loguru import logger
 from datetime import datetime
+from time import perf_counter
+from uuid import uuid4
 
 from app.config.settings import get_settings
 from app.config.logging import setup_logging
@@ -14,8 +16,13 @@ settings = get_settings()
 # 初始化日志系统
 log_file = settings.LOG_FILE if settings.LOG_FILE else None
 setup_logging(
-    log_level=settings.LOG_LEVEL if hasattr(settings, 'LOG_LEVEL') else "INFO",
-    log_file=log_file
+    log_level=settings.LOG_LEVEL,
+    log_file=log_file,
+    json_logs=settings.LOG_FORMAT.lower() == "json",
+    console=settings.LOG_OUTPUT.lower() in {"console", "both"},
+    service=settings.LOG_SERVICE,
+    role=settings.LOG_ROLE,
+    environment=settings.APP_ENV,
 )
 
 allow_origins = [
@@ -45,6 +52,36 @@ app.add_middleware(
     expose_headers=["*"],
 )
 
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or f"req_{uuid4().hex}"
+    if len(request_id) > 128:
+        request_id = f"req_{uuid4().hex}"
+    request.state.request_id = request_id
+    started = perf_counter()
+    with logger.contextualize(request_id=request_id):
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.bind(event="http.request.failed").exception(
+                "HTTP request failed: method={} path={} duration_ms={}",
+                request.method,
+                request.url.path,
+                int((perf_counter() - started) * 1000),
+            )
+            raise
+        response.headers["X-Request-ID"] = request_id
+        route = request.scope.get("route")
+        logger.bind(event="http.request.completed").info(
+            "HTTP request completed: method={} route={} status={} duration_ms={}",
+            request.method,
+            getattr(route, "path", request.url.path),
+            response.status_code,
+            int((perf_counter() - started) * 1000),
+        )
+        return response
+
+
 # 路由
 app.include_router(api_router)
 
@@ -60,7 +97,7 @@ async def health_check():
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
-    logger.error(f"Unhandled exception: {exc}")
+    logger.bind(event="http.unhandled_exception").exception("Unhandled HTTP exception")
     return JSONResponse(
         status_code=500,
         content=ErrorResponse(

@@ -216,20 +216,18 @@ mkdir -p "$LOG_DIR"
 LOG_DATE=$(date +%Y%m%d)
 LOG_ENV="$MODE"
 
-# 日志文件路径
-# 后端应用日志: 使用 loguru 的时间占位符,支持自动按日期轮转
-BACKEND_APP_LOG="$LOG_DIR/{time:YYYYMMDD}.${LOG_ENV}.backend.app.log"
-# 后端 uvicorn 日志: 使用启动时的日期
-BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.uvicorn.log"
-# Agent uvicorn 日志: 使用启动时的日期
-AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.uvicorn.log"
-# 前端日志: 使用启动时的日期（Vite 不支持自动轮转）
+# 每种进程角色使用独立结构化日志，shell 重定向文件只保留启动期故障。
+BACKEND_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend-api.jsonl"
+AGENT_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-api.jsonl"
+BACKEND_RECONCILE_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-reconcile-worker.jsonl"
+BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.bootstrap.log"
+AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.bootstrap.log"
 FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
 
 info "日志配置: 目录=$LOG_DIR"
-info "后端应用日志: $BACKEND_APP_LOG"
-info "后端 Uvicorn 日志: $BACKEND_UVICORN_LOG"
-info "Agent Uvicorn 日志: $AGENT_UVICORN_LOG"
+info "Backend API: $BACKEND_API_LOG"
+info "Agent API: $AGENT_API_LOG"
+info "Reconcile Worker: $BACKEND_RECONCILE_LOG"
 info "前端日志: $FRONTEND_LOG"
 
 # ---------- PID & 端口信息文件（用于清理） ----------
@@ -459,6 +457,27 @@ else
 fi
 ok "Agent 服务地址: http://localhost:$AGENT_PORT"
 
+# Backend and Agent must use the same non-default JWT secret. In local mode,
+# generate one once and persist it to both service env files.
+BACKEND_ENV="$BACKEND_DIR/.env"
+AGENT_ENV="$AGENT_DIR/.env"
+JWT_SECRET_VALUE=${JWT_SECRET:-$(grep -E '^JWT_SECRET=' "$BACKEND_ENV" 2>/dev/null | tail -1 | cut -d= -f2-)}
+if [ "$JWT_SECRET_VALUE" = "change-me-in-production" ] || [ ${#JWT_SECRET_VALUE} -lt 32 ]; then
+  if [ "$MODE" = "cloud" ]; then
+    fail "JWT_SECRET 必须设置为至少 32 字符的非默认值，并由 Backend 与 Agent 共用"
+  fi
+  JWT_SECRET_VALUE=$(openssl rand -hex 32 2>/dev/null || od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+  ok "已为 Local 模式生成 Agent/Backend 共用 JWT secret"
+fi
+for env_file in "$BACKEND_ENV" "$AGENT_ENV"; do
+  if grep -q '^JWT_SECRET=' "$env_file"; then
+    sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET_VALUE|" "$env_file" && rm -f "$env_file.bak"
+  else
+    echo "JWT_SECRET=$JWT_SECRET_VALUE" >> "$env_file"
+  fi
+done
+ok "Backend 与 Agent JWT 配置已同步"
+
 # Avoid leaking backend venv into agent/frontend commands.
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
@@ -513,7 +532,10 @@ else
   HOST="$HOST" \
   PORT="$AGENT_PORT" \
   BACKEND_BASE_URL="http://localhost:$BACKEND_PORT" \
-  uv run python -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" $AGENT_WORKERS_FLAG $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
+  JWT_SECRET="$JWT_SECRET_VALUE" \
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT=file LOG_FILE="$AGENT_API_LOG" \
+  LOG_SERVICE=agent-service LOG_ROLE=api \
+  uv run python -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" --no-access-log $AGENT_WORKERS_FLAG $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
   AGENT_PID=$!
   echo "$AGENT_PID" >> "$PID_FILE"
   wait_for_port "$AGENT_PORT" "Agent"
@@ -562,7 +584,9 @@ fi
   # 启动后端并重定向日志
   # LOG_FILE: 应用日志（loguru 自动轮转）
   # >> redirect: uvicorn 服务器日志（shell 重定向）
-  LOG_FILE="$BACKEND_APP_LOG" AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" $PY -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" $UVICORN_WORKERS_FLAG $UVICORN_RELOAD_FLAG >> "$BACKEND_UVICORN_LOG" 2>&1 &
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT=file LOG_FILE="$BACKEND_API_LOG" \
+  LOG_SERVICE=backend LOG_ROLE=api AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
+  JWT_SECRET="$JWT_SECRET_VALUE" $PY -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" --no-access-log $UVICORN_WORKERS_FLAG $UVICORN_RELOAD_FLAG >> "$BACKEND_UVICORN_LOG" 2>&1 &
   BACKEND_PID=$!
   echo "$BACKEND_PID" >> "$PID_FILE"
   wait_for_port "$BACKEND_PORT" "后端"
@@ -573,9 +597,22 @@ fi
     fail "后端启动失败,请检查日志"
   fi
 
+  # Old workers can survive a previous interrupted run and keep polling the
+  # same database with stale configuration. Stop them before starting the
+  # worker set managed by this script.
+  STALE_WORKER_PIDS=$(pgrep -f 'scripts/run_agent_(worker|reconcile_worker)\.py' 2>/dev/null || true)
+  if [ -n "$STALE_WORKER_PIDS" ]; then
+    warn "检测到遗留 Agent Worker，正在清理..."
+    echo "$STALE_WORKER_PIDS" | xargs kill 2>/dev/null || true
+    sleep 1
+  fi
+
   info "启动 $AGENT_RUN_WORKERS 个 Agent Run Worker..."
   for ((worker_index=1; worker_index<=AGENT_RUN_WORKERS; worker_index++)); do
-    LOG_FILE="$BACKEND_APP_LOG" AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" $PY scripts/run_agent_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
+    RUN_WORKER_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-run-worker-${worker_index}.jsonl"
+    APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT=file LOG_FILE="$RUN_WORKER_LOG" \
+    LOG_SERVICE=backend LOG_ROLE=agent-run-worker AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
+    JWT_SECRET="$JWT_SECRET_VALUE" $PY scripts/run_agent_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
     AGENT_RUN_WORKER_PID=$!
     echo "$AGENT_RUN_WORKER_PID" >> "$PID_FILE"
     if kill -0 "$AGENT_RUN_WORKER_PID" 2>/dev/null; then
@@ -586,7 +623,9 @@ fi
   done
 
   info "启动 Agent Reconcile Worker..."
-  LOG_FILE="$BACKEND_APP_LOG" $PY scripts/run_agent_reconcile_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT=file LOG_FILE="$BACKEND_RECONCILE_LOG" \
+  LOG_SERVICE=backend LOG_ROLE=agent-reconcile-worker AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
+  JWT_SECRET="$JWT_SECRET_VALUE" $PY scripts/run_agent_reconcile_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
   AGENT_RECONCILE_WORKER_PID=$!
   echo "$AGENT_RECONCILE_WORKER_PID" >> "$PID_FILE"
   if kill -0 "$AGENT_RECONCILE_WORKER_PID" 2>/dev/null; then
