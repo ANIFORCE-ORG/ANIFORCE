@@ -4,7 +4,7 @@ import json
 
 from loguru import logger
 
-from app.tools.context import get_meta
+from app.mcp.context import get_meta
 
 
 async def get_approved_arguments(ctx, tool_name: str) -> dict | None:
