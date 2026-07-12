@@ -6,6 +6,8 @@ from typing import Any
 
 from loguru import logger
 
+from app.core.metrics import AGENT_TRACE_EXPORT_ERRORS
+
 _trace_provider: Any = None
 
 
@@ -50,6 +52,7 @@ def configure_sdk_tracing(settings) -> Any:
         )
         return _trace_provider
     except Exception:
+        AGENT_TRACE_EXPORT_ERRORS.labels("initialization").inc()
         set_tracing_disabled(True)
         _trace_provider = None
         logger.exception("Phoenix tracing initialization failed; SDK tracing disabled")
@@ -66,6 +69,7 @@ def shutdown_sdk_tracing() -> None:
         _trace_provider.force_flush()
         _trace_provider.shutdown()
     except Exception:
+        AGENT_TRACE_EXPORT_ERRORS.labels("shutdown").inc()
         logger.exception("Phoenix tracing shutdown failed")
     finally:
         _trace_provider = None

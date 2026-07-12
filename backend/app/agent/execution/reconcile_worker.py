@@ -7,6 +7,7 @@ from loguru import logger
 
 from app.agent.execution.reconciliation import AgentStateReconciler
 from app.config.database import get_session_maker
+from app.config.metrics import AGENT_RECONCILE_ACTIONS, AGENT_RECONCILE_RUNS
 
 
 class AgentReconcileWorker:
@@ -23,6 +24,9 @@ class AgentReconcileWorker:
             )
             await session.commit()
         payload = report.to_dict()
+        AGENT_RECONCILE_RUNS.labels("completed").inc()
+        AGENT_RECONCILE_ACTIONS.labels("action").inc(len(payload["actions"]))
+        AGENT_RECONCILE_ACTIONS.labels("conflict").inc(len(payload["conflicts"]))
         if payload["actions"] or payload["conflicts"]:
             logger.warning("Agent reconciliation: {}", payload)
         return payload
@@ -35,5 +39,6 @@ class AgentReconcileWorker:
             except asyncio.CancelledError:
                 raise
             except Exception:
+                AGENT_RECONCILE_RUNS.labels("failed").inc()
                 logger.exception("Agent reconcile worker iteration failed")
             await asyncio.sleep(self.interval_seconds)

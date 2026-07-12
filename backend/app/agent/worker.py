@@ -15,6 +15,12 @@ from app.agent.execution.store import AgentRunExecutionStore
 from app.agent.execution.executor import execute_agent_run
 from app.config.database import get_session_maker
 from app.config.settings import get_settings
+from app.config.metrics import (
+    AGENT_RUN_WORKER_ACTIVE,
+    AGENT_RUN_WORKER_DURATION,
+    AGENT_RUN_WORKER_EXECUTIONS,
+    AGENT_WORKER_ERRORS,
+)
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.agent.gateway import AgentGatewayService
@@ -55,6 +61,7 @@ class AgentRunWorker:
                 owned = await SqliteAgentRunRepository(session).heartbeat(run_id, self.worker_id)
                 await session.commit()
             if not owned:
+                AGENT_WORKER_ERRORS.labels("lease_lost").inc()
                 logger.warning("Agent run lease lost: run_id={} worker_id={}", run_id, self.worker_id)
                 return
 
@@ -85,6 +92,10 @@ class AgentRunWorker:
         heartbeat_stop = asyncio.Event()
         heartbeat_task = asyncio.create_task(self._heartbeat(run_id, heartbeat_stop))
         transient_stream = RedisRunEventStream()
+        execution_kind = str(run.get("execution_kind") or "initial")
+        execution_start = perf_counter()
+        outcome = "completed"
+        AGENT_RUN_WORKER_ACTIVE.inc()
         try:
             await execute_agent_run(
                 run_id=run_id,
@@ -117,7 +128,13 @@ class AgentRunWorker:
                         status=approval_status,
                     )
                     await session.commit()
+        except Exception:
+            outcome = "failed"
+            raise
         finally:
+            AGENT_RUN_WORKER_EXECUTIONS.labels(execution_kind, outcome).inc()
+            AGENT_RUN_WORKER_DURATION.labels(execution_kind).observe(perf_counter() - execution_start)
+            AGENT_RUN_WORKER_ACTIVE.dec()
             heartbeat_stop.set()
             await heartbeat_task
             await transient_stream.close()
@@ -134,6 +151,7 @@ class AgentRunWorker:
             except asyncio.CancelledError:
                 raise
             except Exception:
+                AGENT_WORKER_ERRORS.labels("iteration").inc()
                 logger.exception("Agent run worker iteration failed")
                 claimed = False
             if not claimed:

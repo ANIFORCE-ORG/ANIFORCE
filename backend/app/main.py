@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from loguru import logger
 from datetime import datetime
 from time import perf_counter
@@ -8,6 +8,13 @@ from uuid import uuid4
 
 from app.config.settings import get_settings
 from app.config.logging import setup_logging
+from app.config.metrics import (
+    CONTENT_TYPE_LATEST,
+    HTTP_DURATION,
+    HTTP_REQUESTS,
+    METRICS_AVAILABLE,
+    generate_latest,
+)
 from app.api.v1.router import api_router
 from app.schemas.base import ErrorResponse, ErrorDetail
 
@@ -63,6 +70,11 @@ async def request_logging_middleware(request: Request, call_next):
         try:
             response = await call_next(request)
         except Exception:
+            duration = perf_counter() - started
+            route = request.scope.get("route")
+            route_path = getattr(route, "path", "unmatched")
+            HTTP_REQUESTS.labels(settings.LOG_SERVICE, request.method, route_path, "5xx").inc()
+            HTTP_DURATION.labels(settings.LOG_SERVICE, request.method, route_path).observe(duration)
             logger.bind(event="http.request.failed").exception(
                 "HTTP request failed: method={} path={} duration_ms={}",
                 request.method,
@@ -72,10 +84,15 @@ async def request_logging_middleware(request: Request, call_next):
             raise
         response.headers["X-Request-ID"] = request_id
         route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+        status_class = f"{response.status_code // 100}xx"
+        duration = perf_counter() - started
+        HTTP_REQUESTS.labels(settings.LOG_SERVICE, request.method, route_path, status_class).inc()
+        HTTP_DURATION.labels(settings.LOG_SERVICE, request.method, route_path).observe(duration)
         logger.bind(event="http.request.completed").info(
             "HTTP request completed: method={} route={} status={} duration_ms={}",
             request.method,
-            getattr(route, "path", request.url.path),
+            route_path,
             response.status_code,
             int((perf_counter() - started) * 1000),
         )
@@ -84,6 +101,16 @@ async def request_logging_middleware(request: Request, call_next):
 
 # 路由
 app.include_router(api_router)
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    if not METRICS_AVAILABLE:
+        return JSONResponse(
+            status_code=503,
+            content={"status": "unavailable", "reason": "prometheus-client is not installed"},
+        )
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 @app.get("/health")

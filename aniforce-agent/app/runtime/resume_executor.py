@@ -1,5 +1,6 @@
 """Checkpoint resume execution and SDK event streaming."""
 
+from time import perf_counter
 from typing import AsyncIterator
 
 from agents import RunState
@@ -9,6 +10,7 @@ from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
 from app.core.errors import AppError, AgentErrorCode, unexpected_error_payload
+from app.core.metrics import AGENT_RUN_DURATION, AGENT_RUNS, observe_tokens
 from app.runtime.checkpoints.service import RuntimeCheckpointService
 from app.runtime.mcp_context import mcp_connection
 from app.runtime.workspace_tool import request_workspace_projection
@@ -79,6 +81,7 @@ class ResumeExecutorMixin:
             tool_call_ids_by_name.pop(tool_name, None)
 
         sequence = 0
+        resume_start = perf_counter()
         run_logger = logger.bind(user_id=user_id, session_id=checkpoint["session_id"], run_id=checkpoint["run_id"], checkpoint_id=checkpoint_id)
         run_logger.bind(event="agent.run.resume_started").info(
             "Agent run resume started: decision={}", decision
@@ -156,6 +159,10 @@ class ResumeExecutorMixin:
                         checkpoint_id, user_id, "completed", expected_status="resuming", claimed_by=claimed_by
                     )
                     sequence += 1
+                    AGENT_RUNS.labels("resume", workspace_context.task_type, "requires_action").inc()
+                    AGENT_RUN_DURATION.labels("resume", workspace_context.task_type).observe(
+                        perf_counter() - resume_start
+                    )
                     yield {
                         "event": "runtime.requires_action",
                         "data": {
@@ -179,11 +186,20 @@ class ResumeExecutorMixin:
                     "data": {"final_output": getattr(result, "final_output", None), "usage": usage},
                     "sequence": sequence,
                 }
+                AGENT_RUNS.labels("resume", workspace_context.task_type, "completed").inc()
+                AGENT_RUN_DURATION.labels("resume", workspace_context.task_type).observe(
+                    perf_counter() - resume_start
+                )
+                observe_tokens("resume", usage)
                 run_logger.bind(event="agent.run.resume_completed", **usage).info(
                     "Agent run resume completed: total_tokens={}",
                     usage.get("totalTokens", 0),
                 )
         except Exception:
+            AGENT_RUNS.labels("resume", workspace_context.task_type, "failed").inc()
+            AGENT_RUN_DURATION.labels("resume", workspace_context.task_type).observe(
+                perf_counter() - resume_start
+            )
             run_logger.bind(event="agent.run.resume_failed").exception(
                 "Agent run checkpoint resume failed"
             )

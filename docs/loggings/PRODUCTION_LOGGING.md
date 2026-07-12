@@ -64,7 +64,7 @@ The application must not write shared production logs to a container filesystem 
 The structured record includes stable correlation fields:
 
 ```text
-service, role, environment, event, request_id, trace_id,
+service, role, environment, event, request_id, trace_id, span_id,
 run_id, session_id, worker_id
 ```
 
@@ -75,7 +75,8 @@ Absent fields remain `null` so collectors receive a stable schema.
 - Accept an upstream `X-Request-ID` up to 128 characters or generate `req_<hex>`.
 - Return `X-Request-ID` in the HTTP response.
 - Bind `run_id` and `session_id` for Agent execution lifecycle events.
-- Use `run_id` to correlate application logs with Phoenix trace metadata.
+- Use `run_id` as the stable cross-system key between application logs and Phoenix trace metadata.
+- `trace_id` and `span_id` are populated automatically only when a log is emitted inside an active OpenTelemetry span; they may be `null` for lifecycle logs outside SDK spans.
 - Do not use user prompt text as an index or correlation key.
 
 Useful local queries:
@@ -97,6 +98,44 @@ Production defaults:
 - Treat local JSONL files and Phoenix data directories as sensitive developer artifacts.
 
 Audit data must remain in the Backend database. It must not depend on sampled or expired logs and traces.
+
+## Metrics
+
+Backend and Agent Service expose Prometheus text format at:
+
+```text
+GET /metrics
+```
+
+Initial production metrics include:
+
+```text
+aniforce_http_requests_total
+aniforce_http_request_duration_seconds
+aniforce_agent_runs_total
+aniforce_agent_run_duration_seconds
+aniforce_agent_tokens_total
+aniforce_agent_worker_executions_total
+aniforce_agent_worker_execution_duration_seconds
+aniforce_agent_worker_active_runs
+aniforce_agent_worker_errors_total
+aniforce_agent_reconcile_runs_total
+aniforce_agent_reconcile_actions_total
+aniforce_agent_trace_export_errors_total
+```
+
+Metrics labels are intentionally low cardinality. Request, Run, Session, User, Worker instance, Prompt, and arbitrary URL values must never become labels. Use logs and Phoenix for individual execution diagnosis.
+
+In production, restrict `/metrics` at the ingress or service-network layer so only the monitoring system can access it. Configure Prometheus or the company monitoring platform to scrape Backend and Agent Service independently.
+
+Minimum alerts:
+
+- Agent Run failure ratio exceeds the agreed SLO window.
+- HTTP 5xx ratio or P95 latency increases.
+- Worker iteration or lease-lost errors increase.
+- Active runs remain nonzero without terminal throughput.
+- Reconcile conflicts increase.
+- Trace exporter errors increase.
 
 ## Collector requirements
 

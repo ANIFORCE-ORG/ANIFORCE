@@ -11,6 +11,7 @@ from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
 from app.core.errors import AppError, AgentErrorCode, unexpected_error_payload
+from app.core.metrics import AGENT_RUN_DURATION, AGENT_RUNS, observe_tokens
 from app.runtime.mcp_context import mcp_connection
 from app.runtime.sessions import RuntimeSessionOwnerMismatch, RuntimeSessionStore
 from app.runtime.workspace_tool import request_workspace_projection
@@ -160,6 +161,8 @@ class RunExecutorMixin:
                     },
                     "sequence": sequence,
                 }
+                AGENT_RUNS.labels("initial", task_type, "requires_action").inc()
+                AGENT_RUN_DURATION.labels("initial", task_type).observe(perf_counter() - run_start)
                 run_logger.bind(
                     event="agent.run.requires_action",
                     checkpoint_id=checkpoint["id"],
@@ -175,6 +178,9 @@ class RunExecutorMixin:
                 "data": {"final_output": getattr(result, "final_output", None), "usage": usage},
                 "sequence": sequence,
             }
+            AGENT_RUNS.labels("initial", task_type, "completed").inc()
+            AGENT_RUN_DURATION.labels("initial", task_type).observe(perf_counter() - run_start)
+            observe_tokens("initial", usage)
             run_logger.bind(event="agent.run.completed", **usage).info(
                 "Agent run completed: duration_ms={} total_tokens={}",
                 _elapsed_ms(run_start),
@@ -182,6 +188,8 @@ class RunExecutorMixin:
             )
 
         except asyncio.CancelledError:
+            AGENT_RUNS.labels("initial", task_type, "cancelled").inc()
+            AGENT_RUN_DURATION.labels("initial", task_type).observe(perf_counter() - run_start)
             run_logger.bind(event="agent.run.cancelled").warning("Agent run cancelled")
             sequence += 1
             yield {
@@ -191,6 +199,8 @@ class RunExecutorMixin:
             }
 
         except RuntimeSessionOwnerMismatch:
+            AGENT_RUNS.labels("initial", task_type, "owner_mismatch").inc()
+            AGENT_RUN_DURATION.labels("initial", task_type).observe(perf_counter() - run_start)
             run_logger.bind(event="agent.run.owner_mismatch").warning(
                 "Agent run session ownership mismatch"
             )
@@ -205,6 +215,8 @@ class RunExecutorMixin:
             }
 
         except AppError as e:
+            AGENT_RUNS.labels("initial", task_type, "failed").inc()
+            AGENT_RUN_DURATION.labels("initial", task_type).observe(perf_counter() - run_start)
             run_logger.bind(event="agent.run.failed", error_code=e.code.value).error(
                 "Agent run failed: {}", e.message
             )
@@ -216,6 +228,8 @@ class RunExecutorMixin:
             }
 
         except Exception as e:
+            AGENT_RUNS.labels("initial", task_type, "failed").inc()
+            AGENT_RUN_DURATION.labels("initial", task_type).observe(perf_counter() - run_start)
             run_logger.bind(event="agent.run.failed").exception(
                 "Agent run failed unexpectedly: {}", e
             )

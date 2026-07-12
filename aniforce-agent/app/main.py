@@ -8,7 +8,7 @@ from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, Response
 from loguru import logger
 
 from app.config.settings import settings
@@ -18,6 +18,7 @@ from app.runtime.migrations import RuntimeSchemaMigrator
 from app.mcp_server import get_mcp_starlette_app, mcp
 from app.core.errors import AppError, get_http_status
 from app.core.logging import settings_logging_values, setup_logging
+from app.core.metrics import HTTP_DURATION, HTTP_REQUESTS
 from app.core.sdk_tracing import configure_sdk_tracing, shutdown_sdk_tracing
 
 
@@ -88,6 +89,11 @@ async def request_logging_middleware(request: Request, call_next):
         try:
             response = await call_next(request)
         except Exception:
+            duration = perf_counter() - started
+            route = request.scope.get("route")
+            route_path = getattr(route, "path", "unmatched")
+            HTTP_REQUESTS.labels(settings.LOG_SERVICE, request.method, route_path, "5xx").inc()
+            HTTP_DURATION.labels(settings.LOG_SERVICE, request.method, route_path).observe(duration)
             logger.bind(event="http.request.failed").exception(
                 "HTTP request failed: method={} path={} duration_ms={}",
                 request.method,
@@ -97,10 +103,15 @@ async def request_logging_middleware(request: Request, call_next):
             raise
         response.headers["X-Request-ID"] = request_id
         route = request.scope.get("route")
+        route_path = getattr(route, "path", "unmatched")
+        status_class = f"{response.status_code // 100}xx"
+        duration = perf_counter() - started
+        HTTP_REQUESTS.labels(settings.LOG_SERVICE, request.method, route_path, status_class).inc()
+        HTTP_DURATION.labels(settings.LOG_SERVICE, request.method, route_path).observe(duration)
         logger.bind(event="http.request.completed").info(
             "HTTP request completed: method={} route={} status={} duration_ms={}",
             request.method,
-            getattr(route, "path", request.url.path),
+            route_path,
             response.status_code,
             int((perf_counter() - started) * 1000),
         )
@@ -124,6 +135,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.get("/metrics", include_in_schema=False)
+async def metrics():
+    from prometheus_client import CONTENT_TYPE_LATEST, generate_latest
+
+    return Response(generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
 # Health

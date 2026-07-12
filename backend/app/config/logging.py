@@ -9,6 +9,8 @@ from pathlib import Path
 
 from loguru import logger
 
+from app.config.log_context import enrich_record
+
 TEXT_FORMAT = (
     "<green>{time:YYYY-MM-DDTHH:mm:ss.SSSZ}</green> | "
     "<level>{level: <8}</level> | {extra[service]} | {extra[role]} | "
@@ -50,12 +52,14 @@ def setup_logging(
 
     logger.remove()
     logger.configure(
+        patcher=enrich_record,
         extra={
             "service": service,
             "role": role,
             "environment": environment,
             "request_id": None,
             "trace_id": None,
+            "span_id": None,
             "run_id": None,
             "session_id": None,
             "worker_id": None,
@@ -111,4 +115,4 @@ def setup_logging(
 
 
 def get_logger(name: str | None = None):
-    return logger.bind(logger_name=name) if name else logger
+    return logger.bind(name=name) if name else logger
