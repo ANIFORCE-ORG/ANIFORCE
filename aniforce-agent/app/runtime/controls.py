@@ -15,7 +15,7 @@ class RuntimeRunControlStore:
             await conn.execute(text(
                 "INSERT INTO runtime_run_controls(run_id,user_id,cancel_requested_at,updated_at) "
                 "VALUES (:run_id,:user_id,NULL,:now) "
-                "ON CONFLICT(run_id) DO UPDATE SET user_id=:user_id,cancel_requested_at=NULL,updated_at=:now"
+                "ON CONFLICT(run_id) DO UPDATE SET user_id=:user_id,updated_at=:now"
             ), {"run_id": run_id, "user_id": user_id, "now": now})
 
     async def request_cancel(self, run_id: str, user_id: str) -> bool:

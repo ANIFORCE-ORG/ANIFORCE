@@ -91,10 +91,6 @@ async def run_runtime(
                 session_state=session_state,
                 run_id=run_id,
             ):
-                if control_store and await control_store.is_cancel_requested(run_id, user_id):
-                    yield "event: runtime.aborted\n"
-                    yield f"data: {json.dumps({'run_id': run_id, 'status': 'cancelled'}, ensure_ascii=False)}\n\n"
-                    return
                 payload = dict(event.get("data") or {})
                 payload.setdefault("run_id", run_id)
                 sequence = int(event.get("sequence") or 0)
@@ -135,6 +131,9 @@ async def cancel_runtime_run(
 ):
     control_store = runtime.run_control_store()
     persisted = await control_store.request_cancel(run_id, user["id"])
+    if not persisted:
+        await control_store.reset(run_id, user["id"])
+        persisted = await control_store.request_cancel(run_id, user["id"])
     if not persisted:
         return {"run_id": run_id, "status": "not_running"}
     active = _LOCAL_STREAM_TASKS.get(run_id)

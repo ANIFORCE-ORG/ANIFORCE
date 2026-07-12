@@ -150,6 +150,10 @@ class AgentRunService:
         return run
 
     async def request_cancel(self, run_id: str, user_id: str) -> dict:
+        current = await self.get(run_id, user_id)
+        if current["status"] in {RunStatus.QUEUED, RunStatus.RESUME_QUEUED} and not current.get("lease_owner"):
+            cancelled = await self.mark_cancelled(run_id, user_id)
+            return cancelled or current
         run = await self.repo.request_cancel(run_id, user_id)
         if not run:
             raise AgentRunError("RUN_NOT_FOUND", "Run not found", 404)

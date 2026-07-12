@@ -11,6 +11,7 @@ backend_root = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_root))
 
 from app.agent.execution.reconciliation import AgentStateReconciler
+from app.models.agent_approval import AgentApproval
 from app.models.agent_run import AgentRun
 from app.models.agent_run_event import AgentRunEvent
 from app.models.agent_session import AgentSession
@@ -28,6 +29,7 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
                 await conn.run_sync(AgentSession.__table__.create)
                 await conn.run_sync(AgentRun.__table__.create)
                 await conn.run_sync(AgentRunEvent.__table__.create)
+                await conn.run_sync(AgentApproval.__table__.create)
                 await conn.run_sync(AgentSessionLease.__table__.create)
                 await conn.run_sync(SessionState.__table__.create)
             async with sessions() as session:
@@ -36,6 +38,7 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
                         AgentSession(session_id="stale_session", user_id="user_1", title="stale", status="active"),
                         AgentSession(session_id="fresh_session", user_id="user_1", title="fresh", status="active"),
                         AgentSession(session_id="approval_session", user_id="user_1", title="approval", status="active"),
+                        AgentSession(session_id="lost_approval_session", user_id="user_1", title="lost", status="active"),
                         AgentRun(
                             run_id="stale_run",
                             session_id="stale_session",
@@ -60,9 +63,29 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
                             input_text="approve",
                             started_at=cutoff - timedelta(hours=1),
                         ),
+                        AgentRun(
+                            run_id="lost_approval_run",
+                            session_id="lost_approval_session",
+                            user_id="user_1",
+                            status="requires_action",
+                            input_text="lost approve",
+                            started_at=cutoff - timedelta(hours=1),
+                        ),
+                        AgentApproval(
+                            approval_id="approval_1",
+                            checkpoint_ref="checkpoint_1",
+                            run_id="approval_run",
+                            tool_call_id="tool_1",
+                            tool_name="create_project",
+                            user_id="user_1",
+                            status="pending",
+                            original_arguments_json="{}",
+                            expires_at=datetime.utcnow() + timedelta(hours=1),
+                        ),
                         SessionState(session_id="stale_session", user_id="user_1", status="running"),
                         SessionState(session_id="fresh_session", user_id="user_1", status="running"),
                         SessionState(session_id="approval_session", user_id="user_1", status="running"),
+                        SessionState(session_id="lost_approval_session", user_id="user_1", status="running"),
                         SessionState(session_id="orphan_session", user_id="user_1", status="running"),
                     ]
                 )
@@ -72,7 +95,7 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
                 dry_run = await AgentStateReconciler(session).reconcile(cutoff=cutoff, apply=False)
                 await session.rollback()
                 assert dry_run.dry_run is True
-                assert len(dry_run.actions) == 4
+                assert len(dry_run.actions) == 6
                 stale = await session.get(AgentRun, "stale_run")
                 assert stale is not None and stale.status == "running"
 
@@ -88,6 +111,8 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
                 fresh = await session.get(AgentRun, "fresh_run")
                 fresh_state = await session.get(SessionState, "fresh_session")
                 approval_state = await session.get(SessionState, "approval_session")
+                lost_approval = await session.get(AgentRun, "lost_approval_run")
+                lost_approval_state = await session.get(SessionState, "lost_approval_session")
                 orphan_state = await session.get(SessionState, "orphan_session")
                 assert stale is not None and stale.status == "error"
                 terminal_event = await session.get(AgentRunEvent, stale.terminal_event_id)
@@ -96,6 +121,8 @@ def test_reconciliation_dry_run_apply_and_idempotency() -> None:
                 assert fresh is not None and fresh.status == "running"
                 assert fresh_state is not None and fresh_state.status == "running"
                 assert approval_state is not None and approval_state.status == "active"
+                assert lost_approval is not None and lost_approval.status == "error"
+                assert lost_approval_state is not None and lost_approval_state.status == "error"
                 assert orphan_state is not None and orphan_state.status == "active"
 
                 repeated = await AgentStateReconciler(session).reconcile(cutoff=cutoff, apply=True)

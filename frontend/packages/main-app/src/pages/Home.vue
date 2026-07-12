@@ -713,11 +713,26 @@ watch(
               <span class="material-symbols-outlined text-[19px]">mic</span>
             </button>
             <button
+              v-if="agent.agentRunning.value"
+              data-agent-action="cancel"
+              class="bg-red-600 text-white h-[37px] w-[37px] rounded-full flex items-center justify-center hover:bg-red-700 transition-all shadow-lg shadow-red-500/20"
+              type="button"
+              title="停止任务"
+              aria-label="停止任务"
+              @click="handleTaskAction('abort')"
+            >
+              <span class="material-symbols-outlined text-[19px]">stop</span>
+            </button>
+            <button
+              v-else
+              data-agent-action="send"
               class="bg-primary text-white h-[37px] w-[37px] rounded-full flex items-center justify-center hover:bg-primary/90 transition-all shadow-lg shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="agent.loading.value || agent.agentRunning.value || !inputText.trim()"
+              :disabled="agent.loading.value || !inputText.trim()"
+              type="button"
+              aria-label="发送消息"
               @click="handleSubmit"
             >
-              <span v-if="agent.loading.value || agent.agentRunning.value" class="h-[16px] w-[16px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span v-if="agent.loading.value" class="h-[16px] w-[16px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
               <span v-else class="material-symbols-outlined text-[19px]">arrow_forward</span>
             </button>
           </div>

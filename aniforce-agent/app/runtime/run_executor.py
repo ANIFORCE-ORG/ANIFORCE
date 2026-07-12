@@ -125,6 +125,15 @@ class RunExecutorMixin:
                     first_event_seen = False
                     stream_events_start = perf_counter()
                     async for sdk_event in self.adapter.stream_events(result):
+                        if run_id and await self.run_control_store().is_cancel_requested(run_id, user_id):
+                            sequence += 1
+                            yield {
+                                "event": "runtime.aborted",
+                                "data": {"run_id": run_id, "status": "cancelled"},
+                                "sequence": sequence,
+                            }
+                            run_logger.bind(event="agent.run.cancelled").warning("Agent run cancelled")
+                            return
                         sequence += 1
                         if not first_event_seen:
                             first_event_seen = True

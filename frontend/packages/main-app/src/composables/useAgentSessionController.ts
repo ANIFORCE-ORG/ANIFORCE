@@ -152,6 +152,7 @@ export function useAgentSessionController() {
   const currentTask = ref<AgentCurrentTask | null>(null)
   const pendingWorkspaceProjectionRequests = ref<Array<{ runId?: string; surface: WorkspaceSurface; reason?: string }>>([])
   const recentWorkspaceToolOutputs = ref<Array<{ id: string; runId?: string; toolName: string; surface: WorkspaceSurface; payload: Record<string, unknown>; mode: 'readonly' }>>([])
+  const explicitlyCancelledRuns = new Set<string>()
 
   // 流式运行时状态全部从 store 读写（不再用闭包变量）
   // currentRunId / currentAbortController / typewriter 都在 store
@@ -373,6 +374,7 @@ export function useAgentSessionController() {
     store.streamingMessage = assistant
 
     let streamCompletedSuccessfully = false
+    let backgroundRecoveryStarted = false
     let completedAssistantContent = ''
 
     try {
@@ -493,18 +495,61 @@ export function useAgentSessionController() {
       }
       streamCompletedSuccessfully = true
     } catch (err: any) {
-      const aborted = err?.name === 'AbortError'
-      if (aborted) {
+      const runId = store.currentRunId
+      const explicitlyCancelled = Boolean(runId && explicitlyCancelledRuns.has(runId))
+      if (explicitlyCancelled) {
+        explicitlyCancelledRuns.delete(runId as string)
         drainTypewriter()
         if (streamingMessage.value) {
           store.appendMessage(sessionId, { ...streamingMessage.value })
           store.streamingMessage = null
         }
+      } else if (runId) {
+        try {
+          const snapshot = await getAgentSessionSnapshot(sessionId)
+          const status = String(snapshot.latest_run?.status || '')
+          const snapshotRunId = String(snapshot.latest_run?.run_id || '')
+          if (snapshotRunId === runId && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(status)) {
+            backgroundRecoveryStarted = true
+            commandStatus.value = '连接已中断，任务仍在后台执行'
+            store.agentRunning = true
+            store.agentPhase = { kind: 'waiting_model' }
+            const recoveryController = new AbortController()
+            store.setAbortController(recoveryController)
+            void connectPersistedRun(runId, store.currentRunLastSequence, recoveryController.signal)
+              .then(async result => {
+                store.currentRunLastSequence = result.lastSequence
+                const refreshed = await getAgentSessionSnapshot(sessionId)
+                store.setMessages(sessionId, refreshed.messages)
+                hydrateWorkspaceSnapshot(workspace, sessionId, refreshed)
+                store.error = String(refreshed.latest_run?.status || '') === 'error'
+                  ? String(refreshed.latest_run?.error?.message || 'Agent 任务执行失败')
+                  : null
+              })
+              .catch(recoveryError => {
+                if (recoveryError?.name !== 'AbortError') {
+                  store.error = recoveryError?.message || '恢复 Agent 任务连接失败'
+                }
+              })
+              .finally(() => {
+                store.agentRunning = false
+                store.agentPhase = null
+                store.streamingMessage = null
+                store.clearStreamRuntime()
+                commandStatus.value = null
+              })
+          } else {
+            store.setMessages(sessionId, snapshot.messages)
+            hydrateWorkspaceSnapshot(workspace, sessionId, snapshot)
+            store.error = status === 'error'
+              ? String(snapshot.latest_run?.error?.message || 'Agent 任务执行失败')
+              : null
+          }
+        } catch (snapshotError: any) {
+          store.error = snapshotError?.message || err?.message || 'Agent 流式响应失败'
+        }
       } else {
         store.error = err?.message || 'Agent 流式响应失败'
-        if (streamingMessage.value && !hasMessageContent(streamingMessage.value)) {
-          streamingMessage.value.content = '抱歉，Agent 流式响应失败，请稍后重试。'
-        }
       }
     } finally {
       const finishSuccess = () => {
@@ -532,6 +577,7 @@ export function useAgentSessionController() {
         store.clearStreamRuntime()
         markRunningToolsCompleted()
       }
+      if (backgroundRecoveryStarted) return
       if (store.isTypewriterPaused() && store.streamingMessage) {
         store.setDeferredStreamFinalizer(() => {
           if (streamCompletedSuccessfully) finishSuccess()
@@ -605,6 +651,7 @@ export function useAgentSessionController() {
     if (!store.agentRunning) return
     const sessionId = activeSession.value?.id
     const runId = store.currentRunId
+    if (runId) explicitlyCancelledRuns.add(runId)
     store.getAbortController()?.abort()
     if (runId) {
       await cancelAgentRun(runId).catch((err) => {

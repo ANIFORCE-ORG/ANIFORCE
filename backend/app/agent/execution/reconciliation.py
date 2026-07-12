@@ -9,6 +9,7 @@ from datetime import datetime
 from sqlalchemy import delete, or_, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.models.agent_approval import AgentApproval
 from app.models.agent_run import AgentRun
 from app.models.session_state import SessionState
 from app.models.agent_session_lease import AgentSessionLease
@@ -92,6 +93,44 @@ class AgentStateReconciler:
                 if not updated or updated.get("status") != expected:
                     conflicts += 1
 
+        approval_result = await self.session.execute(
+            select(AgentRun).where(AgentRun.status == "requires_action")
+        )
+        for run in approval_result.scalars():
+            open_approval_result = await self.session.execute(
+                select(AgentApproval.approval_id)
+                .where(
+                    AgentApproval.run_id == run.run_id,
+                    AgentApproval.status.in_(("pending", "resuming")),
+                )
+                .limit(1)
+            )
+            if open_approval_result.scalar_one_or_none() is not None:
+                continue
+            actions.append(
+                ReconciliationAction(
+                    entity="agent_run",
+                    entity_id=run.run_id,
+                    from_status="requires_action",
+                    to_status="error",
+                    reason="missing_open_approval",
+                )
+            )
+            if apply:
+                error_payload = {
+                    "code": "APPROVAL_STATE_LOST",
+                    "message": "Run requires approval but no open approval exists",
+                    "retryable": False,
+                    "reconciled_at": now.isoformat(),
+                }
+                updated = await AgentRunService(SqliteAgentRunRepository(self.session)).mark_error(
+                    run.run_id,
+                    run.user_id,
+                    error_payload,
+                )
+                if not updated or updated.get("status") != "error":
+                    conflicts += 1
+
         state_result = await self.session.execute(
             select(SessionState).where(SessionState.status.in_(("running", "error")))
         )
@@ -159,7 +198,7 @@ class AgentStateReconciler:
         if latest is None:
             return "active" if current_status == "running" else current_status
         effective_status = "error" if latest.run_id in stale_ids else latest.status
-        if effective_status in {"queued", "running"}:
+        if effective_status in {"queued", "resume_queued", "running", "cancel_requested"}:
             return "running"
         if effective_status == "error":
             return "error"
