@@ -68,9 +68,11 @@ log/
 logs/
 drafts/
 aniforce-agent/tests/
+!aniforce-agent/tests/
+!aniforce-agent/tests/*.py
 
 # ===== 旧 runtime 目录已废弃 =====
-runtime/
+/runtime/
 npm_cache/
 uv_cache/
 resources/

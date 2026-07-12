@@ -10,121 +10,22 @@ Agent 通过 MCPServerStreamableHttp 连本进程的 /mcp 端点。
 - 每次 MCP 调用独立带 token，天然按请求隔离，多用户并发不串号
 """
 
-import hashlib
-import json
 from typing import Literal, Optional
 
 from loguru import logger
 from mcp.server.fastmcp import FastMCP, Context
 
 from app.backend_client import backend_client
+from app.tools.approval import get_approved_arguments as _get_approved_arguments
+from app.tools.context import (
+    backend_headers as _get_backend_headers,
+    compact_payload as _compact_payload,
+    get_token as _get_token,
+)
 
 
 # ---- FastMCP Server ----
 mcp = FastMCP("ANIFORCE Tools", stateless_http=True)
-
-
-def _get_meta(ctx) -> dict:
-    """从 MCP Context 的 request_context.meta 读元信息"""
-    try:
-        meta = ctx.request_context.meta
-        if isinstance(meta, dict):
-            return meta
-        if hasattr(meta, "model_dump"):
-            return meta.model_dump() or {}
-        if meta is not None:
-            return {
-                "jwt_token": getattr(meta, "jwt_token", "") or "",
-                "session_id": getattr(meta, "session_id", "") or "",
-                "run_id": getattr(meta, "run_id", "") or "",
-                "user_id": getattr(meta, "user_id", "") or "",
-            }
-    except Exception as e:
-        logger.warning(f"[MCP] 读取 meta 失败: {e}")
-    return {}
-
-
-def _get_token(ctx) -> str:
-    """从 MCP Context 的 request_context.meta 读 JWT token"""
-    token = _get_meta(ctx).get("jwt_token", "")
-    if not token:
-        logger.warning("[MCP] request_context.meta 无 jwt_token")
-    return token
-
-
-def _make_tool_call_id(ctx, tool_name: str, arguments: dict) -> str | None:
-    meta = _get_meta(ctx)
-    session_id = meta.get("session_id")
-    run_id = meta.get("run_id")
-    if not session_id or not run_id:
-        return None
-    raw = json.dumps(arguments, ensure_ascii=False, sort_keys=True, default=str)
-    digest = hashlib.sha256(raw.encode("utf-8")).hexdigest()[:16]
-    return f"{session_id}:{run_id}:{tool_name}:{digest}"
-
-
-def _get_backend_headers(ctx, tool_name: str | None = None, arguments: dict | None = None) -> dict[str, str]:
-    meta = _get_meta(ctx)
-    headers: dict[str, str] = {}
-    if meta.get("session_id"):
-        headers["X-Agent-Session-Id"] = str(meta["session_id"])
-    if meta.get("run_id"):
-        headers["X-Agent-Run-Id"] = str(meta["run_id"])
-    sdk_tool_call_id = meta.get("tool_call_id")
-    if sdk_tool_call_id:
-        headers["X-Agent-Tool-Call-Id"] = str(sdk_tool_call_id)
-    if tool_name and arguments is not None:
-        idempotency_key = _make_tool_call_id(ctx, tool_name, arguments)
-        if idempotency_key:
-            headers["Idempotency-Key"] = idempotency_key
-    return headers
-
-
-def _compact_payload(data: dict) -> dict:
-    return {key: value for key, value in data.items() if value is not None}
-
-
-async def _get_approved_arguments(ctx, tool_name: str) -> dict | None:
-    """查询当前 run 的 checkpoint，读取用户编辑后的审批参数。
-
-    Workspace 可编辑 HITL：用户在 Workspace 表单里改了参数后 approve，
-    approved_arguments 存在 checkpoint metadata 里。
-    MCP 工具执行前读出来覆盖原始 arguments。
-    """
-    meta = _get_meta(ctx)
-    run_id = meta.get("run_id")
-    user_id = meta.get("user_id")
-    checkpoint_id = meta.get("checkpoint_id")
-    if not run_id or not user_id or not checkpoint_id:
-        return None
-    try:
-        import aiosqlite
-        from app.config.settings import get_settings
-        db_url = get_settings().AGENT_RUNTIME_DB_URL
-        if "sqlite" not in db_url:
-            return None
-        db_path = db_url.replace("sqlite+aiosqlite:///", "")
-        async with aiosqlite.connect(db_path) as db:
-            db.row_factory = aiosqlite.Row
-            cursor = await db.execute(
-                "SELECT approved_arguments_json, interruptions_json FROM runtime_checkpoints "
-                "WHERE id = ? AND run_id = ? AND user_id = ? AND status = 'resuming' "
-                "AND approved_arguments_json IS NOT NULL",
-                (checkpoint_id, run_id, user_id),
-            )
-            row = await cursor.fetchone()
-            if row:
-                interruptions = json.loads(row["interruptions_json"] or "[]")
-                matches_tool = any(
-                    item.get("tool_name") == tool_name
-                    for item in interruptions
-                    if isinstance(item, dict)
-                )
-                if matches_tool and row["approved_arguments_json"]:
-                    return json.loads(row["approved_arguments_json"])
-    except Exception as e:
-        logger.warning(f"[MCP] 读取 approved_arguments 失败: {e}")
-    return None
 
 
 # ============ Project 工具 ============
