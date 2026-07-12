@@ -28,6 +28,7 @@ async def lifespan(app: FastAPI):
     global _adapter, _runtime
 
     # 启动时初始化
+    settings.validate_for_startup()
     Path("data").mkdir(parents=True, exist_ok=True)
 
     _adapter = OpenAISDKAdapter(

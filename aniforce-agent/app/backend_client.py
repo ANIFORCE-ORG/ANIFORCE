@@ -10,6 +10,34 @@ from loguru import logger
 from app.config.settings import settings
 
 
+class BackendClientError(Exception):
+    """Stable error raised when a backend request cannot be completed."""
+
+    def __init__(self, code: str, message: str, *, status: int = 502, retryable: bool = False) -> None:
+        self.code = code
+        self.message = message
+        self.status = status
+        self.retryable = retryable
+        super().__init__(message)
+
+    def to_dict(self) -> dict:
+        return {
+            "error": True,
+            "code": self.code,
+            "message": self.message,
+            "status": self.status,
+            "retryable": self.retryable,
+        }
+
+
+class BackendResponseError(BackendClientError):
+    """Backend returned a non-success response."""
+
+
+class BackendUnavailableError(BackendClientError):
+    """Backend could not be reached."""
+
+
 class BackendClient:
     """Backend REST API 客户端"""
 
@@ -36,22 +64,51 @@ class BackendClient:
 
         logger.debug(f"[BACKEND] {method} {url}")
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.request(
-                method=method,
-                url=url,
-                headers=headers,
-                json=json,
-                params=params,
-            )
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=json,
+                    params=params,
+                )
+        except httpx.TimeoutException as exc:
+            logger.warning("[BACKEND] {} {} timed out", method, url)
+            raise BackendUnavailableError(
+                "BACKEND_TIMEOUT",
+                "Backend request timed out",
+                status=504,
+                retryable=True,
+            ) from exc
+        except httpx.HTTPError as exc:
+            logger.warning("[BACKEND] {} {} unavailable: {}", method, url, type(exc).__name__)
+            raise BackendUnavailableError(
+                "BACKEND_UNAVAILABLE",
+                "Backend is temporarily unavailable",
+                retryable=True,
+            ) from exc
 
         if resp.status_code >= 400:
-            logger.warning(f"[BACKEND] {method} {url} → {resp.status_code}: {resp.text[:200]}")
-            return {"error": True, "status": resp.status_code, "message": resp.text[:500]}
+            logger.warning("[BACKEND] {} {} returned status {}", method, url, resp.status_code)
+            code = {
+                401: "BACKEND_UNAUTHORIZED",
+                403: "BACKEND_FORBIDDEN",
+                404: "BACKEND_NOT_FOUND",
+                409: "BACKEND_CONFLICT",
+                422: "BACKEND_VALIDATION_ERROR",
+                429: "BACKEND_RATE_LIMITED",
+            }.get(resp.status_code, "BACKEND_RESPONSE_ERROR")
+            raise BackendResponseError(
+                code,
+                "Backend rejected the tool request",
+                status=resp.status_code,
+                retryable=resp.status_code == 429 or resp.status_code >= 500,
+            )
 
         try:
             return resp.json()
-        except Exception:
+        except ValueError:
             return {"raw": resp.text[:1000]}
 
     # ---- Projects ----
