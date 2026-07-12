@@ -3,6 +3,8 @@
 import asyncio
 from contextlib import AsyncExitStack, asynccontextmanager
 from pathlib import Path
+from time import perf_counter
+from uuid import uuid4
 
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -15,7 +17,11 @@ from app.runtime.service import AgentRuntime
 from app.runtime.migrations import RuntimeSchemaMigrator
 from app.mcp_server import get_mcp_starlette_app, mcp
 from app.core.errors import AppError, get_http_status
+from app.core.logging import settings_logging_values, setup_logging
+from app.core.sdk_tracing import configure_sdk_tracing, shutdown_sdk_tracing
 
+
+setup_logging(**settings_logging_values(settings))
 
 # 全局实例
 _adapter: OpenAISDKAdapter | None = None
@@ -30,6 +36,7 @@ async def lifespan(app: FastAPI):
     # 启动时初始化
     settings.validate_for_startup()
     Path("data").mkdir(parents=True, exist_ok=True)
+    configure_sdk_tracing(settings)
 
     _adapter = OpenAISDKAdapter(
         model=settings.OPENAI_AGENTS_MODEL,
@@ -37,6 +44,7 @@ async def lifespan(app: FastAPI):
         base_url=settings.OPENAI_BASE_URL,
         enable_tracing=settings.AGENT_TRACING_ENABLED,
         api_mode=settings.OPENAI_AGENTS_API,
+        trace_include_sensitive_data=settings.AGENT_TRACE_INCLUDE_SENSITIVE_DATA,
     )
 
     _runtime = AgentRuntime(
@@ -59,6 +67,7 @@ async def lifespan(app: FastAPI):
     # 关闭时清理
     if _adapter:
         await _adapter.close()
+    shutdown_sdk_tracing()
     logger.info("OpenAI Agent Service shutting down")
 
 
@@ -67,6 +76,36 @@ app = FastAPI(
     version="1.0.0",
     lifespan=lifespan,
 )
+
+@app.middleware("http")
+async def request_logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or f"req_{uuid4().hex}"
+    if len(request_id) > 128:
+        request_id = f"req_{uuid4().hex}"
+    request.state.request_id = request_id
+    started = perf_counter()
+    with logger.contextualize(request_id=request_id):
+        try:
+            response = await call_next(request)
+        except Exception:
+            logger.bind(event="http.request.failed").exception(
+                "HTTP request failed: method={} path={} duration_ms={}",
+                request.method,
+                request.url.path,
+                int((perf_counter() - started) * 1000),
+            )
+            raise
+        response.headers["X-Request-ID"] = request_id
+        route = request.scope.get("route")
+        logger.bind(event="http.request.completed").info(
+            "HTTP request completed: method={} route={} status={} duration_ms={}",
+            request.method,
+            getattr(route, "path", request.url.path),
+            response.status_code,
+            int((perf_counter() - started) * 1000),
+        )
+        return response
+
 
 # 全局异常处理器
 @app.exception_handler(AppError)

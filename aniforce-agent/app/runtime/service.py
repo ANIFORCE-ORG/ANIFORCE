@@ -2,7 +2,6 @@
 
 from app.agent.openai_adapter import OpenAISDKAdapter
 from app.agent.workspace_context import WorkspaceRunContext
-from app.core.tracing import get_tracer
 from app.runtime.checkpoints.service import RuntimeCheckpointService
 from app.runtime.controls import RuntimeRunControlStore
 from app.runtime.history import RuntimeHistoryReader
@@ -22,7 +21,6 @@ class AgentRuntime(RunExecutorMixin, ResumeExecutorMixin):
         self.adapter = adapter
         self.agent_runtime_db_url = agent_runtime_db_url
         self.enable_tracing = enable_tracing
-        self.tracer = get_tracer() if enable_tracing else None
 
     def run_control_store(self) -> RuntimeRunControlStore:
         engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)

@@ -1,8 +1,13 @@
 # OpenAI Agent Service Dependencies
 
-# OpenAI Agents SDK (openai-agents 包在 pip 上，需要从源码安装或用内部包)
-openai>=1.0.0
-openai-agents>=0.0.1
+# OpenAI Agents SDK. Keep these versions aligned: openai 2.45.0 is
+# incompatible with the Usage model expected by openai-agents 0.17.7.
+openai==2.44.0
+openai-agents==0.17.7
+
+# Agents SDK tracing -> OpenInference/OpenTelemetry -> Phoenix
+arize-phoenix-otel==0.16.1
+openinference-instrumentation-openai-agents==1.6.1
 
 # Web Framework
 fastapi>=0.110.0

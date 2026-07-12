@@ -80,6 +80,9 @@ class ResumeExecutorMixin:
 
         sequence = 0
         run_logger = logger.bind(user_id=user_id, session_id=checkpoint["session_id"], run_id=checkpoint["run_id"], checkpoint_id=checkpoint_id)
+        run_logger.bind(event="agent.run.resume_started").info(
+            "Agent run resume started: decision={}", decision
+        )
         try:
             async with mcp_connection(
                 auth_token=auth_token,
@@ -110,19 +113,36 @@ class ResumeExecutorMixin:
                     else:
                         raise AppError(AgentErrorCode.UNKNOWN_ERROR, "decision must be approve or reject")
 
-                result = await self.adapter.run_streamed(
-                    agent=agent,
-                    input_text=state,
-                    session=session,
-                    hooks=WorkspaceRunHooks(),
-                )
-                async for sdk_event in self.adapter.stream_events(result):
-                    sequence += 1
-                    yield {
-                        "event": str(sdk_event.get("type") or "sdk.event"),
-                        "data": sdk_event,
-                        "sequence": sequence,
-                    }
+                trace_context = {
+                    "workflow_name": "aniforce.agent.resume",
+                    "session_id": checkpoint["session_id"],
+                    "user_id": user_id,
+                    "tags": ["aniforce", workspace_context.task_type, "resume"],
+                    "metadata": {
+                        "run_id": checkpoint["run_id"],
+                        "session_id": checkpoint["session_id"],
+                        "checkpoint_id": checkpoint_id,
+                        "task_type": workspace_context.task_type,
+                        "execution_kind": "resume",
+                        "model": self.adapter.model,
+                        "api_mode": self.adapter.api_mode,
+                    },
+                }
+                with self.adapter.trace_scope(trace_context):
+                    result = await self.adapter.run_streamed(
+                        agent=agent,
+                        input_text=state,
+                        session=session,
+                        hooks=WorkspaceRunHooks(),
+                        trace_context=trace_context,
+                    )
+                    async for sdk_event in self.adapter.stream_events(result):
+                        sequence += 1
+                        yield {
+                            "event": str(sdk_event.get("type") or "sdk.event"),
+                            "data": sdk_event,
+                            "sequence": sequence,
+                        }
 
                 if getattr(result, "interruptions", None):
                     new_checkpoint = await self._create_hitl_checkpoint(
@@ -159,9 +179,14 @@ class ResumeExecutorMixin:
                     "data": {"final_output": getattr(result, "final_output", None), "usage": usage},
                     "sequence": sequence,
                 }
-                run_logger.debug("[RUNTIME] Checkpoint resumed")
+                run_logger.bind(event="agent.run.resume_completed", **usage).info(
+                    "Agent run resume completed: total_tokens={}",
+                    usage.get("totalTokens", 0),
+                )
         except Exception:
-            run_logger.exception("[RUNTIME] Checkpoint resume failed")
+            run_logger.bind(event="agent.run.resume_failed").exception(
+                "Agent run checkpoint resume failed"
+            )
             await store.mark_status(
                 checkpoint_id,
                 user_id,

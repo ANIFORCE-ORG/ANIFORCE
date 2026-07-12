@@ -12,6 +12,12 @@ class Settings(BaseSettings):
     # 基础配置
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = ""
+    LOG_FORMAT: str = "text"
+    LOG_OUTPUT: str = "console"
+    LOG_SERVICE: str = "agent-service"
+    LOG_ROLE: str = "api"
+    APP_ENV: str = "local"
     HOST: str = "0.0.0.0"
     PORT: int = 8020
 
@@ -26,12 +32,16 @@ class Settings(BaseSettings):
     # OpenAI Agents SDK
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = ""
-    OPENAI_AGENTS_MODEL: str = "deepseek/deepseek-v4-pro"
+    OPENAI_AGENTS_MODEL: str = "gpt-5.6-luna"
     OPENAI_AGENTS_API: str = "responses"
 
     # Agents SDK runtime database（调试 SQLite，生产换 PostgreSQL）
     AGENT_RUNTIME_DB_URL: str = "sqlite+aiosqlite:///data/agent.db"
     AGENT_TRACING_ENABLED: bool = True
+    AGENT_TRACING_PROVIDER: str = "disabled"
+    AGENT_TRACE_INCLUDE_SENSITIVE_DATA: bool = False
+    PHOENIX_COLLECTOR_ENDPOINT: str = "http://127.0.0.1:16006/v1/traces"
+    PHOENIX_PROJECT_NAME: str = "aniforce"
 
     # CORS
     CORS_ALLOW_ORIGINS: str = "http://localhost:5173,http://localhost:3010,http://127.0.0.1:5173"

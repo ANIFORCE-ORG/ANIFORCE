@@ -40,13 +40,10 @@ class RunExecutorMixin:
         sequence = 0
         result = None
 
-        trace_ctx = None
-        if self.tracer:
-            trace_ctx = self.tracer.trace_task(run_id or session_id, user_id, task_type)
-            trace_ctx.__enter__()
-
         try:
-            run_logger.debug("[RUNTIME] Run started: {}", task_type)
+            run_logger.bind(event="agent.run.started").info(
+                "Agent run started: task_type={}", task_type
+            )
             yield {
                 "event": "runtime.started",
                 "data": {"task_type": task_type, "user_input": user_input},
@@ -93,38 +90,54 @@ class RunExecutorMixin:
                     _elapsed_ms(agent_create_start),
                 )
 
-                run_logger.debug("[RUNTIME] Executing Agent...")
-                run_streamed_start = perf_counter()
-                result = await self.adapter.run_streamed(
-                    agent=agent,
-                    input_text=user_input,
-                    session=session,
-                    context=workspace_context,
-                    hooks=WorkspaceRunHooks(),
-                )
-                run_logger.debug(
-                    "[PERF][agent_first_token] runtime.run_streamed_returned total_ms={} run_streamed_wait_ms={}",
-                    _elapsed_ms(run_start),
-                    _elapsed_ms(run_streamed_start),
-                )
+                trace_context = {
+                    "workflow_name": "aniforce.agent.run",
+                    "session_id": effective_session_id,
+                    "user_id": user_id,
+                    "tags": ["aniforce", task_type, "initial"],
+                    "metadata": {
+                        "run_id": run_id,
+                        "session_id": effective_session_id,
+                        "task_type": task_type,
+                        "execution_kind": "initial",
+                        "model": self.adapter.model,
+                        "api_mode": self.adapter.api_mode,
+                    },
+                }
+                with self.adapter.trace_scope(trace_context):
+                    run_logger.debug("[RUNTIME] Executing Agent...")
+                    run_streamed_start = perf_counter()
+                    result = await self.adapter.run_streamed(
+                        agent=agent,
+                        input_text=user_input,
+                        session=session,
+                        context=workspace_context,
+                        hooks=WorkspaceRunHooks(),
+                        trace_context=trace_context,
+                    )
+                    run_logger.debug(
+                        "[PERF][agent_first_token] runtime.run_streamed_returned total_ms={} run_streamed_wait_ms={}",
+                        _elapsed_ms(run_start),
+                        _elapsed_ms(run_streamed_start),
+                    )
 
-                first_event_seen = False
-                stream_events_start = perf_counter()
-                async for sdk_event in self.adapter.stream_events(result):
-                    sequence += 1
-                    if not first_event_seen:
-                        first_event_seen = True
-                        run_logger.debug(
-                            "[PERF][agent_first_token] runtime.first_sdk_event total_ms={} stream_events_wait_ms={} event_type={}",
-                            _elapsed_ms(run_start),
-                            _elapsed_ms(stream_events_start),
-                            sdk_event.get("type", "unknown"),
-                        )
-                    yield {
-                        "event": str(sdk_event.get("type") or "sdk.event"),
-                        "data": sdk_event,
-                        "sequence": sequence,
-                    }
+                    first_event_seen = False
+                    stream_events_start = perf_counter()
+                    async for sdk_event in self.adapter.stream_events(result):
+                        sequence += 1
+                        if not first_event_seen:
+                            first_event_seen = True
+                            run_logger.debug(
+                                "[PERF][agent_first_token] runtime.first_sdk_event total_ms={} stream_events_wait_ms={} event_type={}",
+                                _elapsed_ms(run_start),
+                                _elapsed_ms(stream_events_start),
+                                sdk_event.get("type", "unknown"),
+                            )
+                        yield {
+                            "event": str(sdk_event.get("type") or "sdk.event"),
+                            "data": sdk_event,
+                            "sequence": sequence,
+                        }
 
             interruptions = list(getattr(result, "interruptions", []) or []) if result else []
             if interruptions:
@@ -147,7 +160,12 @@ class RunExecutorMixin:
                     },
                     "sequence": sequence,
                 }
-                run_logger.debug("[RUNTIME] Run requires action: checkpoint={}", checkpoint["id"])
+                run_logger.bind(
+                    event="agent.run.requires_action",
+                    checkpoint_id=checkpoint["id"],
+                ).info(
+                    "Agent run requires action: duration_ms={}", _elapsed_ms(run_start)
+                )
                 return
 
             usage = self.adapter._extract_usage(result) if result else {}
@@ -157,10 +175,14 @@ class RunExecutorMixin:
                 "data": {"final_output": getattr(result, "final_output", None), "usage": usage},
                 "sequence": sequence,
             }
-            run_logger.debug("[RUNTIME] Run completed successfully")
+            run_logger.bind(event="agent.run.completed", **usage).info(
+                "Agent run completed: duration_ms={} total_tokens={}",
+                _elapsed_ms(run_start),
+                usage.get("totalTokens", 0),
+            )
 
         except asyncio.CancelledError:
-            run_logger.warning("[RUNTIME] Run cancelled")
+            run_logger.bind(event="agent.run.cancelled").warning("Agent run cancelled")
             sequence += 1
             yield {
                 "event": "runtime.aborted",
@@ -169,7 +191,9 @@ class RunExecutorMixin:
             }
 
         except RuntimeSessionOwnerMismatch:
-            run_logger.warning("[RUNTIME] Session ownership mismatch")
+            run_logger.bind(event="agent.run.owner_mismatch").warning(
+                "Agent run session ownership mismatch"
+            )
             sequence += 1
             yield {
                 "event": "runtime.error",
@@ -181,7 +205,9 @@ class RunExecutorMixin:
             }
 
         except AppError as e:
-            run_logger.error("[RUNTIME] AppError: {} - {}", e.code.value, e.message)
+            run_logger.bind(event="agent.run.failed", error_code=e.code.value).error(
+                "Agent run failed: {}", e.message
+            )
             sequence += 1
             yield {
                 "event": "runtime.error",
@@ -190,15 +216,13 @@ class RunExecutorMixin:
             }
 
         except Exception as e:
-            run_logger.exception("[RUNTIME] Unexpected error: {}", e)
+            run_logger.bind(event="agent.run.failed").exception(
+                "Agent run failed unexpectedly: {}", e
+            )
             sequence += 1
             yield {
                 "event": "runtime.error",
                 "data": unexpected_error_payload(),
                 "sequence": sequence,
             }
-
-        finally:
-            if trace_ctx:
-                trace_ctx.__exit__(None, None, None)
 

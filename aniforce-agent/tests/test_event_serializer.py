@@ -1,4 +1,5 @@
 from app.agent.event_serializer import extract_usage, serialize_sdk_event
+from app.agent.openai_adapter import OpenAISDKAdapter
 
 
 def test_sdk_event_serialization_is_json_safe() -> None:
@@ -11,6 +12,20 @@ def test_sdk_event_serialization_is_json_safe() -> None:
         "name": "delta",
         "data": {"delta": "hello"},
     }
+
+
+def test_custom_chat_completions_agent_requests_stream_usage() -> None:
+    adapter = OpenAISDKAdapter(
+        model="test-model",
+        api_key="test-key",
+        base_url="https://example.invalid/v1",
+        enable_tracing=False,
+        api_mode="chat_completions",
+    )
+
+    agent = adapter.create_agent(name="Test", instructions="Test")
+
+    assert agent.model_settings.include_usage is True
 
 
 def test_usage_serialization_preserves_cache_tokens() -> None:

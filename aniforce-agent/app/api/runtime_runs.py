@@ -59,7 +59,12 @@ async def run_runtime(
     if control_store:
         await control_store.reset(run_id, user_id)
     _LOCAL_STREAM_TASKS[run_id] = {"user_id": user_id}
-    perf_log = logger.bind(run_id=run_id, session_id=session_id, user_id=user_id)
+    perf_log = logger.bind(
+        request_id=getattr(getattr(request, "state", None), "request_id", None),
+        run_id=run_id,
+        session_id=session_id,
+        user_id=user_id,
+    )
     perf_log.debug(
         "[PERF][agent_first_token] runtime_api.pre_stream total_ms={} prompt_chars={} context_chars={}",
         _elapsed_ms(request_start),

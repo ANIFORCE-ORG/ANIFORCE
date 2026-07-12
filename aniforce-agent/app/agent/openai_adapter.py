@@ -9,6 +9,7 @@ OpenAI Agents SDK 适配器
 
 import os
 import sqlite3
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 from loguru import logger
@@ -16,11 +17,12 @@ from openai import AsyncOpenAI
 
 from agents import (
     Agent,
+    ModelSettings,
+    RunConfig,
     Runner,
     set_default_openai_api,
     set_default_openai_client,
     set_default_openai_key,
-    set_tracing_disabled,
 )
 from agents.extensions.memory import SQLAlchemySession
 from agents.memory.session import SessionABC
@@ -32,7 +34,6 @@ from agents.models.chatcmpl_converter import Converter
 from app.agent.event_serializer import extract_usage, serialize_sdk_event, to_jsonable
 from app.agent.model_factory import create_sdk_model
 from app.core.errors import AppError, AgentErrorCode, ErrorCategory
-from app.core.tracing import get_tracer
 
 
 _ORIGINAL_ITEMS_TO_MESSAGES = Converter.items_to_messages
@@ -111,12 +112,13 @@ class OpenAISDKAdapter:
         base_url: Optional[str] = None,
         enable_tracing: bool = True,
         api_mode: Optional[str] = None,
+        trace_include_sensitive_data: bool = False,
     ):
         self.model = model
         self.api_key = api_key
         self.base_url = base_url
         self.enable_tracing = enable_tracing
-        self.tracer = get_tracer() if enable_tracing else None
+        self.trace_include_sensitive_data = trace_include_sensitive_data
         self._agent_db_engines: dict[str, AsyncEngine] = {}
         
         self.api_mode = (api_mode or os.environ.get("OPENAI_AGENTS_API") or "responses").strip().lower()
@@ -126,8 +128,6 @@ class OpenAISDKAdapter:
             self.api_mode = "responses"
 
         set_default_openai_api(self.api_mode)
-        # 项目使用本地 JSONL tracing，禁用 OpenAI 官方 trace export。
-        set_tracing_disabled(True)
         if api_key:
             os.environ["OPENAI_API_KEY"] = api_key
             set_default_openai_key(api_key, use_for_tracing=False)
@@ -166,6 +166,7 @@ class OpenAISDKAdapter:
             name=name,
             instructions=instructions,
             model=sdk_model,
+            model_settings=ModelSettings(include_usage=True),
             mcp_servers=mcp_servers or [],
             tools=tools or [],
         )
@@ -235,6 +236,7 @@ class OpenAISDKAdapter:
         session: Optional[SessionABC] = None,
         context: Any = None,
         hooks: Any = None,
+        trace_context: dict[str, Any] | None = None,
     ) -> RunResult:
         """
         流式执行 Agent
@@ -249,15 +251,14 @@ class OpenAISDKAdapter:
         Returns:
             RunResult（可以流式读取事件）
         """
-        # Trace SDK 调用
-        if self.tracer:
-            self.tracer.log_sdk_call(
-                method="run_streamed",
-                agent_name=getattr(agent, "name", "unknown"),
-                input_text=input_text if isinstance(input_text, str) else type(input_text).__name__,
-                session_id=getattr(session, "session_id", None) if session else None,
-            )
-        
+        trace_context = trace_context or {}
+        metadata = dict(trace_context.get("metadata") or {})
+        run_config = RunConfig(
+            workflow_name=str(trace_context.get("workflow_name") or "aniforce.agent.run"),
+            group_id=trace_context.get("session_id"),
+            trace_metadata=metadata,
+            trace_include_sensitive_data=self.trace_include_sensitive_data,
+        )
         try:
             return Runner.run_streamed(
                 agent,
@@ -265,6 +266,7 @@ class OpenAISDKAdapter:
                 session=session,
                 context=context,
                 hooks=hooks,
+                run_config=run_config,
             )
         except Exception as e:
             logger.exception(f"SDK run_streamed error: {e}")
@@ -274,24 +276,26 @@ class OpenAISDKAdapter:
                 category=ErrorCategory.RUNTIME_ERROR,
             )
     
+    def trace_scope(self, trace_context: dict[str, Any] | None = None):
+        """Bind OpenInference attributes for the complete streamed execution."""
+        trace_context = trace_context or {}
+        if not self.enable_tracing or not trace_context:
+            return nullcontext()
+
+        from openinference.instrumentation import using_attributes
+
+        return using_attributes(
+            session_id=str(trace_context.get("session_id") or ""),
+            user_id=str(trace_context.get("user_id") or ""),
+            tags=list(trace_context.get("tags") or []),
+            metadata=dict(trace_context.get("metadata") or {}),
+        )
+
     async def stream_events(self, result: RunResult) -> AsyncIterator[dict]:
         """流式读取 Agents SDK 原生事件 envelope。"""
         try:
             async for event in result.stream_events():
-                sdk_event = self._serialize_sdk_event(event)
-                if self.tracer:
-                    self.tracer.log_sdk_event(
-                        event_type=sdk_event.get("type", "unknown"),
-                        event_data=sdk_event,
-                    )
-                yield sdk_event
-
-            final_output = getattr(result, "final_output", None) or ""
-            if self.tracer:
-                self.tracer.log_llm_response(
-                    model=self.model,
-                    response=final_output,
-                )
+                yield self._serialize_sdk_event(event)
         except Exception as e:
             logger.exception(f"SDK stream error: {e}")
             raise AppError(
