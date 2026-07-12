@@ -216,19 +216,30 @@ mkdir -p "$LOG_DIR"
 LOG_DATE=$(date +%Y%m%d)
 LOG_ENV="$MODE"
 
-# 每种进程角色使用独立结构化日志，shell 重定向文件只保留启动期故障。
-BACKEND_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend-api.jsonl"
-AGENT_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-api.jsonl"
-BACKEND_RECONCILE_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-reconcile-worker.jsonl"
-BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.bootstrap.log"
-AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.bootstrap.log"
-FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
-
-info "日志配置: 目录=$LOG_DIR"
-info "Backend API: $BACKEND_API_LOG"
-info "Agent API: $AGENT_API_LOG"
-info "Reconcile Worker: $BACKEND_RECONCILE_LOG"
-info "前端日志: $FRONTEND_LOG"
+# Local 写项目日志文件；Cloud 输出 JSON 到 stdout/stderr，由运行平台统一采集。
+if [ "$MODE" = "cloud" ]; then
+  SERVICE_LOG_OUTPUT="console"
+  BACKEND_API_LOG=""
+  AGENT_API_LOG=""
+  BACKEND_RECONCILE_LOG=""
+  BACKEND_UVICORN_LOG="/dev/stderr"
+  AGENT_UVICORN_LOG="/dev/stderr"
+  FRONTEND_LOG="/dev/stderr"
+  info "日志配置: stdout JSON（由容器或主机日志平台采集）"
+else
+  SERVICE_LOG_OUTPUT="file"
+  BACKEND_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend-api.jsonl"
+  AGENT_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-api.jsonl"
+  BACKEND_RECONCILE_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-reconcile-worker.jsonl"
+  BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.bootstrap.log"
+  AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.bootstrap.log"
+  FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
+  info "日志配置: 目录=$LOG_DIR"
+  info "Backend API: $BACKEND_API_LOG"
+  info "Agent API: $AGENT_API_LOG"
+  info "Reconcile Worker: $BACKEND_RECONCILE_LOG"
+  info "前端日志: $FRONTEND_LOG"
+fi
 
 # ---------- PID & 端口信息文件（用于清理） ----------
 PID_FILE="$ROOT_DIR/.server_pids"
@@ -533,7 +544,7 @@ else
   PORT="$AGENT_PORT" \
   BACKEND_BASE_URL="http://localhost:$BACKEND_PORT" \
   JWT_SECRET="$JWT_SECRET_VALUE" \
-  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT=file LOG_FILE="$AGENT_API_LOG" \
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$AGENT_API_LOG" \
   LOG_SERVICE=agent-service LOG_ROLE=api \
   uv run python -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" --no-access-log $AGENT_WORKERS_FLAG $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
   AGENT_PID=$!
@@ -584,7 +595,7 @@ fi
   # 启动后端并重定向日志
   # LOG_FILE: 应用日志（loguru 自动轮转）
   # >> redirect: uvicorn 服务器日志（shell 重定向）
-  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT=file LOG_FILE="$BACKEND_API_LOG" \
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$BACKEND_API_LOG" \
   LOG_SERVICE=backend LOG_ROLE=api AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
   JWT_SECRET="$JWT_SECRET_VALUE" $PY -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" --no-access-log $UVICORN_WORKERS_FLAG $UVICORN_RELOAD_FLAG >> "$BACKEND_UVICORN_LOG" 2>&1 &
   BACKEND_PID=$!
@@ -609,8 +620,12 @@ fi
 
   info "启动 $AGENT_RUN_WORKERS 个 Agent Run Worker..."
   for ((worker_index=1; worker_index<=AGENT_RUN_WORKERS; worker_index++)); do
-    RUN_WORKER_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-run-worker-${worker_index}.jsonl"
-    APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT=file LOG_FILE="$RUN_WORKER_LOG" \
+    if [ "$MODE" = "cloud" ]; then
+      RUN_WORKER_LOG=""
+    else
+      RUN_WORKER_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-run-worker-${worker_index}.jsonl"
+    fi
+    APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$RUN_WORKER_LOG" \
     LOG_SERVICE=backend LOG_ROLE=agent-run-worker AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
     JWT_SECRET="$JWT_SECRET_VALUE" $PY scripts/run_agent_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
     AGENT_RUN_WORKER_PID=$!
@@ -623,7 +638,7 @@ fi
   done
 
   info "启动 Agent Reconcile Worker..."
-  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT=file LOG_FILE="$BACKEND_RECONCILE_LOG" \
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$BACKEND_RECONCILE_LOG" \
   LOG_SERVICE=backend LOG_ROLE=agent-reconcile-worker AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
   JWT_SECRET="$JWT_SECRET_VALUE" $PY scripts/run_agent_reconcile_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
   AGENT_RECONCILE_WORKER_PID=$!

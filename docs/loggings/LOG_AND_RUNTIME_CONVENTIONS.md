@@ -1,42 +1,43 @@
 # Log and Agent Runtime Conventions
 
-## Log file naming
+## Canonical logging document
 
-Use this pattern for newly generated service logs:
+Production ownership, environment variables, collector requirements, security rules, and acceptance checks are defined in:
 
 ```text
-logs/YYYYMMDD.<env>.<service>.<stream>.log
+docs/loggings/PRODUCTION_LOGGING.md
 ```
 
-Fields:
+## Local log files
 
-- `YYYYMMDD`: local start date, for example `20260623`
-- `env`: `dev`, `cloud`, `prod`, or a short custom environment name
-- `service`: `agent`, `backend`, `frontend`, or a focused probe name
-- `stream`: `uvicorn`, `vite`, `app`, `probe`, `e2e`, `smoke`, or another concrete source
-
-Current dev stack outputs:
+`./run_server.sh --mode local` writes role-specific JSON Lines files:
 
 ```text
-logs/YYYYMMDD.dev.agent.uvicorn.log
-logs/YYYYMMDD.dev.backend.uvicorn.log
-logs/YYYYMMDD.dev.frontend.vite.log
-logs/run/dev.stack.pids
+logs/YYYYMMDD.local.backend-api.jsonl
+logs/YYYYMMDD.local.agent-api.jsonl
+logs/YYYYMMDD.local.agent-run-worker-1.jsonl
+logs/YYYYMMDD.local.agent-reconcile-worker.jsonl
+```
+
+Bootstrap and frontend output use:
+
+```text
+logs/YYYYMMDD.local.backend.bootstrap.log
+logs/YYYYMMDD.local.agent.bootstrap.log
+logs/YYYYMMDD.local.frontend.vite.log
 ```
 
 Rules:
 
-- Runtime PID files go under `logs/run/`, not mixed with `.log` files.
-- Long-lived service logs should be named by service and stream.
-- One-off checks should use `logs/YYYYMMDD.dev.<topic>.probe.log`.
-- E2E checks should use `logs/YYYYMMDD.dev.<block-or-flow>.e2e.log`.
-- Do not write logs under `/tmp`, `/var/log`, or home-directory cache paths for project runs.
-
-Existing historical files are not renamed automatically because they may be referenced by current debugging sessions.
+- Local application JSONL files rotate at 100 MB, retain 14 days, and compress old files.
+- Bootstrap logs are only for process startup failures.
+- PID files are runtime control files, not application logs.
+- Existing historical files are not renamed or deleted automatically.
+- Cloud mode emits JSON to stdout and does not use project log files as centralized storage.
 
 ## Agent runtime layout
 
-The agent runtime lives under:
+The Agent runtime lives under:
 
 ```text
 aniforce-agent/runtime/
@@ -49,70 +50,45 @@ aniforce-agent/runtime/agent/tasks.db
 aniforce-agent/runtime/agent/sessions.db
 aniforce-agent/runtime/agent/sessions.db-wal
 aniforce-agent/runtime/agent/sessions.db-shm
-aniforce-agent/runtime/agent/traces/YYYYMMDD/task_xxx/run_xxx.jsonl
 aniforce-agent/runtime/agent/sandbox/<session_id>/
 aniforce-agent/runtime/skills/
 aniforce-agent/runtime/sessions/
-aniforce-agent/runtime/logs/
 ```
 
 Meaning:
 
-- `tasks.db`: local agent task ledger. It stores task rows, task status, SSE/runtime events, and user-facing agent session metadata.
-- `sessions.db`: OpenAI Agents SDK conversation memory. It stores model-facing history items used when a session continues.
-- `sessions.db-wal` and `sessions.db-shm`: SQLite WAL sidecar files. They are normal while the service is running.
-- `traces/YYYYMMDD/task_xxx/run_xxx.jsonl`: local structured trace for one task run. It records SDK calls, SDK events, tool calls, agent events, and timing.
-- `sandbox/<session_id>/`: per-session workspace root passed to `SandboxAgent`. Files appear here only when the agent actually uses sandbox file/shell capabilities.
-- `skills/`: runtime-loaded skills made available to the sandbox agent.
-- `sessions/`: reserved runtime session directory from settings. Current code mainly uses `agent/sessions.db` for SDK session memory.
-- `logs/`: reserved runtime-local logs. Current project-level service logs are written to root `logs/`.
+- `tasks.db`: local task and runtime event storage.
+- `sessions.db`: OpenAI Agents SDK model-facing conversation memory.
+- `sessions.db-wal` and `sessions.db-shm`: normal SQLite WAL sidecars while running.
+- `sandbox/<session_id>/`: per-session workspace used for file or shell capabilities.
+- `skills/`: runtime-loaded skills.
+- `sessions/`: reserved runtime directory configured by settings.
 
-## Why many sandbox directories are empty
+The former `runtime/agent/traces/...jsonl` LocalTracer path is retired. Agent LLM and tool traces are exported through OpenInference/OpenTelemetry to Phoenix when tracing is enabled.
 
-Empty directories do not by themselves mean sandbox is disabled.
+## Sandbox interpretation
 
-The current runtime creates a per-session sandbox directory when creating a `SandboxAgent`:
+An empty sandbox directory is expected for API-only business tasks. MCP tools such as `list_projects` and `create_project` call Backend APIs and do not create local files.
 
-```text
-runtime/agent/sandbox/<session_id>/
-```
-
-For normal business questions such as listing projects, the agent uses MCP tools that call the backend API. Those tools do not need to create files in the sandbox, so the session directory stays empty.
-
-A sandbox directory should contain files only when the model uses sandbox capabilities such as shell/file work, or a skill writes artifacts there. Historical traces show sandbox file execution has worked before, for example `block5_test_hello.txt` under `runtime/agent/sandbox/`.
-
-Practical interpretation:
-
-- Empty `sandbox/session_*` after API-only tasks: expected.
-- Files under a sandbox session after shell/file tasks: sandbox write path is active.
-- No sandbox directories at all after runs: likely `SandboxAgent` was not created or `SANDBOX_DIR` differs.
-- Tool calls only named `list_projects`, `create_project`, etc.: backend MCP path, not sandbox file path.
+- Empty sandbox after API-only tasks: expected.
+- Files after shell/file tasks: sandbox write path is active.
+- No sandbox directory after any run: inspect `SANDBOX_DIR` and Agent construction.
 
 ## Quick checks
 
-Inspect recent service logs:
+Inspect local application logs:
 
 ```bash
-ls -lh logs/*.log
-tail -f logs/$(date +%Y%m%d).dev.agent.uvicorn.log
-tail -f logs/$(date +%Y%m%d).dev.backend.uvicorn.log
-tail -f logs/$(date +%Y%m%d).dev.frontend.vite.log
+ls -lh logs/*.jsonl
+jq -c 'select(.record.extra.event == "agent.run.failed")' logs/*.jsonl
+jq -c 'select(.record.extra.run_id == "run_xxx")' logs/*.jsonl
 ```
 
-Inspect runtime DB files:
+Inspect runtime databases and sandbox files:
 
 ```bash
 ls -lh aniforce-agent/runtime/agent/*.db*
-```
-
-Inspect recent traces:
-
-```bash
-find aniforce-agent/runtime/agent/traces/$(date +%Y%m%d) -name '*.jsonl' -print | tail
-```
-
-Inspect sandbox contents:
-
-```bash
 find aniforce-agent/runtime/agent/sandbox -maxdepth 2 -type f -print
 ```
+
+Inspect Agent traces in the configured Phoenix project and correlate them by `metadata.run_id`.
