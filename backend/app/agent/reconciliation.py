@@ -81,12 +81,13 @@ class AgentStateReconciler:
             )
             if apply:
                 service = AgentRunService(SqliteAgentRunRepository(self.session))
-                if run.status == "cancel_requested":
-                    updated = await service.mark_cancelled(run.run_id, run.user_id)
-                    expected = "cancelled"
-                else:
-                    updated = await service.mark_error(run.run_id, run.user_id, error_payload)
-                    expected = "error"
+                updated = await service.recover_stale_run(
+                    run.run_id,
+                    run.user_id,
+                    run.status,
+                    error_payload,
+                )
+                expected = "cancelled" if run.status == "cancel_requested" else "error"
                 await self.session.execute(delete(AgentSessionLease).where(AgentSessionLease.run_id == run.run_id))
                 if not updated or updated.get("status") != expected:
                     conflicts += 1

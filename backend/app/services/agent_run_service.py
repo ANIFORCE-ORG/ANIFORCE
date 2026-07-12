@@ -150,3 +150,15 @@ class AgentRunService:
         if not run:
             raise AgentRunError("RUN_NOT_FOUND", "Run not found", 404)
         return run
+
+    async def recover_stale_run(
+        self,
+        run_id: str,
+        user_id: str,
+        current_status: str,
+        error: dict,
+    ) -> dict | None:
+        """Settle a run whose execution lease expired."""
+        if current_status == RunStatus.CANCEL_REQUESTED:
+            return await self.mark_cancelled(run_id, user_id)
+        return await self.mark_error(run_id, user_id, error)

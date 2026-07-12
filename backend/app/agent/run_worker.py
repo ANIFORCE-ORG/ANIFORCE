@@ -11,13 +11,13 @@ from time import perf_counter
 from jose import jwt
 from loguru import logger
 
-from app.api.v1.agent_routes import _consume_agent_run_background
+from app.agent.run_execution_store import AgentRunExecutionStore
+from app.agent.run_executor import execute_agent_run
 from app.config.database import get_session_maker
 from app.config.settings import get_settings
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.services.agent_gateway import AgentGatewayService
-from app.services.agent_run_event_bus import agent_run_event_bus
 from app.services.redis_run_event_stream import RedisRunEventStream
 
 
@@ -71,7 +71,6 @@ class AgentRunWorker:
         user_id = run["user_id"]
         context = run.get("execution_context") or {}
         authorization = self._authorization(user_id)
-        await agent_run_event_bus.create_run(run_id, session_id, user_id)
         payload = {
             "run_id": run_id,
             "prompt": run["input_text"],
@@ -87,7 +86,7 @@ class AgentRunWorker:
         heartbeat_task = asyncio.create_task(self._heartbeat(run_id, heartbeat_stop))
         transient_stream = RedisRunEventStream()
         try:
-            await _consume_agent_run_background(
+            await execute_agent_run(
                 run_id=run_id,
                 session_id=session_id,
                 user_id=user_id,
@@ -99,6 +98,7 @@ class AgentRunWorker:
                 lease_owner=self.worker_id,
                 resume_payload=run.get("resume_payload") if run.get("execution_kind") == "resume" else None,
                 transient_stream=transient_stream,
+                store=AgentRunExecutionStore(self.session_maker),
             )
             if run.get("execution_kind") == "resume" and run.get("checkpoint_ref"):
                 async with self.session_maker() as session:

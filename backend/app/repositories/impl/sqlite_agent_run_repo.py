@@ -341,33 +341,3 @@ class SqliteAgentRunRepository:
             return await self.get(run_id, user_id)
         await self.session.flush()
         return await self.get(run_id, user_id)
-
-    async def mark_status(
-        self,
-        run_id: str,
-        user_id: str,
-        status: str,
-        *,
-        usage: dict | None = None,
-        error: dict | None = None,
-        checkpoint_ref: str | None = None,
-    ) -> dict | None:
-        values: dict = {"status": status}
-        if status in {"completed", "error", "cancelled"}:
-            values["completed_at"] = datetime.utcnow()
-        if usage is not None:
-            values["usage_json"] = json.dumps(usage, ensure_ascii=False)
-        if error is not None:
-            values["error_json"] = json.dumps(error, ensure_ascii=False)
-        if checkpoint_ref is not None:
-            values["checkpoint_ref"] = checkpoint_ref or None
-        stmt = update(AgentRun).where(AgentRun.run_id == run_id, AgentRun.user_id == user_id)
-        if status == "cancelled":
-            stmt = stmt.where(AgentRun.status.in_(ACTIVE_RUN_STATUSES))
-        elif status in {"running", "completed", "error", "requires_action"}:
-            stmt = stmt.where(~AgentRun.status.in_(TERMINAL_RUN_STATUSES))
-        result = await self.session.execute(stmt.values(**values))
-        if result.rowcount != 1:
-            return await self.get(run_id, user_id)
-        await self.session.flush()
-        return await self.get(run_id, user_id)

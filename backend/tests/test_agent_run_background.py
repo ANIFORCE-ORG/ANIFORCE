@@ -1,16 +1,11 @@
 from __future__ import annotations
 
 import asyncio
-import sys
-from pathlib import Path
 from time import perf_counter
 
 import pytest
 
-backend_root = Path(__file__).parent.parent
-sys.path.insert(0, str(backend_root))
-
-from app.api.v1 import agent_routes
+from app.agent.run_executor import execute_agent_run
 
 
 class ExplodingGateway:
@@ -31,55 +26,103 @@ class FakeGateway:
         yield f"event: {self.event_name}\ndata: {body}\n\n".encode()
 
 
-def test_background_unexpected_error_is_redacted(monkeypatch) -> None:
+class MemoryExecutionStore:
+    def __init__(self, run_id: str, session_id: str, user_id: str) -> None:
+        self.run_id = run_id
+        self.session_id = session_id
+        self.user_id = user_id
+        self.session_state = {"version": 1, "status": "active", "changelog": []}
+        self.run_state = {"run_id": run_id, "status": "queued"}
+        self.persisted_error: dict | None = None
+        self.transitions: list[str] = []
+
+    async def get_session_state(self, session_id: str, user_id: str) -> dict:
+        assert (session_id, user_id) == (self.session_id, self.user_id)
+        return dict(self.session_state)
+
+    async def mark_session_running(self, session_id: str, user_id: str, version: int) -> dict:
+        assert version == self.session_state["version"]
+        self.session_state.update(status="running", version=version + 1)
+        return dict(self.session_state)
+
+    async def settle_session(self, *, session_id, user_id, run_status, error=None) -> None:
+        assert (session_id, user_id) == (self.session_id, self.user_id)
+        if run_status == "error":
+            self.session_state.update(
+                status="error",
+                version=self.session_state["version"] + 1,
+                last_error=error,
+            )
+        elif run_status in {"completed", "cancelled", "requires_action"}:
+            self.session_state.update(status="active", version=self.session_state["version"] + 1)
+
+    async def get_run(self, run_id: str, user_id: str) -> dict:
+        return dict(self.run_state)
+
+    async def mark_running(self, run_id: str, user_id: str) -> dict:
+        if self.run_state["status"] not in {"completed", "error", "cancelled"}:
+            self.run_state["status"] = "running"
+            self.transitions.append("running")
+        return dict(self.run_state)
+
+    async def complete(self, run_id: str, user_id: str, **kwargs) -> dict:
+        self.run_state["status"] = "completed"
+        self.transitions.append("completed")
+        return dict(self.run_state)
+
+    async def fail(self, run_id: str, user_id: str, error: dict, **kwargs) -> dict:
+        if self.run_state["status"] not in {"completed", "error", "cancelled"}:
+            self.run_state["status"] = "error"
+            self.transitions.append("error")
+        self.persisted_error = error
+        return dict(self.run_state)
+
+    async def cancel(self, run_id: str, user_id: str, **kwargs) -> dict:
+        if self.run_state["status"] not in {"completed", "error", "cancelled"}:
+            self.run_state["status"] = "cancelled"
+            self.transitions.append("cancelled")
+        return dict(self.run_state)
+
+    async def require_action(self, *, run_id: str, user_id: str, data: dict, **kwargs) -> dict:
+        self.run_state["status"] = "requires_action"
+        self.transitions.append("requires_action")
+        return dict(self.run_state)
+
+    async def persist_output(self, **kwargs) -> dict:
+        if kwargs.get("error"):
+            self.persisted_error = kwargs["error"]
+        return dict(self.run_state)
+
+
+async def run_executor(store: MemoryExecutionStore, gateway) -> list[tuple[str, dict]]:
+    published: list[tuple[str, dict]] = []
+
+    class MemoryTransientStream:
+        async def publish(self, run_id: str, event: str, data: dict) -> None:
+            published.append((event, data))
+
+    await execute_agent_run(
+        run_id=store.run_id,
+        session_id=store.session_id,
+        user_id=store.user_id,
+        authorization="Bearer token",
+        agent_payload={},
+        changelog_start_index=0,
+        gateway=gateway,
+        perf_start=perf_counter(),
+        store=store,
+        transient_stream=MemoryTransientStream(),
+    )
+    return published
+
+
+def test_background_unexpected_error_is_redacted() -> None:
     async def scenario() -> None:
-        run_id = "run_failure"
-        session_id = "session_failure"
-        user_id = "user_1"
-        session_state = {"version": 1, "status": "active", "changelog": []}
-        persisted_error = None
+        store = MemoryExecutionStore("run_failure", "session_failure", "user_1")
+        published = await run_executor(store, ExplodingGateway())
 
-        async def get_session_state(*args):
-            return dict(session_state)
-
-        async def mark_running(*args):
-            session_state.update(status="running", version=2)
-            return dict(session_state)
-
-        async def mark_error(session_id, user_id, version, error):
-            session_state.update(status="error", version=version + 1, last_error=error)
-            return dict(session_state)
-
-        async def mark_run_status(run_id, user_id, status, **kwargs):
-            nonlocal persisted_error
-            persisted_error = kwargs.get("error")
-            return {"run_id": run_id, "status": status}
-
-        async def persist_output(**kwargs):
-            nonlocal persisted_error
-            persisted_error = kwargs.get("error") or persisted_error
-
-        monkeypatch.setattr(agent_routes, "_get_session_state_short_tx", get_session_state)
-        monkeypatch.setattr(agent_routes, "_mark_running_short_tx", mark_running)
-        monkeypatch.setattr(agent_routes, "_mark_error_short_tx", mark_error)
-        monkeypatch.setattr(agent_routes, "_mark_run_status_short_tx", mark_run_status)
-        monkeypatch.setattr(agent_routes, "_persist_run_output_short_tx", persist_output)
-
-        await agent_routes.agent_run_event_bus.create_run(run_id, session_id, user_id)
-        await agent_routes._consume_agent_run_background(
-            run_id=run_id,
-            session_id=session_id,
-            user_id=user_id,
-            authorization="Bearer token",
-            agent_payload={},
-            changelog_start_index=0,
-            gateway=ExplodingGateway(),
-            perf_start=perf_counter(),
-        )
-
-        public_text = str(persisted_error) + str(session_state.get("last_error"))
-        events = agent_routes.agent_run_event_bus._runs[run_id].events
-        public_text += "".join(str(event.data) for event in events)
+        public_text = str(store.persisted_error) + str(store.session_state.get("last_error"))
+        public_text += "".join(str(data) for _, data in published)
         assert "RUN_FAILED" in public_text
         assert "sk-secret" not in public_text
         assert "SELECT *" not in public_text
@@ -97,79 +140,23 @@ def test_background_unexpected_error_is_redacted(monkeypatch) -> None:
     ],
 )
 def test_background_stream_settles_terminal_state(
-    monkeypatch,
     event_name: str,
     data: dict,
     expected_run_status: str,
     expected_session_status: str,
 ) -> None:
     async def scenario() -> None:
-        run_id = f"run_{expected_run_status}"
-        session_id = f"session_{expected_run_status}"
-        user_id = "user_1"
-        session_state = {"version": 1, "status": "active", "changelog": []}
-        run_state = {"status": "queued"}
-
-        async def get_session_state(requested_session_id, requested_user_id):
-            assert (requested_session_id, requested_user_id) == (session_id, user_id)
-            return dict(session_state)
-
-        async def mark_running(requested_session_id, requested_user_id, version):
-            assert version == session_state["version"]
-            session_state.update(status="running", version=version + 1)
-            return dict(session_state)
-
-        async def mark_active(requested_session_id, requested_user_id, version):
-            assert version == session_state["version"]
-            session_state.update(status="active", version=version + 1)
-            return dict(session_state)
-
-        async def mark_error(requested_session_id, requested_user_id, version, error):
-            assert version == session_state["version"]
-            session_state.update(status="error", version=version + 1, last_error=error)
-            return dict(session_state)
-
-        async def mark_run_status(requested_run_id, requested_user_id, status, **kwargs):
-            assert (requested_run_id, requested_user_id) == (run_id, user_id)
-            if run_state["status"] not in {"completed", "error", "cancelled"}:
-                run_state["status"] = status
-            return {"run_id": run_id, "status": run_state["status"]}
-
-        async def persist_requires_action(**kwargs):
-            assert kwargs == {"run_id": run_id, "user_id": user_id, "data": data}
-            return await mark_run_status(run_id, user_id, "requires_action")
-
-        async def persist_output(**kwargs):
-            return None
-
-        monkeypatch.setattr(agent_routes, "_get_session_state_short_tx", get_session_state)
-        monkeypatch.setattr(agent_routes, "_mark_running_short_tx", mark_running)
-        monkeypatch.setattr(agent_routes, "_mark_active_short_tx", mark_active)
-        monkeypatch.setattr(agent_routes, "_mark_error_short_tx", mark_error)
-        monkeypatch.setattr(agent_routes, "_mark_run_status_short_tx", mark_run_status)
-        monkeypatch.setattr(agent_routes, "_persist_requires_action_short_tx", persist_requires_action)
-        monkeypatch.setattr(agent_routes, "_persist_run_output_short_tx", persist_output)
-
-        await agent_routes.agent_run_event_bus.create_run(run_id, session_id, user_id)
-        await agent_routes._consume_agent_run_background(
-            run_id=run_id,
-            session_id=session_id,
-            user_id=user_id,
-            authorization="Bearer token",
-            agent_payload={},
-            changelog_start_index=0,
-            gateway=FakeGateway(event_name, data),
-            perf_start=perf_counter(),
+        store = MemoryExecutionStore(
+            f"run_{expected_run_status}",
+            f"session_{expected_run_status}",
+            "user_1",
         )
+        published = await run_executor(store, FakeGateway(event_name, data))
 
-        assert run_state["status"] == expected_run_status
-        assert session_state["status"] == expected_session_status
-        statuses = [
-            event.data["status"]
-            for event in agent_routes.agent_run_event_bus._runs[run_id].events
-            if event.event == "run_status"
-        ]
-        assert statuses == ["running", expected_run_status]
-        assert "completed" not in statuses
+        assert store.run_state["status"] == expected_run_status
+        assert store.session_state["status"] == expected_session_status
+        assert store.transitions == ["running", expected_run_status]
+        assert [name for name, _ in published][-1] == event_name
+        assert "completed" not in store.transitions
 
     asyncio.run(scenario())
