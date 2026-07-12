@@ -26,7 +26,7 @@ class AgentReconcileWorker:
         payload = report.to_dict()
         AGENT_RECONCILE_RUNS.labels("completed").inc()
         AGENT_RECONCILE_ACTIONS.labels("action").inc(len(payload["actions"]))
-        AGENT_RECONCILE_ACTIONS.labels("conflict").inc(len(payload["conflicts"]))
+        AGENT_RECONCILE_ACTIONS.labels("conflict").inc(payload["conflicts"])
         if payload["actions"] or payload["conflicts"]:
             logger.warning("Agent reconciliation: {}", payload)
         return payload

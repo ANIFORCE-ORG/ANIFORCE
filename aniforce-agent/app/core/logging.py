@@ -88,13 +88,17 @@ def setup_logging(
 
     handler = InterceptHandler()
     logging.basicConfig(handlers=[handler], level=log_level.upper(), force=True)
-    for name in ("uvicorn", "uvicorn.error", "uvicorn.access", "fastapi"):
+    for name in ("uvicorn", "uvicorn.error", "fastapi"):
         target = logging.getLogger(name)
         target.handlers = [handler]
         target.propagate = False
+    logging.getLogger("uvicorn.access").handlers = [logging.NullHandler()]
+    logging.getLogger("uvicorn.access").propagate = False
     logging.getLogger("sqlalchemy.engine").setLevel(logging.WARNING)
     logging.getLogger("httpx").setLevel(logging.WARNING)
     logging.getLogger("httpcore").setLevel(logging.WARNING)
+    logging.getLogger("mcp").setLevel(logging.WARNING)
+    logging.getLogger("watchfiles").setLevel(logging.WARNING)
 
     logger.bind(event="service.logging.configured").info(
         "Logging configured: level={} format={} output={}",

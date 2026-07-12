@@ -22,7 +22,7 @@ async def get_current_user(
 
     # Demo 模式或没有提供认证信息时，返回测试用户（用于开发）
     if settings.DEMO_MODE or credentials is None:
-        logger.info(
+        logger.debug(
             "[PERF][agent_first_token] backend.auth total_ms={} mode=demo_or_missing_token",
             _elapsed_ms(auth_start),
         )
@@ -45,7 +45,7 @@ async def get_current_user(
                 status_code=status.HTTP_401_UNAUTHORIZED,
                 detail="无效的认证信息",
             )
-        logger.info(
+        logger.debug(
             "[PERF][agent_first_token] backend.auth total_ms={} jwt_decode_ms={} user_id={}",
             _elapsed_ms(auth_start),
             _elapsed_ms(jwt_start),

@@ -108,13 +108,23 @@ async def request_logging_middleware(request: Request, call_next):
         duration = perf_counter() - started
         HTTP_REQUESTS.labels(settings.LOG_SERVICE, request.method, route_path, status_class).inc()
         HTTP_DURATION.labels(settings.LOG_SERVICE, request.method, route_path).observe(duration)
-        logger.bind(event="http.request.completed").info(
-            "HTTP request completed: method={} route={} status={} duration_ms={}",
+        access_logger = logger.bind(event="http.request.completed")
+        access_args = (
             request.method,
             route_path,
             response.status_code,
             int((perf_counter() - started) * 1000),
         )
+        if route_path in {"/health", "/metrics"}:
+            access_logger.debug(
+                "HTTP request completed: method={} route={} status={} duration_ms={}",
+                *access_args,
+            )
+        else:
+            access_logger.info(
+                "HTTP request completed: method={} route={} status={} duration_ms={}",
+                *access_args,
+            )
         return response
 
 
