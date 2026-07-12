@@ -20,8 +20,8 @@ from app.agent.projections.workspace_artifact import WorkspaceArtifactProjection
 from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
-from app.agent.services.approval import AgentApprovalService
-from app.agent.services.run import AgentRunService
+from app.agent.approvals.service import AgentApprovalService
+from app.agent.runs.service import AgentRunService
 
 T = TypeVar("T")
 

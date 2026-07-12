@@ -1,7 +1,7 @@
 """Project Runtime tool events into durable ToolCall audit facts."""
 
 from app.repositories.impl.sqlite_agent_fact_repo import SqliteAgentToolCallRepository
-from app.agent.services.message_assembler import ChatEventAssembler
+from app.agent.messages.assembler import ChatEventAssembler
 
 
 class ToolAuditProjection:

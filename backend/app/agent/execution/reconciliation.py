@@ -13,7 +13,7 @@ from app.models.agent_run import AgentRun
 from app.models.session_state import SessionState
 from app.models.agent_session_lease import AgentSessionLease
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.agent.services.run import AgentRunService
+from app.agent.runs.service import AgentRunService
 
 
 @dataclass(frozen=True)

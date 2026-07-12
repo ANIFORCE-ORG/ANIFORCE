@@ -7,13 +7,13 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.api.common import authorization, error_payload
-from app.agent.run_commands import AgentRunCommands, CreateRunCommand
+from app.agent.runs.commands import AgentRunCommands, CreateRunCommand
 from app.api.deps import get_current_user
 from app.config.database import get_db, get_session_maker
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.agent.gateway import AgentGatewayError, AgentGatewayService
-from app.agent.services.run import AgentRunError, AgentRunService
-from app.agent.services.session import AgentSessionError
+from app.agent.runs.service import AgentRunError, AgentRunService
+from app.agent.sessions.service import AgentSessionError
 
 router = APIRouter()
 

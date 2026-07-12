@@ -13,7 +13,7 @@ sys.path.insert(0, str(backend_root))
 from app.models.agent_run import AgentRun
 from app.models.agent_run_event import AgentRunEvent
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.agent.services.run import AgentRunService
+from app.agent.runs.service import AgentRunService
 
 
 def test_persistent_event_sequence_and_terminal_marker() -> None:

@@ -12,7 +12,7 @@ from pathlib import Path
 backend_root = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(backend_root))
 
-from app.agent.reconciliation import AgentStateReconciler
+from app.agent.execution.reconciliation import AgentStateReconciler
 from app.config.database import get_session_maker
 
 

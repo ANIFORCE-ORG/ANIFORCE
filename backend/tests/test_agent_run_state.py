@@ -1,6 +1,6 @@
 import pytest
 
-from app.agent.run_state import (
+from app.agent.runs.state import (
     RunStatus,
     can_cancel,
     can_finish,

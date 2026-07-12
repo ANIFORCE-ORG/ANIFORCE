@@ -8,7 +8,7 @@ from loguru import logger
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.agent.api.common import error_payload, sse_event, with_session
-from app.agent.approval_commands import AgentApprovalCommands, ResolveApprovalCommand
+from app.agent.approvals.commands import AgentApprovalCommands, ResolveApprovalCommand
 from app.api.deps import get_current_user
 from app.config.database import get_db, get_session_maker
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
@@ -16,9 +16,9 @@ from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApproval
 from app.repositories.impl.sqlite_agent_run_event_repo import SqliteAgentRunEventRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
-from app.agent.services.approval import AgentApprovalError
-from app.agent.services.run import AgentRunError, AgentRunService
-from app.agent.services.business_context import BusinessContextBuilder
+from app.agent.approvals.service import AgentApprovalError
+from app.agent.runs.service import AgentRunError, AgentRunService
+from app.agent.sessions.business_context import BusinessContextBuilder
 from app.agent.event_stream import RedisRunEventStream
 
 router = APIRouter()

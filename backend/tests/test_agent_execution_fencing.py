@@ -15,7 +15,7 @@ sys.path.insert(0, str(backend_root))
 from app.config.database import Base
 from app.models import AgentRun, AgentSession, AgentSessionLease
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.agent.services.run import AgentRunService
+from app.agent.runs.service import AgentRunService
 
 
 def test_session_lease_and_terminal_fencing_across_engines() -> None:

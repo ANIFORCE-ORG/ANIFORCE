@@ -1,4 +1,4 @@
-from app.agent.runtime_event_protocol import is_client_stream_event, parse_sse_events
+from app.agent.execution.protocol import is_client_stream_event, parse_sse_events
 
 
 def test_parse_sse_events_preserves_incomplete_frame() -> None:

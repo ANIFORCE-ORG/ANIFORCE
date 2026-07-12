@@ -5,7 +5,7 @@ from time import perf_counter
 
 import pytest
 
-from app.agent.run_executor import execute_agent_run
+from app.agent.execution.executor import execute_agent_run
 
 
 class ExplodingGateway:

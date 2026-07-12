@@ -7,13 +7,13 @@ from time import perf_counter
 
 from loguru import logger
 
-from app.agent.run_execution_store import AgentRunExecutionStore
-from app.agent.runtime_event_protocol import is_client_stream_event, parse_sse_events
+from app.agent.execution.store import AgentRunExecutionStore
+from app.agent.execution.protocol import is_client_stream_event, parse_sse_events
 from app.agent.gateway import AgentGatewayError, AgentGatewayService
-from app.agent.event_reducer import AgentRunEventProcessor
-from app.agent.services.message_assembler import ChatEventAssembler
+from app.agent.execution.event_reducer import AgentRunEventProcessor
+from app.agent.messages.assembler import ChatEventAssembler
 from app.agent.event_stream import RedisRunEventStream
-from app.agent.services.side_effect import SideEffectService
+from app.agent.projections.side_effect import SideEffectService
 
 
 def _elapsed_ms(start: float) -> int:

@@ -7,12 +7,12 @@ from fastapi import HTTPException
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 from app.agent.api import approvals
-from app.agent.approval_commands import AgentApprovalCommands, ResolveApprovalCommand
+from app.agent.approvals.commands import AgentApprovalCommands, ResolveApprovalCommand
 from app.models.agent_approval import AgentApproval
 from app.models.agent_run import AgentRun
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.agent.services.approval import AgentApprovalError, AgentApprovalService
+from app.agent.approvals.service import AgentApprovalError, AgentApprovalService
 
 
 class FakeRequest:

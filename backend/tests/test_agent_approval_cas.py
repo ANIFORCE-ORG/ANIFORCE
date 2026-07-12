@@ -15,7 +15,7 @@ from app.models.agent_approval import AgentApproval
 from app.models.agent_run import AgentRun
 from app.repositories.impl.sqlite_agent_approval_repo import SqliteAgentApprovalRepository
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-from app.agent.services.approval import AgentApprovalError, AgentApprovalService
+from app.agent.approvals.service import AgentApprovalError, AgentApprovalService
 
 
 async def _seed_approval(session, *, expires_at: datetime) -> None:

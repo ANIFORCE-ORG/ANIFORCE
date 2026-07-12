@@ -10,8 +10,8 @@ from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRe
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 from app.agent.gateway import AgentGatewayError, AgentGatewayService
-from app.agent.services.session import AgentSessionError, AgentSessionService
-from app.agent.services.snapshot import AgentSnapshotService
+from app.agent.sessions.service import AgentSessionError, AgentSessionService
+from app.agent.sessions.snapshot import AgentSnapshotService
 
 router = APIRouter()
 

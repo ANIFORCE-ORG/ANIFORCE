@@ -11,8 +11,8 @@ from time import perf_counter
 from jose import jwt
 from loguru import logger
 
-from app.agent.run_execution_store import AgentRunExecutionStore
-from app.agent.run_executor import execute_agent_run
+from app.agent.execution.store import AgentRunExecutionStore
+from app.agent.execution.executor import execute_agent_run
 from app.config.database import get_session_maker
 from app.config.settings import get_settings
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
