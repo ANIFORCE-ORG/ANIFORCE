@@ -2,10 +2,14 @@
 
 from uuid import uuid4
 
+from app.agent.run_state import (
+    RunStatus,
+    can_cancel,
+    can_finish,
+    can_mark_running,
+    is_terminal,
+)
 from app.repositories.impl.sqlite_agent_run_repo import SqliteAgentRunRepository
-
-ACTIVE_RUN_STATUSES = {"queued", "resume_queued", "running", "requires_action", "cancel_requested"}
-TERMINAL_RUN_STATUSES = {"completed", "error", "cancelled", "expired"}
 
 
 class AgentRunError(Exception):
@@ -49,7 +53,7 @@ class AgentRunService:
             user_id=user_id,
             input_text=input_text,
             idempotency_key=idempotency_key,
-            status="queued",
+            status=RunStatus.QUEUED,
             execution_context=execution_context,
         )
         return run, False
@@ -62,9 +66,9 @@ class AgentRunService:
 
     async def mark_running(self, run_id: str, user_id: str) -> dict | None:
         run = await self.get(run_id, user_id)
-        if run["status"] in TERMINAL_RUN_STATUSES or run["status"] == "running":
+        if not can_mark_running(run["status"]):
             return run
-        event_type = "run.resuming" if run["status"] in {"requires_action", "resume_queued"} else "run.started"
+        event_type = "run.resuming" if run["status"] in {RunStatus.REQUIRES_ACTION, RunStatus.RESUME_QUEUED} else "run.started"
         return await self.repo.transition_with_event(
             run_id, user_id, "running", event_type=event_type,
             payload={"run_id": run_id, "status": "running"}, is_terminal=False,
@@ -79,7 +83,7 @@ class AgentRunService:
         lease_owner: str | None = None,
     ) -> dict | None:
         run = await self.get(run_id, user_id)
-        if run["status"] in TERMINAL_RUN_STATUSES:
+        if not can_finish(run["status"]):
             return run
         return await self.repo.transition_with_event(
             run_id, user_id, "completed", event_type="run.completed",
@@ -96,7 +100,7 @@ class AgentRunService:
         lease_owner: str | None = None,
     ) -> dict | None:
         run = await self.get(run_id, user_id)
-        if run["status"] in TERMINAL_RUN_STATUSES:
+        if is_terminal(run["status"]):
             return run
         return await self.repo.transition_with_event(
             run_id, user_id, "requires_action", event_type="run.requires_action",
@@ -112,7 +116,7 @@ class AgentRunService:
         lease_owner: str | None = None,
     ) -> dict | None:
         run = await self.get(run_id, user_id)
-        if run["status"] in TERMINAL_RUN_STATUSES:
+        if not can_finish(run["status"]):
             return run
         return await self.repo.transition_with_event(
             run_id, user_id, "error", event_type="run.error",
@@ -127,7 +131,7 @@ class AgentRunService:
         lease_owner: str | None = None,
     ) -> dict | None:
         run = await self.get(run_id, user_id)
-        if run["status"] not in ACTIVE_RUN_STATUSES:
+        if not can_cancel(run["status"]):
             return run
         return await self.repo.transition_with_event(
             run_id, user_id, "cancelled", event_type="run.cancelled",

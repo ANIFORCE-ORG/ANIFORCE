@@ -8,11 +8,10 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.agent.run_state import ACTIVE_RUN_STATUSES, PERSISTED_TERMINAL_RUN_STATUSES
 from app.models import AgentRun, AgentRunEvent, AgentSessionLease
 
-
-ACTIVE_RUN_STATUSES = {"queued", "resume_queued", "running", "requires_action", "cancel_requested"}
-TERMINAL_RUN_STATUSES = {"completed", "error", "cancelled"}
+TERMINAL_RUN_STATUSES = PERSISTED_TERMINAL_RUN_STATUSES
 
 
 class SqliteAgentRunRepository:
