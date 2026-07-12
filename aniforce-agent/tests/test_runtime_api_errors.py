@@ -9,7 +9,7 @@ from fastapi import HTTPException
 agent_root = Path(__file__).parent.parent
 sys.path.insert(0, str(agent_root))
 
-from app.agent.runtime_sessions import RuntimeSessionNotRegistered, RuntimeSessionOwnerMismatch
+from app.runtime.sessions import RuntimeSessionNotRegistered, RuntimeSessionOwnerMismatch
 from app.api.runtime_checkpoints import resume_checkpoint
 from app.api.runtime_sessions import get_session_history
 
@@ -52,7 +52,7 @@ class HistoryBoundaryRuntime:
 
 
 def test_checkpoint_api_returns_claim_http_status() -> None:
-    from app.agent.checkpoints import RuntimeCheckpointClaimError
+    from app.runtime.checkpoints.store import RuntimeCheckpointClaimError
 
     async def scenario() -> None:
         for status_code, code in ((410, "CHECKPOINT_EXPIRED"), (409, "CHECKPOINT_CONFLICT")):

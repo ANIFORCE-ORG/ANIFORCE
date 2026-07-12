@@ -1,6 +1,6 @@
 """Coordinate SDK RunState checkpoint persistence for Runtime execution."""
 
-from app.agent.checkpoints import (
+from app.runtime.checkpoints.store import (
     RuntimeCheckpointStore,
     interruption_to_dict,
     serialize_workspace_context_for_checkpoint,

@@ -13,7 +13,7 @@ from fastapi.responses import StreamingResponse
 from loguru import logger
 
 from app.auth import get_current_user
-from app.agent.runtime import AgentRuntime
+from app.runtime.service import AgentRuntime
 from app.core.errors import unexpected_error_payload
 
 router = APIRouter(prefix="/runtime/runs", tags=["runtime-runs"])

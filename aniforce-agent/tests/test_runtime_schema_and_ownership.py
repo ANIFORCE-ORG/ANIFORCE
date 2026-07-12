@@ -13,8 +13,8 @@ agent_root = Path(__file__).parent.parent
 project_root = agent_root.parent
 sys.path.insert(0, str(agent_root))
 
-from app.agent.runtime_migrations import RuntimeSchemaMigrator
-from app.agent.runtime_sessions import RuntimeSessionOwnerMismatch, RuntimeSessionStore
+from app.runtime.migrations import RuntimeSchemaMigrator
+from app.runtime.sessions import RuntimeSessionOwnerMismatch, RuntimeSessionStore
 
 
 def _migrate_runtime_database(db_path: str, output) -> None:

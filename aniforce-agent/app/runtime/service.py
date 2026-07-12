@@ -16,11 +16,12 @@ from app.agent.openai_adapter import OpenAISDKAdapter
 from app.agent.workspace_context import WorkspaceRunContext
 from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
-from app.agent.runtime_sessions import RuntimeSessionOwnerMismatch, RuntimeSessionStore
-from app.agent.runtime_controls import RuntimeRunControlStore
+from app.runtime.sessions import RuntimeSessionOwnerMismatch, RuntimeSessionStore
+from app.runtime.controls import RuntimeRunControlStore
 from app.core.errors import AppError, AgentErrorCode, unexpected_error_payload
 from app.core.tracing import get_tracer
-from app.runtime.checkpoint_service import RuntimeCheckpointService
+from app.runtime.checkpoints.service import RuntimeCheckpointService
+from app.runtime.history import RuntimeHistoryReader
 from app.runtime.mcp_context import mcp_connection
 from app.runtime.workspace_tool import request_workspace_projection
 
@@ -422,16 +423,5 @@ class AgentRuntime:
             raise
 
     async def get_session_history(self, session_id: str, user_id: str) -> list[dict]:
-        """从 agent.db SQLAlchemySession 读取当前用户的 SDK 原生对话历史。"""
-        from agents.extensions.memory.sqlalchemy_session import SQLAlchemySession
-
-        sdk_session_id = session_id
-        if self.adapter.api_mode == "chat_completions":
-            sdk_session_id = f"chat_completions:{session_id}"
-
-        engine = self.adapter._get_agent_db_engine(self.agent_runtime_db_url)
-        await RuntimeSessionStore(engine).require_owner(session_id, user_id)
-        session = SQLAlchemySession(sdk_session_id, engine=engine, create_tables=False)
-        items = await session.get_items()
-        return [item if isinstance(item, dict) else dict(item) for item in items]
+        return await RuntimeHistoryReader(self.adapter, self.agent_runtime_db_url).read(session_id, user_id)
 

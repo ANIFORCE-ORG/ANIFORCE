@@ -11,8 +11,8 @@ from loguru import logger
 
 from app.config.settings import settings
 from app.agent.openai_adapter import OpenAISDKAdapter
-from app.agent.runtime import AgentRuntime
-from app.agent.runtime_migrations import RuntimeSchemaMigrator
+from app.runtime.service import AgentRuntime
+from app.runtime.migrations import RuntimeSchemaMigrator
 from app.mcp_server import get_mcp_starlette_app, mcp
 from app.core.errors import AppError, get_http_status
 

@@ -11,8 +11,8 @@ from sqlalchemy.ext.asyncio import create_async_engine
 agent_root = Path(__file__).parent.parent
 sys.path.insert(0, str(agent_root))
 
-from app.agent.checkpoints import RuntimeCheckpointClaimError, RuntimeCheckpointStore
-from app.agent.runtime_migrations import RuntimeSchemaMigrator
+from app.runtime.checkpoints.store import RuntimeCheckpointClaimError, RuntimeCheckpointStore
+from app.runtime.migrations import RuntimeSchemaMigrator
 
 
 def test_only_one_concurrent_resume_can_claim_checkpoint() -> None:

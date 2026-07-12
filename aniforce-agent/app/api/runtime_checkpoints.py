@@ -6,8 +6,8 @@ from fastapi import APIRouter, Depends, HTTPException, Request
 from fastapi.responses import StreamingResponse
 from loguru import logger
 
-from app.agent.checkpoints import RuntimeCheckpointClaimError
-from app.agent.runtime import AgentRuntime
+from app.runtime.checkpoints.store import RuntimeCheckpointClaimError
+from app.runtime.service import AgentRuntime
 from app.auth import get_current_user
 from app.core.errors import unexpected_error_payload
 
