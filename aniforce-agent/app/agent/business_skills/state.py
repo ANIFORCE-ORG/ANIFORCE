@@ -92,6 +92,8 @@ def build_task_state(
         slot for slot in skill.required_slots if not context.skill_slots.get(slot)
     ]
     status = terminal_status or context.skill_status or ("collecting_inputs" if missing else "ready")
+    if status in {"executing", "completed", "cancelled", "failed"}:
+        missing = []
     result["active_skill"] = {
         "name": skill.name,
         "version": skill.version,
@@ -99,7 +101,9 @@ def build_task_state(
         "slots": dict(context.skill_slots),
         "missing_slots": missing,
         "load_reason": context.skill_load_reason,
-        "pending_question": context.skill_pending_question,
+        "pending_question": (
+            context.skill_pending_question if status == "collecting_inputs" else None
+        ),
     }
     confirmed = dict(result.get("confirmed_entities") or {})
     for key in ("project_id", "campaign_id", "material_id"):

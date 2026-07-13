@@ -37,10 +37,13 @@ describe('business task presentation', () => {
         name: 'safe_business_mutation',
         version: '1.0',
         status: 'completed',
+        missing_slots: ['operation'],
+        pending_question: '旧问题',
       },
     }, null, 's1')
     expect(completed?.status).toBe('completed')
     expect(completed?.phase).toBe('verify')
+    expect(completed?.summary).toContain('已执行完成')
     expect(completed?.task_definition.phases.at(-1)?.label).toBe('验证实际结果')
   })
 

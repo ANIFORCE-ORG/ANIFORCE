@@ -112,6 +112,15 @@ def test_skill_task_state_round_trip_across_run_and_checkpoint():
     assert restored.skill_status == "ready"
 
 
+def test_execution_facts_clear_stale_missing_slots_and_questions():
+    value = context()
+    load_skill_into_context(value, "safe_business_mutation", "matched_user_intent")
+    value.skill_pending_question = "还需要操作对象"
+    completed = build_task_state(value, terminal_status="completed")
+    assert completed["active_skill"]["missing_slots"] == []
+    assert completed["active_skill"]["pending_question"] is None
+
+
 def test_completed_skill_is_not_restored_into_an_unrelated_run():
     value = context()
     value.session_state = {

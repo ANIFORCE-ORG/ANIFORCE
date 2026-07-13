@@ -48,10 +48,11 @@ export function buildAgentTaskPresentation(
           ? 'apply'
           : 'evidence'
   const missing = active.missing_slots || []
-  const summary = active.pending_question
+  const summary = (active.status === 'completed' ? '任务已执行完成，并已记录验证状态。' : '')
+    || (active.status === 'cancelled' ? '任务已取消，未继续执行后续操作。' : '')
+    || active.pending_question
     || (missing.length ? `还需要补充：${missing.join('、')}` : '')
     || (active.status === 'executing' ? '业务操作已进入确认或执行阶段。' : '')
-    || (active.status === 'completed' ? '任务已执行完成，并已记录验证状态。' : '')
     || taskState?.last_conclusion
     || '正在根据当前业务上下文推进任务。'
   const title = skillLabels[active.name] || active.name
