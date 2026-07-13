@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import type { AgentMessage } from '@/api/agent'
 import ActivityMessageView from './ActivityMessageView.vue'
-import { getFriendlyToolName, getToolIcon } from '@/utils/toolNameMapping'
+import { getToolIcon } from '@/utils/toolNameMapping'
 
 const props = defineProps<{
   message: AgentMessage
@@ -145,7 +145,10 @@ function isLastBlock(index: number): boolean {
   return index === blocks.value.length - 1
 }
 function isThinkingExpanded(index: number): boolean {
-  // 普通用户界面默认收起模型分析过程；需要排障时再手动展开。
+  // 流式中且是当前正在输出的 thinking block：默认展开。
+  if (props.isStreaming && isLastBlock(index) && blocks.value[index]?.type === 'thinking') {
+    return expandedThinking.value[index] ?? true
+  }
   return expandedThinking.value[index] ?? false
 }
 
@@ -227,25 +230,7 @@ function toolId(block: Record<string, unknown>): string {
   return String(block.toolCallId || block.id || '')
 }
 function toolName(block: Record<string, unknown>): string {
-  const rawName = String(block.toolName || block.name || 'tool')
-  return getFriendlyToolName(rawName)
-}
-function toolStageLabel(block: Record<string, unknown>): string {
-  const rawName = String(block.toolName || block.name || '')
-  if (rawName === 'load_business_skill') return hasToolResult(block) ? '已选择合适的处理方式' : '正在选择处理方式…'
-  if (rawName === 'update_business_skill_state') return hasToolResult(block) ? '任务信息已更新' : '正在整理任务信息…'
-  if (rawName === 'request_workspace_projection') return hasToolResult(block) ? '结果已展示到工作台' : '正在整理工作台结果…'
-  const isWrite = /^(create_|update_|delete_|add_|remove_)/.test(rawName)
-  if (isToolError(block)) return isWrite ? '业务操作失败' : '业务数据查询失败'
-  if (!hasToolResult(block)) return isWrite ? '正在执行业务操作…' : '正在查询业务数据…'
-  const result = block.result
-  if (result && typeof result === 'object') {
-    const operationStatus = String((result as Record<string, unknown>).operation_status || '')
-    if (operationStatus === 'executed_and_verified') return '业务操作已执行并验证'
-    if (operationStatus === 'executed_verification_failed') return '业务操作已执行，但验证未通过'
-    if (operationStatus === 'status_unknown') return '业务操作结果正在核实'
-  }
-  return isWrite ? '业务操作已返回结果' : '业务数据已获取'
+  return String(block.toolName || block.name || 'tool')
 }
 function toolIconEmoji(block: Record<string, unknown>): string {
   const rawName = String(block.toolName || block.name || 'tool')
@@ -255,8 +240,14 @@ function toolInput(block: Record<string, unknown>): unknown {
   return block.input || block.arguments || {}
 }
 function toolPreview(block: Record<string, unknown>): string {
-  // 不再显示参数预览
-  return ''
+  const input = toolInput(block)
+  if (!input || typeof input !== 'object' || Array.isArray(input)) return ''
+  const record = input as Record<string, unknown>
+  for (const key of ['command', 'path', 'file_path', 'pattern', 'query']) {
+    if (record[key]) return String(record[key]).slice(0, 120)
+  }
+  const first = Object.keys(record)[0]
+  return first ? String(record[first]).slice(0, 120) : ''
 }
 function imageSrc(block: Record<string, unknown>): string {
   if (typeof block.data === 'string') return `data:${String(block.mimeType || 'image/png')};base64,${block.data}`
@@ -386,6 +377,12 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
   >
+    <!-- 流式指示器：只在有文本输出时显示 -->
+    <div v-if="isStreaming && hasTextOutput" class="streaming-indicators">
+      <span v-if="estimatedTokens > 0" class="stream-stat">↓ {{ estimatedTokens }}</span>
+      <span v-if="tps !== null" class="tps-badge">{{ tps.toFixed(1) }} t/s</span>
+    </div>
+
     <!-- 等待首块：脉冲点动效 -->
     <div v-if="isStreaming && blocks.length === 0" class="waiting-indicator">
       <span class="waiting-dot"></span>
@@ -400,7 +397,8 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
         <div v-if="block.type === 'thinking'" class="thinking-block" :class="{ 'is-streaming-thinking': isStreaming }">
           <button class="thinking-header" @click="expandedThinking[i] = !expandedThinking[i]">
             <span class="thinking-dot" :class="{ active: isStreaming && isLastBlock(i) }"></span>
-            <span class="thinking-label">分析过程（调试）</span>
+            <span class="thinking-label">Thinking</span>
+            <span v-if="thinkingCharCount(i) > 0 && !isStreaming" class="thinking-char-hint">{{ thinkingCharCount(i) }} 字</span>
             <span v-if="thinkingDuration(i) !== undefined" class="thinking-duration">{{ thinkingDuration(i) }}s</span>
             <svg class="thinking-chevron" :class="{ expanded: isThinkingExpanded(i) }" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="2 3.5 5 6.5 8 3.5" />
@@ -439,19 +437,28 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
           </div>
         </div>
 
-        <!-- Tool Call Block: 紧凑卡片，不展示输入输出 -->
+        <!-- Tool Call Block: 可展开查看原始参数和结果。 -->
         <div v-else-if="block.type === 'toolCall'" class="tool-call-block" :class="{ error: isToolError(block), 'is-running': isStreaming && !hasToolResult(block) }">
-          <div class="tool-header">
+          <button class="tool-header" @click="expandedTools[toolId(block)] = !expandedTools[toolId(block)]">
             <span class="tool-status-dot" :class="hasToolResult(block) ? (isToolError(block) ? 'error' : 'done') : 'running'"></span>
             <span class="tool-icon">{{ toolIconEmoji(block) }}</span>
-            <span class="tool-name">{{ toolStageLabel(block) }}</span>
-          </div>
+            <span class="tool-name">{{ toolName(block) }}</span>
+            <span class="tool-preview">{{ toolPreview(block) }}</span>
+            <svg class="tool-chevron" :class="{ expanded: expandedTools[toolId(block)] }" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="2 3.5 5 6.5 8 3.5" />
+            </svg>
+          </button>
+          <template v-if="expandedTools[toolId(block)]">
+            <pre class="tool-pre">{{ formatPayload(toolInput(block)) }}</pre>
+            <pre v-if="hasToolResult(block)" class="tool-pre result">{{ toolBlockResultText(block) || '(no output)' }}</pre>
+          </template>
         </div>
       </template>
     </div>
 
-    <!-- 底部行：普通用户只显示复制和时间；Token/成本保留在观测系统。 -->
+    <!-- 底部行：usage + copy + timestamp（完成时显示） -->
     <div v-if="!isStreaming" class="assistant-footer">
+      <span v-if="usageText" class="usage-text">{{ usageText }}</span>
       <button v-if="textContent" class="copy-button" :class="{ visible: hovered || copied }" @click="copy(textContent)">
         <span class="material-symbols-outlined">content_copy</span>
       </button>
@@ -1047,10 +1054,20 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
   padding: 8px 12px;
+  border: 0;
+  background: none;
   color: var(--text, #202124);
+  cursor: pointer;
+  text-align: left;
   font-size: 12px;
   min-width: 0;
+  transition: background 0.12s ease;
+}
+
+.tool-header:hover {
+  background: rgba(100, 116, 139, 0.05);
 }
 
 .tool-status-dot {
@@ -1112,15 +1129,57 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
 }
 
 .tool-name {
-  flex: 1;
+  flex-shrink: 0;
   color: var(--text, #202124);
-  font-weight: 500;
-  font-size: 12px;
+  font-family: var(--font-mono, monospace);
+  font-weight: 600;
+  font-size: 11.5px;
   line-height: 1.4;
 }
 
 .tool-call-block.error .tool-name {
   color: var(--error, #d93025);
+}
+
+.tool-preview {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-dim, #9aa0a6);
+  font-family: var(--font-mono, monospace);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-chevron {
+  flex-shrink: 0;
+  color: var(--text-dim, #9aa0a6);
+  transform: rotate(0deg);
+  transition: transform 0.15s ease;
+}
+
+.tool-chevron.expanded {
+  transform: rotate(180deg);
+}
+
+.tool-pre {
+  overflow: auto;
+  max-height: 400px;
+  margin: 0;
+  border-top: 1px solid var(--outline-variant, #e8eaed);
+  padding: 10px 12px;
+  background: var(--surface, #fff);
+  color: var(--text-muted, #5f6368);
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.tool-pre.result {
+  background: var(--bg, #fff);
 }
 
 /* 流式指示器内部元素 */
