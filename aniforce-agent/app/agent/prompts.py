@@ -11,7 +11,8 @@ from typing import List, Optional
 
 from agents import Agent, RunContextWrapper
 
-from app.agent.business_skills.registry import business_skill_registry
+from app.agent.business_skills.registry import MCP_TOOL_NAMES, business_skill_registry
+from app.agent.business_skills.tool_filter import allowed_mcp_tools
 from app.agent.workspace_context import WorkspaceRunContext
 from app.config.settings import get_settings
 
@@ -118,37 +119,12 @@ def workspace_instructions(
     agent: Agent[WorkspaceRunContext],
 ) -> str:
     """Dynamic instructions：把 Workspace 现场注入 LLM 可见上下文。"""
+    wctx = ctx.context
+    visible_mcp_tools = allowed_mcp_tools(wctx)
     base_prompt = SystemPromptManager.get_react_prompt(
-        available_mcp_tools=[
-            "list_projects",
-            "create_project",
-            "get_project_detail",
-            "get_project_performance",
-            "update_project",
-            "delete_project",
-            "list_campaigns",
-            "create_campaign",
-            "get_campaign_detail",
-            "get_campaign_performance",
-            "update_campaign",
-            "update_campaign_status",
-            "get_campaign_materials",
-            "add_material_to_campaign",
-            "remove_material_from_campaign",
-            "delete_campaign",
-            "list_materials",
-            "create_material",
-            "get_material_detail",
-            "get_material_image",
-            "list_available_images",
-            "update_material",
-            "add_material_to_project",
-            "remove_material_from_project",
-            "delete_material",
-        ],
+        available_mcp_tools=sorted(visible_mcp_tools or MCP_TOOL_NAMES),
     )
 
-    wctx = ctx.context
     snapshot = wctx.ui_snapshot or {}
     selected = snapshot.get("selectedEntities") or []
     draft = snapshot.get("draftEdits") or {}

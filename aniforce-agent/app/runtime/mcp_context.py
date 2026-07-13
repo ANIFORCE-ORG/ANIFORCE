@@ -6,6 +6,7 @@ from time import perf_counter
 from agents.mcp import MCPServerStreamableHttp, MCPToolMetaContext
 from loguru import logger
 
+from app.agent.business_skills.tool_filter import business_skill_tool_filter
 from app.config.settings import get_settings
 
 APPROVAL_REQUIRED_TOOL_NAMES = [
@@ -56,6 +57,7 @@ async def mcp_connection(
         max_retry_attempts=2,
         require_approval={"always": {"tool_names": APPROVAL_REQUIRED_TOOL_NAMES}},
         tool_meta_resolver=resolve_meta,
+        tool_filter=business_skill_tool_filter,
     )
     started = perf_counter()
     perf_log = logger.bind(session_id=session_id, user_id=user_id, run_id=run_id)
