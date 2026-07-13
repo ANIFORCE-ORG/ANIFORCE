@@ -67,6 +67,9 @@ class Material(Base):
     
     # 关系
     user: Mapped["User"] = relationship(back_populates="materials")
+    performance: Mapped[list["MaterialPerformance"]] = relationship(
+        back_populates="material", cascade="all, delete-orphan"
+    )
     
     # 辅助方法
     def get_project_ids(self) -> list[str]:

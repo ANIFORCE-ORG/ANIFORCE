@@ -4,6 +4,8 @@ from app.models.project import Project, ProjectStatus
 from app.models.campaign import Campaign, CampaignStatus
 from app.models.material import Material, MaterialType
 from app.models.metric import Metric
+from app.models.ad_set import AdSet, AdSetMetric, AdSetStatus
+from app.models.material_performance import MaterialPerformance
 from app.models.platform_connection import PlatformConnection
 from app.models.sub_account_binding import SubAccountBinding
 from app.models.organization import Organization
@@ -29,6 +31,10 @@ __all__ = [
     "Material",
     "MaterialType",
     "Metric",
+    "AdSet",
+    "AdSetMetric",
+    "AdSetStatus",
+    "MaterialPerformance",
     "PlatformConnection",
     "SubAccountBinding",
     "Organization",

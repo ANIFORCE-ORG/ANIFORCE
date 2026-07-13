@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.protocols import CampaignRepository, MaterialRepository, MetricRepository, ProjectRepository
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_metric_repo, get_project_repo
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
+from app.repositories.impl.sqlite_ad_set_evidence_repo import SqliteAdSetEvidenceRepository
 from app.config.database import get_db
 from app.api.deps import get_current_user
 from app.services.idempotency_service import IDEMPOTENCY_HEADER, IdempotencyService
@@ -146,6 +147,7 @@ async def get_campaign_performance(
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
     metric_repo: MetricRepository = Depends(get_metric_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """Return permission-checked campaign evidence for Agent diagnosis."""
     campaign = await campaign_repo.get_by_id(campaign_id)
@@ -154,7 +156,11 @@ async def get_campaign_performance(
     project = await project_repo.get_by_id(campaign["project_id"])
     if not project or project["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
-    return await AgentEvidenceService(campaign_repo, metric_repo).campaign_performance(campaign, hours)
+    return await AgentEvidenceService(
+        campaign_repo,
+        metric_repo,
+        SqliteAdSetEvidenceRepository(session),
+    ).campaign_performance(campaign, hours)
 
 
 @router.post("")

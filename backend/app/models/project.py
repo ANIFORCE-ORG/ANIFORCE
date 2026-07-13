@@ -15,7 +15,7 @@ class ProjectStatus(str, enum.Enum):
 
 
 class Project(Base):
-    """项目模型 - 对应 Meta Campaign 层级"""
+    """产品/市场工作空间，聚合跨平台 Campaign、素材和预算。"""
     __tablename__ = "projects"
 
     # 主键和外键

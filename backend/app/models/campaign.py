@@ -25,7 +25,7 @@ class Platform(str, enum.Enum):
 
 
 class Campaign(Base):
-    """广告系列模型 - 对应 Meta Ad Set 层级"""
+    """跨平台广告 Campaign，下面可包含多个定向和预算 Ad Set。"""
     __tablename__ = "campaigns"
 
     # 主键和外键
@@ -83,6 +83,7 @@ class Campaign(Base):
     # 关系
     project: Mapped["Project"] = relationship(back_populates="campaigns")
     metrics: Mapped[list["Metric"]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
+    ad_sets: Mapped[list["AdSet"]] = relationship(back_populates="campaign", cascade="all, delete-orphan")
 
     # 辅助方法
     def get_material_ids(self) -> list[str]:

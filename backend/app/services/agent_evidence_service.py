@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Protocol
 
 from app.repositories.protocols import CampaignRepository, MetricRepository
 
@@ -23,10 +23,20 @@ _METRIC_FIELDS = (
 )
 
 
+class AdSetEvidenceRepository(Protocol):
+    async def get_campaign_breakdown(self, campaign_id: str, hours: int = 168) -> dict: ...
+
+
 class AgentEvidenceService:
-    def __init__(self, campaign_repo: CampaignRepository, metric_repo: MetricRepository) -> None:
+    def __init__(
+        self,
+        campaign_repo: CampaignRepository,
+        metric_repo: MetricRepository,
+        ad_set_evidence_repo: AdSetEvidenceRepository | None = None,
+    ) -> None:
         self.campaign_repo = campaign_repo
         self.metric_repo = metric_repo
+        self.ad_set_evidence_repo = ad_set_evidence_repo
 
     async def campaign_performance(self, campaign: dict, hours: int) -> dict:
         window_hours = self._window(hours)
@@ -35,6 +45,11 @@ class AgentEvidenceService:
         if not latest:
             return self._empty_payload("campaign", campaign, window_hours)
         first = series[0] if series else latest
+        breakdown = (
+            await self.ad_set_evidence_repo.get_campaign_breakdown(campaign["id"], window_hours)
+            if self.ad_set_evidence_repo
+            else {"ad_sets": [], "materials": []}
+        )
         return {
             "scope": "campaign",
             "campaign": self._campaign_identity(campaign),
@@ -48,6 +63,8 @@ class AgentEvidenceService:
             },
             "series": [self._metrics(item, include_timestamp=True) for item in series],
             "data_freshness": {"last_updated_at": latest.get("timestamp")},
+            "ad_set_breakdown": breakdown["ad_sets"],
+            "material_breakdown": breakdown["materials"],
         }
 
     async def project_performance(self, project: dict, hours: int, limit: int = 100) -> dict:

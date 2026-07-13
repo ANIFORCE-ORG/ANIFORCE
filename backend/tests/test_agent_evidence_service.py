@@ -11,6 +11,16 @@ class CampaignRepo:
         return [item for item in self.campaigns if item["project_id"] == project_id][:limit]
 
 
+class AdSetEvidenceRepo:
+    def __init__(self, payload):
+        self.payload = payload
+        self.requests = []
+
+    async def get_campaign_breakdown(self, campaign_id, hours=168):
+        self.requests.append((campaign_id, hours))
+        return self.payload
+
+
 class MetricRepo:
     def __init__(self, series):
         self.series = series
@@ -67,6 +77,25 @@ def test_campaign_evidence_exposes_latest_change_and_window():
     assert result["change"]["conversions"] == 3
     assert result["window"]["timezone"] == "UTC"
     assert repo.requested_hours == [("c1", 168)]
+
+
+def test_campaign_evidence_includes_ad_set_and_material_breakdown():
+    metric_repo = MetricRepo({
+        "c1": [metric("2026-07-13T00:00:00", 100, 10, 2, 1, 20, 30)]
+    })
+    breakdown_repo = AdSetEvidenceRepo({
+        "ad_sets": [{"id": "a1", "name": "Broad", "data_available": True}],
+        "materials": [{"material_id": "m1", "roi": -0.2, "frequency": 5.1}],
+    })
+    result = asyncio.run(
+        AgentEvidenceService(CampaignRepo([]), metric_repo, breakdown_repo).campaign_performance(
+            campaign(), 168
+        )
+    )
+
+    assert result["ad_set_breakdown"][0]["name"] == "Broad"
+    assert result["material_breakdown"][0]["frequency"] == 5.1
+    assert breakdown_repo.requests == [("c1", 168)]
 
 
 def test_no_data_is_not_reported_as_zero_performance():
