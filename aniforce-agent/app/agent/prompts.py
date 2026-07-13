@@ -11,7 +11,9 @@ from typing import List, Optional
 
 from agents import Agent, RunContextWrapper
 
+from app.agent.business_skills.registry import business_skill_registry
 from app.agent.workspace_context import WorkspaceRunContext
+from app.config.settings import get_settings
 
 
 class SystemPromptManager:
@@ -121,11 +123,13 @@ def workspace_instructions(
             "list_projects",
             "create_project",
             "get_project_detail",
+            "get_project_performance",
             "update_project",
             "delete_project",
             "list_campaigns",
             "create_campaign",
             "get_campaign_detail",
+            "get_campaign_performance",
             "update_campaign",
             "update_campaign_status",
             "get_campaign_materials",
@@ -186,6 +190,23 @@ def workspace_instructions(
         parts.append(f"- 当前草稿编辑：{json.dumps(draft, ensure_ascii=False)}")
     if projection:
         parts.append(f"- 右侧 Workspace 当前投影：{json.dumps(projection, ensure_ascii=False)}")
+
+    if get_settings().ENABLE_BUSINESS_SKILLS:
+        parts.append("")
+        parts.append("---")
+        parts.append("# Business Skill Index")
+        parts.append("复杂诊断、项目复盘或真实写操作明显匹配以下 Skill 时，先调用 load_business_skill；简单闲聊和展示查询不需要加载。")
+        parts.append(business_skill_registry.render_index())
+        if wctx.selected_skill_ids:
+            parts.append("")
+            parts.append("# 已加载 Business Skill 合同")
+            for skill_name in wctx.selected_skill_ids:
+                skill = business_skill_registry.get(skill_name)
+                selected_version = wctx.selected_skill_versions.get(skill_name)
+                if skill and selected_version == skill.version:
+                    parts.append(skill.render_contract())
+                else:
+                    parts.append(f"- {skill_name}：版本不可用，禁止继续写操作；请说明任务需要重新开始。")
 
     parts.append("")
     parts.append("---")

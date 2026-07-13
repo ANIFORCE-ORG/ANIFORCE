@@ -7,10 +7,12 @@ from uuid import uuid4
 
 from loguru import logger
 
+from app.agent.business_skills.loader_tool import load_business_skill
 from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
 from app.core.errors import AppError, AgentErrorCode, unexpected_error_payload
+from app.config.settings import get_settings
 from app.core.metrics import AGENT_RUN_DURATION, AGENT_RUNS, observe_tokens
 from app.runtime.mcp_context import mcp_connection
 from app.runtime.sessions import RuntimeSessionOwnerMismatch, RuntimeSessionStore
@@ -79,11 +81,14 @@ class RunExecutorMixin:
                     session_state=session_state or {},
                     task_type=task_type,
                 )
+                local_tools = [request_workspace_projection]
+                if get_settings().ENABLE_BUSINESS_SKILLS:
+                    local_tools.append(load_business_skill)
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",
                     instructions=workspace_instructions,
                     mcp_servers=mcp_servers,
-                    tools=[request_workspace_projection],
+                    tools=local_tools,
                 )
                 run_logger.debug(
                     "[PERF][agent_first_token] runtime.agent_ready total_ms={} agent_create_ms={}",

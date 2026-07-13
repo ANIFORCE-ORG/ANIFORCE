@@ -29,6 +29,12 @@ class WorkspaceRunContext:
     # 运行元信息
     task_type: str = "conversation"
 
+    # 当前 Run 的 Business Skill 状态。Agent/工具结构保持稳定，仅动态注入合同和裁剪工具。
+    selected_skill_ids: list[str] = field(default_factory=list)
+    selected_skill_versions: dict[str, str] = field(default_factory=dict)
+    skill_slots: dict[str, Any] = field(default_factory=dict)
+    skill_load_reason: str | None = None
+
     # HITL 审批用户编辑后的参数（按 tool call_id 关联）
     # MCP 工具执行前读取，覆盖原始 arguments
     approved_arguments_by_call_id: dict[str, dict[str, Any]] = field(default_factory=dict)

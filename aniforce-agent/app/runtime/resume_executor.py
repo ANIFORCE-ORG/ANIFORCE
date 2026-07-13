@@ -6,10 +6,12 @@ from typing import AsyncIterator
 from agents import RunState
 from loguru import logger
 
+from app.agent.business_skills.loader_tool import load_business_skill
 from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
 from app.core.errors import AppError, AgentErrorCode, unexpected_error_payload
+from app.config.settings import get_settings
 from app.core.metrics import AGENT_RUN_DURATION, AGENT_RUNS, observe_tokens
 from app.runtime.checkpoints.service import RuntimeCheckpointService
 from app.runtime.mcp_context import mcp_connection
@@ -95,11 +97,14 @@ class ResumeExecutorMixin:
                 checkpoint_id=checkpoint_id,
                 tool_call_ids_by_name=tool_call_ids_by_name,
             ) as mcp_servers:
+                local_tools = [request_workspace_projection]
+                if get_settings().ENABLE_BUSINESS_SKILLS:
+                    local_tools.append(load_business_skill)
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",
                     instructions=workspace_instructions,
                     mcp_servers=mcp_servers,
-                    tools=[request_workspace_projection],
+                    tools=local_tools,
                 )
                 session = self.adapter.create_session(checkpoint["session_id"], self.agent_runtime_db_url)
                 state = await RunState.from_json(

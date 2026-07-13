@@ -40,6 +40,7 @@ class Settings(BaseSettings):
     AGENT_TRACING_ENABLED: bool = True
     AGENT_TRACING_PROVIDER: str = "disabled"
     AGENT_TRACE_INCLUDE_SENSITIVE_DATA: bool = False
+    ENABLE_BUSINESS_SKILLS: bool = True
     PHOENIX_COLLECTOR_ENDPOINT: str = "http://127.0.0.1:16006/v1/traces"
     PHOENIX_PROJECT_NAME: str = "aniforce"
 
