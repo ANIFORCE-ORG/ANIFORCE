@@ -29,6 +29,29 @@ def test_backend_client_maps_forbidden_without_exposing_body(monkeypatch, caplog
     assert "private backend detail" not in caplog.text
 
 
+def test_backend_client_performance_paths_and_windows(monkeypatch) -> None:
+    requests = []
+
+    async def fake_request(self, **kwargs):
+        requests.append(kwargs)
+        request = httpx.Request(kwargs["method"], kwargs["url"])
+        return httpx.Response(200, request=request, json={"data_available": False})
+
+    monkeypatch.setattr(httpx.AsyncClient, "request", fake_request)
+
+    async def scenario():
+        client = BackendClient("http://backend.test")
+        await client.get_campaign_performance("token", "campaign_1", 24)
+        await client.get_project_performance("token", "project_1", 72)
+
+    asyncio.run(scenario())
+
+    assert requests[0]["url"] == "http://backend.test/api/v1/campaigns/campaign_1/performance"
+    assert requests[0]["params"] == {"hours": 24}
+    assert requests[1]["url"] == "http://backend.test/api/v1/projects/project_1/performance"
+    assert requests[1]["params"] == {"hours": 72}
+
+
 def test_backend_client_maps_timeout(monkeypatch) -> None:
     async def fake_request(self, **kwargs):
         raise httpx.ReadTimeout("private upstream detail")

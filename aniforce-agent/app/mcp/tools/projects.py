@@ -43,6 +43,21 @@ async def get_project_detail(ctx: Context, project_id: str) -> dict:
 
 
 @mcp.tool()
+async def get_project_performance(ctx: Context, project_id: str, hours: int = 168) -> dict:
+    """获取项目下广告计划的投放指标汇总，供项目复盘和计划对比使用。
+
+    Args:
+        project_id: 项目 ID
+        hours: 查询时间窗口小时数，默认 168（最近 7 天），范围 1 至 2160
+
+    Returns:
+        项目指标汇总、各计划最新指标、无数据数量和 ROI 排序。data_available=false 表示没有指标，不能推断表现为零。
+    """
+    token = _get_token(ctx)
+    return await backend_client.get_project_performance(token=token, project_id=project_id, hours=hours)
+
+
+@mcp.tool()
 async def create_project(
     ctx: Context,
     name: str,

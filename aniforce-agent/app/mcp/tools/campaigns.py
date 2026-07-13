@@ -50,6 +50,21 @@ async def get_campaign_detail(ctx: Context, campaign_id: str) -> dict:
 
 
 @mcp.tool()
+async def get_campaign_performance(ctx: Context, campaign_id: str, hours: int = 168) -> dict:
+    """获取广告计划的最新指标和时间序列证据，供效果诊断使用。
+
+    Args:
+        campaign_id: 广告计划 ID
+        hours: 查询时间窗口小时数，默认 168（最近 7 天），范围 1 至 2160
+
+    Returns:
+        最新指标、窗口内变化、时间序列和数据新鲜度。data_available=false 表示没有指标，不能据此判断效果。
+    """
+    token = _get_token(ctx)
+    return await backend_client.get_campaign_performance(token=token, campaign_id=campaign_id, hours=hours)
+
+
+@mcp.tool()
 async def create_campaign(
     ctx: Context,
     project_id: str,

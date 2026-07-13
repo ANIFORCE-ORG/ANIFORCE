@@ -2,12 +2,13 @@
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.repositories.protocols import CampaignRepository, MaterialRepository, ProjectRepository
-from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
+from app.repositories.protocols import CampaignRepository, MaterialRepository, MetricRepository, ProjectRepository
+from app.repositories.factory import get_campaign_repo, get_material_repo, get_metric_repo, get_project_repo
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 from app.config.database import get_db
 from app.api.deps import get_current_user
 from app.services.idempotency_service import IDEMPOTENCY_HEADER, IdempotencyService
+from app.services.agent_evidence_service import AgentEvidenceService
 from app.services.session_state_mutation import record_entity_change
 
 router = APIRouter(prefix="/campaigns", tags=["campaigns"])
@@ -135,6 +136,25 @@ async def get_campaign(
     campaign["project_name"] = project["name"]
 
     return campaign
+
+
+@router.get("/{campaign_id}/performance")
+async def get_campaign_performance(
+    campaign_id: str,
+    hours: int = 168,
+    current_user: dict = Depends(get_current_user),
+    campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    metric_repo: MetricRepository = Depends(get_metric_repo),
+):
+    """Return permission-checked campaign evidence for Agent diagnosis."""
+    campaign = await campaign_repo.get_by_id(campaign_id)
+    if not campaign:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    project = await project_repo.get_by_id(campaign["project_id"])
+    if not project or project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    return await AgentEvidenceService(campaign_repo, metric_repo).campaign_performance(campaign, hours)
 
 
 @router.post("")

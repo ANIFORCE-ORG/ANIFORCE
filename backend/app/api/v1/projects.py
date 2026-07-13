@@ -1,11 +1,12 @@
 """项目管理 API"""
 from fastapi import APIRouter, Depends, HTTPException, Request
 from pydantic import BaseModel
-from app.repositories.protocols import ProjectRepository
-from app.repositories.factory import get_project_repo
+from app.repositories.protocols import CampaignRepository, MetricRepository, ProjectRepository
+from app.repositories.factory import get_campaign_repo, get_metric_repo, get_project_repo
 from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 from app.api.deps import get_current_user
 from app.services.idempotency_service import IDEMPOTENCY_HEADER, IdempotencyService
+from app.services.agent_evidence_service import AgentEvidenceService
 from app.services.session_state_mutation import record_entity_change
 
 router = APIRouter(prefix="/projects", tags=["projects"])
@@ -59,6 +60,24 @@ async def get_project(
         raise HTTPException(status_code=403, detail="Permission denied")
 
     return project
+
+
+@router.get("/{project_id}/performance")
+async def get_project_performance(
+    project_id: str,
+    hours: int = 168,
+    current_user: dict = Depends(get_current_user),
+    project_repo: ProjectRepository = Depends(get_project_repo),
+    campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    metric_repo: MetricRepository = Depends(get_metric_repo),
+):
+    """Return permission-checked project evidence for Agent review."""
+    project = await project_repo.get_by_id(project_id)
+    if not project:
+        raise HTTPException(status_code=404, detail="Project not found")
+    if project["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    return await AgentEvidenceService(campaign_repo, metric_repo).project_performance(project, hours)
 
 
 @router.post("")
