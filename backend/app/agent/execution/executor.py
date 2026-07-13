@@ -70,6 +70,8 @@ async def execute_agent_run(
 
     async def apply_terminal_event(event_name: str, data: dict) -> str | None:
         outcome = event_processor.reduce(event_name, data)
+        if isinstance(data.get("task_state"), dict):
+            await store.update_session_task_state(session_id, user_id, data["task_state"])
         if not outcome.terminal or outcome.transition == "completed":
             return None
         if outcome.transition == "requires_action":

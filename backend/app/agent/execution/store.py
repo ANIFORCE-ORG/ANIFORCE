@@ -14,6 +14,7 @@ from app.repositories.impl.sqlite_agent_fact_repo import (
     SqliteAgentToolCallRepository,
 )
 from app.agent.projections.message_projection import MessageProjection
+from app.agent.sessions.task_state import persist_task_state
 from app.agent.projections.session_settlement import SessionSettlementProjection
 from app.agent.projections.tool_audit import ToolAuditProjection
 from app.agent.projections.workspace_artifact import WorkspaceArtifactProjection
@@ -45,6 +46,16 @@ class AgentRunExecutionStore:
     async def get_session_state(self, session_id: str, user_id: str) -> dict | None:
         async def operation(session: AsyncSession) -> dict | None:
             return await SqliteSessionStateRepository(session).get(session_id, user_id)
+
+        return await self._transaction(operation)
+
+    async def update_session_task_state(
+        self, session_id: str, user_id: str, task_state: dict
+    ) -> dict | None:
+        async def operation(session: AsyncSession) -> dict | None:
+            return await persist_task_state(
+                SqliteSessionStateRepository(session), session_id, user_id, task_state
+            )
 
         return await self._transaction(operation)
 

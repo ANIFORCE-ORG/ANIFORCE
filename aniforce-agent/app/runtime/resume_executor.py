@@ -6,7 +6,8 @@ from typing import AsyncIterator
 from agents import RunState
 from loguru import logger
 
-from app.agent.business_skills.loader_tool import load_business_skill
+from app.agent.business_skills.loader_tool import load_business_skill, update_business_skill_state
+from app.agent.business_skills.state import build_task_state
 from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
@@ -66,6 +67,13 @@ class ResumeExecutorMixin:
             task_type=safe_context.get("task_type", "conversation"),
             approved_arguments_by_call_id=approved_args_by_call_id,
             argument_diff=argument_diff or [],
+            selected_skill_ids=list(safe_context.get("selected_skill_ids") or []),
+            selected_skill_versions=dict(safe_context.get("selected_skill_versions") or {}),
+            skill_slots=dict(safe_context.get("skill_slots") or {}),
+            skill_load_reason=safe_context.get("skill_load_reason"),
+            skill_status=safe_context.get("skill_status"),
+            skill_missing_slots=list(safe_context.get("skill_missing_slots") or []),
+            skill_pending_question=safe_context.get("skill_pending_question"),
         )
 
         tool_call_ids_by_name: dict[str, str] = {}
@@ -99,7 +107,7 @@ class ResumeExecutorMixin:
             ) as mcp_servers:
                 local_tools = [request_workspace_projection]
                 if get_settings().ENABLE_BUSINESS_SKILLS:
-                    local_tools.append(load_business_skill)
+                    local_tools.extend([load_business_skill, update_business_skill_state])
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",
                     instructions=workspace_instructions,
@@ -176,6 +184,7 @@ class ResumeExecutorMixin:
                             "checkpoint_id": new_checkpoint["id"],
                             "interruptions": new_checkpoint["interruptions"],
                             "expires_at": new_checkpoint["expires_at"],
+                            "task_state": build_task_state(workspace_context, terminal_status="executing"),
                         },
                         "sequence": sequence,
                     }
@@ -188,7 +197,11 @@ class ResumeExecutorMixin:
                 sequence += 1
                 yield {
                     "event": "runtime.completed",
-                    "data": {"final_output": getattr(result, "final_output", None), "usage": usage},
+                    "data": {
+                        "final_output": getattr(result, "final_output", None),
+                        "usage": usage,
+                        "task_state": build_task_state(workspace_context, terminal_status="completed"),
+                    },
                     "sequence": sequence,
                 }
                 AGENT_RUNS.labels("resume", workspace_context.task_type, "completed").inc()

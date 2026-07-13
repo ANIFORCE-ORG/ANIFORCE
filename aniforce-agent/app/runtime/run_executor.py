@@ -7,7 +7,8 @@ from uuid import uuid4
 
 from loguru import logger
 
-from app.agent.business_skills.loader_tool import load_business_skill
+from app.agent.business_skills.loader_tool import load_business_skill, update_business_skill_state
+from app.agent.business_skills.state import build_task_state, restore_business_skill_state
 from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
@@ -81,9 +82,10 @@ class RunExecutorMixin:
                     session_state=session_state or {},
                     task_type=task_type,
                 )
+                restore_business_skill_state(workspace_context)
                 local_tools = [request_workspace_projection]
                 if get_settings().ENABLE_BUSINESS_SKILLS:
-                    local_tools.append(load_business_skill)
+                    local_tools.extend([load_business_skill, update_business_skill_state])
                 agent = self.adapter.create_agent(
                     name="ANIFORCE Assistant",
                     instructions=workspace_instructions,
@@ -134,7 +136,11 @@ class RunExecutorMixin:
                             sequence += 1
                             yield {
                                 "event": "runtime.aborted",
-                                "data": {"run_id": run_id, "status": "cancelled"},
+                                "data": {
+                                    "run_id": run_id,
+                                    "status": "cancelled",
+                                    "task_state": build_task_state(workspace_context, terminal_status="cancelled"),
+                                },
                                 "sequence": sequence,
                             }
                             run_logger.bind(event="agent.run.cancelled").warning("Agent run cancelled")
@@ -172,6 +178,7 @@ class RunExecutorMixin:
                         "checkpoint_id": checkpoint["id"],
                         "interruptions": checkpoint["interruptions"],
                         "expires_at": checkpoint["expires_at"],
+                        "task_state": build_task_state(workspace_context, terminal_status="executing"),
                     },
                     "sequence": sequence,
                 }
@@ -189,7 +196,18 @@ class RunExecutorMixin:
             sequence += 1
             yield {
                 "event": "runtime.completed",
-                "data": {"final_output": getattr(result, "final_output", None), "usage": usage},
+                "data": {
+                    "final_output": getattr(result, "final_output", None),
+                    "usage": usage,
+                    "task_state": build_task_state(
+                        workspace_context,
+                        terminal_status=(
+                            "collecting_inputs"
+                            if workspace_context.skill_status == "collecting_inputs"
+                            else "completed"
+                        ),
+                    ),
+                },
                 "sequence": sequence,
             }
             AGENT_RUNS.labels("initial", task_type, "completed").inc()
@@ -208,7 +226,10 @@ class RunExecutorMixin:
             sequence += 1
             yield {
                 "event": "runtime.aborted",
-                "data": {"message": "Run cancelled by user"},
+                "data": {
+                    "message": "Run cancelled by user",
+                    "task_state": build_task_state(workspace_context, terminal_status="cancelled") if 'workspace_context' in locals() else {},
+                },
                 "sequence": sequence,
             }
 

@@ -267,6 +267,13 @@ def serialize_workspace_context_for_checkpoint(context) -> dict[str, Any]:
         "ui_snapshot": context.ui_snapshot,
         "session_state": context.session_state,
         "task_type": context.task_type,
+        "selected_skill_ids": context.selected_skill_ids,
+        "selected_skill_versions": context.selected_skill_versions,
+        "skill_slots": context.skill_slots,
+        "skill_load_reason": context.skill_load_reason,
+        "skill_status": context.skill_status,
+        "skill_missing_slots": context.skill_missing_slots,
+        "skill_pending_question": context.skill_pending_question,
     }
 
 

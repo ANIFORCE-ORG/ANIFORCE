@@ -116,6 +116,7 @@ class AgentSessionService:
             "mode": state.get("mode", "general"),
             "linked_entities": state.get("linked_entities", {}),
             "summary": state.get("summary", ""),
+            "task_state": state.get("task_state", {}),
             "status": state.get("status", "active"),
             "version": state.get("version", 1),
         }

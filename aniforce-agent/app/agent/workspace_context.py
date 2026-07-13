@@ -34,6 +34,9 @@ class WorkspaceRunContext:
     selected_skill_versions: dict[str, str] = field(default_factory=dict)
     skill_slots: dict[str, Any] = field(default_factory=dict)
     skill_load_reason: str | None = None
+    skill_status: str | None = None
+    skill_missing_slots: list[str] = field(default_factory=list)
+    skill_pending_question: str | None = None
 
     # HITL 审批用户编辑后的参数（按 tool call_id 关联）
     # MCP 工具执行前读取，覆盖原始 arguments

@@ -2,11 +2,13 @@ from types import SimpleNamespace
 
 import pytest
 
-from app.agent.business_skills.loader_tool import load_skill_into_context
+from app.agent.business_skills.loader_tool import load_skill_into_context, update_skill_state_in_context
 from app.agent.business_skills.models import BusinessSkill
+from app.agent.business_skills.state import build_task_state, restore_business_skill_state
 from app.agent.business_skills.registry import BusinessSkillRegistry, business_skill_registry
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
+from app.runtime.checkpoints.store import serialize_workspace_context_for_checkpoint
 
 
 def context():
@@ -75,6 +77,49 @@ def test_loader_is_idempotent_and_limits_selected_skills():
     assert second["loaded"] is True
     assert blocked["code"] == "BUSINESS_SKILL_LIMIT"
     assert value.selected_skill_ids == ["campaign_diagnosis", "project_review"]
+
+
+def test_skill_task_state_round_trip_across_run_and_checkpoint():
+    value = context()
+    value.ui_snapshot = {"activeCampaignId": "c1"}
+    load_skill_into_context(value, "campaign_diagnosis", "matched_user_intent")
+    update_skill_state_in_context(
+        value,
+        "ready",
+        '{"campaign_id":"c1","time_range_hours":72}',
+        [],
+        None,
+    )
+    task_state = build_task_state(value)
+    checkpoint = serialize_workspace_context_for_checkpoint(value)
+
+    assert task_state["active_skill"]["status"] == "ready"
+    assert task_state["confirmed_entities"]["campaign"] == "c1"
+    assert checkpoint["selected_skill_versions"] == {"campaign_diagnosis": "1.0"}
+    assert checkpoint["skill_slots"]["time_range_hours"] == 72
+
+    restored = context()
+    restored.session_state = {"task_state": task_state}
+    restore_business_skill_state(restored)
+    assert restored.selected_skill_ids == ["campaign_diagnosis"]
+    assert restored.skill_slots == {"campaign_id": "c1", "time_range_hours": 72}
+    assert restored.skill_status == "ready"
+
+
+def test_completed_skill_is_not_restored_into_an_unrelated_run():
+    value = context()
+    value.session_state = {
+        "task_state": {
+            "active_skill": {
+                "name": "project_review",
+                "version": "1.0",
+                "status": "completed",
+                "slots": {"project_id": "p1"},
+            }
+        }
+    }
+    restore_business_skill_state(value)
+    assert value.selected_skill_ids == []
 
 
 def test_unknown_skill_does_not_mutate_context():

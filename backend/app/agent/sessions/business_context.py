@@ -24,6 +24,17 @@ class BusinessContextBuilder:
         selected_entities = ui_snapshot.get("selectedEntities") or []
         lines = ["当前业务现场："]
         lines.append(f"- 当前会话模式：{session_state.get('mode', 'general')}")
+        task_state = session_state.get("task_state") or {}
+        active_skill = task_state.get("active_skill") if isinstance(task_state, dict) else None
+        if isinstance(active_skill, dict) and active_skill.get("status") in {"selected", "collecting_inputs", "ready", "executing"}:
+            lines.append(
+                f"- 当前未完成任务：{active_skill.get('name')} v{active_skill.get('version')}，"
+                f"状态 {active_skill.get('status')}"
+            )
+            if active_skill.get("slots"):
+                lines.append(f"- 已确认任务槽位：{active_skill.get('slots')}")
+            if active_skill.get("missing_slots"):
+                lines.append(f"- 尚缺任务槽位：{active_skill.get('missing_slots')}")
 
         selected_project_ids = self._selected_ids(selected_entities, "project")
         selected_campaign_ids = self._selected_ids(selected_entities, "campaign")

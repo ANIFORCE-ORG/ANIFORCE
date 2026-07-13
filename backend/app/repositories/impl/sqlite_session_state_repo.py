@@ -38,6 +38,7 @@ class SqliteSessionStateRepository:
             "pending_actions": self._loads(state.pending_actions_json, []),
             "changelog": self._loads(state.changelog_json, []),
             "ui_snapshot": self._loads(state.ui_snapshot_json, None),
+            "task_state": self._loads(state.task_state_json, {}),
             "version": state.version,
             "status": state.status,
             "last_error": self._loads(state.last_error_json, None),
@@ -126,6 +127,20 @@ class SqliteSessionStateRepository:
             ui_snapshot=ui_snapshot,
         )
 
+    async def update_task_state(
+        self,
+        session_id: str,
+        user_id: str,
+        expected_version: int,
+        task_state: dict,
+    ) -> dict:
+        return await self.update_with_version(
+            session_id,
+            user_id,
+            expected_version,
+            task_state=task_state,
+        )
+
     async def append_changelog(
         self,
         session_id: str,
@@ -184,6 +199,7 @@ class SqliteSessionStateRepository:
             "pending_actions": "pending_actions_json",
             "changelog": "changelog_json",
             "ui_snapshot": "ui_snapshot_json",
+            "task_state": "task_state_json",
             "last_error": "last_error_json",
         }
         for key, value in kwargs.items():

@@ -227,5 +227,8 @@ def workspace_instructions(
     parts.append("- 写操作、预算、上线、删除等高风险动作必须通过直接调用对应写工具触发 SDK HITL；不要在聊天区二次询问确认。")
     parts.append("- 用户已明确表达操作意图且对象/参数足够时，直接调用写工具；右侧 Workspace 会展示业务组件和确认/拒绝按钮。")
     parts.append("- 只有对象不唯一、参数缺失或意图不清时，才向用户澄清。")
+    if get_settings().ENABLE_BUSINESS_SKILLS:
+        parts.append("- 已加载 Business Skill 后，如果需要追问，先调用 update_business_skill_state 保存已确认 slots、missing_slots 和 pending_question，再向用户提出一个必要问题。")
+        parts.append("- 用户补充信息或确认对象后，调用 update_business_skill_state 更新结构化任务状态，避免后续 Run 重复追问。")
 
     return "\n".join(parts)
