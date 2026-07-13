@@ -20,7 +20,11 @@ const statusDotClass = computed(() => {
 })
 
 const businessTitle = computed(() => {
-  const isWrite = /^(create_|update_|delete_|add_|remove_)/.test(props.content.toolName || '')
+  const toolName = props.content.toolName || ''
+  if (toolName === 'load_business_skill') return props.content.status === 'completed' ? '已选择合适的处理方式' : '正在选择处理方式'
+  if (toolName === 'update_business_skill_state') return props.content.status === 'completed' ? '任务信息已更新' : '正在整理任务信息'
+  if (toolName === 'request_workspace_projection') return props.content.status === 'completed' ? '结果已展示到工作台' : '正在整理工作台结果'
+  const isWrite = /^(create_|update_|delete_|add_|remove_)/.test(toolName)
   if (props.content.status === 'error') return isWrite ? '业务操作失败' : '业务数据查询失败'
   if (props.content.status === 'completed') return isWrite ? '业务操作已完成' : '业务数据已获取'
   return isWrite ? '正在执行业务操作' : '正在查询业务数据'

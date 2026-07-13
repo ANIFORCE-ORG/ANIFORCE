@@ -232,6 +232,9 @@ function toolName(block: Record<string, unknown>): string {
 }
 function toolStageLabel(block: Record<string, unknown>): string {
   const rawName = String(block.toolName || block.name || '')
+  if (rawName === 'load_business_skill') return hasToolResult(block) ? '已选择合适的处理方式' : '正在选择处理方式…'
+  if (rawName === 'update_business_skill_state') return hasToolResult(block) ? '任务信息已更新' : '正在整理任务信息…'
+  if (rawName === 'request_workspace_projection') return hasToolResult(block) ? '结果已展示到工作台' : '正在整理工作台结果…'
   const isWrite = /^(create_|update_|delete_|add_|remove_)/.test(rawName)
   if (isToolError(block)) return isWrite ? '业务操作失败' : '业务数据查询失败'
   if (!hasToolResult(block)) return isWrite ? '正在执行业务操作…' : '正在查询业务数据…'
