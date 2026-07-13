@@ -21,10 +21,14 @@ class BusinessContextBuilder:
     async def build(self, session_state: dict, user_id: str) -> str:
         linked_entities = session_state.get("linked_entities") or {}
         ui_snapshot = session_state.get("ui_snapshot") or {}
+        selected_entities = ui_snapshot.get("selectedEntities") or []
         lines = ["当前业务现场："]
         lines.append(f"- 当前会话模式：{session_state.get('mode', 'general')}")
 
-        project_id = linked_entities.get("project_id")
+        selected_project_ids = self._selected_ids(selected_entities, "project")
+        selected_campaign_ids = self._selected_ids(selected_entities, "campaign")
+        selected_material_ids = self._selected_ids(selected_entities, "material")
+        project_id = ui_snapshot.get("activeProjectId") or (selected_project_ids[0] if len(selected_project_ids) == 1 else None) or linked_entities.get("project_id")
         if project_id:
             project = await self.project_repo.get_by_id(project_id)
             if project and project.get("user_id") == user_id:
@@ -38,11 +42,16 @@ class BusinessContextBuilder:
         else:
             lines.append("- 当前未绑定具体项目")
 
-        campaign_ids = linked_entities.get("campaign_ids") or []
+        active_campaign_id = ui_snapshot.get("activeCampaignId")
+        campaign_ids = self._ordered_unique([
+            *([active_campaign_id] if active_campaign_id else []),
+            *selected_campaign_ids,
+            *(linked_entities.get("campaign_ids") or []),
+        ])
         campaigns = []
         for campaign_id in campaign_ids[:10]:
             campaign = await self.campaign_repo.get_by_id(campaign_id)
-            if campaign:
+            if campaign and await self._campaign_belongs_to_user(campaign, user_id):
                 campaigns.append(campaign)
         if campaigns:
             lines.append(f"- 关联广告计划：{len(campaigns)} 个")
@@ -53,9 +62,22 @@ class BusinessContextBuilder:
                     f"预算 ¥{campaign.get('budget', 0):,.0f}，状态 {campaign.get('status')}"
                 )
 
-        material_ids = linked_entities.get("material_ids") or []
-        if material_ids:
-            lines.append(f"- 关联素材：{len(material_ids)} 个")
+        material_ids = self._ordered_unique([
+            *selected_material_ids,
+            *(linked_entities.get("material_ids") or []),
+        ])
+        visible_materials = []
+        for material_id in material_ids[:10]:
+            material = await self.material_repo.get_by_id(material_id)
+            if material and material.get("user_id") == user_id:
+                visible_materials.append(material)
+        if visible_materials:
+            lines.append(f"- 关联素材：{len(visible_materials)} 个")
+            for material in visible_materials:
+                lines.append(f"  · {material.get('name')}（ID: {material.get('id')}）")
+
+        if selected_entities:
+            lines.append("- 本轮用户在 Workspace 显式选中了业务对象；以上经过权限校验的选中对象优先于历史会话引用")
 
         summary = session_state.get("summary") or ""
         if summary:
@@ -92,6 +114,25 @@ class BusinessContextBuilder:
             ]
         )
         return "\n".join(lines)
+
+    @staticmethod
+    def _selected_ids(selected_entities: list[Any], entity_type: str) -> list[str]:
+        return [
+            str(item["id"])
+            for item in selected_entities
+            if isinstance(item, dict) and item.get("type") == entity_type and item.get("id")
+        ]
+
+    @staticmethod
+    def _ordered_unique(values: list[Any]) -> list[str]:
+        return list(dict.fromkeys(str(value) for value in values if value))
+
+    async def _campaign_belongs_to_user(self, campaign: dict, user_id: str) -> bool:
+        project_id = campaign.get("project_id")
+        if not project_id:
+            return False
+        project = await self.project_repo.get_by_id(str(project_id))
+        return bool(project and project.get("user_id") == user_id)
 
     def build_general_context(self, ui_snapshot: dict[str, Any] | None = None) -> str:
         lines = ["当前业务现场：", "- 当前未绑定具体项目", "- 用户可能是在闲聊、查询、体验或准备开始任务"]

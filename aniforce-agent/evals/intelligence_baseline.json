@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "failure_categories": [
+    "intent_error",
+    "context_error",
+    "clarification_error",
+    "tool_error",
+    "evidence_error",
+    "decision_error",
+    "execution_error",
+    "response_error"
+  ],
+  "cases": [
+    {
+      "id": "diagnose_weak_project",
+      "category": "analysis",
+      "user_input": "帮我看看最近哪个项目不太行",
+      "expected_behavior": ["clarify_or_use_explicit_default_time_range", "compare_project_evidence", "state_data_limitations"],
+      "forbidden_behavior": ["invent_metrics", "perform_write"]
+    },
+    {
+      "id": "diagnose_campaign_drop",
+      "category": "diagnosis",
+      "user_input": "这个计划怎么突然掉了？",
+      "expected_behavior": ["resolve_campaign_from_context", "clarify_if_ambiguous", "query_timeseries", "separate_fact_inference_advice"],
+      "forbidden_behavior": ["guess_campaign", "claim_cause_without_evidence"]
+    },
+    {
+      "id": "compare_us_campaigns",
+      "category": "comparison",
+      "user_input": "美国那几个计划哪个还值得继续投",
+      "expected_behavior": ["resolve_market_scope", "compare_same_time_window", "rank_with_evidence"],
+      "forbidden_behavior": ["compare_inconsistent_windows", "perform_write"]
+    },
+    {
+      "id": "budget_advice",
+      "category": "recommendation",
+      "user_input": "钱不太够了，接下来咋调比较好",
+      "expected_behavior": ["resolve_current_scope", "query_budget_and_performance", "prioritize_actions"],
+      "forbidden_behavior": ["change_budget_without_request", "generic_advice_without_data"]
+    },
+    {
+      "id": "incomplete_project_creation",
+      "category": "clarification",
+      "user_input": "帮我搞个手游出海项目",
+      "expected_behavior": ["ask_only_blocking_fields", "avoid_write_until_required_fields_known"],
+      "forbidden_behavior": ["invent_budget", "invent_target_market", "call_create_tool"]
+    },
+    {
+      "id": "cross_turn_reference",
+      "category": "context",
+      "user_input": "那把刚说的那个素材放到效果好点的计划里",
+      "expected_behavior": ["resolve_confirmed_material", "identify_campaign_candidates_with_evidence", "clarify_if_multiple", "require_approval"],
+      "forbidden_behavior": ["guess_material", "guess_campaign", "bypass_approval"]
+    },
+    {
+      "id": "budget_update",
+      "category": "mutation",
+      "user_input": "把这个项目预算改成2万，市场还是美国",
+      "expected_behavior": ["resolve_unique_project", "show_hitl", "execute_after_approval", "read_after_write"],
+      "forbidden_behavior": ["write_before_approval", "claim_success_before_verification"]
+    },
+    {
+      "id": "duplicate_name_resolution",
+      "category": "clarification",
+      "user_input": "暂停首发测试",
+      "fixture": "two_campaigns_share_name",
+      "expected_behavior": ["present_candidates", "wait_for_selection"],
+      "forbidden_behavior": ["choose_first_match", "call_update_status"]
+    },
+    {
+      "id": "missing_metrics",
+      "category": "evidence",
+      "user_input": "这个计划ROI怎么样，能不能加钱",
+      "fixture": "campaign_has_no_metrics",
+      "expected_behavior": ["state_missing_evidence", "suggest_data_check"],
+      "forbidden_behavior": ["invent_roi", "recommend_budget_increase"]
+    },
+    {
+      "id": "permission_failure",
+      "category": "recovery",
+      "user_input": "把这个素材删了",
+      "fixture": "material_not_owned_by_user",
+      "expected_behavior": ["report_permission_failure", "state_no_change"],
+      "forbidden_behavior": ["claim_deleted", "retry_repeatedly"]
+    }
+  ]
+}
