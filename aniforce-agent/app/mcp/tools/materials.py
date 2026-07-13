@@ -13,6 +13,7 @@ from app.mcp.context import (
     get_token as _get_token,
 )
 from app.mcp.server import mcp
+from app.mcp.verification import verify_absent, verify_collection_membership, verify_fields
 
 @mcp.tool()
 async def list_materials(ctx: Context, project_id: str = "", campaign_id: str = "", type: str = "", limit: int = 20) -> dict:
@@ -77,12 +78,21 @@ async def create_material(
     })
     approved = await _get_approved_arguments(ctx, "create_material")
     if approved:
-        logger.info(f"[MCP] create_material 使用用户编辑后的参数: {approved}")
+        logger.bind(event="agent.tool.arguments_edited", tool_name="create_material").info(
+            "Using user-edited tool arguments: fields={}", sorted(approved)
+        )
         data.update(_compact_payload(approved))
-    return await backend_client.create_material(
+    result = await backend_client.create_material(
         token=token,
         data=data,
         extra_headers=_get_backend_headers(ctx, "create_material", data),
+    )
+    material_id = str(result.get("id") or "")
+    return await verify_fields(
+        result,
+        lambda: backend_client.get_material(token, material_id),
+        data,
+        entity_id=material_id,
     )
 
 
@@ -212,13 +222,21 @@ async def update_material(
     })
     approved = await _get_approved_arguments(ctx, "update_material")
     if approved:
-        logger.info(f"[MCP] update_material 使用用户编辑后的参数: {approved}")
+        logger.bind(event="agent.tool.arguments_edited", tool_name="update_material").info(
+            "Using user-edited tool arguments: fields={}", sorted(approved)
+        )
         data.update(_compact_payload(approved))
-    return await backend_client.update_material(
+    result = await backend_client.update_material(
         token=token,
         material_id=material_id,
         data=data,
         extra_headers=_get_backend_headers(ctx, "update_material", {"material_id": material_id, **data}),
+    )
+    return await verify_fields(
+        result,
+        lambda: backend_client.get_material(token, material_id),
+        data,
+        entity_id=material_id,
     )
 
 
@@ -227,11 +245,18 @@ async def add_material_to_project(ctx: Context, material_id: str, project_id: st
     """把素材添加到项目。"""
     token = _get_token(ctx)
     args = {"material_id": material_id, "project_id": project_id}
-    return await backend_client.add_material_to_project(
+    result = await backend_client.add_material_to_project(
         token=token,
         material_id=material_id,
         project_id=project_id,
         extra_headers=_get_backend_headers(ctx, "add_material_to_project", args),
+    )
+    return await verify_collection_membership(
+        result,
+        lambda: backend_client.get_material(token, material_id),
+        collection_key="project_ids",
+        entity_id=project_id,
+        should_exist=True,
     )
 
 
@@ -240,11 +265,18 @@ async def remove_material_from_project(ctx: Context, material_id: str, project_i
     """从项目移除素材。"""
     token = _get_token(ctx)
     args = {"material_id": material_id, "project_id": project_id}
-    return await backend_client.remove_material_from_project(
+    result = await backend_client.remove_material_from_project(
         token=token,
         material_id=material_id,
         project_id=project_id,
         extra_headers=_get_backend_headers(ctx, "remove_material_from_project", args),
+    )
+    return await verify_collection_membership(
+        result,
+        lambda: backend_client.get_material(token, material_id),
+        collection_key="project_ids",
+        entity_id=project_id,
+        should_exist=False,
     )
 
 
@@ -252,10 +284,15 @@ async def remove_material_from_project(ctx: Context, material_id: str, project_i
 async def delete_material(ctx: Context, material_id: str) -> dict:
     """删除指定素材。"""
     token = _get_token(ctx)
-    return await backend_client.delete_material(
+    result = await backend_client.delete_material(
         token=token,
         material_id=material_id,
         extra_headers=_get_backend_headers(ctx, "delete_material", {"material_id": material_id}),
+    )
+    return await verify_absent(
+        result,
+        lambda: backend_client.get_material(token, material_id),
+        entity_id=material_id,
     )
 
 

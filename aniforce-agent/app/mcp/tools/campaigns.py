@@ -13,6 +13,7 @@ from app.mcp.context import (
     get_token as _get_token,
 )
 from app.mcp.server import mcp
+from app.mcp.verification import verify_absent, verify_collection_membership, verify_fields
 
 @mcp.tool()
 async def list_campaigns(ctx: Context, project_id: str = "", status: str = "", limit: int = 20) -> dict:
@@ -143,12 +144,21 @@ async def create_campaign(
     })
     approved = await _get_approved_arguments(ctx, "create_campaign")
     if approved:
-        logger.info(f"[MCP] create_campaign 使用用户编辑后的参数: {approved}")
+        logger.bind(event="agent.tool.arguments_edited", tool_name="create_campaign").info(
+            "Using user-edited tool arguments: fields={}", sorted(approved)
+        )
         data.update(_compact_payload(approved))
-    return await backend_client.create_campaign(
+    result = await backend_client.create_campaign(
         token=token,
         data=data,
         extra_headers=_get_backend_headers(ctx, "create_campaign", data),
+    )
+    campaign_id = str(result.get("id") or "")
+    return await verify_fields(
+        result,
+        lambda: backend_client.get_campaign(token, campaign_id),
+        data,
+        entity_id=campaign_id,
     )
 
 
@@ -230,13 +240,21 @@ async def update_campaign(
     })
     approved = await _get_approved_arguments(ctx, "update_campaign")
     if approved:
-        logger.info(f"[MCP] update_campaign 使用用户编辑后的参数: {approved}")
+        logger.bind(event="agent.tool.arguments_edited", tool_name="update_campaign").info(
+            "Using user-edited tool arguments: fields={}", sorted(approved)
+        )
         data.update(_compact_payload(approved))
-    return await backend_client.update_campaign(
+    result = await backend_client.update_campaign(
         token=token,
         campaign_id=campaign_id,
         data=data,
         extra_headers=_get_backend_headers(ctx, "update_campaign", {"campaign_id": campaign_id, **data}),
+    )
+    return await verify_fields(
+        result,
+        lambda: backend_client.get_campaign(token, campaign_id),
+        data,
+        entity_id=campaign_id,
     )
 
 
@@ -256,11 +274,17 @@ async def update_campaign_status(
         更新后的计划信息
     """
     token = _get_token(ctx)
-    return await backend_client.update_campaign_status(
+    result = await backend_client.update_campaign_status(
         token=token,
         campaign_id=campaign_id,
         status=status,
         extra_headers=_get_backend_headers(ctx, "update_campaign_status", {"campaign_id": campaign_id, "status": status}),
+    )
+    return await verify_fields(
+        result,
+        lambda: backend_client.get_campaign(token, campaign_id),
+        {"status": status},
+        entity_id=campaign_id,
     )
 
 
@@ -291,11 +315,18 @@ async def add_material_to_campaign(ctx: Context, campaign_id: str, material_id: 
     """
     token = _get_token(ctx)
     args = {"campaign_id": campaign_id, "material_id": material_id}
-    return await backend_client.add_material_to_campaign(
+    result = await backend_client.add_material_to_campaign(
         token=token,
         campaign_id=campaign_id,
         material_id=material_id,
         extra_headers=_get_backend_headers(ctx, "add_material_to_campaign", args),
+    )
+    return await verify_collection_membership(
+        result,
+        lambda: backend_client.get_campaign_materials(token, campaign_id),
+        collection_key="materials",
+        entity_id=material_id,
+        should_exist=True,
     )
 
 
@@ -312,11 +343,18 @@ async def remove_material_from_campaign(ctx: Context, campaign_id: str, material
     """
     token = _get_token(ctx)
     args = {"campaign_id": campaign_id, "material_id": material_id}
-    return await backend_client.remove_material_from_campaign(
+    result = await backend_client.remove_material_from_campaign(
         token=token,
         campaign_id=campaign_id,
         material_id=material_id,
         extra_headers=_get_backend_headers(ctx, "remove_material_from_campaign", args),
+    )
+    return await verify_collection_membership(
+        result,
+        lambda: backend_client.get_campaign_materials(token, campaign_id),
+        collection_key="materials",
+        entity_id=material_id,
+        should_exist=False,
     )
 
 
@@ -331,10 +369,15 @@ async def delete_campaign(ctx: Context, campaign_id: str) -> dict:
         删除结果
     """
     token = _get_token(ctx)
-    return await backend_client.delete_campaign(
+    result = await backend_client.delete_campaign(
         token=token,
         campaign_id=campaign_id,
         extra_headers=_get_backend_headers(ctx, "delete_campaign", {"campaign_id": campaign_id}),
+    )
+    return await verify_absent(
+        result,
+        lambda: backend_client.get_campaign(token, campaign_id),
+        entity_id=campaign_id,
     )
 
 

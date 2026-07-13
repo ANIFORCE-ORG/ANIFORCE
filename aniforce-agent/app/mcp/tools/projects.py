@@ -13,6 +13,7 @@ from app.mcp.context import (
     get_token as _get_token,
 )
 from app.mcp.server import mcp
+from app.mcp.verification import verify_absent, verify_fields
 
 @mcp.tool()
 async def list_projects(ctx: Context, limit: int = 20) -> dict:
@@ -107,12 +108,21 @@ async def create_project(
     # Workspace 可编辑 HITL：用用户确认后的参数覆盖原始 arguments
     approved = await _get_approved_arguments(ctx, "create_project")
     if approved:
-        logger.info(f"[MCP] create_project 使用用户编辑后的参数: {approved}")
+        logger.bind(event="agent.tool.arguments_edited", tool_name="create_project").info(
+            "Using user-edited tool arguments: fields={}", sorted(approved)
+        )
         data.update(_compact_payload(approved))
-    return await backend_client.create_project(
+    result = await backend_client.create_project(
         token=token,
         data=data,
         extra_headers=_get_backend_headers(ctx, "create_project", data),
+    )
+    project_id = str(result.get("id") or "")
+    return await verify_fields(
+        result,
+        lambda: backend_client.get_project(token, project_id),
+        data,
+        entity_id=project_id,
     )
 
 
@@ -158,13 +168,21 @@ async def update_project(
     })
     approved = await _get_approved_arguments(ctx, "update_project")
     if approved:
-        logger.info(f"[MCP] update_project 使用用户编辑后的参数: {approved}")
+        logger.bind(event="agent.tool.arguments_edited", tool_name="update_project").info(
+            "Using user-edited tool arguments: fields={}", sorted(approved)
+        )
         data.update(_compact_payload(approved))
-    return await backend_client.update_project(
+    result = await backend_client.update_project(
         token=token,
         project_id=project_id,
         data=data,
         extra_headers=_get_backend_headers(ctx, "update_project", {"project_id": project_id, **data}),
+    )
+    return await verify_fields(
+        result,
+        lambda: backend_client.get_project(token, project_id),
+        data,
+        entity_id=project_id,
     )
 
 
@@ -179,10 +197,15 @@ async def delete_project(ctx: Context, project_id: str) -> dict:
         删除结果
     """
     token = _get_token(ctx)
-    return await backend_client.delete_project(
+    result = await backend_client.delete_project(
         token=token,
         project_id=project_id,
         extra_headers=_get_backend_headers(ctx, "delete_project", {"project_id": project_id}),
+    )
+    return await verify_absent(
+        result,
+        lambda: backend_client.get_project(token, project_id),
+        entity_id=project_id,
     )
 
 
