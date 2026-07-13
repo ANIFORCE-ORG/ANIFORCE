@@ -41,15 +41,15 @@ class AgentEvidenceService:
     async def campaign_performance(self, campaign: dict, hours: int) -> dict:
         window_hours = self._window(hours)
         series = await self.metric_repo.get_timeseries(campaign["id"], window_hours)
-        latest = series[-1] if series else None
-        if not latest:
-            return self._empty_payload("campaign", campaign, window_hours)
-        first = series[0] if series else latest
         breakdown = (
             await self.ad_set_evidence_repo.get_campaign_breakdown(campaign["id"], window_hours)
             if self.ad_set_evidence_repo
             else {"ad_sets": [], "materials": []}
         )
+        latest = series[-1] if series else None
+        if not latest:
+            return self._empty_payload("campaign", campaign, window_hours, breakdown)
+        first = series[0] if series else latest
         return {
             "scope": "campaign",
             "campaign": self._campaign_identity(campaign),
@@ -114,7 +114,14 @@ class AgentEvidenceService:
             "semantics": "snapshots recorded within the requested UTC lookback window; latest is the last snapshot in that window",
         }
 
-    def _empty_payload(self, scope: str, campaign: dict, hours: int) -> dict:
+    def _empty_payload(
+        self,
+        scope: str,
+        campaign: dict,
+        hours: int,
+        breakdown: dict | None = None,
+    ) -> dict:
+        breakdown = breakdown or {"ad_sets": [], "materials": []}
         return {
             "scope": scope,
             "campaign": self._campaign_identity(campaign),
@@ -125,6 +132,8 @@ class AgentEvidenceService:
             "change": None,
             "series": [],
             "data_freshness": {"last_updated_at": None},
+            "ad_set_breakdown": breakdown["ad_sets"],
+            "material_breakdown": breakdown["materials"],
             "limitations": ["No campaign metrics are available; zero performance must not be inferred."],
         }
 

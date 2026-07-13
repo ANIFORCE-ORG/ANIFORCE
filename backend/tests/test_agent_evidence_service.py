@@ -106,7 +106,26 @@ def test_no_data_is_not_reported_as_zero_performance():
     assert result["data_available"] is False
     assert result["latest"] is None
     assert result["change"] is None
+    assert result["ad_set_breakdown"] == []
     assert "zero performance must not be inferred" in result["limitations"][0]
+
+
+def test_campaign_without_metrics_still_exposes_existing_ad_sets():
+    breakdown_repo = AdSetEvidenceRepo({
+        "ad_sets": [{"id": "a1", "name": "Pre-launch", "data_available": False}],
+        "materials": [],
+    })
+    result = asyncio.run(
+        AgentEvidenceService(CampaignRepo([]), MetricRepo({}), breakdown_repo).campaign_performance(
+            campaign(), 168
+        )
+    )
+
+    assert result["data_available"] is False
+    assert result["ad_set_breakdown"] == [
+        {"id": "a1", "name": "Pre-launch", "data_available": False}
+    ]
+    assert breakdown_repo.requests == [("c1", 168)]
 
 
 def test_project_aggregation_recalculates_rates_from_totals():

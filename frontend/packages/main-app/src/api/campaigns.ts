@@ -41,6 +41,39 @@ export interface CampaignsResponse {
 
 export interface CampaignDetailResponse extends Campaign {}
 
+export interface AdSetPerformance {
+  id: string
+  name: string
+  status: string
+  daily_budget: number
+  spent: number
+  audience?: string
+  placements?: string
+  optimization_goal?: string
+  bid_strategy?: string
+  data_available: boolean
+  sample_count: number
+  latest?: {
+    timestamp: string
+    impressions: number
+    clicks: number
+    conversions: number
+    installs: number
+    spend: number
+    revenue: number
+    ctr: number
+    cvr: number
+    cpa: number
+    cpi: number
+    roi: number
+  } | null
+}
+
+export interface CampaignPerformance {
+  data_available: boolean
+  ad_set_breakdown: AdSetPerformance[]
+}
+
 /**
  * 获取广告投放列表
  */
@@ -66,6 +99,16 @@ export async function getCampaigns(params?: {
  */
 export async function getCampaignDetail(campaignId: string): Promise<Campaign> {
   return http.get<Campaign>(`/campaigns/${campaignId}`)
+}
+
+/**
+ * 获取广告投放表现及其广告单元明细
+ */
+export async function getCampaignPerformance(
+  campaignId: string,
+  hours = 168
+): Promise<CampaignPerformance> {
+  return http.get<CampaignPerformance>(`/campaigns/${campaignId}/performance?hours=${hours}`)
 }
 
 /**

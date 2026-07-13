@@ -4,8 +4,7 @@ import { useRouter, useRoute } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import AdUnitCardDetailed from '@/components/campaigns/AdUnitCardDetailed.vue'
 import CreateAdUnitModal from '@/components/campaigns/CreateAdUnitModal.vue'
-import { getCampaignDetail, getCampaignMaterials, type Campaign } from '@/api/campaigns'
-import { getMaterialImage } from '@/api/materials'
+import { getCampaignDetail, getCampaignPerformance, type AdSetPerformance, type Campaign } from '@/api/campaigns'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
@@ -15,7 +14,7 @@ const loading = ref(false)
 const error = ref<string | null>(null)
 
 const campaign = ref<Campaign | null>(null)
-const adUnits = ref<any[]>([])
+const adUnits = ref<AdSetPerformance[]>([])
 const showCreateAdUnitModal = ref(false)
 const createAdUnitModalRef = ref<any>(null)
 
@@ -35,12 +34,8 @@ const loadCampaignData = async () => {
     campaign.value = campaignData
     console.log('广告投放详情加载成功:', campaignData)
 
-    // TODO: 加载关联的 Ad Units
-    // const adUnitsData = await getAdUnits(campaignId.value)
-    // adUnits.value = adUnitsData
-
-    // 临时模拟数据
-    adUnits.value = []
+    const performance = await getCampaignPerformance(campaignId.value)
+    adUnits.value = performance.ad_set_breakdown || []
     console.log('Ad Units 加载成功:', adUnits.value.length, '条')
   } catch (err: any) {
     error.value = err.message || '加载数据失败'
