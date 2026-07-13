@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from scripts.seed_agent_demo_account import (
     AD_SETS,
     CAMPAIGNS,
@@ -19,6 +21,21 @@ def test_demo_fixture_represents_one_operator_workspace() -> None:
     assert {item[1] for item in AD_SETS} <= campaign_ids
     assert {item[0] for item in MATERIAL_ASSIGNMENTS} <= material_ids
     assert {item[1] for item in MATERIAL_ASSIGNMENTS} <= ad_set_ids
+
+
+def test_demo_fixture_material_previews_exist() -> None:
+    creative_dir = (
+        Path(__file__).resolve().parents[2]
+        / "frontend"
+        / "packages"
+        / "main-app"
+        / "public"
+        / "images"
+        / "creatives"
+    )
+
+    assert all((creative_dir / item[6]).is_file() for item in MATERIALS)
+    assert len({item[6] for item in MATERIALS}) == len(MATERIALS)
 
 
 def test_demo_fixture_contains_decision_quality_contrasts() -> None:

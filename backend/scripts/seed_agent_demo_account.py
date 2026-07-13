@@ -4,6 +4,7 @@ Run from backend/:
     UV_CACHE_DIR=../uv_cache uv run python scripts/seed_agent_demo_account.py
 """
 
+import argparse
 import asyncio
 import json
 from datetime import datetime, timedelta
@@ -16,6 +17,8 @@ from app.models import (
     AdSet,
     AdSetMetric,
     AdSetStatus,
+    AgentRun,
+    AgentSession,
     Campaign,
     CampaignStatus,
     Material,
@@ -23,6 +26,7 @@ from app.models import (
     Metric,
     Project,
     ProjectStatus,
+    SessionState,
     User,
 )
 from app.models.campaign import Platform
@@ -137,14 +141,14 @@ AD_SETS = [
 
 
 MATERIALS = [
-    ("demo-material-boss", "Boss战实录｜15秒", MaterialStatus.RUNNING, 32, 2.1, ["Boss战", "实录", "强反馈"]),
-    ("demo-material-upgrade", "基地升级前后对比｜20秒", MaterialStatus.RUNNING, 38, 2.5, ["升级", "前后对比", "养成"]),
-    ("demo-material-reversal", "三秒逆袭反转｜12秒", MaterialStatus.FATIGUE, 86, 5.3, ["反转", "强钩子", "疲劳"]),
-    ("demo-material-draw", "角色抽卡爽感｜15秒", MaterialStatus.RUNNING, 52, 3.3, ["抽卡", "角色", "爽感"]),
-    ("demo-material-alliance", "联盟混战高光｜18秒", MaterialStatus.RUNNING, 44, 2.8, ["联盟", "多人", "高光"]),
-    ("demo-material-review", "媒体口碑混剪｜20秒", MaterialStatus.RUNNING, 35, 2.2, ["口碑", "媒体", "混剪"]),
-    ("demo-material-new-hook", "新钩子A｜失败后重建", MaterialStatus.READY, 5, 0.0, ["新素材", "失败", "重建"]),
-    ("demo-material-preheat", "新品预约悬念版｜10秒", MaterialStatus.READY, 0, 0.0, ["新品", "预约", "悬念"]),
+    ("demo-material-boss", "Boss战实录｜15秒", MaterialStatus.RUNNING, 32, 2.1, ["Boss战", "实录", "强反馈"], "creative_game_001.jpg"),
+    ("demo-material-upgrade", "基地升级前后对比｜20秒", MaterialStatus.RUNNING, 38, 2.5, ["升级", "前后对比", "养成"], "creative_game_002.jpg"),
+    ("demo-material-reversal", "三秒逆袭反转｜12秒", MaterialStatus.FATIGUE, 86, 5.3, ["反转", "强钩子", "疲劳"], "creative_game_003.jpg"),
+    ("demo-material-draw", "角色抽卡爽感｜15秒", MaterialStatus.RUNNING, 52, 3.3, ["抽卡", "角色", "爽感"], "creative_game_004.jpg"),
+    ("demo-material-alliance", "联盟混战高光｜18秒", MaterialStatus.RUNNING, 44, 2.8, ["联盟", "多人", "高光"], "ai_candy_victory_001.jpg"),
+    ("demo-material-review", "媒体口碑混剪｜20秒", MaterialStatus.RUNNING, 35, 2.2, ["口碑", "媒体", "混剪"], "ai_candy_combo_001.jpg"),
+    ("demo-material-new-hook", "新钩子A｜失败后重建", MaterialStatus.READY, 5, 0.0, ["新素材", "失败", "重建"], "ai_candy_hook_001.jpg"),
+    ("demo-material-preheat", "新品预约悬念版｜10秒", MaterialStatus.READY, 0, 0.0, ["新品", "预约", "悬念"], "ai_candy_trend_001.jpg"),
 ]
 
 
@@ -183,7 +187,7 @@ def daily_profile(kind: str, day: int, base_spend: float, base_roi: float) -> tu
     return 0.0, 0.0
 
 
-async def seed() -> None:
+async def seed(reset_agent_history: bool = False) -> None:
     maker = get_session_maker()
     async with maker() as session:
         user = (
@@ -198,6 +202,13 @@ async def seed() -> None:
         user.name = "Alex｜美国市场投放"
         user.password_hash = PASSWORDS.hash(DEMO_PASSWORD)
         await session.flush()
+
+        if reset_agent_history:
+            # AgentSession cascades messages, artifacts and leases; AgentRun cascades run facts.
+            await session.execute(delete(AgentSession).where(AgentSession.user_id == user.id))
+            await session.execute(delete(SessionState).where(SessionState.user_id == user.id))
+            await session.execute(delete(AgentRun).where(AgentRun.user_id == user.id))
+            await session.flush()
 
         await session.execute(delete(Project).where(Project.user_id == user.id))
         await session.execute(delete(Material).where(Material.user_id == user.id))
@@ -222,15 +233,18 @@ async def seed() -> None:
         session.add(project)
 
         material_ids = [item[0] for item in MATERIALS]
-        for material_id, name, status, fatigue, frequency, tags in MATERIALS:
+        for material_id, name, status, fatigue, frequency, tags, image_filename in MATERIALS:
+            image_url = f"/images/creatives/{image_filename}"
             session.add(Material(
                 id=material_id,
                 user_id=user.id,
                 name=name,
                 type=MaterialType.FULL_VIDEO,
                 status=status,
-                url=f"/images/{material_id}.jpg",
-                thumbnail_url=f"/images/{material_id}.jpg",
+                url=image_url,
+                thumbnail_url=image_url,
+                poster_url=image_url,
+                preview_url=image_url,
                 ctr_estimate=None,
                 tags=json.dumps(tags, ensure_ascii=False),
                 media_kind="video",
@@ -348,7 +362,15 @@ async def seed() -> None:
     print(f"email={DEMO_EMAIL}")
     print(f"password={DEMO_PASSWORD}")
     print("projects=1 campaigns=5 ad_sets=10 materials=8 metric_days=14")
+    print(f"agent_history_reset={str(reset_agent_history).lower()}")
 
 
 if __name__ == "__main__":
-    asyncio.run(seed())
+    parser = argparse.ArgumentParser(description="Seed the investor-demo operator workspace.")
+    parser.add_argument(
+        "--reset-agent-history",
+        action="store_true",
+        help="Delete Agent sessions and run state owned by the fixed demo user.",
+    )
+    args = parser.parse_args()
+    asyncio.run(seed(reset_agent_history=args.reset_agent_history))
