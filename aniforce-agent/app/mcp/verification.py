@@ -16,6 +16,11 @@ def _same(actual: Any, expected: Any) -> bool:
         return abs(float(actual) - expected) < 1e-9
     if isinstance(expected, list) and isinstance(actual, list):
         return sorted(map(str, actual)) == sorted(map(str, expected))
+    if isinstance(expected, str) and isinstance(actual, str):
+        if len(actual) == 10 and len(expected) > 10 and expected.startswith(actual):
+            return True
+        if len(expected) == 10 and len(actual) > 10 and actual.startswith(expected):
+            return True
     return actual == expected
 
 

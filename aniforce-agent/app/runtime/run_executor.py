@@ -8,6 +8,7 @@ from uuid import uuid4
 from loguru import logger
 
 from app.agent.business_skills.loader_tool import load_business_skill, update_business_skill_state
+from app.agent.business_skills.selector import preselect_business_skill
 from app.agent.business_skills.state import build_task_state, restore_business_skill_state, skill_trace_metadata
 from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
@@ -83,6 +84,8 @@ class RunExecutorMixin:
                     task_type=task_type,
                 )
                 restore_business_skill_state(workspace_context)
+                if get_settings().ENABLE_BUSINESS_SKILLS:
+                    preselect_business_skill(workspace_context, user_input)
                 local_tools = [request_workspace_projection]
                 if get_settings().ENABLE_BUSINESS_SKILLS:
                     local_tools.extend([load_business_skill, update_business_skill_state])

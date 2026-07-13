@@ -13,7 +13,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Any, AsyncIterator, Optional
 from loguru import logger
-from openai import AsyncOpenAI
+from openai import APIConnectionError, APITimeoutError, AsyncOpenAI, AuthenticationError, RateLimitError
 
 from agents import (
     Agent,
@@ -37,6 +37,43 @@ from app.core.errors import AppError, AgentErrorCode, ErrorCategory
 
 
 _ORIGINAL_ITEMS_TO_MESSAGES = Converter.items_to_messages
+
+
+def map_provider_exception(error: Exception) -> AppError:
+    if isinstance(error, APITimeoutError):
+        return AppError(
+            AgentErrorCode.UPSTREAM_TIMEOUT,
+            "模型服务响应超时，本次未完成任务，请稍后重试。",
+            ErrorCategory.UPSTREAM_ERROR,
+            {"retryable": True},
+        )
+    if isinstance(error, RateLimitError):
+        return AppError(
+            AgentErrorCode.UPSTREAM_RATE_LIMIT,
+            "模型服务当前繁忙，请稍后重试。",
+            ErrorCategory.UPSTREAM_ERROR,
+            {"retryable": True},
+        )
+    if isinstance(error, AuthenticationError):
+        return AppError(
+            AgentErrorCode.UPSTREAM_AUTH_ERROR,
+            "模型服务认证失败，请联系管理员。",
+            ErrorCategory.UPSTREAM_ERROR,
+            {"retryable": False},
+        )
+    if isinstance(error, APIConnectionError):
+        return AppError(
+            AgentErrorCode.UPSTREAM_NETWORK_ERROR,
+            "模型服务暂时无法连接，请稍后重试。",
+            ErrorCategory.UPSTREAM_ERROR,
+            {"retryable": True},
+        )
+    return AppError(
+        AgentErrorCode.SDK_ERROR,
+        "模型服务处理失败，本次任务未完成，请稍后重试。",
+        ErrorCategory.UPSTREAM_ERROR,
+        {"retryable": True},
+    )
 
 
 def _is_empty_assistant_output_message(item) -> bool:
@@ -139,7 +176,12 @@ class OpenAISDKAdapter:
         if base_url:
             os.environ["OPENAI_BASE_URL"] = base_url
 
-        self.openai_client = AsyncOpenAI(api_key=api_key, base_url=base_url)
+        self.openai_client = AsyncOpenAI(
+            api_key=api_key,
+            base_url=base_url,
+            timeout=90.0,
+            max_retries=0,
+        )
         set_default_openai_client(self.openai_client, use_for_tracing=False)
         
     
@@ -269,12 +311,8 @@ class OpenAISDKAdapter:
                 run_config=run_config,
             )
         except Exception as e:
-            logger.exception(f"SDK run_streamed error: {e}")
-            raise AppError(
-                code=AgentErrorCode.SDK_ERROR,
-                message=f"SDK execution failed: {str(e)}",
-                category=ErrorCategory.RUNTIME_ERROR,
-            )
+            logger.exception("SDK run_streamed error")
+            raise map_provider_exception(e) from e
     
     def trace_scope(self, trace_context: dict[str, Any] | None = None):
         """Bind OpenInference attributes for the complete streamed execution."""
@@ -297,12 +335,8 @@ class OpenAISDKAdapter:
             async for event in result.stream_events():
                 yield self._serialize_sdk_event(event)
         except Exception as e:
-            logger.exception(f"SDK stream error: {e}")
-            raise AppError(
-                code=AgentErrorCode.SDK_ERROR,
-                message=f"SDK stream error: {str(e)}",
-                category=ErrorCategory.RUNTIME_ERROR,
-            )
+            logger.exception("SDK stream error")
+            raise map_provider_exception(e) from e
     
     def _serialize_sdk_event(self, sdk_event) -> dict:
         return serialize_sdk_event(sdk_event)

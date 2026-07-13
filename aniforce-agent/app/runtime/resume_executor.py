@@ -19,6 +19,15 @@ from app.runtime.mcp_context import mcp_connection
 from app.runtime.workspace_tool import request_workspace_projection
 
 
+def extract_checkpoint_workspace_context(run_state: dict) -> dict:
+    """Extract the serialized WorkspaceRunContext from the SDK context wrapper."""
+    raw_context = run_state.get("context") or {}
+    value = raw_context.get("value", raw_context) if isinstance(raw_context, dict) else {}
+    if isinstance(value, dict) and isinstance(value.get("context"), dict):
+        return value["context"]
+    return value if isinstance(value, dict) else {}
+
+
 class ResumeExecutorMixin:
     async def resume_checkpoint(
         self,
@@ -46,7 +55,7 @@ class ResumeExecutorMixin:
             claimed_by=claimed_by,
         )
 
-        safe_context = checkpoint["run_state"].get("context", {}).get("value") or {}
+        safe_context = extract_checkpoint_workspace_context(checkpoint["run_state"])
         latest_context = context_override or {}
         # 构建 approved_arguments_by_call_id：用 interruption 的 call_id 关联
         approved_args_by_call_id: dict[str, dict] = {}

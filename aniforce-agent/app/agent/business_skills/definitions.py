@@ -71,6 +71,7 @@ SAFE_BUSINESS_MUTATION = BusinessSkill(
     required_slots=("operation", "target_type", "target_id_or_create_fields"),
     clarification_rules=(
         "对象、目标值、删除范围或创建必填字段不唯一时必须澄清，禁止猜测。",
+        "用户未提供的可选业务字段保持为空或 Backend 默认值，不擅自补写日期、预算、市场或状态。",
         "用户意图和参数完整后直接调用写工具触发 Workspace HITL，不在聊天区重复确认。",
     ),
     evidence_contract=(

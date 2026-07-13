@@ -7,13 +7,13 @@ from app.mcp.verification import verify_absent, verify_collection_membership, ve
 def test_field_verification_passes_and_reports_mismatch():
     async def scenario():
         async def matching():
-            return {"id": "c1", "budget": 20000.0, "status": "paused"}
+            return {"id": "c1", "budget": 20000.0, "status": "paused", "start_date": "2026-07-13"}
 
         async def mismatching():
             return {"id": "c1", "budget": 10000.0, "status": "running"}
 
         passed = await verify_fields(
-            {"id": "c1"}, matching, {"budget": 20000.0, "status": "paused"}, entity_id="c1"
+            {"id": "c1"}, matching, {"budget": 20000.0, "status": "paused", "start_date": "2026-07-13T07:12"}, entity_id="c1"
         )
         failed = await verify_fields(
             {"id": "c1"}, mismatching, {"budget": 20000.0, "status": "paused"}, entity_id="c1"
