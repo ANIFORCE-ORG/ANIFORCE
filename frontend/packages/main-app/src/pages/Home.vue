@@ -122,6 +122,16 @@ const taskStatus = computed<TaskPanelStatus>(() => {
   if (visibleMessages.value.length > 0 || hasInteracted.value) return 'created'
   return 'created'
 })
+const taskStatusLabel = computed(() => ({
+  created: '待开始',
+  running: '进行中',
+  waiting_user_input: '等待补充',
+  waiting_approval: '等待确认',
+  applying: '执行中',
+  completed: '已完成',
+  failed: '失败',
+  canceled: '已取消'
+}[taskStatus.value]))
 const taskSummary = computed(() => {
   if (currentTask.value?.summary) return currentTask.value.summary
   if (currentTask.value?.goal) return currentTask.value.goal
@@ -607,6 +617,31 @@ watch(
 
     <!-- Output Content Area (above the input bar, only when has content) -->
     <div v-if="hasContent" class="max-w-[842px] w-full px-[12px] space-y-[19px] mb-[19px]">
+      <!-- Backend 持久任务状态：刷新和断流后仍可恢复。 -->
+      <section v-if="currentTask" class="rounded-2xl border border-slate-200 bg-slate-50/80 p-[15px] dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="flex items-start justify-between gap-[12px]">
+          <div class="min-w-0">
+            <div class="flex items-center gap-[7px]">
+              <span class="material-symbols-outlined text-[17px] text-primary">route</span>
+              <h2 class="truncate text-[14px] font-semibold text-slate-900 dark:text-white">{{ currentTask.title }}</h2>
+            </div>
+            <p class="mt-[6px] text-[12px] leading-5 text-slate-500 dark:text-slate-300">{{ taskSummary }}</p>
+          </div>
+          <span class="shrink-0 rounded-full bg-white px-[9px] py-[4px] text-[11px] font-semibold text-primary shadow-sm dark:bg-slate-900">
+            {{ taskStatusLabel }}
+          </span>
+        </div>
+        <div class="mt-[12px] flex flex-wrap gap-x-[12px] gap-y-[7px]">
+          <div v-for="step in taskSteps" :key="step.key" class="flex items-center gap-[5px] text-[11px]">
+            <span
+              class="h-[7px] w-[7px] rounded-full"
+              :class="step.status === 'done' ? 'bg-emerald-500' : step.status === 'active' ? 'bg-primary animate-pulse' : step.status === 'error' ? 'bg-red-500' : 'bg-slate-300 dark:bg-slate-600'"
+            ></span>
+            <span :class="step.status === 'active' ? 'font-semibold text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'">{{ step.label }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Loading State -->
       <div v-if="agent.loading.value" class="flex items-center justify-center gap-[9px] py-[25px]">
         <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
