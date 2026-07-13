@@ -32,7 +32,7 @@ def test_core_journeys_represent_natural_page_based_work() -> None:
 
     for journey in journeys:
         context = journey["entry_context"]
-        assert context["page"]
+        assert context["page"] == "home"
         assert context["fixture"]
         assert journey["expected_user_value"]
         assert journey["expected_behavior"]

@@ -61,7 +61,7 @@
       "frequency": "daily",
       "journey": "异常诊断",
       "entry_context": {
-        "page": "campaign_detail",
+        "page": "home",
         "selected_entities": [{"type": "campaign", "name": "美国iOS首发"}],
         "fixture": "selected_campaign_has_recent_conversion_drop"
       },
@@ -89,7 +89,7 @@
       "frequency": "several_times_per_week",
       "journey": "预算取舍",
       "entry_context": {
-        "page": "project_detail",
+        "page": "home",
         "selected_entities": [{"type": "project", "name": "星际远征美国测试"}],
         "fixture": "project_has_three_campaigns_and_limited_remaining_budget"
       },
@@ -116,7 +116,7 @@
       "frequency": "several_times_per_week",
       "journey": "素材迭代",
       "entry_context": {
-        "page": "material",
+        "page": "home",
         "selected_entities": [{"type": "project", "name": "星际远征美国测试"}],
         "fixture": "project_materials_include_winner_fatigued_and_no_delivery_items"
       },
@@ -142,7 +142,7 @@
       "frequency": "daily",
       "journey": "放量判断",
       "entry_context": {
-        "page": "dashboard",
+        "page": "home",
         "selected_entities": [],
         "fixture": "portfolio_contains_stable_winner_volatile_winner_and_low_volume_campaign"
       },
@@ -168,7 +168,7 @@
       "frequency": "weekly",
       "journey": "周复盘",
       "entry_context": {
-        "page": "project_detail",
+        "page": "home",
         "selected_entities": [{"type": "project", "name": "星际远征美国测试"}],
         "fixture": "project_has_complete_seven_day_performance"
       },
@@ -195,7 +195,7 @@
       "frequency": "weekly",
       "journey": "新计划搭建",
       "entry_context": {
-        "page": "project_detail",
+        "page": "home",
         "selected_entities": [{"type": "project", "name": "星际远征美国测试"}],
         "fixture": "project_ready_for_meta_campaign_creation"
       },
@@ -222,7 +222,7 @@
       "frequency": "several_times_per_week",
       "journey": "止损执行",
       "entry_context": {
-        "page": "campaign_detail",
+        "page": "home",
         "selected_entities": [{"type": "campaign", "name": "日本安卓素材测试"}],
         "fixture": "selected_campaign_has_sustained_loss"
       },
@@ -276,7 +276,7 @@
       "frequency": "weekly_or_onboarding",
       "journey": "无消耗排查",
       "entry_context": {
-        "page": "campaign_detail",
+        "page": "home",
         "selected_entities": [{"type": "campaign", "name": "韩国首发测试"}],
         "fixture": "selected_campaign_has_no_metrics_and_unknown_delivery_state"
       },
