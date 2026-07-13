@@ -75,14 +75,13 @@ class WorkspaceRunHooks(RunHooks[WorkspaceRunContext]):
     async def on_tool_start(self, context, agent, tool) -> None:
         run_context = context.context
         logger.debug(
-            "[SDK_HOOK] tool_start run_id={} session_id={} user_id={} agent={} tool={} tool_call_id={} tool_arguments={}",
+            "[SDK_HOOK] tool_start run_id={} session_id={} user_id={} agent={} tool={} tool_call_id={}",
             run_context.run_id,
             run_context.session_id,
             run_context.user_id,
             getattr(agent, "name", None),
             getattr(tool, "name", None),
             getattr(context, "tool_call_id", None),
-            getattr(context, "tool_arguments", None),
         )
 
     async def on_tool_end(self, context, agent, tool, result: object) -> None:

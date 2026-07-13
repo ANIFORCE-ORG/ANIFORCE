@@ -43,6 +43,15 @@ def load_skill_into_context(context: WorkspaceRunContext, skill_name: str, reaso
         slot for slot in skill.required_slots if not context.skill_slots.get(slot)
     ]
     context.skill_status = "collecting_inputs" if context.skill_missing_slots else "ready"
+    try:
+        from opentelemetry import trace
+
+        span = trace.get_current_span()
+        span.set_attribute("aniforce.skill.name", skill.name)
+        span.set_attribute("aniforce.skill.version", skill.version)
+        span.set_attribute("aniforce.skill.status", context.skill_status or "selected")
+    except Exception:
+        pass
     logger.bind(
         event="agent.skill.loaded",
         skill_name=skill.name,

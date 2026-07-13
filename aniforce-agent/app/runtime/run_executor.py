@@ -8,7 +8,7 @@ from uuid import uuid4
 from loguru import logger
 
 from app.agent.business_skills.loader_tool import load_business_skill, update_business_skill_state
-from app.agent.business_skills.state import build_task_state, restore_business_skill_state
+from app.agent.business_skills.state import build_task_state, restore_business_skill_state, skill_trace_metadata
 from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
@@ -110,6 +110,7 @@ class RunExecutorMixin:
                         "execution_kind": "initial",
                         "model": self.adapter.model,
                         "api_mode": self.adapter.api_mode,
+                        **skill_trace_metadata(workspace_context),
                     },
                 }
                 with self.adapter.trace_scope(trace_context):
@@ -187,6 +188,7 @@ class RunExecutorMixin:
                 run_logger.bind(
                     event="agent.run.requires_action",
                     checkpoint_id=checkpoint["id"],
+                    **skill_trace_metadata(workspace_context),
                 ).info(
                     "Agent run requires action: duration_ms={}", _elapsed_ms(run_start)
                 )
@@ -213,7 +215,11 @@ class RunExecutorMixin:
             AGENT_RUNS.labels("initial", task_type, "completed").inc()
             AGENT_RUN_DURATION.labels("initial", task_type).observe(perf_counter() - run_start)
             observe_tokens("initial", usage)
-            run_logger.bind(event="agent.run.completed", **usage).info(
+            run_logger.bind(
+                event="agent.run.completed",
+                **usage,
+                **skill_trace_metadata(workspace_context),
+            ).info(
                 "Agent run completed: duration_ms={} total_tokens={}",
                 _elapsed_ms(run_start),
                 usage.get("totalTokens", 0),

@@ -4,7 +4,7 @@ import pytest
 
 from app.agent.business_skills.loader_tool import load_skill_into_context, update_skill_state_in_context
 from app.agent.business_skills.models import BusinessSkill
-from app.agent.business_skills.state import build_task_state, restore_business_skill_state
+from app.agent.business_skills.state import build_task_state, restore_business_skill_state, skill_trace_metadata
 from app.agent.business_skills.registry import BusinessSkillRegistry, business_skill_registry
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
@@ -97,6 +97,12 @@ def test_skill_task_state_round_trip_across_run_and_checkpoint():
     assert task_state["confirmed_entities"]["campaign"] == "c1"
     assert checkpoint["selected_skill_versions"] == {"campaign_diagnosis": "1.0"}
     assert checkpoint["skill_slots"]["time_range_hours"] == 72
+    assert skill_trace_metadata(value) == {
+        "skill_names": ["campaign_diagnosis"],
+        "skill_versions": {"campaign_diagnosis": "1.0"},
+        "skill_load_reason": "matched_user_intent",
+        "skill_status": "ready",
+    }
 
     restored = context()
     restored.session_state = {"task_state": task_state}

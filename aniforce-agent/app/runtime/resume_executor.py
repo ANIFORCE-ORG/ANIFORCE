@@ -7,7 +7,7 @@ from agents import RunState
 from loguru import logger
 
 from app.agent.business_skills.loader_tool import load_business_skill, update_business_skill_state
-from app.agent.business_skills.state import build_task_state
+from app.agent.business_skills.state import build_task_state, skill_trace_metadata
 from app.agent.lifecycle_hooks import WorkspaceRunHooks
 from app.agent.prompts import workspace_instructions
 from app.agent.workspace_context import WorkspaceRunContext
@@ -142,6 +142,7 @@ class ResumeExecutorMixin:
                         "execution_kind": "resume",
                         "model": self.adapter.model,
                         "api_mode": self.adapter.api_mode,
+                        **skill_trace_metadata(workspace_context),
                     },
                 }
                 with self.adapter.trace_scope(trace_context):
@@ -209,7 +210,11 @@ class ResumeExecutorMixin:
                     perf_counter() - resume_start
                 )
                 observe_tokens("resume", usage)
-                run_logger.bind(event="agent.run.resume_completed", **usage).info(
+                run_logger.bind(
+                    event="agent.run.resume_completed",
+                    **usage,
+                    **skill_trace_metadata(workspace_context),
+                ).info(
                     "Agent run resume completed: total_tokens={}",
                     usage.get("totalTokens", 0),
                 )

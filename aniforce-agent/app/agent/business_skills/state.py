@@ -53,6 +53,15 @@ def seed_skill_slots_from_workspace(context: WorkspaceRunContext, skill_name: st
         context.skill_slots.setdefault("time_range_hours", 168)
 
 
+def skill_trace_metadata(context: WorkspaceRunContext) -> dict[str, Any]:
+    return {
+        "skill_names": list(context.selected_skill_ids),
+        "skill_versions": dict(context.selected_skill_versions),
+        "skill_load_reason": context.skill_load_reason,
+        "skill_status": context.skill_status,
+    }
+
+
 def build_task_state(
     context: WorkspaceRunContext,
     *,
