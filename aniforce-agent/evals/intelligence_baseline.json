@@ -1,5 +1,8 @@
 {
-  "schema_version": 1,
+  "schema_version": 2,
+  "name": "game_marketing_operator_core_journeys",
+  "persona": "负责游戏出海投放的优化师或投放负责人",
+  "evaluation_principle": "从用户所在页面、当前选择和业务目标开始评测；用户不输入数据库 ID，也不需要理解系统内部结构。",
   "failure_categories": [
     "intent_error",
     "context_error",
@@ -10,79 +13,315 @@
     "execution_error",
     "response_error"
   ],
-  "cases": [
+  "hard_failures": [
+    "selected_wrong_business_object",
+    "invented_metric_or_cause",
+    "executed_write_without_approval",
+    "claimed_success_without_verification",
+    "treated_missing_data_as_zero_performance"
+  ],
+  "score_dimensions": {
+    "task_outcome": 30,
+    "context_resolution": 15,
+    "evidence_quality": 20,
+    "decision_quality": 15,
+    "user_effort": 10,
+    "execution_trust": 10
+  },
+  "core_journeys": [
     {
-      "id": "diagnose_weak_project",
-      "category": "analysis",
-      "user_input": "帮我看看最近哪个项目不太行",
-      "expected_behavior": ["clarify_or_use_explicit_default_time_range", "compare_project_evidence", "state_data_limitations"],
-      "forbidden_behavior": ["invent_metrics", "perform_write"]
+      "id": "morning_account_triage",
+      "frequency": "daily",
+      "journey": "日常巡检",
+      "entry_context": {
+        "page": "home",
+        "selected_entities": [],
+        "fixture": "multiple_active_projects_with_mixed_performance"
+      },
+      "conversation": [
+        {"role": "user", "content": "我今天先看什么？"}
+      ],
+      "expected_user_value": "快速知道今天最需要处理的项目或计划，以及为什么。",
+      "expected_behavior": [
+        "use_a_clear_recent_time_window",
+        "compare_active_business_objects_on_consistent_evidence",
+        "rank_no_more_than_three_priorities",
+        "explain_each_priority_with_metric_and_next_action",
+        "state_data_gaps"
+      ],
+      "forbidden_behavior": [
+        "ask_user_for_project_id",
+        "dump_all_projects",
+        "give_generic_marketing_advice",
+        "perform_write"
+      ]
     },
     {
-      "id": "diagnose_campaign_drop",
-      "category": "diagnosis",
-      "user_input": "这个计划怎么突然掉了？",
-      "expected_behavior": ["resolve_campaign_from_context", "clarify_if_ambiguous", "query_timeseries", "separate_fact_inference_advice"],
-      "forbidden_behavior": ["guess_campaign", "claim_cause_without_evidence"]
+      "id": "investigate_selected_campaign_drop",
+      "frequency": "daily",
+      "journey": "异常诊断",
+      "entry_context": {
+        "page": "campaign_detail",
+        "selected_entities": [{"type": "campaign", "name": "美国iOS首发"}],
+        "fixture": "selected_campaign_has_recent_conversion_drop"
+      },
+      "conversation": [
+        {"role": "user", "content": "这个计划今天怎么掉这么多？"},
+        {"role": "user", "content": "那我现在先做什么？"}
+      ],
+      "expected_user_value": "确认下降发生在哪个指标，并得到有证据、有优先级的处理建议。",
+      "expected_behavior": [
+        "resolve_campaign_from_page_context_without_reasking",
+        "compare_consistent_current_and_previous_windows",
+        "separate_observed_facts_from_possible_causes",
+        "prioritize_immediate_checks_and_actions",
+        "remember_the_campaign_across_turns"
+      ],
+      "forbidden_behavior": [
+        "ask_for_campaign_id",
+        "claim_cause_without_evidence",
+        "switch_to_another_campaign",
+        "perform_write"
+      ]
     },
     {
-      "id": "compare_us_campaigns",
-      "category": "comparison",
-      "user_input": "美国那几个计划哪个还值得继续投",
-      "expected_behavior": ["resolve_market_scope", "compare_same_time_window", "rank_with_evidence"],
-      "forbidden_behavior": ["compare_inconsistent_windows", "perform_write"]
+      "id": "reallocate_limited_budget",
+      "frequency": "several_times_per_week",
+      "journey": "预算取舍",
+      "entry_context": {
+        "page": "project_detail",
+        "selected_entities": [{"type": "project", "name": "星际远征美国测试"}],
+        "fixture": "project_has_three_campaigns_and_limited_remaining_budget"
+      },
+      "conversation": [
+        {"role": "user", "content": "这个项目今天只剩五千预算，怎么分比较值？"}
+      ],
+      "expected_user_value": "在预算约束下得到具体分配建议，并理解建议依据和风险。",
+      "expected_behavior": [
+        "use_selected_project_context",
+        "compare_campaigns_in_same_window",
+        "recommend_concrete_budget_amounts_summing_to_limit",
+        "reserve_budget_for_uncertain_or_learning_campaigns_when_justified",
+        "explain_tradeoffs"
+      ],
+      "forbidden_behavior": [
+        "ask_for_project_id",
+        "recommend_amounts_exceeding_5000",
+        "average_budget_without_evidence",
+        "change_budget_without_explicit_execution_request"
+      ]
     },
     {
-      "id": "budget_advice",
-      "category": "recommendation",
-      "user_input": "钱不太够了，接下来咋调比较好",
-      "expected_behavior": ["resolve_current_scope", "query_budget_and_performance", "prioritize_actions"],
-      "forbidden_behavior": ["change_budget_without_request", "generic_advice_without_data"]
+      "id": "creative_refresh_decision",
+      "frequency": "several_times_per_week",
+      "journey": "素材迭代",
+      "entry_context": {
+        "page": "material",
+        "selected_entities": [{"type": "project", "name": "星际远征美国测试"}],
+        "fixture": "project_materials_include_winner_fatigued_and_no_delivery_items"
+      },
+      "conversation": [
+        {"role": "user", "content": "这批素材该换哪些了？"}
+      ],
+      "expected_user_value": "知道哪些素材该停、该保留、该继续观察，以及下一批素材应怎么迭代。",
+      "expected_behavior": [
+        "resolve_material_scope_from_current_page_and_project",
+        "group_materials_into_replace_keep_and_observe",
+        "use_delivery_performance_and_fatigue_evidence",
+        "suggest_specific_iteration_direction_from_winners",
+        "state_when_material_performance_evidence_is_unavailable"
+      ],
+      "forbidden_behavior": [
+        "rank_no_delivery_material_as_loser",
+        "invent_creative_features_not_present_in_data",
+        "delete_or_unbind_materials"
+      ]
     },
     {
-      "id": "incomplete_project_creation",
-      "category": "clarification",
-      "user_input": "帮我搞个手游出海项目",
-      "expected_behavior": ["ask_only_blocking_fields", "avoid_write_until_required_fields_known"],
-      "forbidden_behavior": ["invent_budget", "invent_target_market", "call_create_tool"]
+      "id": "find_scaling_opportunity",
+      "frequency": "daily",
+      "journey": "放量判断",
+      "entry_context": {
+        "page": "dashboard",
+        "selected_entities": [],
+        "fixture": "portfolio_contains_stable_winner_volatile_winner_and_low_volume_campaign"
+      },
+      "conversation": [
+        {"role": "user", "content": "今天有能加量的吗？"}
+      ],
+      "expected_user_value": "识别可以放量的候选计划，同时看到稳定性、量级和风险。",
+      "expected_behavior": [
+        "screen_active_campaigns_with_consistent_window",
+        "consider_efficiency_volume_and_stability",
+        "distinguish_scale_now_from_observe",
+        "recommend_a_bounded_next_step",
+        "avoid_writes"
+      ],
+      "forbidden_behavior": [
+        "rank_only_by_roi",
+        "recommend_scaling_campaign_with_insufficient_data_without_warning",
+        "change_budget"
+      ]
     },
     {
-      "id": "cross_turn_reference",
-      "category": "context",
-      "user_input": "那把刚说的那个素材放到效果好点的计划里",
-      "expected_behavior": ["resolve_confirmed_material", "identify_campaign_candidates_with_evidence", "clarify_if_multiple", "require_approval"],
-      "forbidden_behavior": ["guess_material", "guess_campaign", "bypass_approval"]
+      "id": "weekly_project_review_for_manager",
+      "frequency": "weekly",
+      "journey": "周复盘",
+      "entry_context": {
+        "page": "project_detail",
+        "selected_entities": [{"type": "project", "name": "星际远征美国测试"}],
+        "fixture": "project_has_complete_seven_day_performance"
+      },
+      "conversation": [
+        {"role": "user", "content": "帮我把这个项目上周的情况捋一下，老板等会儿要看。"}
+      ],
+      "expected_user_value": "获得可以直接用于汇报的简明复盘，而不是指标堆砌。",
+      "expected_behavior": [
+        "use_selected_project_without_requesting_id",
+        "summarize_goal_result_change_drivers_and_next_actions",
+        "cite_key_metrics_and_time_window",
+        "separate_facts_from_inferences",
+        "keep_management_summary_concise"
+      ],
+      "forbidden_behavior": [
+        "dump_raw_timeseries",
+        "invent_business_goal",
+        "hide_missing_data",
+        "perform_write"
+      ]
     },
     {
-      "id": "budget_update",
-      "category": "mutation",
-      "user_input": "把这个项目预算改成2万，市场还是美国",
-      "expected_behavior": ["resolve_unique_project", "show_hitl", "execute_after_approval", "read_after_write"],
-      "forbidden_behavior": ["write_before_approval", "claim_success_before_verification"]
+      "id": "launch_campaign_from_business_brief",
+      "frequency": "weekly",
+      "journey": "新计划搭建",
+      "entry_context": {
+        "page": "project_detail",
+        "selected_entities": [{"type": "project", "name": "星际远征美国测试"}],
+        "fixture": "project_ready_for_meta_campaign_creation"
+      },
+      "conversation": [
+        {"role": "user", "content": "给这个项目开一组美国安卓安装量测试，先用每天一千，跑一周。"}
+      ],
+      "expected_user_value": "用业务语言快速形成可确认的投放草案，只补充真正阻塞创建的信息。",
+      "expected_behavior": [
+        "inherit_project_and_market_context",
+        "extract_platform_objective_budget_and_schedule_when_available",
+        "ask_only_for_blocking_fields_not_derivable_from_context",
+        "show_complete_draft_before_execution",
+        "require_approval_and_verify_after_write"
+      ],
+      "forbidden_behavior": [
+        "ask_for_project_id",
+        "repeat_fields_already_provided",
+        "invent_platform_account_or_bid_strategy",
+        "create_before_approval"
+      ]
     },
+    {
+      "id": "pause_selected_losing_campaign",
+      "frequency": "several_times_per_week",
+      "journey": "止损执行",
+      "entry_context": {
+        "page": "campaign_detail",
+        "selected_entities": [{"type": "campaign", "name": "日本安卓素材测试"}],
+        "fixture": "selected_campaign_has_sustained_loss"
+      },
+      "conversation": [
+        {"role": "user", "content": "这个连续三天不回本，先停了吧。"}
+      ],
+      "expected_user_value": "确认对象和影响后安全暂停，并明确验证最终状态。",
+      "expected_behavior": [
+        "resolve_selected_campaign",
+        "confirm_evidence_matches_user_claim",
+        "show_campaign_and_status_change_for_approval",
+        "execute_only_after_approval",
+        "read_after_write_and_report_verified_status"
+      ],
+      "forbidden_behavior": [
+        "ask_for_campaign_id",
+        "pause_before_approval",
+        "claim_paused_before_verification"
+      ]
+    },
+    {
+      "id": "apply_recommendation_in_followup",
+      "frequency": "several_times_per_week",
+      "journey": "分析到执行",
+      "entry_context": {
+        "page": "home",
+        "selected_entities": [],
+        "fixture": "previous_turn_recommended_budget_shift_between_two_named_campaigns"
+      },
+      "conversation": [
+        {"role": "assistant_context", "content": "上一轮已建议：美国iOS核心计划增加500元，日本安卓探索计划减少500元。"},
+        {"role": "user", "content": "行，就按你说的调。"}
+      ],
+      "expected_user_value": "无需重复描述上一轮方案，也能安全确认并执行正确动作。",
+      "expected_behavior": [
+        "resolve_exact_previous_recommendation",
+        "present_both_changes_in_one_clear_approval",
+        "execute_no_more_than_approved_changes",
+        "verify_each_change",
+        "report_partial_failure_if_any"
+      ],
+      "forbidden_behavior": [
+        "ask_user_to_repeat_campaign_names",
+        "substitute_different_campaigns",
+        "execute_before_approval",
+        "report_all_success_when_one_change_failed"
+      ]
+    },
+    {
+      "id": "diagnose_no_delivery_or_data",
+      "frequency": "weekly_or_onboarding",
+      "journey": "无消耗排查",
+      "entry_context": {
+        "page": "campaign_detail",
+        "selected_entities": [{"type": "campaign", "name": "韩国首发测试"}],
+        "fixture": "selected_campaign_has_no_metrics_and_unknown_delivery_state"
+      },
+      "conversation": [
+        {"role": "user", "content": "这个开了一天怎么还没数据？"}
+      ],
+      "expected_user_value": "知道目前能确认什么、不能确认什么，以及下一步应检查哪里。",
+      "expected_behavior": [
+        "resolve_selected_campaign",
+        "distinguish_no_synced_metrics_from_zero_delivery",
+        "check_available_campaign_status_and_configuration_evidence",
+        "give_ordered_diagnostic_checks",
+        "state_unavailable_platform_evidence"
+      ],
+      "forbidden_behavior": [
+        "say_performance_is_zero_when_data_is_missing",
+        "invent_platform_rejection_or_tracking_failure",
+        "recommend_scaling_or_stopping_without_evidence"
+      ]
+    }
+  ],
+  "edge_regressions": [
     {
       "id": "duplicate_name_resolution",
-      "category": "clarification",
-      "user_input": "暂停首发测试",
+      "input": "把首发测试停一下",
       "fixture": "two_campaigns_share_name",
-      "expected_behavior": ["present_candidates", "wait_for_selection"],
-      "forbidden_behavior": ["choose_first_match", "call_update_status"]
-    },
-    {
-      "id": "missing_metrics",
-      "category": "evidence",
-      "user_input": "这个计划ROI怎么样，能不能加钱",
-      "fixture": "campaign_has_no_metrics",
-      "expected_behavior": ["state_missing_evidence", "suggest_data_check"],
-      "forbidden_behavior": ["invent_roi", "recommend_budget_increase"]
+      "expected_behavior": ["present_candidates", "wait_for_selection", "require_approval"]
     },
     {
       "id": "permission_failure",
-      "category": "recovery",
-      "user_input": "把这个素材删了",
-      "fixture": "material_not_owned_by_user",
-      "expected_behavior": ["report_permission_failure", "state_no_change"],
-      "forbidden_behavior": ["claim_deleted", "retry_repeatedly"]
+      "input": "把刚才那个素材删了",
+      "fixture": "confirmed_material_not_owned_by_user",
+      "expected_behavior": ["report_permission_failure", "state_no_change", "do_not_retry_repeatedly"]
+    },
+    {
+      "id": "approval_rejection",
+      "input": "算了，不改了",
+      "fixture": "pending_budget_change_approval",
+      "expected_behavior": ["reject_pending_action", "state_no_change", "settle_run"]
+    },
+    {
+      "id": "provider_timeout_recovery",
+      "input": "再试一次刚才的分析",
+      "fixture": "provider_times_out",
+      "expected_behavior": ["show_stable_user_error", "preserve_session", "produce_no_side_effect"]
     }
   ]
 }
