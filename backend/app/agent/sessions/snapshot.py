@@ -9,6 +9,7 @@ from app.repositories.impl.sqlite_agent_fact_repo import SqliteAgentArtifactRepo
 from app.repositories.impl.sqlite_agent_message_repo import SqliteAgentMessageRepository
 from app.repositories.impl.sqlite_agent_run_event_repo import SqliteAgentRunEventRepository
 from app.repositories.impl.sqlite_agent_session_repo import SqliteAgentSessionRepository
+from app.repositories.impl.sqlite_session_state_repo import SqliteSessionStateRepository
 
 
 class AgentSnapshotService:
@@ -49,6 +50,7 @@ class AgentSnapshotService:
             tool_calls = await SqliteAgentToolCallRepository(self.session).list_by_run(latest_model.run_id)
         return {
             "session": product_session,
+            "state": await SqliteSessionStateRepository(self.session).get(session_id, user_id),
             "messages": await SqliteAgentMessageRepository(self.session).list_by_session(session_id, user_id),
             "latest_run": latest_run,
             "pending_approval": next(

@@ -145,10 +145,7 @@ function isLastBlock(index: number): boolean {
   return index === blocks.value.length - 1
 }
 function isThinkingExpanded(index: number): boolean {
-  // 流式中且是当前正在输出的 thinking block：默认展开
-  if (props.isStreaming && isLastBlock(index) && blocks.value[index]?.type === 'thinking') {
-    return expandedThinking.value[index] ?? true
-  }
+  // 普通用户界面默认收起模型分析过程；需要排障时再手动展开。
   return expandedThinking.value[index] ?? false
 }
 
@@ -232,6 +229,20 @@ function toolId(block: Record<string, unknown>): string {
 function toolName(block: Record<string, unknown>): string {
   const rawName = String(block.toolName || block.name || 'tool')
   return getFriendlyToolName(rawName)
+}
+function toolStageLabel(block: Record<string, unknown>): string {
+  const rawName = String(block.toolName || block.name || '')
+  const isWrite = /^(create_|update_|delete_|add_|remove_)/.test(rawName)
+  if (isToolError(block)) return isWrite ? '业务操作失败' : '业务数据查询失败'
+  if (!hasToolResult(block)) return isWrite ? '正在执行业务操作…' : '正在查询业务数据…'
+  const result = block.result
+  if (result && typeof result === 'object') {
+    const operationStatus = String((result as Record<string, unknown>).operation_status || '')
+    if (operationStatus === 'executed_and_verified') return '业务操作已执行并验证'
+    if (operationStatus === 'executed_verification_failed') return '业务操作已执行，但验证未通过'
+    if (operationStatus === 'status_unknown') return '业务操作结果正在核实'
+  }
+  return isWrite ? '业务操作已返回结果' : '业务数据已获取'
 }
 function toolIconEmoji(block: Record<string, unknown>): string {
   const rawName = String(block.toolName || block.name || 'tool')
@@ -372,12 +383,6 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
   >
-    <!-- 流式指示器：只在有文本输出时显示 -->
-    <div v-if="isStreaming && hasTextOutput" class="streaming-indicators">
-      <span v-if="estimatedTokens > 0" class="stream-stat">↓ {{ estimatedTokens }}</span>
-      <span v-if="tps !== null" class="tps-badge">{{ tps.toFixed(1) }} t/s</span>
-    </div>
-
     <!-- 等待首块：脉冲点动效 -->
     <div v-if="isStreaming && blocks.length === 0" class="waiting-indicator">
       <span class="waiting-dot"></span>
@@ -392,8 +397,7 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
         <div v-if="block.type === 'thinking'" class="thinking-block" :class="{ 'is-streaming-thinking': isStreaming }">
           <button class="thinking-header" @click="expandedThinking[i] = !expandedThinking[i]">
             <span class="thinking-dot" :class="{ active: isStreaming && isLastBlock(i) }"></span>
-            <span class="thinking-label">Thinking</span>
-            <span v-if="thinkingCharCount(i) > 0 && !isStreaming" class="thinking-char-hint">{{ thinkingCharCount(i) }} 字</span>
+            <span class="thinking-label">分析过程（调试）</span>
             <span v-if="thinkingDuration(i) !== undefined" class="thinking-duration">{{ thinkingDuration(i) }}s</span>
             <svg class="thinking-chevron" :class="{ expanded: isThinkingExpanded(i) }" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="2 3.5 5 6.5 8 3.5" />
@@ -437,15 +441,14 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
           <div class="tool-header">
             <span class="tool-status-dot" :class="hasToolResult(block) ? (isToolError(block) ? 'error' : 'done') : 'running'"></span>
             <span class="tool-icon">{{ toolIconEmoji(block) }}</span>
-            <span class="tool-name">{{ toolName(block) }}</span>
+            <span class="tool-name">{{ toolStageLabel(block) }}</span>
           </div>
         </div>
       </template>
     </div>
 
-    <!-- 底部行：usage + copy + timestamp（完成时显示） -->
+    <!-- 底部行：普通用户只显示复制和时间；Token/成本保留在观测系统。 -->
     <div v-if="!isStreaming" class="assistant-footer">
-      <span v-if="usageText" class="usage-text">{{ usageText }}</span>
       <button v-if="textContent" class="copy-button" :class="{ visible: hovered || copied }" @click="copy(textContent)">
         <span class="material-symbols-outlined">content_copy</span>
       </button>

@@ -19,6 +19,13 @@ const statusDotClass = computed(() => {
   return 'status-dot-running'
 })
 
+const businessTitle = computed(() => {
+  const isWrite = /^(create_|update_|delete_|add_|remove_)/.test(props.content.toolName || '')
+  if (props.content.status === 'error') return isWrite ? '业务操作失败' : '业务数据查询失败'
+  if (props.content.status === 'completed') return isWrite ? '业务操作已完成' : '业务数据已获取'
+  return isWrite ? '正在执行业务操作' : '正在查询业务数据'
+})
+
 const durationText = computed(() => {
   // 可以后续从 props 传入实际耗时
   if (props.content.status === 'running') return '...'
@@ -34,8 +41,7 @@ const durationText = computed(() => {
 
       <!-- 工具信息 -->
       <div class="flex-1 min-w-0">
-        <span class="activity-title">{{ content.title }}</span>
-        <span v-if="content.toolName" class="activity-tool">{{ content.toolName }}</span>
+        <span class="activity-title">{{ businessTitle }}</span>
       </div>
 
       <!-- 耗时/状态 -->

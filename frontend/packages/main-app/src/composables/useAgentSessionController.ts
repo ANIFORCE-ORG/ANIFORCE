@@ -18,10 +18,12 @@ import {
   type AgentContentBlock,
   type AgentSdkStreamEvent,
   type SideEffectEvent,
+  type AgentSessionTaskState,
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
 import { useWorkspaceStore, workspaceResultProjectionRegistry, type WorkspaceSurface } from '@/store/workspace'
 import { parseAgentSdkEvent } from '@/agent/protocol/parser'
+import { buildAgentTaskPresentation } from '@/agent/taskPresentation'
 import { connectPersistedRun } from '@/services/runConnectionManager'
 import { hydrateWorkspaceSnapshot } from '@/services/workspaceArtifactStore'
 
@@ -154,6 +156,14 @@ export function useAgentSessionController() {
   const recentWorkspaceToolOutputs = ref<Array<{ id: string; runId?: string; toolName: string; surface: WorkspaceSurface; payload: Record<string, unknown>; mode: 'readonly' }>>([])
   const explicitlyCancelledRuns = new Set<string>()
 
+  function applyPersistedTaskState(taskState?: AgentSessionTaskState | null, pendingApproval?: unknown): void {
+    currentTask.value = buildAgentTaskPresentation(
+      taskState,
+      pendingApproval,
+      activeSession.value?.id || '',
+    )
+  }
+
   // 流式运行时状态全部从 store 读写（不再用闭包变量）
   // currentRunId / currentAbortController / typewriter 都在 store
 
@@ -264,6 +274,7 @@ export function useAgentSessionController() {
       if (!selectingActiveRun) {
         const snapshot = await getAgentSessionSnapshot(session.id)
         store.setMessages(session.id, snapshot.messages)
+        applyPersistedTaskState(snapshot.state?.task_state, snapshot.pending_approval)
         restoreTimelineFromCache()
         restoreWorkspaceFromCache()
         hydrateWorkspaceSnapshot(workspace, session.id, snapshot)
@@ -284,6 +295,7 @@ export function useAgentSessionController() {
             store.currentRunLastSequence = result.lastSequence
             const refreshed = await getAgentSessionSnapshot(session.id)
             store.setMessages(session.id, refreshed.messages)
+            applyPersistedTaskState(refreshed.state?.task_state, refreshed.pending_approval)
             hydrateWorkspaceSnapshot(workspace, session.id, refreshed)
             store.agentRunning = false
             store.agentPhase = null
@@ -445,6 +457,7 @@ export function useAgentSessionController() {
         }
 
         if (event.event === 'runtime.completed') {
+          applyPersistedTaskState(event.data.task_state as AgentSessionTaskState | undefined)
           const finalOutput = event.data.final_output
           if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
           const usage = event.data.usage
@@ -453,6 +466,7 @@ export function useAgentSessionController() {
         }
 
         if (event.event === 'runtime.requires_action') {
+          applyPersistedTaskState(event.data.task_state as AgentSessionTaskState | undefined, event.data)
           drainTypewriter(false)
           ensureAssistantMessage(assistant)
           const checkpointId = String(event.data.checkpoint_id || '')
@@ -509,6 +523,7 @@ export function useAgentSessionController() {
           const snapshot = await getAgentSessionSnapshot(sessionId)
           const status = String(snapshot.latest_run?.status || '')
           const snapshotRunId = String(snapshot.latest_run?.run_id || '')
+          applyPersistedTaskState(snapshot.state?.task_state, snapshot.pending_approval)
           if (snapshotRunId === runId && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(status)) {
             backgroundRecoveryStarted = true
             commandStatus.value = '连接已中断，任务仍在后台执行'
@@ -521,6 +536,7 @@ export function useAgentSessionController() {
                 store.currentRunLastSequence = result.lastSequence
                 const refreshed = await getAgentSessionSnapshot(sessionId)
                 store.setMessages(sessionId, refreshed.messages)
+                applyPersistedTaskState(refreshed.state?.task_state, refreshed.pending_approval)
                 hydrateWorkspaceSnapshot(workspace, sessionId, refreshed)
                 store.error = String(refreshed.latest_run?.status || '') === 'error'
                   ? String(refreshed.latest_run?.error?.message || 'Agent 任务执行失败')
@@ -1207,6 +1223,7 @@ export function useAgentSessionController() {
           })
         }
         if (eventType === 'runtime.completed') {
+          applyPersistedTaskState(event.data.task_state as AgentSessionTaskState | undefined)
           const finalOutput = event.data.final_output
           if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
           const usage = event.data.usage
@@ -1216,6 +1233,7 @@ export function useAgentSessionController() {
           workspace.setApprovalDraftStatus(checkpointId, 'completed')
         }
         if (event.event === 'runtime.requires_action') {
+          applyPersistedTaskState(event.data.task_state as AgentSessionTaskState | undefined, event.data)
           drainTypewriter(false)
           ensureAssistantMessage(assistant)
         }

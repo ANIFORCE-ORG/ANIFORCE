@@ -188,6 +188,7 @@ const taskActions = computed<TaskPanelAction[]>(() => {
     })
   }
   if (agent.agentRunning.value) return [{ key: 'abort', label: '停止任务', icon: 'stop', tone: 'danger' }]
+  if (taskStatus.value === 'waiting_user_input') return [{ key: 'focus', label: '补充所需信息', icon: 'edit_note', tone: 'primary' }]
   if (agent.error.value) return [{ key: 'retry', label: '重新发送', icon: 'refresh', tone: 'primary' }]
   if (taskStatus.value === 'completed' && !hasWorkspaceToolResults.value) {
     return [
@@ -201,8 +202,7 @@ const taskActions = computed<TaskPanelAction[]>(() => {
 const taskTags = computed(() => {
   const tags: string[] = []
   if (currentTask.value?.task_definition?.label) tags.push(currentTask.value.task_definition.label)
-  if (currentTask.value?.phase) tags.push(currentTask.value.phase)
-  if (agent.agentPhase.value?.kind === 'running_tools') tags.push(...agent.agentPhase.value.tools.slice(0, 2).map(tool => tool.name))
+  if (taskPhaseLabel.value) tags.push(taskPhaseLabel.value)
   return Array.from(new Set(tags)).slice(0, 4)
 })
 const currentModel = computed(() => {
@@ -261,19 +261,16 @@ function scrollToBottom() {
 }
 
 function phaseLabel(phase: AgentPhase): string {
-  if (phase?.kind === 'queued') return '任务已入队，等待 Worker 派发...'
-  if (phase?.kind === 'running_tools') {
-    const names = phase.tools.map(t => t.name)
-    if (!names.length) return 'Agent 正在调用工具...'
-    if (names.length === 1) return `Agent 正在调用 ${names[0]}...`
-    return `Agent 正在调用 ${names.slice(0, 2).join(', ')}${names.length > 2 ? ` 等 ${names.length} 个工具` : ''}...`
-  }
-  if (phase?.kind === 'waiting_model') return 'Agent 正在思考...'
-  return 'Agent 正在处理...'
+  if (phase?.kind === 'queued') return '任务已提交，正在准备处理...'
+  if (phase?.kind === 'running_tools') return '正在查询和核对业务数据...'
+  if (phase?.kind === 'waiting_model') return '正在理解目标并形成判断...'
+  return '正在处理当前任务...'
 }
 
 function normalizeTaskStatus(status: string): TaskPanelStatus {
   if (status === 'waiting_approval') return 'waiting_approval'
+  if (status === 'waiting_user_input') return 'waiting_user_input'
+  if (status === 'applying') return 'applying'
   if (status === 'completed') return 'completed'
   if (status === 'failed') return 'failed'
   if (status === 'canceled') return 'canceled'

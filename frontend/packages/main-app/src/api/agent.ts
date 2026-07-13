@@ -8,8 +8,30 @@ export interface AgentSession {
   archived_at?: string | null
 }
 
+export interface AgentSessionTaskState {
+  active_skill?: {
+    name: string
+    version: string
+    status: 'selected' | 'collecting_inputs' | 'ready' | 'executing' | 'completed' | 'cancelled' | 'failed'
+    slots?: Record<string, unknown>
+    missing_slots?: string[]
+    load_reason?: string | null
+    pending_question?: string | null
+  }
+  confirmed_entities?: Record<string, string>
+  constraints?: Record<string, unknown>
+  last_conclusion?: string
+}
+
+export interface AgentSessionState {
+  task_state?: AgentSessionTaskState
+  status?: string
+  version?: number
+}
+
 export interface AgentSessionSnapshot {
   session: AgentSession
+  state?: AgentSessionState | null
   messages: AgentMessage[]
   latest_run: Record<string, any> | null
   pending_approval: Record<string, any> | null

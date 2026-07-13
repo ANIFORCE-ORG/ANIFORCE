@@ -251,6 +251,7 @@ async def execute_agent_run(
                         user_id=user_id,
                         run_status="completed",
                     )
+                    settled_state = await store.get_session_state(session_id, user_id)
                     await publish_transient(
                         "runtime.completed",
                         {
@@ -259,6 +260,7 @@ async def execute_agent_run(
                             "status": "completed",
                             "usage": assistant_content.get("usage") or {},
                             "final_output": final_output or "",
+                            "task_state": (settled_state or {}).get("task_state") or {},
                         },
                     )
             except AgentGatewayError as exc:
