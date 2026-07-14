@@ -15,6 +15,7 @@ warn()  { echo -e "${YELLOW}[WARN]${NC}  $*"; }
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PID_FILE="$ROOT_DIR/.server_pids"
 PORT_FILE="$ROOT_DIR/.server_ports"
+SUPERVISOR_PID_FILE="$ROOT_DIR/.server_supervisor_pid"
 
 # ---------- 默认参数 ----------
 FRONTEND_PORT=3020
@@ -53,7 +54,18 @@ KILLED=0
 echo ""
 info "========== 停止 ANIMAGUS 服务 (MODE=$MODE, ONLY=$ONLY, 前端:$FRONTEND_PORT / 后端:$BACKEND_PORT) =========="
 
-# ---------- 1. 通过 PID 文件清理 ----------
+# ---------- 1. 终止后台监督进程 ----------
+if [ -f "$SUPERVISOR_PID_FILE" ]; then
+  SUPERVISOR_PID=$(cat "$SUPERVISOR_PID_FILE")
+  if [ -n "$SUPERVISOR_PID" ] && kill -0 "$SUPERVISOR_PID" 2>/dev/null; then
+    info "正在停止后台监督进程 PID $SUPERVISOR_PID..."
+    kill "$SUPERVISOR_PID" 2>/dev/null || true
+    KILLED=$((KILLED + 1))
+    sleep 1
+  fi
+fi
+
+# ---------- 2. 通过 PID 文件清理 ----------
 if [ -f "$PID_FILE" ]; then
   info "读取 PID 文件..."
   while IFS= read -r pid; do
@@ -69,7 +81,7 @@ else
   warn "未找到 PID 文件，将通过端口扫描清理"
 fi
 
-# ---------- 2. 按端口清理残留进程 ----------
+# ---------- 3. 按端口清理残留进程 ----------
 # 后端
 if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
   BACKEND_PIDS=$(lsof -ti :$BACKEND_PORT 2>/dev/null || true)
@@ -126,10 +138,10 @@ fi
 
 # 不按进程名全局清理，避免停止其他工作目录中的同名服务。
 
-# ---------- 3. 清理临时文件 ----------
-rm -f "$PID_FILE" "$PORT_FILE"
+# ---------- 4. 清理临时文件 ----------
+rm -f "$PID_FILE" "$PORT_FILE" "$SUPERVISOR_PID_FILE"
 
-# ---------- 4. 结果 ----------
+# ---------- 5. 结果 ----------
 echo ""
 if [ "$KILLED" -gt 0 ]; then
   echo -e "${GREEN}============================================${NC}"

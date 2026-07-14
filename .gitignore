@@ -80,6 +80,7 @@ resources/
 *.log
 .server_pids
 .server_ports
+.server_supervisor_pid
 .deploy_config
 .nginx_runtime.conf
 

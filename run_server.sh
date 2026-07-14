@@ -4,6 +4,7 @@
 #  用法:
 #    ./run_server.sh [--mode local|cloud] [--frontend-port 3020] [--backend-port 18010]
 #                   [--only all|backend|frontend] [--skip-install] [--host 0.0.0.0]
+#                   [--daemon]
 # ============================================================
 set -euo pipefail
 
@@ -103,11 +104,14 @@ kill_port_process() {
 }
 
 # ---------- 默认参数 ----------
+ORIGINAL_ARGS=("$@")
 MODE=local
 ONLY=all
 SKIP_INSTALL=0
 HOST=0.0.0.0
 DEMO_MODE=false
+DAEMON=0
+DAEMON_CHILD=0
 BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-2}
 AGENT_API_WORKERS=${AGENT_API_WORKERS:-1}
 AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-2}
@@ -137,8 +141,10 @@ while [[ $# -gt 0 ]]; do
     --host) HOST="$2"; shift 2 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
     --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
+    --daemon) DAEMON=1; shift 1 ;;
+    --daemon-child) DAEMON=1; DAEMON_CHILD=1; shift 1 ;;
     -h|--help)
-      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--agent-port PORT] [--only all|agent|backend|frontend] [--skip-install] [--host HOST] [--demo] [--log-dir DIR]"
+      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--agent-port PORT] [--only all|agent|backend|frontend] [--skip-install] [--host HOST] [--demo] [--log-dir DIR] [--daemon]"
       echo ""
       echo "参数说明:"
       echo "  --mode           启动模式: local(默认) / cloud"
@@ -150,6 +156,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --backend-port   后端端口 (默认: 18010)"
       echo "  --agent-port     Agent 服务端口 (默认: 18020)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
+      echo "  --daemon         后台常驻运行，退出终端后服务继续运行"
       echo ""
       echo "环境变量:"
       echo "  CLOUD_DOMAIN         云端模式的域名（默认: https://www.aniforce.cc）"
@@ -165,6 +172,9 @@ while [[ $# -gt 0 ]]; do
       echo "示例:"
       echo "  # 本地开发模式"
       echo "  $0 --mode local"
+      echo ""
+      echo "  # 本地后台常驻模式"
+      echo "  $0 --mode local --daemon"
       echo ""
       echo "  # 云端生产模式（使用默认域名）"
       echo "  $0 --mode cloud --skip-install"
@@ -217,6 +227,27 @@ mkdir -p "$LOG_DIR"
 LOG_DATE=$(date +%Y%m%d)
 LOG_ENV="$MODE"
 
+# 后台模式通过 nohup 重启脚本，使监督进程和所有子进程脱离当前终端。
+if [ "$DAEMON" -eq 1 ] && [ "$DAEMON_CHILD" -eq 0 ]; then
+  DAEMON_ARGS=()
+  for arg in "${ORIGINAL_ARGS[@]}"; do
+    [ "$arg" = "--daemon" ] || DAEMON_ARGS+=("$arg")
+  done
+
+  DAEMON_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.launcher.log"
+  nohup "$ROOT_DIR/run_server.sh" "${DAEMON_ARGS[@]}" --daemon-child \
+    > "$DAEMON_LOG" 2>&1 < /dev/null &
+  DAEMON_PID=$!
+  echo "$DAEMON_PID" > "$ROOT_DIR/.server_supervisor_pid"
+  disown "$DAEMON_PID" 2>/dev/null || true
+
+  ok "后台启动任务已提交 (监督进程 PID: $DAEMON_PID)"
+  info "启动日志: $DAEMON_LOG"
+  info "查看状态: $ROOT_DIR/check_server.sh"
+  info "停止服务: $ROOT_DIR/stop_server.sh"
+  exit 0
+fi
+
 # Local 写项目日志文件；Cloud 输出 JSON 到 stdout/stderr，由运行平台统一采集。
 if [ "$MODE" = "cloud" ]; then
   SERVICE_LOG_OUTPUT="console"
@@ -245,6 +276,7 @@ fi
 # ---------- PID & 端口信息文件（用于清理） ----------
 PID_FILE="$ROOT_DIR/.server_pids"
 PORT_FILE="$ROOT_DIR/.server_ports"
+SUPERVISOR_PID_FILE="$ROOT_DIR/.server_supervisor_pid"
 : > "$PID_FILE"
 echo "FRONTEND_PORT=$FRONTEND_PORT" > "$PORT_FILE"
 echo "BACKEND_PORT=$BACKEND_PORT" >> "$PORT_FILE"
@@ -261,7 +293,7 @@ cleanup() {
       kill "$pid" 2>/dev/null && ok "已停止进程 $pid" || true
     fi
   done < "$PID_FILE"
-  rm -f "$PID_FILE" "$PORT_FILE"
+  rm -f "$PID_FILE" "$PORT_FILE" "$SUPERVISOR_PID_FILE"
   ok "所有服务已停止,再见！"
   exit 0
 }
@@ -755,11 +787,15 @@ if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
   echo -e "  API 文档:      ${CYAN}http://$NETWORK_IP:$BACKEND_PORT/docs${NC}"
 fi
 echo ""
-echo -e "  按 ${YELLOW}Ctrl+C${NC} 停止所有服务"
+if [ "$DAEMON" -eq 1 ]; then
+  echo -e "  后台运行中，使用 ${YELLOW}./stop_server.sh${NC} 停止所有服务"
+else
+  echo -e "  按 ${YELLOW}Ctrl+C${NC} 停止所有服务"
+fi
 echo ""
 
-# 自动打开浏览器访问前端（cloud 模式默认不打开）
-if [ "$MODE" = "local" ]; then
+# 自动打开浏览器访问前端（cloud 和后台模式默认不打开）
+if [ "$MODE" = "local" ] && [ "$DAEMON" -eq 0 ]; then
   if command -v open &>/dev/null; then
     open "http://localhost:$FRONTEND_PORT"
   elif command -v xdg-open &>/dev/null; then
