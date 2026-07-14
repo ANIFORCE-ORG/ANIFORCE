@@ -62,16 +62,16 @@ class Settings(BaseSettings):
     GOOGLE_DEVELOPER_TOKEN: str = ""  # Google Ads API Developer Token
 
     # 服务地址配置（根据运行模式自动切换）
-    # Local 模式: http://localhost:3010 / http://localhost:8010
+    # Local/Test 模式: http://localhost:3020 / http://localhost:18010
     # Cloud 模式: http://8.148.151.36:3010 / https://8.148.151.36:8010
-    FRONTEND_BASE_URL: str = "http://localhost:3010"
-    BACKEND_BASE_URL: str = "http://localhost:8010"
+    FRONTEND_BASE_URL: str = "http://localhost:3020"
+    BACKEND_BASE_URL: str = "http://localhost:18010"
 
     # Agent Service（后端代理 /api/v1/agent/* 时使用）
-    AGENT_SERVICE_URL: str = "http://127.0.0.1:8020"
+    AGENT_SERVICE_URL: str = "http://127.0.0.1:18020"
 
     # OAuth 回调地址配置（用于第三方平台 OAuth 重定向）
-    # 默认使用生产域名，本地开发时可设置为 http://localhost:8010
+    # 默认使用生产域名，本地测试时可设置为 http://localhost:18010
     OAUTH_REDIRECT_BASE_URL: str = "https://www.aniforce.cc"
 
     # 日志配置

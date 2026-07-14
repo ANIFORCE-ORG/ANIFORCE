@@ -16,9 +16,10 @@ FRONTEND_LOG="${LOG_DIR}/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
 PID_FILE="${RUN_DIR}/${LOG_ENV}.stack.pids"
 
 HOST="${HOST:-127.0.0.1}"
-BACKEND_PORT="${BACKEND_PORT:-8010}"
-AGENT_PORT="${AGENT_PORT:-8020}"
-FRONTEND_PORT="${FRONTEND_PORT:-3010}"
+BACKEND_PORT="${BACKEND_PORT:-18010}"
+AGENT_PORT="${AGENT_PORT:-18020}"
+FRONTEND_PORT="${FRONTEND_PORT:-3020}"
+PHOENIX_PORT="${PHOENIX_PORT:-6006}"
 LOCAL_NO_PROXY="localhost,127.0.0.1,0.0.0.0,::1,${HOST}"
 BACKEND_RELOAD=0
 SKIP_INSTALL=0
@@ -32,9 +33,9 @@ Usage:
 
 Options:
   --host HOST             Default: 127.0.0.1
-  --backend-port PORT     Default: 8010
-  --agent-port PORT       Default: 8020
-  --frontend-port PORT    Default: 3010
+  --backend-port PORT     Default: 18010
+  --agent-port PORT       Default: 18020
+  --frontend-port PORT    Default: 3020
   --reload                Enable backend/agent uvicorn reload
   --skip-install          Skip dependency installation
   --no-clear-ports        Do not clear selected ports
@@ -164,12 +165,14 @@ check_port_free() {
 }
 
 cleanup() {
-  for pid in "${AGENT_PID}" "${BACKEND_PID}" "${FRONTEND_PID}"; do
-    if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
-      pkill -TERM -P "${pid}" >/dev/null 2>&1 || true
-      kill -TERM "${pid}" >/dev/null 2>&1 || true
-    fi
-  done
+  if [[ -f "${PID_FILE}" ]]; then
+    while read -r pid; do
+      if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
+        pkill -TERM -P "${pid}" >/dev/null 2>&1 || true
+        kill -TERM "${pid}" >/dev/null 2>&1 || true
+      fi
+    done < "${PID_FILE}"
+  fi
 }
 trap cleanup EXIT INT TERM
 
@@ -240,6 +243,13 @@ if [[ "${SKIP_INSTALL}" -eq 0 ]]; then
   npm_config_cache="${ROOT_DIR}/npm_cache" npx pnpm install
 fi
 
+echo "Checking Redis Agent event stream..."
+"${ROOT_DIR}/scripts/ensure-redis.sh" "${BACKEND_DIR}/.env" "${LOG_DIR}"
+
+echo "Checking Phoenix tracing collector..."
+PHOENIX_PORT="${PHOENIX_PORT}" \
+  "${ROOT_DIR}/scripts/ensure-phoenix.sh" "${AGENT_DIR}/.env" "${LOG_DIR}" "${PID_FILE}"
+
 echo "Migrating backend database..."
 cd "${BACKEND_DIR}"
 UV_CACHE_DIR=./uv_cache uv run python -m alembic upgrade head
@@ -255,6 +265,7 @@ UV_CACHE_DIR=./uv_cache \
 HOST="${HOST}" \
 PORT="${AGENT_PORT}" \
 BACKEND_BASE_URL="http://${HOST}:${BACKEND_PORT}" \
+PHOENIX_COLLECTOR_ENDPOINT="http://127.0.0.1:${PHOENIX_PORT}/v1/traces" \
 uv run python -m uvicorn app.main:app \
   --host "${HOST}" \
   --port "${AGENT_PORT}" \
@@ -317,6 +328,7 @@ Backend health: http://${DISPLAY_HOST}:${BACKEND_PORT}/health
 Agent health:   http://${DISPLAY_HOST}:${AGENT_PORT}/health
 Agent runs API: http://${DISPLAY_HOST}:${AGENT_PORT}/api/agent/runs
 API docs:       http://${DISPLAY_HOST}:${BACKEND_PORT}/docs
+Phoenix traces: http://${DISPLAY_HOST}:${PHOENIX_PORT}
 
 Bind host:      ${HOST}
 If you open from another machine/browser environment, use the Network URL above.

@@ -3,7 +3,7 @@
 #  ANIFORCE 统一部署脚本（通过 Nginx 反向代理）
 #  用法:
 #    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80]
-#                       [--frontend-port 3010] [--backend-port 8010] [--agent-port 8020]
+#                       [--frontend-port 3020] [--backend-port 18010] [--agent-port 18020]
 #                       [--only all|agent|backend|frontend|nginx] [--skip-install] [--without-agent]
 # ============================================================
 set -euo pipefail
@@ -75,15 +75,32 @@ kill_port_process() {
   return 1
 }
 
+wait_for_service_port() {
+  local port=$1
+  local name=$2
+  local max_wait=${3:-120}
+  local elapsed
+
+  for ((elapsed=1; elapsed<=max_wait; elapsed++)); do
+    if check_port_in_use "$port"; then
+      ok "$name 已监听端口 $port (等待 ${elapsed}s)"
+      return 0
+    fi
+    sleep 1
+  done
+
+  fail "$name 启动超时: 等待 ${max_wait}s 后端口 $port 仍未监听"
+}
+
 # ---------- 默认参数 ----------
 MODE=local
 ONLY=all
 SKIP_INSTALL=0
 WITHOUT_AGENT=0
 NGINX_PORT=80
-FRONTEND_PORT=3010
-BACKEND_PORT=8010
-AGENT_PORT=8020
+FRONTEND_PORT=3020
+BACKEND_PORT=18010
+AGENT_PORT=18020
 DEMO_MODE=false
 USE_SSL=false
 
@@ -111,9 +128,9 @@ while [[ $# -gt 0 ]]; do
       echo "选项:"
       echo "  --mode           启动模式: local(默认) / cloud"
       echo "  --nginx-port     Nginx 端口 (默认: 80)"
-      echo "  --frontend-port  前端端口 (默认: 3010)"
-      echo "  --backend-port   后端端口 (默认: 8010)"
-      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
+      echo "  --frontend-port  前端端口 (默认: 3020)"
+      echo "  --backend-port   后端端口 (默认: 18010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 18020)"
       echo "  --only           仅启动: all(默认) / agent / backend / frontend / nginx"
       echo "  --skip-install   跳过依赖安装"
       echo "  --without-agent  跳过 Agent 服务部署"
@@ -253,13 +270,8 @@ else
   bash "$ROOT_DIR/run_server.sh" $AGENT_ARGS &
   AGENT_SCRIPT_PID=$!
 
-  sleep 8
-
-  if check_port_in_use $AGENT_PORT; then
-    ok "Agent 服务已启动 (端口: $AGENT_PORT)"
-  else
-    fail "Agent 服务启动失败 (端口: $AGENT_PORT)"
-  fi
+  wait_for_service_port "$AGENT_PORT" "Agent 服务"
+  ok "Agent 服务已启动 (端口: $AGENT_PORT)"
 fi
 
 # ============================================================
@@ -294,15 +306,8 @@ else
   bash "$ROOT_DIR/run_server.sh" $BACKEND_ARGS &
   BACKEND_SCRIPT_PID=$!
   
-  # 等待后端启动
-  sleep 10
-  
-  # 检查后端是否启动成功
-  if check_port_in_use $BACKEND_PORT; then
-    ok "后端服务已启动 (端口: $BACKEND_PORT)"
-  else
-    fail "后端服务启动失败 (端口: $BACKEND_PORT)"
-  fi
+  wait_for_service_port "$BACKEND_PORT" "后端服务"
+  ok "后端服务已启动 (端口: $BACKEND_PORT)"
 fi
 
 # ============================================================
@@ -334,15 +339,8 @@ else
   bash "$ROOT_DIR/run_server.sh" $FRONTEND_ARGS &
   FRONTEND_SCRIPT_PID=$!
   
-  # 等待前端启动
-  sleep 8
-  
-  # 检查前端是否启动成功
-  if check_port_in_use $FRONTEND_PORT; then
-    ok "前端服务已启动 (端口: $FRONTEND_PORT)"
-  else
-    fail "前端服务启动失败"
-  fi
+  wait_for_service_port "$FRONTEND_PORT" "前端服务"
+  ok "前端服务已启动 (端口: $FRONTEND_PORT)"
 fi
 
 # ============================================================

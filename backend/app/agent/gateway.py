@@ -20,7 +20,7 @@ class AgentGatewayService:
     """Calls agent-service and streams SSE responses."""
 
     def __init__(self, base_url: str | None = None, timeout_seconds: float = 300.0) -> None:
-        self.base_url = (base_url or os.getenv("AGENT_SERVICE_URL") or "http://127.0.0.1:8020").rstrip("/")
+        self.base_url = (base_url or os.getenv("AGENT_SERVICE_URL") or "http://127.0.0.1:18020").rstrip("/")
         self.timeout = httpx.Timeout(timeout_seconds, connect=10.0)
 
     async def health(self) -> dict[str, Any]:

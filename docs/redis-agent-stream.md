@@ -4,17 +4,24 @@ Redis 只承载短期 Agent 增量事件，业务事实仍写入 SQLite/生产�
 
 ## 本地启动
 
+`run_server.sh` 和 `scripts/start-dev.sh` 会在启动 Backend 前执行
+`scripts/ensure-redis.sh`。检查逻辑如下：
+
+- Redis 已可用：继续启动。
+- 本机 Redis 未运行：优先启动 `redis-server.service`，无 systemd 时启动独立 Redis 进程。
+- 远程 Redis 不可达或本机 Redis 无法启动：立即终止，避免实时事件静默丢失。
+
+Ubuntu/Debian 首次安装：
+
 ```bash
-redis-server \
-  --bind 127.0.0.1 \
-  --protected-mode yes \
-  --port 6379 \
-  --save '' \
-  --appendonly no \
-  --daemonize yes \
-  --pidfile "$PWD/logs/run/redis.pid" \
-  --logfile "$PWD/logs/redis_260711.log" \
-  --dir "$PWD/logs/run"
+sudo apt-get install redis-server redis-tools
+sudo systemctl enable --now redis-server
+```
+
+也可以单独执行前置检查：
+
+```bash
+scripts/ensure-redis.sh backend/.env logs
 ```
 
 配置：
@@ -48,7 +55,7 @@ SQLite/生产数据库保存：
 - 工具最终结果
 - usage 和错误
 
-Redis 不可用时，Run 继续执行和落库，SSE 降级为耐久状态与最终结果。
+运行期间 Redis 突发不可用时，Run 仍会执行和落库，SSE 降级为耐久状态与最终结果；标准启动脚本会在启动前阻止 Redis 不可用的服务栈上线。
 
 ## Linux 生产扩展
 

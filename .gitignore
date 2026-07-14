@@ -62,6 +62,7 @@ backend/data/images/
 backend/data/sqlite/*
 !backend/data/sqlite/animagus.db
 aniforce-agent/data/
+.phoenix/
 
 # ==== 日志/临时文件 =====
 log/

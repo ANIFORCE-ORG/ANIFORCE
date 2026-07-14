@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     LOG_ROLE: str = "api"
     APP_ENV: str = "local"
     HOST: str = "0.0.0.0"
-    PORT: int = 8020
+    PORT: int = 18020
 
     # JWT 配置（复用 backend 的 JWT secret）
     JWT_SECRET: str = "change-me-in-production"
@@ -27,7 +27,7 @@ class Settings(BaseSettings):
     JWT_EXPIRE_MINUTES: int = 60 * 24  # 24 小时
 
     # 后端服务（用于 MCP 工具调用）
-    BACKEND_BASE_URL: str = "http://localhost:8010"
+    BACKEND_BASE_URL: str = "http://localhost:18010"
 
     # OpenAI Agents SDK
     OPENAI_API_KEY: str = ""
@@ -41,11 +41,11 @@ class Settings(BaseSettings):
     AGENT_TRACING_PROVIDER: str = "disabled"
     AGENT_TRACE_INCLUDE_SENSITIVE_DATA: bool = False
     ENABLE_BUSINESS_SKILLS: bool = True
-    PHOENIX_COLLECTOR_ENDPOINT: str = "http://127.0.0.1:16006/v1/traces"
+    PHOENIX_COLLECTOR_ENDPOINT: str = "http://127.0.0.1:6006/v1/traces"
     PHOENIX_PROJECT_NAME: str = "aniforce"
 
     # CORS
-    CORS_ALLOW_ORIGINS: str = "http://localhost:5173,http://localhost:3010,http://127.0.0.1:5173"
+    CORS_ALLOW_ORIGINS: str = "http://localhost:5173,http://localhost:3020,http://127.0.0.1:5173,http://127.0.0.1:3020"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
 

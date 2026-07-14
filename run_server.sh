@@ -2,7 +2,7 @@
 # ============================================================
 #  ANIMAGUS 一键启动脚本（本地 / 云端）
 #  用法:
-#    ./run_server.sh [--mode local|cloud] [--frontend-port 3010] [--backend-port 8010]
+#    ./run_server.sh [--mode local|cloud] [--frontend-port 3020] [--backend-port 18010]
 #                   [--only all|backend|frontend] [--skip-install] [--host 0.0.0.0]
 # ============================================================
 set -euo pipefail
@@ -117,9 +117,10 @@ BACKEND_PORT_EXPLICIT=0
 AGENT_PORT_EXPLICIT=0
 
 # ---------- 默认端口 ----------
-FRONTEND_PORT=3010
-BACKEND_PORT=8010
-AGENT_PORT=8020
+FRONTEND_PORT=3020
+BACKEND_PORT=18010
+AGENT_PORT=18020
+PHOENIX_PORT=${PHOENIX_PORT:-6006}
 
 # ---------- 日志配置 ----------
 LOG_DIR="./logs"
@@ -145,9 +146,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --skip-install   跳过依赖安装（云端更常用）"
       echo "  --host           监听地址（默认: 0.0.0.0）"
       echo "  --demo           启用 Demo 模式（设置 DEMO_MODE=true,默认: false 生产模式）"
-      echo "  --frontend-port  前端端口 (默认: 3010；cloud 模式若存在环境变量 PORT 且未显式指定,将使用 PORT)"
-      echo "  --backend-port   后端端口 (默认: 8010)"
-      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
+      echo "  --frontend-port  前端端口 (默认: 3020；cloud 模式若存在环境变量 PORT 且未显式指定,将使用 PORT)"
+      echo "  --backend-port   后端端口 (默认: 18010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 18020)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
       echo ""
       echo "环境变量:"
@@ -194,7 +195,7 @@ fi
 
 info "启动模式: MODE=$MODE, ONLY=$ONLY, SKIP_INSTALL=$SKIP_INSTALL, HOST=$HOST"
 info "环境配置: DEMO_MODE=$DEMO_MODE"
-info "端口配置: 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT"
+info "端口配置: 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT, Phoenix=$PHOENIX_PORT"
 info "Worker 配置: Backend API=$BACKEND_API_WORKERS, Agent API=$AGENT_API_WORKERS, Agent Run=$AGENT_RUN_WORKERS"
 
 # ---------- 项目根目录 ----------
@@ -248,6 +249,7 @@ PORT_FILE="$ROOT_DIR/.server_ports"
 echo "FRONTEND_PORT=$FRONTEND_PORT" > "$PORT_FILE"
 echo "BACKEND_PORT=$BACKEND_PORT" >> "$PORT_FILE"
 echo "AGENT_PORT=$AGENT_PORT" >> "$PORT_FILE"
+echo "PHOENIX_PORT=$PHOENIX_PORT" >> "$PORT_FILE"
 echo "MODE=$MODE" >> "$PORT_FILE"
 echo "ONLY=$ONLY" >> "$PORT_FILE"
 
@@ -270,21 +272,12 @@ trap cleanup SIGINT SIGTERM
 # ============================================================
 info "========== 环境检测 =========="
 
-# --- Python ---
-if command -v python3 &>/dev/null; then
-  PY="python3"
-elif command -v python &>/dev/null; then
-  PY="python"
-else
-  fail "未检测到 Python,请先安装 Python 3.10+"
-fi
-PY_VER=$($PY --version 2>&1 | awk '{print $2}')
-PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
-PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
-if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
-  fail "Python 版本过低 ($PY_VER),需要 3.10+"
-fi
-ok "Python $PY_VER"
+# --- Python 3.11 runtime ---
+command -v uv &>/dev/null || fail "未检测到 uv,无法准备 Python 3.11 运行环境"
+PY311=$(uv python find 3.11 2>/dev/null || true)
+[ -n "$PY311" ] || fail "未找到 Python 3.11,请执行: uv python install 3.11"
+PY_VER=$($PY311 --version 2>&1 | awk '{print $2}')
+ok "Python $PY_VER (uv managed)"
 
 # --- Node.js ---
 if ! command -v node &>/dev/null; then
@@ -354,19 +347,30 @@ info "========== 后端依赖 =========="
 
 cd "$BACKEND_DIR"
 
-# 虚拟环境
-if [ ! -d "venv/bin" ] && [ ! -d "venv/Scripts" ]; then
-  info "创建 Python 虚拟环境..."
-  $PY -m venv venv
+# 后端使用 Python 3.11+（代码依赖 enum.StrEnum）。
+BACKEND_VENV_DIR="$BACKEND_DIR/.venv"
+if [ ! -f "$BACKEND_VENV_DIR/bin/python" ] && [ ! -f "$BACKEND_VENV_DIR/Scripts/python.exe" ]; then
+  command -v uv &>/dev/null || fail "创建后端 Python 3.11 环境需要 uv"
+  info "创建后端 Python 3.11 虚拟环境..."
+  UV_CACHE_DIR=./uv_cache uv venv --python 3.11 "$BACKEND_VENV_DIR"
 fi
 
-# 激活虚拟环境
-if [ -f "venv/bin/activate" ]; then
-  source venv/bin/activate
-elif [ -f "venv/Scripts/activate" ]; then
-  source venv/Scripts/activate
+if [ -f "$BACKEND_VENV_DIR/bin/activate" ]; then
+  source "$BACKEND_VENV_DIR/bin/activate"
+  BACKEND_PY="$BACKEND_VENV_DIR/bin/python"
+elif [ -f "$BACKEND_VENV_DIR/Scripts/activate" ]; then
+  source "$BACKEND_VENV_DIR/Scripts/activate"
+  BACKEND_PY="$BACKEND_VENV_DIR/Scripts/python.exe"
+else
+  fail "后端虚拟环境不可用: $BACKEND_VENV_DIR"
 fi
-ok "虚拟环境已激活"
+BACKEND_PY_VER=$($BACKEND_PY -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+BACKEND_PY_MAJOR=${BACKEND_PY_VER%%.*}
+BACKEND_PY_MINOR=${BACKEND_PY_VER#*.}
+if [ "$BACKEND_PY_MAJOR" -lt 3 ] || { [ "$BACKEND_PY_MAJOR" -eq 3 ] && [ "$BACKEND_PY_MINOR" -lt 11 ]; }; then
+  fail "后端虚拟环境 Python 版本过低 ($BACKEND_PY_VER),需要 3.11+"
+fi
+ok "后端虚拟环境已激活 (Python $BACKEND_PY_VER)"
 
 # 安装依赖
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "frontend" ]; then
@@ -375,8 +379,7 @@ elif [ "$SKIP_INSTALL" -eq 1 ]; then
   warn "已启用 --skip-install, 跳过后端依赖安装"
 else
   info "安装 Python 依赖..."
-  pip install -q --upgrade pip
-  pip install -q -r requirements.txt
+  UV_CACHE_DIR=./uv_cache uv pip install --python "$BACKEND_PY" -r requirements.txt
   ok "后端依赖安装完成"
 fi
 
@@ -495,6 +498,13 @@ if [[ "$AGENT_RUNTIME_DB_URL_VALUE" == sqlite* ]] && [ "$AGENT_API_WORKERS" -ne 
   fail "SQLite Agent Runtime 仅支持 AGENT_API_WORKERS=1；多节点部署需先迁移共享数据库"
 fi
 
+if [ "$ONLY" = "all" ] || [ "$ONLY" = "backend" ]; then
+  info "检查 Agent 实时事件 Redis..."
+  "$ROOT_DIR/scripts/ensure-redis.sh" "$BACKEND_ENV" "$LOG_DIR" \
+    || fail "Redis 不可用，Backend 与 Agent Run Worker 未启动"
+  ok "Redis 实时事件通道可用"
+fi
+
 # Avoid leaking backend venv into agent/frontend commands.
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
@@ -523,6 +533,14 @@ fi
 # ============================================================
 #  5. 启动 Agent 服务
 # ============================================================
+if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+  info "检查 Phoenix tracing collector..."
+  PHOENIX_PORT="$PHOENIX_PORT" \
+    "$ROOT_DIR/scripts/ensure-phoenix.sh" "$AGENT_ENV" "$LOG_DIR" "$PID_FILE" \
+    || fail "Phoenix tracing collector 启动失败"
+  ok "Phoenix tracing 可用: http://localhost:$PHOENIX_PORT"
+fi
+
 if [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
   warn "--only=$ONLY: 跳过 Agent 启动"
 else
@@ -550,6 +568,7 @@ else
   PORT="$AGENT_PORT" \
   UVICORN_WORKERS="$AGENT_API_WORKERS" \
   BACKEND_BASE_URL="http://localhost:$BACKEND_PORT" \
+  PHOENIX_COLLECTOR_ENDPOINT="http://127.0.0.1:$PHOENIX_PORT/v1/traces" \
   JWT_SECRET="$JWT_SECRET_VALUE" \
   APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$AGENT_API_LOG" \
   LOG_SERVICE=agent-service LOG_ROLE=api \
@@ -575,14 +594,8 @@ else
 
   cd "$BACKEND_DIR"
 
-  # 确保虚拟环境已激活并更新 Python 路径
-  if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-    PY="venv/bin/python"
-  elif [ -f "venv/Scripts/activate" ]; then
-    source venv/Scripts/activate
-    PY="venv/Scripts/python.exe"
-  fi
+  # 使用上面已验证的 Python 3.11+ 后端虚拟环境。
+  PY="$BACKEND_PY"
 
   # 检查后端端口
 if check_port_in_use $BACKEND_PORT; then
@@ -734,6 +747,7 @@ fi
 if [ "$ONLY" != "frontend" ] && [ "$ONLY" != "backend" ]; then
   echo -e "  Agent (本地):  ${CYAN}http://localhost:$AGENT_PORT${NC}"
   echo -e "  Agent (网络):  ${CYAN}http://$NETWORK_IP:$AGENT_PORT${NC}"
+  echo -e "  Phoenix traces: ${CYAN}http://localhost:$PHOENIX_PORT${NC}"
 fi
 if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
   echo -e "  后端 (本地):   ${CYAN}http://localhost:$BACKEND_PORT${NC}"

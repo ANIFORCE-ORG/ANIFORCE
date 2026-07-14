@@ -19,7 +19,7 @@ from app.mcp_server import get_mcp_starlette_app, mcp
 from app.core.errors import AppError, get_http_status
 from app.core.logging import settings_logging_values, setup_logging
 from app.core.metrics import HTTP_DURATION, HTTP_REQUESTS
-from app.core.sdk_tracing import configure_sdk_tracing, shutdown_sdk_tracing
+from app.core.sdk_tracing import configure_sdk_tracing, sdk_tracing_status, shutdown_sdk_tracing
 
 
 setup_logging(**settings_logging_values(settings))
@@ -162,6 +162,7 @@ async def health():
         "service": "openai-agent-service",
         "model": settings.OPENAI_AGENTS_MODEL,
         "api": settings.OPENAI_AGENTS_API,
+        "tracing": sdk_tracing_status(settings),
     }
 
 

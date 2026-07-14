@@ -2,13 +2,36 @@
 
 from __future__ import annotations
 
+import socket
 from typing import Any
+from urllib.parse import urlparse
 
 from loguru import logger
 
 from app.core.metrics import AGENT_TRACE_EXPORT_ERRORS
 
 _trace_provider: Any = None
+
+
+def sdk_tracing_status(settings) -> dict[str, Any]:
+    """Return tracing configuration and collector reachability for health checks."""
+    endpoint = str(settings.PHOENIX_COLLECTOR_ENDPOINT or "")
+    parsed = urlparse(endpoint)
+    collector_reachable = False
+    if parsed.hostname and parsed.port:
+        try:
+            with socket.create_connection((parsed.hostname, parsed.port), timeout=0.25):
+                collector_reachable = True
+        except OSError:
+            pass
+    return {
+        "enabled": bool(settings.AGENT_TRACING_ENABLED),
+        "provider": str(settings.AGENT_TRACING_PROVIDER or "disabled"),
+        "initialized": _trace_provider is not None,
+        "collector_endpoint": endpoint,
+        "collector_reachable": collector_reachable,
+        "project": str(settings.PHOENIX_PROJECT_NAME),
+    }
 
 
 def configure_sdk_tracing(settings) -> Any:
@@ -26,6 +49,16 @@ def configure_sdk_tracing(settings) -> Any:
     if provider != "phoenix":
         set_tracing_disabled(True)
         logger.warning("Unsupported Agents SDK tracing provider: {}", provider)
+        return None
+
+    status = sdk_tracing_status(settings)
+    if not status["collector_reachable"]:
+        AGENT_TRACE_EXPORT_ERRORS.labels("collector_unreachable").inc()
+        set_tracing_disabled(True)
+        logger.error(
+            "Phoenix collector is unreachable; SDK tracing disabled: endpoint={}",
+            settings.PHOENIX_COLLECTOR_ENDPOINT,
+        )
         return None
 
     try:

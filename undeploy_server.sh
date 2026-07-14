@@ -17,9 +17,9 @@ DEPLOY_CONFIG="$ROOT_DIR/.deploy_config"
 
 # ---------- 默认参数 ----------
 NGINX_PORT=80
-FRONTEND_PORT=3010
-BACKEND_PORT=8010
-AGENT_PORT=8020
+FRONTEND_PORT=3020
+BACKEND_PORT=18010
+AGENT_PORT=18020
 ONLY=all
 USE_SSL=false
 
@@ -45,9 +45,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --only           仅停止: all(默认) / agent / backend / frontend / nginx"
       echo "  --ssl            停止 HTTPS 模式的 Nginx"
       echo "  --nginx-port     Nginx 端口 (默认: 80)"
-      echo "  --frontend-port  前端端口 (默认: 3010)"
-      echo "  --backend-port   后端端口 (默认: 8010)"
-      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
+      echo "  --frontend-port  前端端口 (默认: 3020)"
+      echo "  --backend-port   后端端口 (默认: 18010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 18020)"
       echo ""
       echo "示例:"
       echo "  # 停止所有服务"
@@ -143,24 +143,28 @@ if [ "$ONLY" = "agent" ] || [ "$ONLY" = "nginx" ] || [ "$ONLY" = "frontend" ]; t
 else
   info "========== 停止后端服务 =========="
   
-  # 通过端口清理
-  if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
+  # 按已配置端口清理，避免误杀其他工作目录中的 uvicorn。
+  BACKEND_PIDS=$(lsof -ti :$BACKEND_PORT 2>/dev/null || true)
+  if [ -n "$BACKEND_PIDS" ]; then
     info "检测到端口 $BACKEND_PORT 上的进程，正在终止..."
-    lsof -ti :$BACKEND_PORT | while read -r pid; do
-      kill "$pid" 2>/dev/null && ok "已停止后端进程 PID $pid" && STOPPED=$((STOPPED + 1)) || true
+    for pid in $BACKEND_PIDS; do
+      if kill "$pid" 2>/dev/null; then
+        ok "已停止后端进程 PID $pid"
+        STOPPED=$((STOPPED + 1))
+      fi
     done
     sleep 1
-    
     if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
       warn "端口 $BACKEND_PORT 仍被占用，强制终止..."
-      lsof -ti :$BACKEND_PORT | xargs kill -9 2>/dev/null || true
+      lsof -ti :$BACKEND_PORT 2>/dev/null | xargs -r kill -9 2>/dev/null || true
     fi
   fi
-  
-  # 通过进程名清理（兜底）
-  if pgrep -f "uvicorn app.main:app" &>/dev/null; then
-    info "检测到 uvicorn 残留进程，正在终止..."
-    pkill -f "uvicorn app.main:app" 2>/dev/null && STOPPED=$((STOPPED + 1)) || true
+
+  WORKER_PIDS=$(pgrep -f "$ROOT_DIR/backend/.venv/bin/python scripts/run_agent_(worker|reconcile_worker)\\.py" 2>/dev/null || true)
+  if [ -n "$WORKER_PIDS" ]; then
+    info "检测到 Agent Worker，正在终止..."
+    echo "$WORKER_PIDS" | xargs kill 2>/dev/null || true
+    STOPPED=$((STOPPED + 1))
   fi
 fi
 
@@ -172,16 +176,20 @@ if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ];
 else
   info "========== 停止 Agent 服务 =========="
 
-  if lsof -i :$AGENT_PORT -sTCP:LISTEN &>/dev/null; then
+  AGENT_PIDS=$(lsof -ti :$AGENT_PORT 2>/dev/null || true)
+  if [ -n "$AGENT_PIDS" ]; then
     info "检测到端口 $AGENT_PORT 上的进程，正在终止..."
-    lsof -ti :$AGENT_PORT | while read -r pid; do
-      kill "$pid" 2>/dev/null && ok "已停止 Agent 进程 PID $pid" && STOPPED=$((STOPPED + 1)) || true
+    for pid in $AGENT_PIDS; do
+      if kill "$pid" 2>/dev/null; then
+        ok "已停止 Agent 进程 PID $pid"
+        STOPPED=$((STOPPED + 1))
+      fi
     done
     sleep 1
 
     if lsof -i :$AGENT_PORT -sTCP:LISTEN &>/dev/null; then
       warn "端口 $AGENT_PORT 仍被占用，强制终止..."
-      lsof -ti :$AGENT_PORT | xargs kill -9 2>/dev/null || true
+      lsof -ti :$AGENT_PORT 2>/dev/null | xargs -r kill -9 2>/dev/null || true
     fi
   fi
 fi
@@ -194,24 +202,21 @@ if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ]; th
 else
   info "========== 停止前端服务 =========="
   
-  # 通过端口清理
-  if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
+  FRONTEND_PIDS=$(lsof -ti :$FRONTEND_PORT 2>/dev/null || true)
+  if [ -n "$FRONTEND_PIDS" ]; then
     info "检测到端口 $FRONTEND_PORT 上的进程，正在终止..."
-    lsof -ti :$FRONTEND_PORT | while read -r pid; do
-      kill "$pid" 2>/dev/null && ok "已停止前端进程 PID $pid" && STOPPED=$((STOPPED + 1)) || true
+    for pid in $FRONTEND_PIDS; do
+      if kill "$pid" 2>/dev/null; then
+        ok "已停止前端进程 PID $pid"
+        STOPPED=$((STOPPED + 1))
+      fi
     done
     sleep 1
-    
+
     if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
       warn "端口 $FRONTEND_PORT 仍被占用，强制终止..."
-      lsof -ti :$FRONTEND_PORT | xargs kill -9 2>/dev/null || true
+      lsof -ti :$FRONTEND_PORT 2>/dev/null | xargs -r kill -9 2>/dev/null || true
     fi
-  fi
-  
-  # 通过进程名清理（兜底）
-  if pgrep -f "vite.*animagus\|vite.*main-app" &>/dev/null; then
-    info "检测到 Vite 残留进程，正在终止..."
-    pkill -f "vite.*animagus\|vite.*main-app" 2>/dev/null && STOPPED=$((STOPPED + 1)) || true
   fi
 fi
 

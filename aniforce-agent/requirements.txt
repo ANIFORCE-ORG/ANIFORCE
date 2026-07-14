@@ -6,6 +6,7 @@ openai==2.44.0
 openai-agents==0.17.7
 
 # Agents SDK tracing -> OpenInference/OpenTelemetry -> Phoenix
+arize-phoenix==17.30.0
 arize-phoenix-otel==0.16.1
 openinference-instrumentation-openai-agents==1.6.1
 

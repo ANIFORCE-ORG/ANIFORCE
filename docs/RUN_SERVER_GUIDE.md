@@ -246,7 +246,7 @@ cd ../frontend && pnpm install
 
 ### 问题 3：Python 版本过低
 
-**要求**：Python 3.10+
+**要求**：Python 3.11+（通过 `uv` 管理运行环境）
 
 **解决方案**：升级 Python 版本
 

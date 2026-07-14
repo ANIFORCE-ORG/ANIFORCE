@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  ANIMAGUS 一键停止服务脚本
-#  用法: ./stop_server.sh [--frontend-port 3010] [--backend-port 8010] [--only all|backend|frontend]
+#  用法: ./stop_server.sh [--frontend-port 3020] [--backend-port 18010] [--agent-port 18020] [--only all|agent|backend|frontend]
 # ============================================================
 set -euo pipefail
 
@@ -17,8 +17,10 @@ PID_FILE="$ROOT_DIR/.server_pids"
 PORT_FILE="$ROOT_DIR/.server_ports"
 
 # ---------- 默认参数 ----------
-FRONTEND_PORT=3010
-BACKEND_PORT=8010
+FRONTEND_PORT=3020
+BACKEND_PORT=18010
+AGENT_PORT=18020
+PHOENIX_PORT=6006
 MODE=local
 ONLY=all
 
@@ -32,12 +34,14 @@ while [[ $# -gt 0 ]]; do
   case "$1" in
     --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
     --backend-port)  BACKEND_PORT="$2";  shift 2 ;;
+    --agent-port)    AGENT_PORT="$2";    shift 2 ;;
     --only) ONLY="$2"; shift 2 ;;
     -h|--help)
-      echo "用法: $0 [--frontend-port PORT] [--backend-port PORT] [--only all|backend|frontend]"
-      echo "  --frontend-port  前端端口 (默认: 3010)"
-      echo "  --backend-port   后端端口 (默认: 8010)"
-      echo "  --only           仅停止: all(默认) / backend / frontend"
+      echo "用法: $0 [--frontend-port PORT] [--backend-port PORT] [--agent-port PORT] [--only all|agent|backend|frontend]"
+      echo "  --frontend-port  前端端口 (默认: 3020)"
+      echo "  --backend-port   后端端口 (默认: 18010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 18020)"
+      echo "  --only           仅停止: all(默认) / agent / backend / frontend"
       echo "  若 run_server.sh 使用了自定义参数，脚本会自动读取"
       exit 0 ;;
     *) fail "未知参数: $1  (使用 --help 查看帮助)" ;;
@@ -67,56 +71,65 @@ fi
 
 # ---------- 2. 按端口清理残留进程 ----------
 # 后端
-if [ "$ONLY" != "frontend" ]; then
-  if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
+if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
+  BACKEND_PIDS=$(lsof -ti :$BACKEND_PORT 2>/dev/null || true)
+  if [ -n "$BACKEND_PIDS" ]; then
     info "检测到端口 $BACKEND_PORT 上的进程，正在终止..."
-    lsof -ti :$BACKEND_PORT | while read -r pid; do
-      kill "$pid" 2>/dev/null && ok "已停止 :$BACKEND_PORT 进程 PID $pid" && KILLED=$((KILLED + 1)) || true
+    for pid in $BACKEND_PIDS; do
+      kill "$pid" 2>/dev/null || true
     done
     sleep 1
     if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
       warn "端口 $BACKEND_PORT 仍被占用，强制终止..."
-      lsof -ti :$BACKEND_PORT | xargs kill -9 2>/dev/null || true
+      lsof -ti :$BACKEND_PORT 2>/dev/null | xargs -r kill -9 2>/dev/null || true
     fi
+  fi
+fi
+
+# Agent
+if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+  if lsof -i :$AGENT_PORT -sTCP:LISTEN &>/dev/null; then
+    info "检测到端口 $AGENT_PORT 上的进程，正在终止..."
+    lsof -ti :$AGENT_PORT 2>/dev/null | xargs -r kill 2>/dev/null || true
+    sleep 1
+    if lsof -i :$AGENT_PORT -sTCP:LISTEN &>/dev/null; then
+      warn "端口 $AGENT_PORT 仍被占用，强制终止..."
+      lsof -ti :$AGENT_PORT 2>/dev/null | xargs -r kill -9 2>/dev/null || true
+    fi
+  fi
+fi
+
+# Phoenix tracing
+if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+  PHOENIX_PIDS=$(lsof -ti :$PHOENIX_PORT 2>/dev/null || true)
+  if [ -n "$PHOENIX_PIDS" ]; then
+    info "检测到 Phoenix tracing 端口 $PHOENIX_PORT，正在终止..."
+    echo "$PHOENIX_PIDS" | xargs -r kill 2>/dev/null || true
   fi
 fi
 
 # 前端
-if [ "$ONLY" != "backend" ]; then
-  if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
+if [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ]; then
+  FRONTEND_PIDS=$(lsof -ti :$FRONTEND_PORT 2>/dev/null || true)
+  if [ -n "$FRONTEND_PIDS" ]; then
     info "检测到端口 $FRONTEND_PORT 上的进程，正在终止..."
-    lsof -ti :$FRONTEND_PORT | while read -r pid; do
-      kill "$pid" 2>/dev/null && ok "已停止 :$FRONTEND_PORT 进程 PID $pid" && KILLED=$((KILLED + 1)) || true
+    for pid in $FRONTEND_PIDS; do
+      kill "$pid" 2>/dev/null || true
     done
     sleep 1
     if lsof -i :$FRONTEND_PORT -sTCP:LISTEN &>/dev/null; then
       warn "端口 $FRONTEND_PORT 仍被占用，强制终止..."
-      lsof -ti :$FRONTEND_PORT | xargs kill -9 2>/dev/null || true
+      lsof -ti :$FRONTEND_PORT 2>/dev/null | xargs -r kill -9 2>/dev/null || true
     fi
   fi
 fi
 
-# ---------- 3. 按进程名清理（兜底） ----------
-# uvicorn
-if [ "$ONLY" != "frontend" ]; then
-  if pgrep -f "uvicorn app.main:app" &>/dev/null; then
-    info "检测到 uvicorn 残留进程，正在终止..."
-    pkill -f "uvicorn app.main:app" 2>/dev/null && KILLED=$((KILLED + 1)) || true
-  fi
-fi
+# 不按进程名全局清理，避免停止其他工作目录中的同名服务。
 
-# vite (animagus 相关)
-if [ "$ONLY" != "backend" ]; then
-  if pgrep -f "vite.*animagus\|vite.*main-app" &>/dev/null; then
-    info "检测到 Vite 残留进程，正在终止..."
-    pkill -f "vite.*animagus\|vite.*main-app" 2>/dev/null && KILLED=$((KILLED + 1)) || true
-  fi
-fi
-
-# ---------- 4. 清理临时文件 ----------
+# ---------- 3. 清理临时文件 ----------
 rm -f "$PID_FILE" "$PORT_FILE"
 
-# ---------- 5. 结果 ----------
+# ---------- 4. 结果 ----------
 echo ""
 if [ "$KILLED" -gt 0 ]; then
   echo -e "${GREEN}============================================${NC}"
