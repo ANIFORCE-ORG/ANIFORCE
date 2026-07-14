@@ -109,7 +109,7 @@ SKIP_INSTALL=0
 HOST=0.0.0.0
 DEMO_MODE=false
 BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-2}
-AGENT_API_WORKERS=${AGENT_API_WORKERS:-2}
+AGENT_API_WORKERS=${AGENT_API_WORKERS:-1}
 AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-2}
 
 FRONTEND_PORT_EXPLICIT=0
@@ -153,7 +153,7 @@ while [[ $# -gt 0 ]]; do
       echo "环境变量:"
       echo "  CLOUD_DOMAIN         云端模式的域名（默认: https://www.aniforce.cc）"
       echo "  BACKEND_API_WORKERS  Backend API 进程数（默认: 2）"
-      echo "  AGENT_API_WORKERS    Agent API 进程数（默认: 2）"
+      echo "  AGENT_API_WORKERS    Agent API 进程数（SQLite 正式版本固定为 1）"
       echo "  AGENT_RUN_WORKERS    Agent 执行 worker 数（默认: 2）"
       echo ""
       echo "使用场景:"
@@ -489,6 +489,12 @@ for env_file in "$BACKEND_ENV" "$AGENT_ENV"; do
 done
 ok "Backend 与 Agent JWT 配置已同步"
 
+AGENT_RUNTIME_DB_URL_VALUE=${AGENT_RUNTIME_DB_URL:-$(grep -E '^AGENT_RUNTIME_DB_URL=' "$AGENT_ENV" 2>/dev/null | tail -1 | cut -d= -f2-)}
+AGENT_RUNTIME_DB_URL_VALUE=${AGENT_RUNTIME_DB_URL_VALUE:-sqlite+aiosqlite:///data/agent.db}
+if [[ "$AGENT_RUNTIME_DB_URL_VALUE" == sqlite* ]] && [ "$AGENT_API_WORKERS" -ne 1 ]; then
+  fail "SQLite Agent Runtime 仅支持 AGENT_API_WORKERS=1；多节点部署需先迁移共享数据库"
+fi
+
 # Avoid leaking backend venv into agent/frontend commands.
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
@@ -542,6 +548,7 @@ else
   UV_CACHE_DIR=./uv_cache \
   HOST="$HOST" \
   PORT="$AGENT_PORT" \
+  UVICORN_WORKERS="$AGENT_API_WORKERS" \
   BACKEND_BASE_URL="http://localhost:$BACKEND_PORT" \
   JWT_SECRET="$JWT_SECRET_VALUE" \
   APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$AGENT_API_LOG" \

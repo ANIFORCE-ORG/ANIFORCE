@@ -10,7 +10,7 @@ from uuid import uuid4
 from sqlalchemy import func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import AgentApproval
+from app.models import AgentApproval, AgentRun
 
 
 class SqliteAgentApprovalRepository:
@@ -97,6 +97,18 @@ class SqliteAgentApprovalRepository:
         result = await self.session.execute(
             select(AgentApproval)
             .where(AgentApproval.run_id == run_id, AgentApproval.user_id == user_id)
+            .order_by(AgentApproval.created_at, AgentApproval.approval_id)
+        )
+        return [self._to_dict(item) for item in result.scalars()]
+
+    async def list_for_session(self, session_id: str, user_id: str) -> list[dict]:
+        result = await self.session.execute(
+            select(AgentApproval)
+            .join(AgentRun, AgentRun.run_id == AgentApproval.run_id)
+            .where(
+                AgentRun.session_id == session_id,
+                AgentApproval.user_id == user_id,
+            )
             .order_by(AgentApproval.created_at, AgentApproval.approval_id)
         )
         return [self._to_dict(item) for item in result.scalars()]

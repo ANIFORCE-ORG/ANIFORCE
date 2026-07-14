@@ -96,11 +96,78 @@ const approvalDomain = computed<'project' | 'campaign' | 'material' | 'other'>((
   return 'other'
 })
 
-const approvalTitle = computed(() => {
+const approvalTitle = computed(() => approvalIntent.value.title)
+
+const statusLabels: Record<string, string> = {
+  active: '启用', running: '进行中', paused: '暂停', draft: '草稿', review: '审核中',
+  ready: '待投放', fatigue: '已疲劳', archived: '已归档', deleted: '已删除',
+}
+
+const fieldLabels: Record<string, string> = {
+  name: '名称', status: '状态', budget: '预算', total_budget: '总预算', platform: '平台',
+  start_date: '开始日期', end_date: '结束日期', objective: '投放目标', bid_strategy: '出价策略',
+  spend_limit: '花费上限', material_id: '素材', campaign_id: '广告计划', project_id: '项目',
+}
+
+const approvalIntent = computed(() => {
+  const tool = props.approvalDraft?.toolName || ''
+  const status = String(approvalArgs.value.status || '')
+  if (tool === 'update_campaign_status') {
+    const action = status === 'paused' ? '暂停' : status === 'running' || status === 'active' ? '启用' : '变更状态'
+    return { title: `${action}广告计划`, summary: `将广告计划状态变更为“${statusLabels[status] || status}”`, confirm: `确认${action}` }
+  }
+  const relationshipActions: Record<string, { title: string; summary: string; confirm: string }> = {
+    add_material_to_campaign: { title: '关联素材到广告计划', summary: '将指定素材加入该广告计划', confirm: '确认关联' },
+    remove_material_from_campaign: { title: '从广告计划移除素材', summary: '解除素材与该广告计划的关联', confirm: '确认移除' },
+    add_material_to_project: { title: '关联素材到项目', summary: '将指定素材加入该项目', confirm: '确认关联' },
+    remove_material_from_project: { title: '从项目移除素材', summary: '解除素材与该项目的关联', confirm: '确认移除' },
+  }
+  if (relationshipActions[tool]) return relationshipActions[tool]
   const actionText = { create: '创建', update: '修改', delete: '删除', other: '执行' }[approvalAction.value]
-  const domainText = { project: '项目', campaign: '广告计划', material: '素材', other: '操作' }[approvalDomain.value]
-  return `${actionText}${domainText}`
+  const domainText = { project: '项目', campaign: '广告计划', material: '素材', other: '业务操作' }[approvalDomain.value]
+  return {
+    title: `${actionText}${domainText}`,
+    summary: `${actionText}${domainText}，确认前不会产生业务变更`,
+    confirm: approvalAction.value === 'delete' ? '确认删除' : approvalAction.value === 'create' ? '确认创建' : approvalAction.value === 'update' ? '确认修改' : '确认执行',
+  }
 })
+
+const approvalChanges = computed(() => {
+  const args = approvalArgs.value
+  const entity = displayEntity.value as unknown as Record<string, unknown> | null
+  if (props.approvalDraft?.toolName === 'update_campaign_status') {
+    return [{
+      field: '状态',
+      before: formatApprovalValue('status', entity?.status),
+      after: formatApprovalValue('status', args.status),
+    }]
+  }
+  if (approvalAction.value !== 'update') return []
+  return Object.entries(args)
+    .filter(([key]) => !key.endsWith('_id') && key !== 'raw')
+    .filter(([key, value]) => !entity || entity[key] !== value)
+    .map(([key, value]) => ({
+      field: fieldLabels[key] || key,
+      before: formatApprovalValue(key, entity?.[key]),
+      after: formatApprovalValue(key, value),
+    }))
+})
+
+const approvalTargetName = computed(() => {
+  const entity = displayEntity.value as unknown as Record<string, unknown> | null
+  return String(entity?.name || approvalArgs.value.name || '')
+})
+
+function formatApprovalValue(field: string, value: unknown): string {
+  if (value === undefined || value === null || value === '') return '未设置'
+  if (field === 'status') return statusLabels[String(value)] || String(value)
+  if (['budget', 'total_budget', 'spend_limit'].includes(field) && typeof value === 'number') {
+    return value.toLocaleString()
+  }
+  if (Array.isArray(value)) return value.join('、') || '空'
+  if (typeof value === 'object') return JSON.stringify(value)
+  return String(value)
+}
 
 const approvalStatusText = computed(() => {
   const status = props.approvalDraft?.status || 'pending'
@@ -120,10 +187,10 @@ const approvalStatusClass = computed(() => {
 
 const approvalDescription = computed(() => {
   const status = props.approvalDraft?.status || 'pending'
-  if (status === 'executing' || status === 'approved') return `已确认，正在执行 ${props.approvalDraft?.toolName || '操作'}`
-  if (status === 'completed') return '操作已完成，业务结果已返回对话区'
+  if (status === 'executing' || status === 'approved') return `已确认，正在${approvalIntent.value.title}`
+  if (status === 'completed') return '操作已完成，实际业务结果已返回对话区'
   if (status === 'rejected') return '你已拒绝，本次操作不会执行'
-  return `请审阅右侧业务内容，确认后才会执行 ${props.approvalDraft?.toolName || '操作'}`
+  return `${approvalIntent.value.summary}。确认后才会执行`
 })
 
 const displayEntity = computed(() => approvalEntity.value || approvalEntitySnapshot.value)
@@ -497,6 +564,28 @@ function handlePreviewMaterial(material: Material): void {
 
       <div class="flex-1 overflow-y-auto p-[16px]">
         <div
+          v-if="approvalDraft.status === 'pending'"
+          class="mb-[12px] rounded-md border border-amber-200 bg-amber-50 p-[12px] dark:border-amber-900/40 dark:bg-amber-950/20"
+        >
+          <div class="flex items-start gap-[9px]">
+            <span class="material-symbols-outlined mt-[1px] text-[17px] text-amber-600 dark:text-amber-400">warning</span>
+            <div class="min-w-0">
+              <p class="text-[12px] font-semibold text-slate-900 dark:text-white">准备执行：{{ approvalIntent.title }}</p>
+              <p v-if="approvalTargetName" class="mt-[3px] text-[11px] text-slate-600 dark:text-slate-300">影响对象：{{ approvalTargetName }}</p>
+              <p class="mt-[3px] text-[11px] leading-relaxed text-slate-600 dark:text-slate-300">{{ approvalIntent.summary }}</p>
+            </div>
+          </div>
+          <div v-if="approvalChanges.length" class="mt-[10px] overflow-hidden rounded-md border border-amber-200/80 bg-white dark:border-amber-900/40 dark:bg-slate-900">
+            <div v-for="change in approvalChanges" :key="change.field" class="grid grid-cols-[72px_1fr_auto_1fr] items-center gap-[6px] border-b border-slate-100 px-[10px] py-[8px] text-[11px] last:border-b-0 dark:border-slate-800">
+              <span class="text-slate-500 dark:text-slate-400">{{ change.field }}</span>
+              <span class="truncate font-medium text-slate-700 dark:text-slate-300">{{ change.before }}</span>
+              <span class="material-symbols-outlined text-[14px] text-slate-400">arrow_forward</span>
+              <span class="truncate font-semibold text-amber-700 dark:text-amber-300">{{ change.after }}</span>
+            </div>
+          </div>
+          <p class="mt-[9px] text-[10px] font-medium text-amber-700 dark:text-amber-300">批准前不会修改业务数据</p>
+        </div>
+        <div
           v-if="approvalDraft.status === 'executing' || approvalDraft.status === 'approved'"
           class="mb-[12px] flex items-center gap-[8px] rounded-md border border-blue-100 bg-blue-50 p-[10px] text-[11px] text-blue-700 dark:border-blue-900/40 dark:bg-blue-950/20 dark:text-blue-300"
         >
@@ -591,7 +680,7 @@ function handlePreviewMaterial(material: Material): void {
           :class="approvalAction === 'delete' ? 'bg-red-600 hover:bg-red-700' : 'bg-primary hover:bg-primary/90'"
           @click="approvalDraft.toolName === 'update_project' ? handleApproveProjectEdit() : handleApproveRaw()"
         >
-          {{ approvalAction === 'delete' ? '确认删除' : approvalAction === 'update' ? '确认修改' : '确认执行' }}
+          {{ approvalIntent.confirm }}
         </button>
       </div>
     </div>

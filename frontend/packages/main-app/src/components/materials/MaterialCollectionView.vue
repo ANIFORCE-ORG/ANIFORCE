@@ -13,8 +13,13 @@ const emit = defineEmits<{
   preview: [material: Material]
 }>()
 
-function getMaterialImageSrc(materialImages: Map<string, string> | undefined, materialId: string): string | undefined {
-  return materialImages?.get(materialId)
+function getMaterialImageSrc(materialImages: Map<string, string> | undefined, material: Material): string | undefined {
+  return materialImages?.get(material.id)
+    || material.poster_url
+    || material.preview_url
+    || material.thumbnail_url
+    || material.url
+    || undefined
 }
 
 function getStatusColor(status: string) {
@@ -51,8 +56,8 @@ function getStatusLabel(status: string) {
       >
         <div class="relative aspect-[9/16] overflow-hidden bg-slate-100 dark:bg-slate-800">
           <img
-            v-if="getMaterialImageSrc(materialImages, creative.id)"
-            :src="getMaterialImageSrc(materialImages, creative.id)"
+            v-if="getMaterialImageSrc(materialImages, creative)"
+            :src="getMaterialImageSrc(materialImages, creative)"
             :alt="creative.name"
             class="h-full w-full object-cover"
           />

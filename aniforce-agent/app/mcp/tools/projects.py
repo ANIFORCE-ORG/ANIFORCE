@@ -10,6 +10,7 @@ from app.mcp.approval import get_approved_arguments as _get_approved_arguments
 from app.mcp.context import (
     backend_headers as _get_backend_headers,
     compact_payload as _compact_payload,
+    compact_update_payload as _compact_update_payload,
     get_token as _get_token,
 )
 from app.mcp.server import mcp
@@ -171,7 +172,8 @@ async def update_project(
         logger.bind(event="agent.tool.arguments_edited", tool_name="update_project").info(
             "Using user-edited tool arguments: fields={}", sorted(approved)
         )
-        data.update(_compact_payload(approved))
+        data.update(_compact_update_payload(approved, "project_id"))
+    data = _compact_update_payload(data, "project_id")
     result = await backend_client.update_project(
         token=token,
         project_id=project_id,

@@ -28,7 +28,8 @@ class AgentSnapshotService:
         )
         latest_model = run_result.scalar_one_or_none()
         latest_run = None
-        approvals: list[dict] = []
+        approval_repo = SqliteAgentApprovalRepository(self.session)
+        approvals: list[dict] = await approval_repo.list_for_session(session_id, user_id)
         tool_calls: list[dict] = []
         last_sequence = 0
         if latest_model:
@@ -43,10 +44,6 @@ class AgentSnapshotService:
                 "error": __import__("json").loads(latest_model.error_json) if latest_model.error_json else None,
             }
             last_sequence = latest_model.last_event_sequence
-            if latest_model.checkpoint_ref:
-                approvals = await SqliteAgentApprovalRepository(self.session).list_for_checkpoint(
-                    latest_model.run_id, latest_model.checkpoint_ref, user_id
-                )
             tool_calls = await SqliteAgentToolCallRepository(self.session).list_by_run(latest_model.run_id)
         return {
             "session": product_session,

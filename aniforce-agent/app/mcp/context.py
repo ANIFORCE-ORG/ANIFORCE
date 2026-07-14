@@ -67,3 +67,13 @@ def backend_headers(
 
 def compact_payload(data: dict) -> dict:
     return {key: value for key, value in data.items() if value is not None}
+
+
+def compact_update_payload(data: dict, *identity_fields: str) -> dict:
+    """Remove SDK defaults and object identity from partial-update bodies."""
+    identities = set(identity_fields)
+    return {
+        key: value
+        for key, value in data.items()
+        if key not in identities and value is not None and value != ""
+    }
