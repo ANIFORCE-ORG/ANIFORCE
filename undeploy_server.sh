@@ -22,11 +22,36 @@ BACKEND_PORT=8010
 AGENT_PORT=8020
 ONLY=all
 USE_SSL=false
+WITH_NGINX=0
+WITHOUT_AGENT=0
+HAS_DEPLOY_CONFIG=0
+SHOW_HELP=0
+
+for arg in "$@"; do
+  case "$arg" in
+    -h|--help) SHOW_HELP=1 ;;
+  esac
+done
 
 # 从配置文件读取
 if [ -f "$DEPLOY_CONFIG" ]; then
+  HAS_DEPLOY_CONFIG=1
   source "$DEPLOY_CONFIG"
-  info "从配置文件读取: USE_SSL=$USE_SSL"
+  info "从配置文件读取: ONLY=${ONLY}, WITH_NGINX=${WITH_NGINX}, WITHOUT_AGENT=${WITHOUT_AGENT}, USE_SSL=${USE_SSL}"
+elif [ "$SHOW_HELP" -ne 1 ]; then
+  warn "未找到部署配置文件: ${DEPLOY_CONFIG}，将仅停止可确认由当前部署启动的服务"
+fi
+
+DEPLOYED_ONLY="$ONLY"
+
+DEPLOYED_WITH_NGINX=0
+if [ "$HAS_DEPLOY_CONFIG" -eq 1 ] && [ "$WITH_NGINX" -eq 1 ] && { [ "$DEPLOYED_ONLY" = "all" ] || [ "$DEPLOYED_ONLY" = "nginx" ]; }; then
+  DEPLOYED_WITH_NGINX=1
+fi
+
+DEPLOYED_WITH_AGENT=0
+if [ "$HAS_DEPLOY_CONFIG" -eq 1 ] && [ "$WITHOUT_AGENT" -ne 1 ] && { [ "$DEPLOYED_ONLY" = "all" ] || [ "$DEPLOYED_ONLY" = "agent" ]; }; then
+  DEPLOYED_WITH_AGENT=1
 fi
 
 # 命令行参数可覆盖
@@ -66,13 +91,15 @@ done
 STOPPED=0
 
 echo ""
-info "========== 停止 ANIFORCE 服务 (ONLY=$ONLY, USE_SSL=$USE_SSL) =========="
+info "========== 停止 ANIFORCE 服务 (ONLY=${ONLY}, DEPLOYED_ONLY=${DEPLOYED_ONLY}, WITH_NGINX=${WITH_NGINX}, WITHOUT_AGENT=${WITHOUT_AGENT}, USE_SSL=${USE_SSL}) =========="
 
 # ============================================================
 #  1. 停止 Nginx
 # ============================================================
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
   warn "--only=$ONLY：跳过 Nginx 停止"
+elif [ "$DEPLOYED_WITH_NGINX" -ne 1 ]; then
+  warn "当前部署未启动 Nginx：跳过 Nginx 停止，避免误杀端口 ${NGINX_PORT}/80/443 上的其它服务"
 else
   info "========== 停止 Nginx =========="
   
@@ -169,6 +196,8 @@ fi
 # ============================================================
 if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
   warn "--only=$ONLY：跳过 Agent 停止"
+elif [ "$DEPLOYED_WITH_AGENT" -ne 1 ]; then
+  warn "当前部署未启动 Agent：跳过 Agent 停止，避免误杀端口 ${AGENT_PORT} 上的其它服务"
 else
   info "========== 停止 Agent 服务 =========="
 

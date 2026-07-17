@@ -6,6 +6,50 @@
 set -e
 
 DOMAIN="www.aniforce.cc"
+CERTBOT_BIN=""
+
+resolve_certbot() {
+    if [ -x /snap/bin/certbot ]; then
+        CERTBOT_BIN="/snap/bin/certbot"
+        return 0
+    fi
+    if command -v certbot &> /dev/null; then
+        CERTBOT_BIN="$(command -v certbot)"
+        return 0
+    fi
+    return 1
+}
+
+print_certbot_compat_help() {
+    echo "❌ Certbot 运行环境不兼容"
+    echo "检测到 Certbot 可能依赖了已移除的 pyOpenSSL.crypto.X509Req API。"
+    echo "建议使用官方 snap 版 Certbot 隔离 Python 依赖:"
+    echo "  sudo apt remove -y certbot python3-certbot-nginx"
+    echo "  sudo snap install core"
+    echo "  sudo snap refresh core"
+    echo "  sudo snap install --classic certbot"
+    echo "  sudo ln -sf /snap/bin/certbot /usr/bin/certbot"
+}
+
+check_certbot_compat() {
+    local output
+    if ! resolve_certbot; then
+        echo "❌ Certbot 未安装"
+        return 1
+    fi
+    if ! output=$("$CERTBOT_BIN" --version 2>&1); then
+        echo "$output"
+        if echo "$output" | grep -Eq "OpenSSL\\.crypto|X509Req|pyOpenSSL"; then
+            print_certbot_compat_help
+        else
+            echo "❌ Certbot 启动失败，请检查安装环境"
+        fi
+        return 1
+    fi
+    echo "✓ Certbot 可用: $CERTBOT_BIN"
+    echo "  $output"
+    return 0
+}
 
 echo "======================================"
 echo "ANIFORCE SSL 证书状态检查"
@@ -54,15 +98,13 @@ echo ""
 echo "2. Certbot 证书信息"
 echo "-------------------"
 
-if command -v certbot &> /dev/null; then
+if check_certbot_compat; then
     if [ "$EUID" -eq 0 ]; then
-        certbot certificates
+        "$CERTBOT_BIN" certificates
     else
         echo "需要 root 权限查看 Certbot 证书信息"
         echo "请使用: sudo $0"
     fi
-else
-    echo "❌ Certbot 未安装"
 fi
 
 # 3. HTTPS 连接测试
