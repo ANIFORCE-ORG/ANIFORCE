@@ -97,9 +97,9 @@ info "========== 停止 ANIFORCE 服务 (ONLY=${ONLY}, DEPLOYED_ONLY=${DEPLOYED_
 #  1. 停止 Nginx
 # ============================================================
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
-  warn "--only=$ONLY：跳过 Nginx 停止"
+  warn "--only=$ONLY: 跳过 Nginx 停止"
 elif [ "$DEPLOYED_WITH_NGINX" -ne 1 ]; then
-  warn "当前部署未启动 Nginx：跳过 Nginx 停止，避免误杀端口 ${NGINX_PORT}/80/443 上的其它服务"
+  warn "当前部署未启动 Nginx: 跳过 Nginx 停止，避免误杀端口 ${NGINX_PORT}/80/443 上的其它服务"
 else
   info "========== 停止 Nginx =========="
   
@@ -166,7 +166,7 @@ fi
 #  2. 停止后端服务
 # ============================================================
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "nginx" ] || [ "$ONLY" = "frontend" ]; then
-  warn "--only=$ONLY：跳过后端停止"
+  warn "--only=$ONLY: 跳过后端停止"
 else
   info "========== 停止后端服务 =========="
   
@@ -195,9 +195,9 @@ fi
 #  3. 停止 Agent 服务
 # ============================================================
 if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
-  warn "--only=$ONLY：跳过 Agent 停止"
+  warn "--only=$ONLY: 跳过 Agent 停止"
 elif [ "$DEPLOYED_WITH_AGENT" -ne 1 ]; then
-  warn "当前部署未启动 Agent：跳过 Agent 停止，避免误杀端口 ${AGENT_PORT} 上的其它服务"
+  warn "当前部署未启动 Agent: 跳过 Agent 停止，避免误杀端口 ${AGENT_PORT} 上的其它服务"
 else
   info "========== 停止 Agent 服务 =========="
 
@@ -219,7 +219,7 @@ fi
 #  4. 停止前端服务
 # ============================================================
 if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ]; then
-  warn "--only=$ONLY：跳过前端停止"
+  warn "--only=$ONLY: 跳过前端停止"
 else
   info "========== 停止前端服务 =========="
   
