@@ -1,10 +1,11 @@
 #!/usr/bin/env bash
 # ============================================================
-#  ANIFORCE 统一部署脚本（通过 Nginx 反向代理）
+#  ANIFORCE 统一部署脚本（默认不启动 Nginx）
 #  用法:
 #    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80]
 #                       [--frontend-port 3020] [--backend-port 18010] [--agent-port 18020]
 #                       [--only all|agent|backend|frontend|nginx] [--skip-install] [--without-agent]
+#                       [--with-nginx] [--ssl]
 # ============================================================
 set -euo pipefail
 
@@ -97,6 +98,7 @@ MODE=local
 ONLY=all
 SKIP_INSTALL=0
 WITHOUT_AGENT=0
+WITH_NGINX=0
 NGINX_PORT=80
 FRONTEND_PORT=3020
 BACKEND_PORT=18010
@@ -119,6 +121,7 @@ while [[ $# -gt 0 ]]; do
     --only) ONLY="$2"; shift 2 ;;
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
     --without-agent) WITHOUT_AGENT=1; shift 1 ;;
+    --with-nginx) WITH_NGINX=1; shift 1 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
     --ssl) USE_SSL=true; shift 1 ;;
     --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
@@ -134,8 +137,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --only           仅启动: all(默认) / agent / backend / frontend / nginx"
       echo "  --skip-install   跳过依赖安装"
       echo "  --without-agent  跳过 Agent 服务部署"
+      echo "  --with-nginx     启动 Nginx 反向代理；默认不启动"
       echo "  --demo           启用 Demo 模式"
-      echo "  --ssl            启用 HTTPS (使用 nginx-https.conf)"
+      echo "  --ssl            启用 HTTPS (需配合 --with-nginx，使用 nginx-https.conf)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
       echo ""
       echo "示例:"
@@ -143,13 +147,13 @@ while [[ $# -gt 0 ]]; do
       echo "  $0 --mode local"
       echo ""
       echo "  # 仅启动 Nginx"
-      echo "  $0 --only nginx"
+      echo "  $0 --with-nginx --only nginx"
       echo ""
       echo "  # 云端生产模式"
       echo "  $0 --mode cloud --skip-install"
       echo ""
       echo "  # 启用 HTTPS"
-      echo "  $0 --ssl"
+      echo "  $0 --with-nginx --ssl"
       exit 0 ;;
     *) fail "未知参数: $1  (使用 --help 查看帮助)" ;;
   esac
@@ -165,8 +169,14 @@ fi
 if [ "$WITHOUT_AGENT" -eq 1 ] && [ "$ONLY" = "agent" ]; then
   fail "--without-agent 不能与 --only agent 同时使用"
 fi
+if [ "$ONLY" = "nginx" ] && [ "$WITH_NGINX" -ne 1 ]; then
+  fail "--only nginx 需要同时指定 --with-nginx"
+fi
+if [ "$USE_SSL" = "true" ] && [ "$WITH_NGINX" -ne 1 ]; then
+  fail "--ssl 需要同时指定 --with-nginx"
+fi
 
-info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, USE_SSL=$USE_SSL, WITHOUT_AGENT=$WITHOUT_AGENT"
+info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, WITH_NGINX=$WITH_NGINX, USE_SSL=$USE_SSL, WITHOUT_AGENT=$WITHOUT_AGENT"
 info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT"
 
 # ---------- 项目根目录 ----------
@@ -200,8 +210,10 @@ info "后端应用日志: $BACKEND_APP_LOG"
 info "后端 Uvicorn 日志: $BACKEND_UVICORN_LOG"
 info "Agent Uvicorn 日志: $AGENT_UVICORN_LOG"
 info "前端日志: $FRONTEND_LOG"
-info "Nginx访问日志: $NGINX_ACCESS_LOG"
-info "Nginx错误日志: $NGINX_ERROR_LOG"
+if [ "$WITH_NGINX" -eq 1 ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+  info "Nginx访问日志: $NGINX_ACCESS_LOG"
+  info "Nginx错误日志: $NGINX_ERROR_LOG"
+fi
 
 # ---------- 配置文件 ----------
 DEPLOY_CONFIG="$ROOT_DIR/.deploy_config"
@@ -212,13 +224,14 @@ echo "BACKEND_PORT=$BACKEND_PORT" >> "$DEPLOY_CONFIG"
 echo "AGENT_PORT=$AGENT_PORT" >> "$DEPLOY_CONFIG"
 echo "MODE=$MODE" >> "$DEPLOY_CONFIG"
 echo "ONLY=$ONLY" >> "$DEPLOY_CONFIG"
+echo "WITH_NGINX=$WITH_NGINX" >> "$DEPLOY_CONFIG"
 echo "USE_SSL=$USE_SSL" >> "$DEPLOY_CONFIG"
 echo "WITHOUT_AGENT=$WITHOUT_AGENT" >> "$DEPLOY_CONFIG"
 
 # ============================================================
 #  1. 检查 Nginx
 # ============================================================
-if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+if [ "$WITH_NGINX" -eq 1 ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
   info "========== 检查 Nginx =========="
   
   if ! command -v nginx &>/dev/null; then
@@ -346,7 +359,9 @@ fi
 # ============================================================
 #  5. 配置并启动 Nginx
 # ============================================================
-if [ "$ONLY" = "agent" ]; then
+if [ "$WITH_NGINX" -ne 1 ]; then
+  warn "未指定 --with-nginx：跳过 Nginx 启动"
+elif [ "$ONLY" = "agent" ]; then
   warn "--only=agent :跳过 Nginx 启动"
 elif [ "$ONLY" = "backend" ]; then
   warn "--only=backend :跳过 Nginx 启动"
@@ -452,7 +467,7 @@ echo -e "${GREEN}  ANIFORCE 服务部署完成！${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
 
-if [ "$ONLY" = "all" ] || [ "$ONLY" = "nginx" ]; then
+if [ "$WITH_NGINX" -eq 1 ] && { [ "$ONLY" = "all" ] || [ "$ONLY" = "nginx" ]; }; then
   if [ "$USE_SSL" = "true" ]; then
     echo -e "  访问地址:      ${CYAN}https://www.aniforce.cc${NC}"
     echo -e "  API 端点:      ${CYAN}https://www.aniforce.cc/api/${NC}"
@@ -484,10 +499,16 @@ echo ""
 
 # 自动打开浏览器（仅本地模式）
 if [ "$MODE" = "local" ] && [ "$ONLY" = "all" ]; then
+  if [ "$WITH_NGINX" -eq 1 ]; then
+    OPEN_URL="http://localhost:$NGINX_PORT"
+  else
+    OPEN_URL="http://localhost:$FRONTEND_PORT"
+  fi
+
   if command -v open &>/dev/null; then
-    open "http://localhost:$NGINX_PORT"
+    open "$OPEN_URL"
   elif command -v xdg-open &>/dev/null; then
-    xdg-open "http://localhost:$NGINX_PORT"
+    xdg-open "$OPEN_URL"
   fi
 fi
 
