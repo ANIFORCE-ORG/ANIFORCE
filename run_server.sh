@@ -567,7 +567,7 @@ fi
 # ============================================================
 if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
   info "检查 Phoenix tracing collector..."
-  PHOENIX_PORT="$PHOENIX_PORT" \
+  PHOENIX_HOST=0.0.0.0 PHOENIX_PORT="$PHOENIX_PORT" \
     "$ROOT_DIR/scripts/ensure-phoenix.sh" "$AGENT_ENV" "$LOG_DIR" "$PID_FILE" \
     || fail "Phoenix tracing collector 启动失败"
   ok "Phoenix tracing 可用: http://localhost:$PHOENIX_PORT"
