@@ -68,9 +68,16 @@ aniforce-agent/data/
 log/
 logs/
 drafts/
+test-results/
+frontend/test-results/
 aniforce-agent/tests/
 !aniforce-agent/tests/
 !aniforce-agent/tests/*.py
+aniforce-agent/tests/test_mcp_multiworker_config.py
+notebooks/02-sandbox/260712_01_stream_granularity_debug.py
+notebooks/04-runner/260712_01_tokenlab_gpt56_luna_responses_debug.py
+notebooks/04-runner/260712_02_tokenlab_deepseek_chat_stream_debug.py
+notebooks/04-runner/260712_03_phoenix_openai_agents_trace_debug.py
 
 # ===== 旧 runtime 目录已废弃 =====
 /runtime/
