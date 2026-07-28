@@ -5,14 +5,21 @@ import json
 from pathlib import Path
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.protocols import CampaignRepository, MaterialRepository, ProjectRepository
+from app.models import MaterialSyncRun, PlatformConnection, SubAccountBinding
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
 from app.api.deps import get_current_user
 from app.config.database import get_db
 from app.config.settings import get_settings
 from app.services.idempotency_service import IDEMPOTENCY_HEADER, IdempotencyService
+from app.services.meta_material_sync import (
+    MetaMaterialSyncService,
+    MetaSdkMaterialSource,
+    OssMaterialMediaImporter,
+)
 from app.services.object_storage import AliyunOssStorageService, ObjectStorageError
 
 router = APIRouter(prefix="/materials", tags=["materials"])
@@ -40,6 +47,12 @@ class CreateMaterialRequest(BaseModel):
     campaign_ids: list[str] | None = None
     tags: list[str] | None = None
     ctr_estimate: float | None = None
+
+
+class MetaMaterialSyncRequest(BaseModel):
+    connection_id: str
+    ad_account_id: str
+    asset_types: list[str] = Field(default_factory=lambda: ["image", "video"])
 
 
 class UpdateMaterialRequest(BaseModel):
@@ -148,6 +161,105 @@ async def update_material(
 
     await session.commit()
     return updated
+
+
+@router.post("/sync/meta")
+async def sync_meta_materials(
+    request: MetaMaterialSyncRequest,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Import image and video assets from one authorized Meta ad account."""
+    connection = await session.scalar(
+        select(PlatformConnection).where(
+            PlatformConnection.id == request.connection_id,
+            PlatformConnection.user_id == current_user["id"],
+        )
+    )
+    if not connection:
+        raise HTTPException(status_code=404, detail="Meta connection not found")
+    if connection.platform != "Meta":
+        raise HTTPException(status_code=400, detail="Connection is not a Meta connection")
+    if connection.status != "active" or not connection.access_token:
+        raise HTTPException(status_code=400, detail="Meta connection is not authorized")
+
+    bindings = (
+        await session.scalars(
+            select(SubAccountBinding).where(
+                SubAccountBinding.parent_connection_id == connection.id
+            )
+        )
+    ).all()
+    normalized_account_id = request.ad_account_id.removeprefix("act_")
+    binding = next(
+        (
+            item
+            for item in bindings
+            if item.sub_account_id.removeprefix("act_") == normalized_account_id
+        ),
+        None,
+    )
+    if not binding:
+        raise HTTPException(status_code=404, detail="Meta ad account is not bound to this connection")
+    if binding.status != "active":
+        raise HTTPException(status_code=400, detail="Meta ad account is not active")
+    if not settings.META_APP_ID or not settings.META_APP_SECRET:
+        raise HTTPException(status_code=500, detail="Meta app configuration is missing")
+
+    try:
+        service = MetaMaterialSyncService(
+            session=session,
+            source=MetaSdkMaterialSource(
+                access_token=connection.access_token,
+                app_id=settings.META_APP_ID,
+                app_secret=settings.META_APP_SECRET,
+            ),
+            media_importer=OssMaterialMediaImporter(),
+        )
+        result = await service.sync_account(
+            user_id=current_user["id"],
+            connection_id=connection.id,
+            ad_account_id=binding.sub_account_id,
+            asset_types=set(request.asset_types),
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
+    except ObjectStorageError as exc:
+        raise HTTPException(status_code=500, detail=str(exc)) from exc
+
+    await session.commit()
+    return result
+
+
+@router.get("/sync-runs/{run_id}")
+async def get_material_sync_run(
+    run_id: str,
+    current_user: dict = Depends(get_current_user),
+    session: AsyncSession = Depends(get_db),
+):
+    """Return a material sync run owned by the current user."""
+    run = await session.scalar(
+        select(MaterialSyncRun).where(
+            MaterialSyncRun.id == run_id,
+            MaterialSyncRun.user_id == current_user["id"],
+        )
+    )
+    if not run:
+        raise HTTPException(status_code=404, detail="Material sync run not found")
+    return {
+        "run_id": run.id,
+        "status": run.status,
+        "connection_id": run.connection_id,
+        "ad_account_id": run.ad_account_id,
+        "discovered_count": run.discovered_count,
+        "created_count": run.created_count,
+        "updated_count": run.updated_count,
+        "skipped_count": run.skipped_count,
+        "failed_count": run.failed_count,
+        "error_summary": run.error_summary,
+        "started_at": run.started_at.isoformat(),
+        "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+    }
 
 
 @router.get("/{material_id}/image")

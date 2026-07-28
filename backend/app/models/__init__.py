@@ -6,6 +6,8 @@ from app.models.material import Material, MaterialType
 from app.models.metric import Metric
 from app.models.ad_set import AdSet, AdSetMetric, AdSetStatus
 from app.models.material_performance import MaterialPerformance
+from app.models.material_platform_asset import MaterialPlatformAsset
+from app.models.material_sync_run import MaterialSyncRun
 from app.models.platform_connection import PlatformConnection
 from app.models.sub_account_binding import SubAccountBinding
 from app.models.organization import Organization
@@ -35,6 +37,8 @@ __all__ = [
     "AdSetMetric",
     "AdSetStatus",
     "MaterialPerformance",
+    "MaterialPlatformAsset",
+    "MaterialSyncRun",
     "PlatformConnection",
     "SubAccountBinding",
     "Organization",
