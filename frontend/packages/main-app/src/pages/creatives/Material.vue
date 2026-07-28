@@ -6,7 +6,18 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import { getCampaigns, type Campaign } from '@/api/campaigns'
-import { deleteMaterial, getMaterialImage, getMaterials, updateMaterial, uploadMaterialWithMetadata, type Material } from '@/api/materials'
+import {
+  deleteMaterial,
+  getMaterialImage,
+  getMaterials,
+  getMetaAdAccounts,
+  syncMetaMaterials,
+  updateMaterial,
+  uploadMaterialWithMetadata,
+  type Material,
+  type MaterialSyncRun,
+  type MetaAdAccountOption,
+} from '@/api/materials'
 import { navItems } from '@/config/navigation'
 import { useToast } from '@/composables/useToast'
 import {
@@ -87,6 +98,14 @@ const uploadForm = ref({
 const isDragging = ref(false)
 const uploading = ref(false)
 const uploadProgress = ref<Map<string, number>>(new Map())
+
+const showMetaSyncModal = ref(false)
+const metaAccounts = ref<MetaAdAccountOption[]>([])
+const loadingMetaAccounts = ref(false)
+const selectedMetaAccountKey = ref('')
+const metaSyncAssetTypes = ref<Array<'image' | 'video'>>(['image', 'video'])
+const syncingMeta = ref(false)
+const metaSyncResult = ref<MaterialSyncRun | null>(null)
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -274,6 +293,63 @@ const closeDetailDrawer = () => {
 const refreshMaterials = async () => {
   await loadPageData()
   success('素材数据已刷新')
+}
+
+const openMetaSyncModal = async () => {
+  showMetaSyncModal.value = true
+  metaSyncResult.value = null
+  loadingMetaAccounts.value = true
+  try {
+    metaAccounts.value = await getMetaAdAccounts()
+    selectedMetaAccountKey.value = metaAccounts.value[0]
+      ? `${metaAccounts.value[0].connection_id}|${metaAccounts.value[0].account_id}`
+      : ''
+  } catch (err: any) {
+    showError(err.message || '加载 Meta 广告账户失败')
+  } finally {
+    loadingMetaAccounts.value = false
+  }
+}
+
+const closeMetaSyncModal = () => {
+  if (!syncingMeta.value) showMetaSyncModal.value = false
+}
+
+const runMetaSync = async () => {
+  const account = metaAccounts.value.find(
+    item => `${item.connection_id}|${item.account_id}` === selectedMetaAccountKey.value
+  )
+  if (!account) {
+    showError('请选择 Meta 广告账户')
+    return
+  }
+  if (!metaSyncAssetTypes.value.length) {
+    showError('请至少选择一种素材类型')
+    return
+  }
+
+  syncingMeta.value = true
+  metaSyncResult.value = null
+  try {
+    const result = await syncMetaMaterials({
+      connection_id: account.connection_id,
+      ad_account_id: account.account_id,
+      asset_types: metaSyncAssetTypes.value,
+    })
+    metaSyncResult.value = result
+    if (result.status === 'succeeded') {
+      success(`Meta 素材同步完成：新增 ${result.created_count}，更新 ${result.updated_count}`)
+    } else if (result.status === 'partially_succeeded') {
+      showError(`Meta 素材部分同步成功，失败 ${result.failed_count} 个`)
+    } else {
+      showError(result.error_summary || 'Meta 素材同步失败')
+    }
+    await loadPageData()
+  } catch (err: any) {
+    showError(err.message || 'Meta 素材同步失败')
+  } finally {
+    syncingMeta.value = false
+  }
 }
 
 const openUploadModal = () => {
@@ -662,8 +738,8 @@ const periodLabel = (period: string) => {
             <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">条式预览 · 数据评估 · OSS 预览</p>
           </div>
           <div class="flex items-center gap-[8px]">
-            <button class="inline-flex items-center gap-[5px] px-[10px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="refreshMaterials">
-              <span class="material-symbols-outlined text-[15px]" :class="{ 'animate-spin': loading }">sync</span>
+            <button class="inline-flex items-center gap-[5px] px-[10px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="openMetaSyncModal">
+              <span class="material-symbols-outlined text-[15px]">sync</span>
               同步
             </button>
             <button class="inline-flex items-center gap-[5px] px-[10px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
@@ -1106,6 +1182,73 @@ const periodLabel = (period: string) => {
             {{ uploading ? '提交中...' : '提交素材' }}
           </button>
         </div>
+      </div>
+    </div>
+  </div>
+
+  <div v-if="showMetaSyncModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeMetaSyncModal">
+    <div class="w-full max-w-[560px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
+      <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700">
+        <div>
+          <h2 class="text-[15px] font-bold text-slate-900 dark:text-white">从 Meta 同步素材</h2>
+          <p class="mt-[3px] text-[11px] text-slate-500 dark:text-slate-400">从一个广告账户导入图片和视频到 ANIFORCE 素材库</p>
+        </div>
+        <button class="rounded-md p-[6px] hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-slate-700" :disabled="syncingMeta" @click="closeMetaSyncModal">
+          <span class="material-symbols-outlined text-[18px] text-slate-600 dark:text-slate-300">close</span>
+        </button>
+      </div>
+
+      <div class="space-y-[16px] p-[18px]">
+        <label class="block">
+          <span class="mb-[6px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Meta 广告账户</span>
+          <select v-model="selectedMetaAccountKey" class="edit-input" :disabled="loadingMetaAccounts || syncingMeta">
+            <option value="" disabled>{{ loadingMetaAccounts ? '正在加载广告账户...' : '请选择广告账户' }}</option>
+            <option v-for="account in metaAccounts" :key="`${account.connection_id}-${account.account_id}`" :value="`${account.connection_id}|${account.account_id}`">
+              {{ account.account_name }} · {{ account.account_id }}
+            </option>
+          </select>
+          <p v-if="!loadingMetaAccounts && metaAccounts.length === 0" class="mt-[7px] text-[11px] text-amber-600 dark:text-amber-400">暂无可用账户，请先在平台连接中完成 Meta 授权并同步广告账户。</p>
+        </label>
+
+        <div>
+          <span class="mb-[8px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">素材类型</span>
+          <div class="flex gap-[10px]">
+            <label class="inline-flex min-h-[36px] flex-1 items-center gap-[8px] rounded-md border border-slate-200 px-[12px] text-[11px] font-medium text-slate-700 dark:border-slate-700 dark:text-slate-300">
+              <input v-model="metaSyncAssetTypes" type="checkbox" value="image" :disabled="syncingMeta" class="h-[14px] w-[14px] accent-primary" />
+              图片素材
+            </label>
+            <label class="inline-flex min-h-[36px] flex-1 items-center gap-[8px] rounded-md border border-slate-200 px-[12px] text-[11px] font-medium text-slate-700 dark:border-slate-700 dark:text-slate-300">
+              <input v-model="metaSyncAssetTypes" type="checkbox" value="video" :disabled="syncingMeta" class="h-[14px] w-[14px] accent-primary" />
+              视频素材
+            </label>
+          </div>
+        </div>
+
+        <div v-if="syncingMeta" class="flex min-h-[84px] items-center justify-center gap-[8px] rounded-md bg-slate-50 text-[12px] text-slate-600 dark:bg-slate-900 dark:text-slate-300">
+          <span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
+          正在读取 Meta 素材并转存 OSS
+        </div>
+
+        <div v-if="metaSyncResult" class="rounded-md border border-slate-200 bg-slate-50 p-[12px] dark:border-slate-700 dark:bg-slate-900">
+          <div class="text-[11px] font-semibold text-slate-800 dark:text-slate-100">同步结果 · {{ metaSyncResult.status }}</div>
+          <div class="mt-[10px] grid grid-cols-5 gap-[8px] text-center">
+            <div><b class="block text-[16px] text-slate-900 dark:text-white">{{ metaSyncResult.discovered_count }}</b><span class="text-[10px] text-slate-500">发现</span></div>
+            <div><b class="block text-[16px] text-emerald-600">{{ metaSyncResult.created_count }}</b><span class="text-[10px] text-slate-500">新增</span></div>
+            <div><b class="block text-[16px] text-blue-600">{{ metaSyncResult.updated_count }}</b><span class="text-[10px] text-slate-500">更新</span></div>
+            <div><b class="block text-[16px] text-slate-600 dark:text-slate-300">{{ metaSyncResult.skipped_count }}</b><span class="text-[10px] text-slate-500">跳过</span></div>
+            <div><b class="block text-[16px] text-red-600">{{ metaSyncResult.failed_count }}</b><span class="text-[10px] text-slate-500">失败</span></div>
+          </div>
+          <p v-if="metaSyncResult.error_summary" class="mt-[10px] break-words text-[10px] text-red-600 dark:text-red-400">{{ metaSyncResult.error_summary }}</p>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700">
+        <button class="rounded-md px-[12px] py-[7px] text-[11px] font-medium text-slate-700 hover:bg-slate-100 disabled:opacity-40 dark:text-slate-300 dark:hover:bg-slate-700" :disabled="syncingMeta" @click="closeMetaSyncModal">关闭</button>
+        <button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50" :disabled="syncingMeta || loadingMetaAccounts || !selectedMetaAccountKey || !metaSyncAssetTypes.length" @click="runMetaSync">
+          <span v-if="syncingMeta" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>
+          <span v-else class="material-symbols-outlined text-[14px]">sync</span>
+          {{ syncingMeta ? '同步中...' : '开始同步' }}
+        </button>
       </div>
     </div>
   </div>

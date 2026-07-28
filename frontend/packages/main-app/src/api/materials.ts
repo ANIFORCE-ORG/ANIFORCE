@@ -89,6 +89,28 @@ interface UploadMaterialsResponse {
   materials: Material[]
 }
 
+export interface MetaAdAccountOption {
+  account_id: string
+  account_name: string
+  channel: 'Meta'
+  connection_id: string
+}
+
+export interface MaterialSyncRun {
+  run_id: string
+  status: 'running' | 'succeeded' | 'partially_succeeded' | 'failed'
+  connection_id: string
+  ad_account_id: string
+  discovered_count: number
+  created_count: number
+  updated_count: number
+  skipped_count: number
+  failed_count: number
+  error_summary?: string
+  started_at: string
+  finished_at?: string
+}
+
 /**
  * 获取素材列表
  */
@@ -231,6 +253,31 @@ export async function uploadMaterialWithMetadata(
   }
 
   return response.json() as Promise<Material>
+}
+
+/**
+ * 获取当前用户已绑定的 Meta 广告账户。
+ */
+export async function getMetaAdAccounts(): Promise<MetaAdAccountOption[]> {
+  return http.get<MetaAdAccountOption[]>('/platform-auth/ad-accounts?channel=Meta')
+}
+
+/**
+ * 从单个 Meta 广告账户同步图片和视频到 ANIFORCE 素材库。
+ */
+export async function syncMetaMaterials(data: {
+  connection_id: string
+  ad_account_id: string
+  asset_types: Array<'image' | 'video'>
+}): Promise<MaterialSyncRun> {
+  return http.post<MaterialSyncRun>('/materials/sync/meta', data)
+}
+
+/**
+ * 查询素材同步结果。
+ */
+export async function getMaterialSyncRun(runId: string): Promise<MaterialSyncRun> {
+  return http.get<MaterialSyncRun>(`/materials/sync-runs/${runId}`)
 }
 
 /**
