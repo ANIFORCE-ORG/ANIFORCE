@@ -12,12 +12,20 @@ backend_root = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_root))
 
 from app.config.database import Base
-from app.models import Material, MaterialPlatformAsset, MaterialSyncRun, PlatformConnection, User
+from app.models import (
+    Material,
+    MaterialPlatformAsset,
+    MaterialSyncRun,
+    MaterialSyncRunItem,
+    PlatformConnection,
+    User,
+)
 from app.services.meta_material_sync import (
     ImportedMaterialMedia,
     MetaMaterialAsset,
     MetaMaterialSyncService,
     _normalize_image,
+    _sanitize_error_message,
     _normalize_video,
 )
 
@@ -62,8 +70,10 @@ class FakeImporter:
         suffix = "mp4" if asset.asset_type == "video" else "jpg"
         return ImportedMaterialMedia(
             original_url=f"https://oss.example/{user_id}/{asset.external_asset_id}.{suffix}",
+            storage_object_key=f"materials/{user_id}/{asset.external_asset_id}.{suffix}",
             thumbnail_url=f"https://oss.example/{user_id}/{asset.external_asset_id}-thumb.jpg",
             content_type=f"{asset.asset_type}/{suffix}",
+            checksum_sha256=("a" if asset.asset_type == "image" else "b") * 64,
             size=1024,
             format=suffix.upper(),
         )
@@ -115,7 +125,8 @@ def test_sync_is_idempotent_and_reuses_materials_across_accounts() -> None:
 
             assert second["status"] == "succeeded"
             assert second["created_count"] == 0
-            assert second["updated_count"] == 2
+            assert second["updated_count"] == 0
+            assert second["skipped_count"] == 2
             assert len(importer.calls) == 2
 
             third = await service.sync_account(
@@ -126,15 +137,36 @@ def test_sync_is_idempotent_and_reuses_materials_across_accounts() -> None:
             )
             await session.commit()
 
-            assert third["created_count"] == 2
+            assert third["created_count"] == 0
+            assert third["reused_count"] == 2
             assert len(importer.calls) == 2
             assert await session.scalar(select(func.count()).select_from(Material)) == 2
             assert await session.scalar(select(func.count()).select_from(MaterialPlatformAsset)) == 4
             assert await session.scalar(select(func.count()).select_from(MaterialSyncRun)) == 3
+            assert await session.scalar(select(func.count()).select_from(MaterialSyncRunItem)) == 6
+
+            materials = (await session.scalars(select(Material))).all()
+            assert {item.mime_type for item in materials} == {"image/jpg", "video/mp4"}
+            assert all(item.storage_object_key for item in materials)
+            assert all(item.checksum_sha256 for item in materials)
 
         await engine.dispose()
 
     asyncio.run(scenario())
+
+
+def test_sync_error_message_redacts_meta_credentials() -> None:
+    token = "EAA" + "a" * 40
+    proof = "b" * 64
+    message = _sanitize_error_message(
+        f"GET https://graph.facebook.com/adimages?access_token={token}"
+        f"&appsecret_proof={proof} payload={{'access_token': '{token}'}}"
+    )
+
+    assert token not in message
+    assert proof not in message
+    assert "access_token=[REDACTED]" in message
+    assert "appsecret_proof=[REDACTED]" in message
 
 
 def test_normalizes_meta_image_and_video_fields() -> None:

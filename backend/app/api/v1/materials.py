@@ -9,7 +9,12 @@ from pydantic import BaseModel, Field
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.protocols import CampaignRepository, MaterialRepository, ProjectRepository
-from app.models import MaterialSyncRun, PlatformConnection, SubAccountBinding
+from app.models import (
+    MaterialSyncRun,
+    MaterialSyncRunItem,
+    PlatformConnection,
+    SubAccountBinding,
+)
 from app.repositories.factory import get_campaign_repo, get_material_repo, get_project_repo
 from app.api.deps import get_current_user
 from app.config.database import get_db
@@ -246,19 +251,41 @@ async def get_material_sync_run(
     )
     if not run:
         raise HTTPException(status_code=404, detail="Material sync run not found")
+    items = (
+        await session.scalars(
+            select(MaterialSyncRunItem)
+            .where(MaterialSyncRunItem.run_id == run.id)
+            .order_by(MaterialSyncRunItem.processed_at.asc())
+        )
+    ).all()
     return {
         "run_id": run.id,
         "status": run.status,
         "connection_id": run.connection_id,
         "ad_account_id": run.ad_account_id,
+        "asset_types": json.loads(run.asset_types),
         "discovered_count": run.discovered_count,
         "created_count": run.created_count,
+        "reused_count": run.reused_count,
         "updated_count": run.updated_count,
         "skipped_count": run.skipped_count,
         "failed_count": run.failed_count,
         "error_summary": run.error_summary,
         "started_at": run.started_at.isoformat(),
         "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+        "items": [
+            {
+                "asset_type": item.asset_type,
+                "external_asset_id": item.external_asset_id,
+                "remote_name": item.remote_name,
+                "action": item.action,
+                "material_id": item.material_id,
+                "platform_asset_id": item.platform_asset_id,
+                "error_message": item.error_message,
+                "processed_at": item.processed_at.isoformat(),
+            }
+            for item in items
+        ],
     }
 
 
@@ -451,6 +478,9 @@ async def upload_material_with_metadata(
         name=(name or Path(file.filename or uploaded.object_key).stem).strip(),
         type=_material_type_from_content_type(uploaded.content_type),
         url=uploaded.url,
+        storage_object_key=uploaded.object_key,
+        mime_type=uploaded.content_type,
+        checksum_sha256=uploaded.checksum_sha256,
         thumbnail_url=thumbnail_url,
         poster_url=poster_uploaded.url if poster_uploaded else None,
         preview_url=thumbnail_url,

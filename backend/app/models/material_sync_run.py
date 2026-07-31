@@ -38,9 +38,11 @@ class MaterialSyncRun(Base):
     trigger_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="manual"
     )
+    asset_types: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="running")
     discovered_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reused_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

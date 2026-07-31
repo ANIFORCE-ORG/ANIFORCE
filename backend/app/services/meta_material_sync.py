@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import json
 import mimetypes
+import re
 from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
@@ -15,7 +16,12 @@ import httpx
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import Material, MaterialPlatformAsset, MaterialSyncRun
+from app.models import (
+    Material,
+    MaterialPlatformAsset,
+    MaterialSyncRun,
+    MaterialSyncRunItem,
+)
 from app.models.material import MaterialStatus, MaterialType
 from app.services.object_storage import AliyunOssStorageService
 
@@ -39,8 +45,10 @@ class MetaMaterialAsset:
 @dataclass(frozen=True)
 class ImportedMaterialMedia:
     original_url: str
+    storage_object_key: str
     thumbnail_url: str | None
     content_type: str
+    checksum_sha256: str
     size: int
     format: str
 
@@ -172,8 +180,10 @@ class OssMaterialMediaImporter:
         suffix = Path(filename).suffix.lstrip(".").upper()
         return ImportedMaterialMedia(
             original_url=uploaded.url,
+            storage_object_key=uploaded.object_key,
             thumbnail_url=thumbnail_url,
             content_type=uploaded.content_type,
+            checksum_sha256=uploaded.checksum_sha256,
             size=uploaded.size,
             format=suffix or "UNKNOWN",
         )
@@ -227,6 +237,7 @@ class MetaMaterialSyncService:
             connection_id=connection_id,
             ad_account_id=ad_account_id,
             trigger_type=trigger_type,
+            asset_types=json.dumps(sorted(asset_types)),
             status="running",
         )
         self.session.add(run)
@@ -237,7 +248,7 @@ class MetaMaterialSyncService:
         except Exception as exc:
             run.status = "failed"
             run.failed_count = 1
-            run.error_summary = str(exc)[:2000]
+            run.error_summary = _sanitize_error_message(exc)[:2000]
             run.finished_at = datetime.utcnow()
             await self.session.flush()
             return _run_result(run)
@@ -246,7 +257,7 @@ class MetaMaterialSyncService:
         errors: list[str] = []
         for asset in assets:
             try:
-                action = await self._upsert_asset(
+                action, material_id, platform_asset_id = await self._upsert_asset(
                     user_id=user_id,
                     connection_id=connection_id,
                     ad_account_id=ad_account_id,
@@ -254,17 +265,35 @@ class MetaMaterialSyncService:
                 )
                 if action == "created":
                     run.created_count += 1
+                elif action == "reused":
+                    run.reused_count += 1
                 elif action == "updated":
                     run.updated_count += 1
                 else:
                     run.skipped_count += 1
+                self._add_run_item(
+                    run=run,
+                    asset=asset,
+                    action=action,
+                    material_id=material_id,
+                    platform_asset_id=platform_asset_id,
+                )
             except Exception as exc:
                 run.failed_count += 1
-                errors.append(f"{asset.asset_type}:{asset.external_asset_id}: {exc}")
+                error_message = _sanitize_error_message(exc)[:2000]
+                errors.append(
+                    f"{asset.asset_type}:{asset.external_asset_id}: {error_message}"
+                )
+                self._add_run_item(
+                    run=run,
+                    asset=asset,
+                    action="failed",
+                    error_message=error_message,
+                )
 
         if run.failed_count == 0:
             run.status = "succeeded"
-        elif run.created_count or run.updated_count:
+        elif run.created_count or run.reused_count or run.updated_count or run.skipped_count:
             run.status = "partially_succeeded"
         else:
             run.status = "failed"
@@ -280,7 +309,7 @@ class MetaMaterialSyncService:
         connection_id: str,
         ad_account_id: str,
         asset: MetaMaterialAsset,
-    ) -> str:
+    ) -> tuple[str, str, str]:
         existing = await self.session.scalar(
             select(MaterialPlatformAsset).where(
                 MaterialPlatformAsset.connection_id == connection_id,
@@ -290,12 +319,17 @@ class MetaMaterialSyncService:
             )
         )
         if existing:
-            _update_platform_asset(existing, asset)
-            return "updated"
+            changed = _update_platform_asset(existing, asset)
+            return (
+                "updated" if changed else "skipped",
+                existing.material_id,
+                existing.id,
+            )
 
         reusable_material_id = await self._find_reusable_material(user_id, asset)
         if reusable_material_id:
             material_id = reusable_material_id
+            action = "reused"
         else:
             imported = await self.media_importer.import_media(asset, user_id)
             material = Material(
@@ -308,6 +342,9 @@ class MetaMaterialSyncService:
                 ),
                 status=MaterialStatus.READY,
                 url=imported.original_url,
+                storage_object_key=imported.storage_object_key,
+                mime_type=imported.content_type,
+                checksum_sha256=imported.checksum_sha256,
                 thumbnail_url=imported.thumbnail_url,
                 poster_url=(
                     imported.thumbnail_url if asset.asset_type == "video" else None
@@ -329,6 +366,7 @@ class MetaMaterialSyncService:
             self.session.add(material)
             await self.session.flush()
             material_id = material.id
+            action = "created"
 
         platform_asset = MaterialPlatformAsset(
             material_id=material_id,
@@ -343,7 +381,30 @@ class MetaMaterialSyncService:
         _update_platform_asset(platform_asset, asset)
         self.session.add(platform_asset)
         await self.session.flush()
-        return "created"
+        return action, material_id, platform_asset.id
+
+    def _add_run_item(
+        self,
+        *,
+        run: MaterialSyncRun,
+        asset: MetaMaterialAsset,
+        action: str,
+        material_id: str | None = None,
+        platform_asset_id: str | None = None,
+        error_message: str | None = None,
+    ) -> None:
+        self.session.add(
+            MaterialSyncRunItem(
+                run_id=run.id,
+                asset_type=asset.asset_type,
+                external_asset_id=asset.external_asset_id,
+                remote_name=asset.name,
+                action=action,
+                material_id=material_id,
+                platform_asset_id=platform_asset_id,
+                error_message=error_message,
+            )
+        )
 
     async def _find_reusable_material(
         self, user_id: str, asset: MetaMaterialAsset
@@ -412,15 +473,39 @@ def _normalize_video(video: object) -> MetaMaterialAsset | None:
 
 def _update_platform_asset(
     platform_asset: MaterialPlatformAsset, asset: MetaMaterialAsset
-) -> None:
-    platform_asset.image_hash = asset.image_hash
-    platform_asset.remote_name = asset.name
-    platform_asset.remote_status = asset.status
-    platform_asset.remote_url = asset.source_url
-    platform_asset.remote_thumbnail_url = asset.thumbnail_url
-    platform_asset.remote_created_at = asset.remote_created_at
-    platform_asset.remote_updated_at = asset.remote_updated_at
+) -> bool:
+    remote_fields = {
+        "image_hash": asset.image_hash,
+        "remote_name": asset.name,
+        "remote_status": asset.status,
+        "remote_url": asset.source_url,
+        "remote_thumbnail_url": asset.thumbnail_url,
+        "remote_created_at": asset.remote_created_at,
+        "remote_updated_at": asset.remote_updated_at,
+    }
+    changed = any(
+        getattr(platform_asset, field_name) != value
+        for field_name, value in remote_fields.items()
+    )
+    for field_name, value in remote_fields.items():
+        setattr(platform_asset, field_name, value)
     platform_asset.last_seen_at = datetime.utcnow()
+    return changed
+
+
+def _sanitize_error_message(error: Exception | str) -> str:
+    message = str(error)
+    message = re.sub(
+        r"(?i)((?:access_token|appsecret_proof)=)[^&\s'\"]+",
+        r"\1[REDACTED]",
+        message,
+    )
+    message = re.sub(
+        r"(?i)((?:['\"]?(?:access_token|appsecret_proof)['\"]?)\s*:\s*['\"])[^'\"]+",
+        r"\1[REDACTED]",
+        message,
+    )
+    return re.sub(r"\bEAA[A-Za-z0-9]{20,}\b", "[REDACTED_META_TOKEN]", message)
 
 
 def _run_result(run: MaterialSyncRun) -> dict:
@@ -430,7 +515,9 @@ def _run_result(run: MaterialSyncRun) -> dict:
         "connection_id": run.connection_id,
         "ad_account_id": run.ad_account_id,
         "discovered_count": run.discovered_count,
+        "asset_types": json.loads(run.asset_types),
         "created_count": run.created_count,
+        "reused_count": run.reused_count,
         "updated_count": run.updated_count,
         "skipped_count": run.skipped_count,
         "failed_count": run.failed_count,

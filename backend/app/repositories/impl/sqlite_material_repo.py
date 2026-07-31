@@ -7,6 +7,9 @@ from app.models.material import MaterialStatus, MaterialType
 
 
 MATERIAL_METADATA_COLUMNS = {
+    "storage_object_key": "TEXT",
+    "mime_type": "VARCHAR(100)",
+    "checksum_sha256": "VARCHAR(64)",
     "poster_url": "TEXT",
     "preview_url": "TEXT",
     "media_kind": "VARCHAR(20)",
@@ -59,6 +62,9 @@ class SqliteMaterialRepository:
             "type": material.type.value,
             "status": material.status.value,
             "url": material.url,
+            "storage_object_key": material.storage_object_key,
+            "mime_type": material.mime_type,
+            "checksum_sha256": material.checksum_sha256,
             "thumbnail_url": material.thumbnail_url,
             "poster_url": material.poster_url,
             "preview_url": material.preview_url,

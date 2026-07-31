@@ -35,8 +35,10 @@ class FakeImporter:
     async def import_media(self, asset: MetaMaterialAsset, user_id: str):
         return ImportedMaterialMedia(
             original_url="https://oss.example/image.jpg",
+            storage_object_key="materials/user-1/image.jpg",
             thumbnail_url="https://oss.example/image.jpg",
             content_type="image/jpeg",
+            checksum_sha256="a" * 64,
             size=128,
             format="JPG",
         )
@@ -115,7 +117,9 @@ def test_sync_endpoint_runs_for_owned_connection_and_bound_account(monkeypatch) 
 
             assert result["status"] == "succeeded"
             assert result["ad_account_id"] == "act_123"
+            assert result["asset_types"] == ["image"]
             assert result["created_count"] == 1
+            assert result["reused_count"] == 0
         await engine.dispose()
 
     asyncio.run(scenario())

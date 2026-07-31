@@ -6,6 +6,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 from datetime import datetime
+import hashlib
 import mimetypes
 import re
 
@@ -21,6 +22,7 @@ class UploadedObject:
     url: str
     size: int
     content_type: str
+    checksum_sha256: str
 
 
 class ObjectStorageError(RuntimeError):
@@ -74,6 +76,7 @@ class AliyunOssStorageService:
             url=self.object_url(object_key),
             size=len(data),
             content_type=resolved_content_type,
+            checksum_sha256=hashlib.sha256(data).hexdigest(),
         )
 
     def object_url(self, object_key: str) -> str:
