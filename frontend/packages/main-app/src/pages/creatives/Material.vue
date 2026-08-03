@@ -80,7 +80,6 @@ const uploadForm = ref({
   placementsText: '',
   campaignIds: [] as string[],
   creator: '',
-  rights: '自有素材',
   materialType: '自动识别',
   materialUsage: '信息流素材',
   materialTags: ['新上传'] as string[],
@@ -381,7 +380,6 @@ const resetUploadForm = () => {
     placementsText: 'Feed, Reels',
     campaignIds: [],
     creator: '',
-    rights: '自有素材',
     materialType: '自动识别',
     materialUsage: '信息流素材',
     materialTags: ['新上传'],
@@ -589,7 +587,6 @@ const completeUpload = async () => {
         media_kind: mediaKind,
         source: 'oss_upload',
         creator: uploadForm.value.creator.trim() || undefined,
-        rights: uploadForm.value.rights.trim() || undefined,
         review_status: '待审核',
       }, isFirst ? uploadPoster.value || undefined : undefined)
       uploadProgress.value.set(file.name, 100)
@@ -994,12 +991,6 @@ const periodLabel = (period: string) => {
               <label class="block">
                 <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材名称</span>
                 <input v-model="uploadForm.name" class="edit-input" type="text" placeholder="输入素材名称" />
-              </label>
-              <label class="block">
-                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">授权状态</span>
-                <select v-model="uploadForm.rights" class="edit-input">
-                  <option>自有素材</option><option>达人授权</option><option>Spark 授权</option><option>商业可用</option><option>待确认</option>
-                </select>
               </label>
               <label class="block md:col-span-2">
                 <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材标签</span>
