@@ -19,7 +19,10 @@ read_env() {
 
 tracing_enabled="$(read_env AGENT_TRACING_ENABLED)"
 tracing_provider="$(read_env AGENT_TRACING_PROVIDER)"
-if [[ "${tracing_enabled,,}" != "true" || "${tracing_provider,,}" != "phoenix" ]]; then
+# macOS ships Bash 3.2, which does not support ${value,,} lowercase expansion.
+tracing_enabled="$(printf '%s' "${tracing_enabled}" | tr '[:upper:]' '[:lower:]')"
+tracing_provider="$(printf '%s' "${tracing_provider}" | tr '[:upper:]' '[:lower:]')"
+if [[ "${tracing_enabled}" != "true" || "${tracing_provider}" != "phoenix" ]]; then
   echo "Phoenix tracing is disabled; skipping collector startup."
   exit 0
 fi

@@ -115,6 +115,7 @@ DAEMON_CHILD=0
 BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-2}
 AGENT_API_WORKERS=${AGENT_API_WORKERS:-1}
 AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-2}
+PYPI_INDEX_URL=${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
 
 FRONTEND_PORT_EXPLICIT=0
 BACKEND_PORT_EXPLICIT=0
@@ -205,6 +206,7 @@ fi
 
 info "启动模式: MODE=$MODE, ONLY=$ONLY, SKIP_INSTALL=$SKIP_INSTALL, HOST=$HOST"
 info "环境配置: DEMO_MODE=$DEMO_MODE"
+info "Python 镜像: $PYPI_INDEX_URL"
 info "端口配置: 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT, Phoenix=$PHOENIX_PORT"
 info "Worker 配置: Backend API=$BACKEND_API_WORKERS, Agent API=$AGENT_API_WORKERS, Agent Run=$AGENT_RUN_WORKERS"
 
@@ -344,17 +346,21 @@ info "========== Agent 依赖 =========="
 
 cd "$AGENT_DIR"
 
+AGENT_VENV_DIR="$AGENT_DIR/.venv"
+AGENT_PY="$AGENT_VENV_DIR/bin/python"
+
 if [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
   warn "--only=$ONLY: 跳过 Agent 依赖安装"
 elif [ "$SKIP_INSTALL" -eq 1 ]; then
   warn "已启用 --skip-install,跳过 Agent 依赖安装"
 else
-  if [ ! -d ".venv" ]; then
+  if [ ! -x "$AGENT_PY" ]; then
     info "创建 Agent Python 虚拟环境..."
-    UV_CACHE_DIR=./uv_cache uv venv --python 3.11
+    UV_CACHE_DIR="$ROOT_DIR/uv_cache" uv venv --python 3.11 "$AGENT_VENV_DIR"
   fi
   info "安装 Agent Python 依赖..."
-  UV_CACHE_DIR=./uv_cache uv pip install -r requirements.txt
+  # Always target the Agent venv explicitly. A user-activated root venv must not capture these packages.
+  VIRTUAL_ENV= UV_CACHE_DIR="$ROOT_DIR/uv_cache" uv pip install --python "$AGENT_PY" --index-url "$PYPI_INDEX_URL" -r requirements.txt
   ok "Agent 依赖安装完成"
 fi
 
@@ -384,14 +390,12 @@ BACKEND_VENV_DIR="$BACKEND_DIR/.venv"
 if [ ! -f "$BACKEND_VENV_DIR/bin/python" ] && [ ! -f "$BACKEND_VENV_DIR/Scripts/python.exe" ]; then
   command -v uv &>/dev/null || fail "创建后端 Python 3.11 环境需要 uv"
   info "创建后端 Python 3.11 虚拟环境..."
-  UV_CACHE_DIR=./uv_cache uv venv --python 3.11 "$BACKEND_VENV_DIR"
+  UV_CACHE_DIR="$ROOT_DIR/uv_cache" uv venv --python 3.11 "$BACKEND_VENV_DIR"
 fi
 
-if [ -f "$BACKEND_VENV_DIR/bin/activate" ]; then
-  source "$BACKEND_VENV_DIR/bin/activate"
+if [ -x "$BACKEND_VENV_DIR/bin/python" ]; then
   BACKEND_PY="$BACKEND_VENV_DIR/bin/python"
-elif [ -f "$BACKEND_VENV_DIR/Scripts/activate" ]; then
-  source "$BACKEND_VENV_DIR/Scripts/activate"
+elif [ -x "$BACKEND_VENV_DIR/Scripts/python.exe" ]; then
   BACKEND_PY="$BACKEND_VENV_DIR/Scripts/python.exe"
 else
   fail "后端虚拟环境不可用: $BACKEND_VENV_DIR"
@@ -402,7 +406,7 @@ BACKEND_PY_MINOR=${BACKEND_PY_VER#*.}
 if [ "$BACKEND_PY_MAJOR" -lt 3 ] || { [ "$BACKEND_PY_MAJOR" -eq 3 ] && [ "$BACKEND_PY_MINOR" -lt 11 ]; }; then
   fail "后端虚拟环境 Python 版本过低 ($BACKEND_PY_VER),需要 3.11+"
 fi
-ok "后端虚拟环境已激活 (Python $BACKEND_PY_VER)"
+ok "后端 Python 环境可用: $BACKEND_PY (Python $BACKEND_PY_VER)"
 
 # 安装依赖
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "frontend" ]; then
@@ -411,7 +415,7 @@ elif [ "$SKIP_INSTALL" -eq 1 ]; then
   warn "已启用 --skip-install, 跳过后端依赖安装"
 else
   info "安装 Python 依赖..."
-  UV_CACHE_DIR=./uv_cache uv pip install --python "$BACKEND_PY" -r requirements.txt
+  UV_CACHE_DIR="$ROOT_DIR/uv_cache" uv pip install --python "$BACKEND_PY" --index-url "$PYPI_INDEX_URL" -r requirements.txt
   ok "后端依赖安装完成"
 fi
 
@@ -594,8 +598,7 @@ else
     AGENT_WORKERS_FLAG="--workers $AGENT_API_WORKERS"
   fi
 
-  unset VIRTUAL_ENV
-  UV_CACHE_DIR=./uv_cache \
+  [ -x "$AGENT_PY" ] || fail "Agent Python 环境不可用: $AGENT_PY"
   HOST="$HOST" \
   PORT="$AGENT_PORT" \
   UVICORN_WORKERS="$AGENT_API_WORKERS" \
@@ -604,7 +607,7 @@ else
   JWT_SECRET="$JWT_SECRET_VALUE" \
   APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$AGENT_API_LOG" \
   LOG_SERVICE=agent-service LOG_ROLE=api \
-  uv run python -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" --no-access-log $AGENT_WORKERS_FLAG $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
+  "$AGENT_PY" -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" --no-access-log $AGENT_WORKERS_FLAG $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
   AGENT_PID=$!
   echo "$AGENT_PID" >> "$PID_FILE"
   wait_for_port "$AGENT_PORT" "Agent"

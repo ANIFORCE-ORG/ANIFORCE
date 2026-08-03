@@ -20,6 +20,7 @@ BACKEND_PORT="${BACKEND_PORT:-18010}"
 AGENT_PORT="${AGENT_PORT:-18020}"
 FRONTEND_PORT="${FRONTEND_PORT:-3020}"
 PHOENIX_PORT="${PHOENIX_PORT:-6006}"
+PYPI_INDEX_URL="${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 LOCAL_NO_PROXY="localhost,127.0.0.1,0.0.0.0,::1,${HOST}"
 BACKEND_RELOAD=0
 SKIP_INSTALL=0
@@ -231,12 +232,12 @@ if [[ "${SKIP_INSTALL}" -eq 0 ]]; then
   echo "Preparing backend uv environment..."
   cd "${BACKEND_DIR}"
   ensure_uv_venv "backend"
-  UV_CACHE_DIR=./uv_cache uv pip install -r requirements.txt
+  UV_CACHE_DIR="${ROOT_DIR}/uv_cache" uv pip install --index-url "${PYPI_INDEX_URL}" -r requirements.txt
 
   echo "Preparing agent uv environment..."
   cd "${AGENT_DIR}"
   ensure_uv_venv "agent"
-  UV_CACHE_DIR=./uv_cache uv pip install -r requirements.txt
+  UV_CACHE_DIR="${ROOT_DIR}/uv_cache" uv pip install --index-url "${PYPI_INDEX_URL}" -r requirements.txt
 
   echo "Preparing frontend pnpm environment..."
   cd "${FRONTEND_DIR}"
