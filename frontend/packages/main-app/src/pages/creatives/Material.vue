@@ -50,9 +50,7 @@ const deleting = ref(false)
 const editingMaterial = ref<MaterialRow | null>(null)
 const editForm = ref({
   name: '',
-  status: 'ready',
   tagsText: '',
-  ctrEstimate: '',
 })
 const savingEdit = ref(false)
 
@@ -569,17 +567,10 @@ const completeUpload = async () => {
   try {
     const baseName = uploadForm.value.name.trim()
     const extraTags = uploadForm.value.tagsText.split(',').map(tag => tag.trim()).filter(Boolean)
-    const tags = Array.from(new Set([
+      const tags = Array.from(new Set([
       ...uploadForm.value.materialTags,
       ...extraTags,
-      uploadForm.value.materialUsage,
-      uploadForm.value.metaNote.trim() ? '有备注' : '',
     ].filter(Boolean)))
-    const placements = uploadForm.value.materialUsage.includes('Reels')
-      ? ['Reels', 'Stories']
-      : uploadForm.value.materialUsage.includes('Feed') || uploadForm.value.materialUsage.includes('信息流')
-        ? ['Feed', 'In-Feed']
-        : [uploadForm.value.materialUsage]
 
     for (const [index, file] of uploadFiles.value.entries()) {
       uploadProgress.value.set(file.name, 0)
@@ -588,7 +579,6 @@ const completeUpload = async () => {
       const name = uploadFiles.value.length > 1 ? `${baseName}_${String(index + 1).padStart(2, '0')}` : baseName
       await uploadMaterialWithMetadata(file, {
         name,
-        status: 'ready',
         tags,
         duration: isFirst && uploadForm.value.duration ? Number(uploadForm.value.duration) : undefined,
         width: isFirst && uploadForm.value.width ? Number(uploadForm.value.width) : undefined,
@@ -599,11 +589,7 @@ const completeUpload = async () => {
         source: 'oss_upload',
         creator: uploadForm.value.creator.trim() || undefined,
         rights: uploadForm.value.rights.trim() || undefined,
-        platforms: uploadForm.value.platforms,
         review_status: '待审核',
-        source_account: uploadForm.value.sourceAccount.trim() || undefined,
-        placements,
-        campaign_ids: uploadForm.value.campaignIds,
       }, isFirst ? uploadPoster.value || undefined : undefined)
       uploadProgress.value.set(file.name, 100)
     }
@@ -627,9 +613,7 @@ const openEditMaterial = (row: MaterialRow) => {
   editingMaterial.value = row
   editForm.value = {
     name: row.name,
-    status: row.status,
     tagsText: row.tags.join(', '),
-    ctrEstimate: row.material.ctr_estimate?.toString() || '',
   }
 }
 
@@ -647,19 +631,9 @@ const saveMaterialEdit = async () => {
 
   savingEdit.value = true
   try {
-    const ctrEstimate = editForm.value.ctrEstimate.trim()
-      ? Number(editForm.value.ctrEstimate)
-      : undefined
-    if (ctrEstimate !== undefined && !Number.isFinite(ctrEstimate)) {
-      showError('CTR 预估必须是数字')
-      return
-    }
-
     await updateMaterial(editingMaterial.value.id, {
       name,
-      status: editForm.value.status,
       tags: editForm.value.tagsText.split(',').map(tag => tag.trim()).filter(Boolean),
-      ctr_estimate: ctrEstimate,
     })
     success('素材信息已更新')
     editingMaterial.value = null
@@ -910,21 +884,20 @@ const periodLabel = (period: string) => {
           </button>
           <div class="flex h-full items-center gap-[24px] text-[14px] font-semibold">
             <span class="flex h-full items-center border-b-2 border-primary text-slate-900 dark:text-white">详情</span>
-            <span class="flex h-full items-center text-slate-500 dark:text-slate-400">分析</span>
           </div>
           <button v-if="selectedRow" class="ml-auto text-[12px] font-semibold text-primary hover:text-primary/80" @click="openEditMaterial(selectedRow)">编辑素材</button>
         </div>
 
         <div v-if="selectedRow" class="flex-1 overflow-y-auto p-[14px]">
-          <div class="grid gap-[14px] xl:grid-cols-[230px_minmax(0,1fr)]">
+          <div class="grid gap-[14px] xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.75fr)]">
             <aside class="rounded-md bg-white p-[18px] dark:bg-slate-900">
-              <h3 class="text-[16px] font-bold text-slate-900 dark:text-white">基本信息</h3>
+              <div class="mb-[12px] flex items-center justify-between gap-[10px]"><h3 class="text-[16px] font-bold text-slate-900 dark:text-white">原始素材</h3><span class="text-[11px] text-slate-400">{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }}</span></div>
               <div class="mt-[12px] overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                 <div class="bg-black">
                   <video
                     v-if="selectedRow.mediaKind === 'video' && selectedPreviewUrl"
                     :src="selectedPreviewUrl"
-                    class="max-h-[360px] w-full object-contain"
+                    class="max-h-[560px] min-h-[420px] w-full object-contain"
                     controls
                     playsinline
                     preload="metadata"
@@ -933,9 +906,9 @@ const periodLabel = (period: string) => {
                     v-else-if="selectedPreviewUrl"
                     :src="selectedPreviewUrl"
                     :alt="selectedRow.name"
-                    class="max-h-[360px] w-full object-contain"
+                    class="max-h-[560px] min-h-[420px] w-full object-contain"
                   />
-                  <div v-else class="grid h-[300px] place-items-center text-slate-500">
+                  <div v-else class="grid h-[420px] place-items-center text-slate-500">
                     <span class="material-symbols-outlined text-[40px]">broken_image</span>
                   </div>
                 </div>
@@ -949,7 +922,6 @@ const periodLabel = (period: string) => {
                 </button>
               </div>
               <dl class="mt-[18px] space-y-[13px] text-[12px]">
-                <div><dt class="text-slate-400">素材评估</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">Score {{ selectedRow.score }} · 疲劳 {{ selectedRow.fatigue }}%</dd></div>
                 <div><dt class="text-slate-400">素材类型</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div>
                 <div><dt class="text-slate-400">创建时间</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.createdAtLabel }}</dd></div>
                 <div><dt class="text-slate-400">来源</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.sourceLabel }}</dd></div>
@@ -959,52 +931,17 @@ const periodLabel = (period: string) => {
 
             <main class="space-y-[14px]">
               <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
-                <div class="inline-flex border-b-2 border-primary pb-[7px] text-[15px] font-bold text-slate-900 dark:text-white">标准投放</div>
+                <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">文件信息</h3>
+                <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>类型 / 格式</dt><dd>{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div><div class="detail-row"><dt>尺寸 / 比例</dt><dd>{{ selectedRow.material.width && selectedRow.material.height ? `${selectedRow.material.width} × ${selectedRow.material.height}` : '-' }} · {{ selectedRow.material.ratio || '-' }}</dd></div><div class="detail-row"><dt>文件大小</dt><dd>{{ selectedRow.material.file_size ? `${(selectedRow.material.file_size / 1024 / 1024).toFixed(2)} MB` : '-' }}</dd></div><div class="detail-row"><dt>视频时长</dt><dd>{{ selectedRow.material.duration ? `${selectedRow.material.duration} 秒` : '-' }}</dd></div><div class="detail-row"><dt>处理状态</dt><dd>{{ selectedRow.statusLabel }}</dd></div></dl>
               </section>
-
               <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
-                <div class="mb-[18px] flex flex-wrap items-center justify-between gap-[12px]">
-                  <h3 class="text-[16px] font-bold text-slate-900 dark:text-white">数据概览</h3>
-                  <div class="inline-flex min-h-[36px] items-center gap-[10px] rounded-md bg-slate-100 px-[12px] text-[12px] font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                    <span>{{ periodLabel(periodFilter) }}</span>
-                    <span class="material-symbols-outlined text-[15px]">date_range</span>
-                  </div>
-                </div>
-                <div class="grid gap-[10px] md:grid-cols-5">
-                  <div class="rounded-md bg-blue-50 p-[14px] dark:bg-blue-950/30"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">消耗</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatCurrency(selectedRow.metrics.spend) }}</b></div>
-                  <div class="rounded-md bg-emerald-50 p-[14px] dark:bg-emerald-950/30"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">平均转化成本</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatCurrency(selectedRow.metrics.cpa) }}</b></div>
-                  <div class="rounded-md bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">点击率</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatPercent(selectedRow.metrics.ctr) }}</b></div>
-                  <div class="rounded-md bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">ROAS</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ formatNumber(selectedRow.metrics.roas, 2) }}x</b></div>
-                  <div class="rounded-md bg-slate-100 p-[14px] dark:bg-slate-800"><span class="text-[11px] font-semibold text-slate-600 dark:text-slate-300">3秒播放率</span><b class="mt-[8px] block text-[19px] text-slate-900 dark:text-white">{{ selectedRow.mediaKind === 'video' ? '63%' : '-' }}</b></div>
-                </div>
-                <div class="mt-[22px] flex items-center justify-between text-[15px] font-bold text-slate-800 dark:text-slate-100">
-                  <span>数据对比</span>
-                  <span class="text-[12px] font-medium text-slate-400">消耗 / 转化成本</span>
-                </div>
-                <div class="relative mt-[18px] h-[250px] rounded-md border border-slate-100 bg-[repeating-linear-gradient(to_bottom,transparent_0,transparent_49px,#e2e8f0_50px)] p-[18px] dark:border-slate-800 dark:bg-slate-900">
-                  <div class="absolute left-[42px] right-[24px] bottom-[54px] h-[3px] rounded-full bg-primary"></div>
-                  <div class="absolute left-[42px] right-[24px] bottom-[30px] flex justify-between text-[10px] text-slate-400">
-                    <span>06-18</span><span>06-19</span><span>06-20</span><span>06-21</span><span>06-22</span><span>06-23</span><span>06-24</span><span>06-25</span>
-                  </div>
-                </div>
+                <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">Meta 广告账户</h3><span class="text-[10px] text-slate-400">素材归属</span></div>
+                <div v-if="selectedRow.material.source_account" class="mt-[12px] border border-blue-100 bg-blue-50 px-[12px] py-[10px] text-[12px] font-semibold text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">{{ selectedRow.material.source_account }}</div>
+                <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[16px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未绑定 Meta 广告账户</div>
               </section>
-
               <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
-                <div class="mb-[14px] flex items-center gap-[28px] text-[15px] font-bold">
-                  <span class="border-b-2 border-primary pb-[7px] text-slate-900 dark:text-white">关联账户</span>
-                  <span class="pb-[7px] text-slate-500">关联计划</span>
-                </div>
-                <div class="overflow-hidden rounded-md border border-slate-200 dark:border-slate-800">
-                  <div class="grid min-h-[44px] grid-cols-[44px_1fr_1.2fr_90px_90px_90px] items-center bg-slate-100 text-[11px] font-semibold text-slate-700 dark:bg-slate-800 dark:text-slate-300">
-                    <span class="px-[10px]"><input type="checkbox" /></span><span>素材开关</span><span>账户/计划名称和ID</span><span>操作</span><span>素材状态</span><span>消耗</span>
-                  </div>
-                  <div v-if="selectedRow.campaigns.length" class="divide-y divide-slate-100 dark:divide-slate-800">
-                    <div v-for="campaign in selectedRow.campaigns" :key="campaign.id" class="grid min-h-[58px] grid-cols-[44px_1fr_1.2fr_90px_90px_90px] items-center text-[11px] text-slate-600 dark:text-slate-300">
-                      <span class="px-[10px]"><input type="checkbox" /></span><span>启用</span><span class="truncate pr-[10px]">{{ campaign.name }} · {{ campaign.id }}</span><span>查看</span><span>{{ campaign.status }}</span><span>{{ formatCurrency(campaign.spent || 0) }}</span>
-                    </div>
-                  </div>
-                  <div v-else class="grid min-h-[180px] place-items-center text-[12px] text-slate-400">暂无数据</div>
-                </div>
+                <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">素材信息</h3>
+                <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>来源</dt><dd>{{ selectedRow.sourceLabel }}</dd></div><div class="detail-row"><dt>创建时间</dt><dd>{{ selectedRow.createdAtLabel }}</dd></div><div class="detail-row"><dt>创作者</dt><dd>{{ selectedRow.material.creator || '-' }}</dd></div><div class="detail-row"><dt>权利信息</dt><dd>{{ selectedRow.material.rights || '-' }}</dd></div><div class="detail-row"><dt>标签</dt><dd>{{ selectedRow.tags.length ? selectedRow.tags.join(' · ') : '-' }}</dd></div></dl>
               </section>
             </main>
           </div>
@@ -1020,8 +957,8 @@ const periodLabel = (period: string) => {
       <div class="max-h-[calc(100vh-36px)] w-full max-w-[860px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-900">
         <div class="sticky top-0 z-10 flex items-start justify-between gap-[16px] border-b border-slate-200 bg-white px-[18px] py-[16px] dark:border-slate-800 dark:bg-slate-900">
           <div>
-            <h2 class="text-[20px] font-bold leading-tight text-slate-900 dark:text-white">手动提交素材</h2>
-            <p class="mt-[4px] text-[12px] text-slate-500 dark:text-slate-400">素材基础信息</p>
+            <h2 class="text-[20px] font-bold leading-tight text-slate-900 dark:text-white">上传到 ANIFORCE 素材库</h2>
+            <p class="mt-[4px] text-[12px] text-slate-500 dark:text-slate-400">保存原始文件，之后可单独推送到 Meta 广告账户</p>
           </div>
           <button class="grid h-[36px] w-[36px] place-items-center rounded-md border border-slate-200 text-[22px] text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" @click="closeUploadModal">×</button>
         </div>
@@ -1096,40 +1033,19 @@ const periodLabel = (period: string) => {
                 <input v-model="uploadForm.name" class="edit-input" type="text" placeholder="输入素材名称" />
               </label>
               <label class="block">
-                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材类型</span>
-                <select v-model="uploadForm.materialType" class="edit-input">
-                  <option>自动识别</option><option>横版图片</option><option>竖版图片</option><option>横版视频</option><option>竖版视频</option>
-                </select>
-              </label>
-              <label class="block">
-                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材分组</span>
-                <select v-model="uploadForm.materialUsage" class="edit-input">
-                  <option>信息流素材</option><option>Reels / Stories</option><option>Feed 素材</option><option>落地页素材</option><option>素材库归档</option>
-                </select>
-              </label>
-              <label class="block">
                 <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">授权状态</span>
                 <select v-model="uploadForm.rights" class="edit-input">
                   <option>自有素材</option><option>达人授权</option><option>Spark 授权</option><option>商业可用</option><option>待确认</option>
                 </select>
               </label>
-              <div class="md:col-span-2">
-                <span class="mb-[8px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材标签</span>
-                <div class="flex flex-wrap gap-[8px]">
-                  <label v-for="tag in uploadTagOptions" :key="tag" class="inline-flex min-h-[34px] items-center gap-[7px] rounded-md border border-slate-200 px-[12px] text-[11px] font-semibold text-slate-600 dark:border-slate-700 dark:text-slate-300">
-                    <input v-model="uploadForm.materialTags" type="checkbox" :value="tag" class="h-[14px] w-[14px] accent-primary" />
-                    {{ tag }}
-                  </label>
-                </div>
-              </div>
               <label class="block md:col-span-2">
-                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材备注</span>
-                <textarea v-model="uploadForm.metaNote" class="edit-input min-h-[86px] resize-y" placeholder="补充素材亮点、授权说明或分组说明"></textarea>
+                <span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">素材标签</span>
+                <input v-model="uploadForm.tagsText" class="edit-input" type="text" placeholder="用逗号分隔，例如 UGC, summer, 9:16" />
               </label>
               <div class="grid gap-[12px] md:col-span-2 md:grid-cols-3">
                 <label class="block"><span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">识别尺寸</span><input class="edit-input" type="text" :value="uploadForm.width && uploadForm.height ? `${uploadForm.width} × ${uploadForm.height}` : '-'" readonly /></label>
                 <label class="block"><span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">比例 / 时长</span><input class="edit-input" type="text" :value="`${uploadForm.ratio || '-'} / ${uploadForm.duration ? uploadForm.duration + 's' : '-'}`" readonly /></label>
-                <label class="block"><span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">平台</span><select v-model="uploadForm.platforms[0]" class="edit-input"><option v-for="platform in uploadPlatformOptions" :key="platform">{{ platform }}</option></select></label>
+                <div class="rounded-md border border-slate-200 bg-slate-50 px-[10px] py-[9px] text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800">平台账户绑定在“推送到 Meta”时选择，不在本地上传时预设。</div>
               </div>
             </div>
           </section>
@@ -1228,20 +1144,8 @@ const periodLabel = (period: string) => {
           <input v-model="editForm.name" class="edit-input" type="text" />
         </label>
         <label class="block">
-          <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">状态</span>
-          <select v-model="editForm.status" class="edit-input">
-            <option value="ready">待投放</option>
-            <option value="running">投放中</option>
-            <option value="fatigue">已疲劳</option>
-          </select>
-        </label>
-        <label class="block">
           <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">标签</span>
           <input v-model="editForm.tagsText" class="edit-input" type="text" placeholder="用英文逗号分隔，例如 hook, ugc" />
-        </label>
-        <label class="block">
-          <span class="mb-[5px] block text-[11px] font-medium text-slate-700 dark:text-slate-300">CTR 预估 (%)</span>
-          <input v-model="editForm.ctrEstimate" class="edit-input" type="text" inputmode="decimal" />
         </label>
       </div>
       <div class="flex items-center justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700">
