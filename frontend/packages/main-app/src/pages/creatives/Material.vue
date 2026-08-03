@@ -110,7 +110,8 @@ const showMetaPublishModal = ref(false)
 const publishingMeta = ref(false)
 const publishMaterial = ref<MaterialRow | null>(null)
 const publishAssetType = ref<'image' | 'video'>('image')
-const publishAccountKey = ref('')
+const publishPlatform = ref('Meta')
+const publishAccountKeys = ref<string[]>([])
 const publishError = ref('')
 
 const sessions = ref([
@@ -325,14 +326,13 @@ const closeMetaSyncModal = () => {
 const openMetaPublishModal = async (row: MaterialRow, assetType: 'image' | 'video') => {
   publishMaterial.value = row
   publishAssetType.value = assetType
+  publishPlatform.value = 'Meta'
   publishError.value = ''
   showMetaPublishModal.value = true
   loadingMetaAccounts.value = true
   try {
     metaAccounts.value = await getMetaAdAccounts()
-    if (!publishAccountKey.value && metaAccounts.value[0]) {
-      publishAccountKey.value = `${metaAccounts.value[0].connection_id}|${metaAccounts.value[0].account_id}`
-    }
+    publishAccountKeys.value = []
   } catch (err: any) {
     publishError.value = err.message || '加载 Meta 广告账户失败'
   } finally {
@@ -344,37 +344,59 @@ const closeMetaPublishModal = () => {
   if (!publishingMeta.value) showMetaPublishModal.value = false
 }
 
+const togglePublishAccount = (key: string) => {
+  publishAccountKeys.value = publishAccountKeys.value.includes(key)
+    ? publishAccountKeys.value.filter(item => item !== key)
+    : [...publishAccountKeys.value, key]
+}
+
 const runMetaPublish = async () => {
-  if (!publishMaterial.value || !publishAccountKey.value) return
-  const [connectionId, accountId] = publishAccountKey.value.split('|')
+  if (!publishMaterial.value || !publishAccountKeys.value.length) return
   publishingMeta.value = true
   publishError.value = ''
+  let successCount = 0
   try {
-    const result = await publishMaterialToMeta(publishMaterial.value.id, {
-      connection_id: connectionId,
-      ad_account_id: accountId,
-      asset_type: publishAssetType.value,
-    })
-    success(result.action === 'reused' ? 'Meta 账户中已有该素材' : '素材已推送到 Meta')
+    for (const key of publishAccountKeys.value) {
+      const [connectionId, accountId] = key.split('|')
+      await publishMaterialToMeta(publishMaterial.value.id, {
+        platform: publishPlatform.value,
+        connection_id: connectionId,
+        ad_account_id: accountId,
+        asset_type: publishAssetType.value,
+      })
+      successCount += 1
+    }
+    success(`已处理 ${successCount} 个 Meta 广告账户`)
     showMetaPublishModal.value = false
     await loadPageData()
   } catch (err: any) {
-    publishError.value = err.message || 'Meta 素材推送失败'
+    publishError.value = `${successCount} 个账户已完成；${err.message || '其余账户推送失败'}`
+    await loadPageData()
   } finally {
     publishingMeta.value = false
   }
 }
 
-const removeMetaAsset = async (row: MaterialRow, asset: MaterialPlatformAsset) => {
-  if (!window.confirm(`确认从 Meta 广告账户 ${asset.ad_account_id} 删除这个素材资产？`)) return
+const pendingMetaAssetDelete = ref<{ row: MaterialRow; asset: MaterialPlatformAsset } | null>(null)
+
+const removeMetaAsset = (row: MaterialRow, asset: MaterialPlatformAsset) => {
+  pendingMetaAssetDelete.value = { row, asset }
+}
+
+const confirmRemoveMetaAsset = async () => {
+  const pending = pendingMetaAssetDelete.value
+  if (!pending) return
+  const { row, asset } = pending
   try {
     await deleteMaterialMetaAsset(row.id, asset.id, {
+      platform: asset.platform,
       connection_id: asset.connection_id,
       ad_account_id: asset.ad_account_id,
       asset_type: asset.asset_type,
       external_asset_id: asset.external_asset_id,
     })
-    success('Meta 素材资产已删除')
+    success('平台素材资产已删除')
+    pendingMetaAssetDelete.value = null
     await loadPageData()
   } catch (err: any) {
     showError(err.message || 'Meta 素材删除失败')
@@ -734,6 +756,10 @@ const confirmDeleteMaterial = async () => {
   }
 }
 
+const platformAssetStatus = (status?: string) => ({ processing: '平台处理中', ready: '已同步', published: '已同步', failed: '同步失败' }[status || ''] || status || '未知')
+const materialFileStatus = (status?: string) => ({ processing: '处理中', ready: '已就绪', active: '已就绪', failed: '处理失败' }[status || ''] || status || '未知')
+const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chip platform-chip-meta' : 'platform-chip'
+
 const statusClass = (status: string) => {
   const classes: Record<string, string> = {
     running: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800',
@@ -831,7 +857,7 @@ const periodLabel = (period: string) => {
                 <thead class="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase text-slate-500 dark:text-slate-400">
                   <tr>
                     <th class="px-[12px] py-[9px] font-semibold">素材</th>
-                    <th class="px-[10px] py-[9px] font-semibold">Meta 广告账户</th>
+                    <th class="px-[10px] py-[9px] font-semibold">平台 / 账户</th>
                     <th class="px-[10px] py-[9px] font-semibold">来源</th>
                     <th class="px-[10px] py-[9px] font-semibold">类型 / 格式</th>
                     <th class="px-[10px] py-[9px] font-semibold">尺寸 / 比例</th>
@@ -882,8 +908,8 @@ const periodLabel = (period: string) => {
                         </div>
                       </div>
                     </td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300">{{ row.material.platform_assets?.length ? row.material.platform_assets.map(asset => asset.ad_account_id).join(' · ') : row.material.source_account || '未绑定' }}</td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300">{{ row.sourceLabel }}</td>
+                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><div v-if="row.material.platform_assets?.length" class="space-y-[4px]"><div v-for="asset in row.material.platform_assets" :key="asset.id" class="flex flex-wrap items-center gap-[4px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_id }}</span><span class="asset-status">{{ platformAssetStatus(asset.remote_status) }}</span></div></div><span v-else class="text-slate-400">未绑定</span></td>
+                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><span class="source-chip">{{ row.sourceLabel }}</span></td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.mediaKind === 'video' ? '视频' : '图片' }} · {{ row.format }}</td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.material.width && row.material.height ? `${row.material.width} × ${row.material.height}` : '-' }} · {{ row.ratio }}</td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.fileSizeLabel }}<span v-if="row.durationLabel !== '-'"> · {{ row.durationLabel }}</span></td>
@@ -903,10 +929,10 @@ const periodLabel = (period: string) => {
 
       <div v-if="detailOpen" class="fixed inset-0 z-40 bg-slate-950/20" @click="closeDetailDrawer"></div>
       <aside
-        class="fixed right-0 top-0 bottom-0 z-50 flex h-screen w-[min(980px,64vw)] max-w-[100vw] flex-col overflow-hidden bg-slate-100 shadow-2xl transition-all duration-200 dark:bg-slate-950 max-lg:w-screen"
+        class="fixed right-0 top-0 bottom-0 z-50 flex h-screen w-[min(1120px,72vw)] max-w-[100vw] flex-col overflow-hidden bg-slate-50 shadow-2xl transition-all duration-200 dark:bg-slate-950 max-lg:w-screen"},{
         :class="detailOpen ? 'translate-x-0 opacity-100' : 'translate-x-[108%] opacity-0 pointer-events-none'"
       >
-        <div class="h-[54px] shrink-0 border-b border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900 flex items-center gap-[18px] pr-[18px]">
+        <div class="h-[70px] shrink-0 border-b border-slate-200 bg-white px-[6px] dark:border-slate-800 dark:bg-slate-900 flex items-center gap-[18px] pr-[24px]">
           <button class="grid h-[42px] w-[42px] place-items-center rounded-r-md bg-primary text-white hover:bg-primary/90" title="关闭详情" @click="closeDetailDrawer">
             <span class="material-symbols-outlined text-[22px]">close</span>
           </button>
@@ -916,16 +942,16 @@ const periodLabel = (period: string) => {
           <button v-if="selectedRow" class="ml-auto text-[12px] font-semibold text-primary hover:text-primary/80" @click="openEditMaterial(selectedRow)">编辑素材</button>
         </div>
 
-        <div v-if="selectedRow" class="flex-1 overflow-y-auto p-[14px]">
-          <div class="grid gap-[14px] xl:grid-cols-[minmax(0,1.55fr)_minmax(280px,.75fr)]">
-            <aside class="rounded-md bg-white p-[18px] dark:bg-slate-900">
+        <div v-if="selectedRow" class="flex-1 overflow-y-auto p-[24px] max-sm:p-[14px]">
+          <div class="grid gap-[22px] xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.75fr)]">
+            <aside class="rounded-xl border border-slate-200 bg-white p-[24px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
               <div class="mb-[12px] flex items-center justify-between gap-[10px]"><h3 class="text-[16px] font-bold text-slate-900 dark:text-white">原始素材</h3><span class="text-[11px] text-slate-400">{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }}</span></div>
-              <div class="mt-[12px] overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div class="mt-[16px] overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                 <div class="bg-black">
                   <video
                     v-if="selectedRow.mediaKind === 'video' && selectedPreviewUrl"
                     :src="selectedPreviewUrl"
-                    class="max-h-[560px] min-h-[420px] w-full object-contain"
+                    class="max-h-[620px] min-h-[500px] w-full object-contain"
                     controls
                     playsinline
                     preload="metadata"
@@ -934,9 +960,9 @@ const periodLabel = (period: string) => {
                     v-else-if="selectedPreviewUrl"
                     :src="selectedPreviewUrl"
                     :alt="selectedRow.name"
-                    class="max-h-[560px] min-h-[420px] w-full object-contain"
+                    class="max-h-[620px] min-h-[500px] w-full object-contain"
                   />
-                  <div v-else class="grid h-[420px] place-items-center text-slate-500">
+                  <div v-else class="grid h-[500px] place-items-center text-slate-500">
                     <span class="material-symbols-outlined text-[40px]">broken_image</span>
                   </div>
                 </div>
@@ -958,17 +984,17 @@ const periodLabel = (period: string) => {
             </aside>
 
             <main class="space-y-[14px]">
-              <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
+              <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">文件信息</h3>
-                <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>类型 / 格式</dt><dd>{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div><div class="detail-row"><dt>尺寸 / 比例</dt><dd>{{ selectedRow.material.width && selectedRow.material.height ? `${selectedRow.material.width} × ${selectedRow.material.height}` : '-' }} · {{ selectedRow.material.ratio || '-' }}</dd></div><div class="detail-row"><dt>文件大小</dt><dd>{{ selectedRow.material.file_size ? `${(selectedRow.material.file_size / 1024 / 1024).toFixed(2)} MB` : '-' }}</dd></div><div class="detail-row"><dt>视频时长</dt><dd>{{ selectedRow.material.duration ? `${selectedRow.material.duration} 秒` : '-' }}</dd></div><div class="detail-row"><dt>处理状态</dt><dd>{{ selectedRow.statusLabel }}</dd></div></dl>
+                <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>类型 / 格式</dt><dd>{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div><div class="detail-row"><dt>尺寸 / 比例</dt><dd>{{ selectedRow.material.width && selectedRow.material.height ? `${selectedRow.material.width} × ${selectedRow.material.height}` : '-' }} · {{ selectedRow.material.ratio || '-' }}</dd></div><div class="detail-row"><dt>文件大小</dt><dd>{{ selectedRow.material.file_size ? `${(selectedRow.material.file_size / 1024 / 1024).toFixed(2)} MB` : '-' }}</dd></div><div class="detail-row"><dt>视频时长</dt><dd>{{ selectedRow.material.duration ? `${selectedRow.material.duration} 秒` : '-' }}</dd></div><div class="detail-row"><dt>处理状态</dt><dd>{{ materialFileStatus(selectedRow.material.processing_status || selectedRow.material.status) }}</dd></div></dl>
               </section>
-              <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
-                <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">Meta 广告账户</h3><span class="text-[10px] text-slate-400">素材资产</span></div>
-                <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center justify-between gap-[8px] border border-slate-200 px-[10px] py-[9px] dark:border-slate-700"><div class="min-w-0"><div class="truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">{{ asset.ad_account_id }}</div><div class="mt-[3px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ asset.remote_status || 'unknown' }}</div></div><button class="text-[10px] font-semibold text-red-600 hover:text-red-700" @click="removeMetaAsset(selectedRow, asset)">删除</button></div></div>
+              <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
+                <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">平台资产</h3><span class="text-[10px] text-slate-400">平台归属</span></div>
+                <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center justify-between gap-[8px] border border-slate-200 px-[10px] py-[10px] dark:border-slate-700"><div class="min-w-0"><div class="flex flex-wrap items-center gap-[5px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_id }}</span></div><div class="mt-[5px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ platformAssetStatus(asset.remote_status) }}</div></div><button class="text-[10px] font-semibold text-red-600 hover:text-red-700" @click="removeMetaAsset(selectedRow, asset)">删除</button></div></div>
                 <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[12px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未绑定 Meta 广告账户</div>
                 <div class="mt-[12px] flex gap-[8px]"><button v-if="selectedRow.mediaKind === 'image'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'image')">推送到 Meta</button><button v-if="selectedRow.mediaKind === 'video'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'video')">推送到 Meta</button></div>
               </section>
-              <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
+              <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">素材信息</h3>
                 <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>来源</dt><dd>{{ selectedRow.sourceLabel }}</dd></div><div class="detail-row"><dt>创建时间</dt><dd>{{ selectedRow.createdAtLabel }}</dd></div><div class="detail-row"><dt>创作者</dt><dd>{{ selectedRow.material.creator || '-' }}</dd></div><div class="detail-row"><dt>权利信息</dt><dd>{{ selectedRow.material.rights || '-' }}</dd></div><div class="detail-row"><dt>标签</dt><dd>{{ selectedRow.tags.length ? selectedRow.tags.join(' · ') : '-' }}</dd></div></dl>
               </section>
@@ -1100,7 +1126,7 @@ const periodLabel = (period: string) => {
 
       <div class="space-y-[16px] p-[18px]">
         <label class="block">
-          <span class="mb-[6px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Meta 广告账户</span>
+          <span class="mb-[6px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">广告账户</span>
           <select v-model="selectedMetaAccountKey" class="edit-input" :disabled="loadingMetaAccounts || syncingMeta">
             <option value="" disabled>{{ loadingMetaAccounts ? '正在加载广告账户...' : '请选择广告账户' }}</option>
             <option v-for="account in metaAccounts" :key="`${account.connection_id}-${account.account_id}`" :value="`${account.connection_id}|${account.account_id}`">
@@ -1155,9 +1181,9 @@ const periodLabel = (period: string) => {
 
   <div v-if="showMetaPublishModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeMetaPublishModal">
     <div class="w-full max-w-[480px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
-      <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700"><div><h2 class="text-[15px] font-bold text-slate-900 dark:text-white">推送到 Meta</h2><p class="mt-[3px] text-[11px] text-slate-500 dark:text-slate-400">只创建 AdImage / AdVideo，不创建广告</p></div><button class="rounded-md p-[6px] hover:bg-slate-100 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal"><span class="material-symbols-outlined text-[18px]">close</span></button></div>
-      <div class="space-y-[14px] p-[18px]"><div class="rounded-md bg-slate-50 px-[12px] py-[10px] text-[12px] text-slate-600 dark:bg-slate-900 dark:text-slate-300"><span class="font-semibold">素材：</span>{{ publishMaterial?.name }}<span class="ml-[8px] text-slate-400">{{ publishAssetType === 'video' ? 'AdVideo' : 'AdImage' }}</span></div><label class="block"><span class="mb-[6px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Meta 广告账户</span><select v-model="publishAccountKey" class="edit-input" :disabled="loadingMetaAccounts || publishingMeta"><option value="">{{ loadingMetaAccounts ? '正在加载广告账户...' : '请选择广告账户' }}</option><option v-for="account in metaAccounts" :key="`${account.connection_id}|${account.account_id}`" :value="`${account.connection_id}|${account.account_id}`">{{ account.account_name }} · {{ account.account_id }}</option></select></label><p v-if="publishError" class="rounded-md bg-red-50 px-[10px] py-[8px] text-[11px] text-red-600">{{ publishError }}</p></div>
-      <div class="flex justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700"><button class="rounded-md px-[12px] py-[7px] text-[11px] text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal">取消</button><button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50" :disabled="publishingMeta || loadingMetaAccounts || !publishAccountKey" @click="runMetaPublish"><span v-if="publishingMeta" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>{{ publishingMeta ? '推送中...' : '确认推送' }}</button></div>
+      <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700"><div><h2 class="text-[15px] font-bold text-slate-900 dark:text-white">推送素材</h2><p class="mt-[3px] text-[11px] text-slate-500 dark:text-slate-400">只创建 AdImage / AdVideo，不创建广告</p></div><button class="rounded-md p-[6px] hover:bg-slate-100 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal"><span class="material-symbols-outlined text-[18px]">close</span></button></div>
+      <div class="space-y-[14px] p-[18px]"><div class="rounded-md bg-slate-50 px-[12px] py-[10px] text-[12px] text-slate-600 dark:bg-slate-900 dark:text-slate-300"><span class="font-semibold">素材：</span>{{ publishMaterial?.name }}<span class="ml-[8px] text-slate-400">{{ publishAssetType === 'video' ? 'AdVideo' : 'AdImage' }}</span></div><div><span class="mb-[7px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">目标平台</span><div class="flex gap-[7px]"><button class="platform-option platform-option-active" type="button" @click="publishPlatform = 'Meta'"><span class="platform-dot platform-dot-meta"></span>Meta</button><button class="platform-option" type="button" disabled title="Google provider 尚未接入"><span class="platform-dot platform-dot-google"></span>Google<span class="coming-label">即将支持</span></button><button class="platform-option" type="button" disabled title="TikTok provider 尚未接入"><span class="platform-dot platform-dot-tiktok"></span>TikTok<span class="coming-label">即将支持</span></button></div></div><div><div class="mb-[6px] flex items-center justify-between"><span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">平台账户</span><span class="text-[10px] text-slate-400">已选 {{ publishAccountKeys.length }} 个</span></div><div v-if="loadingMetaAccounts" class="px-[10px] py-[18px] text-center text-[11px] text-slate-400">正在加载广告账户...</div><div v-else class="max-h-[220px] space-y-[6px] overflow-y-auto"> <label v-for="account in metaAccounts" :key="`${account.connection_id}|${account.account_id}`" class="flex cursor-pointer items-center gap-[9px] border border-slate-200 px-[10px] py-[9px] text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"><input type="checkbox" :checked="publishAccountKeys.includes(`${account.connection_id}|${account.account_id}`)" :disabled="publishingMeta" class="h-[14px] w-[14px] accent-primary" @change="togglePublishAccount(`${account.connection_id}|${account.account_id}`)" /><span class="min-w-0 truncate"><b>{{ account.account_name }}</b><span class="ml-[5px] text-slate-400">{{ account.account_id }}</span></span></label><div v-if="!metaAccounts.length" class="px-[10px] py-[18px] text-center text-[11px] text-slate-400">暂无可用 Meta 广告账户</div></div></div><p v-if="publishError" class="rounded-md bg-red-50 px-[10px] py-[8px] text-[11px] text-red-600">{{ publishError }}</p></div>
+      <div class="flex justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700"><button class="rounded-md px-[12px] py-[7px] text-[11px] text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal">取消</button><button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50" :disabled="publishingMeta || loadingMetaAccounts || !publishAccountKeys.length" @click="runMetaPublish"><span v-if="publishingMeta" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>{{ publishingMeta ? '推送中...' : '确认推送' }}</button></div>
     </div>
   </div>
 
@@ -1188,6 +1214,18 @@ const periodLabel = (period: string) => {
       </div>
     </div>
   </div>
+
+  <ConfirmDialog
+    :show="Boolean(pendingMetaAssetDelete)"
+    title="删除平台素材资产"
+    :message="pendingMetaAssetDelete ? `确认从 ${pendingMetaAssetDelete.asset.platform} 广告账户 ${pendingMetaAssetDelete.asset.ad_account_id} 删除该平台资产？此操作不会删除 ANIFORCE 原始素材。` : ''"
+    confirm-text="删除平台资产"
+    cancel-text="取消"
+    confirm-button-class="bg-red-600 hover:bg-red-700"
+    @confirm="confirmRemoveMetaAsset"
+    @cancel="pendingMetaAssetDelete = null"
+    @close="pendingMetaAssetDelete = null"
+  />
 
   <ConfirmDialog
     :show="Boolean(deletingMaterial)"
@@ -1221,6 +1259,51 @@ const periodLabel = (period: string) => {
   box-shadow: 0 0 0 1px rgb(var(--color-primary, 59 130 246));
 }
 
+.platform-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 999px;
+  background: white;
+  padding: 6px 9px;
+  color: rgb(71 85 105);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.platform-option-active {
+  border-color: rgb(147 197 253);
+  background: rgb(239 246 255);
+  color: rgb(30 64 175);
+}
+
+.platform-option:disabled { cursor: not-allowed; opacity: .45; }
+.platform-dot { height: 7px; width: 7px; border-radius: 999px; }
+.platform-dot-meta { background: rgb(37 99 235); }
+.platform-dot-google { background: rgb(234 88 12); }
+.platform-dot-tiktok { background: rgb(15 23 42); }
+.coming-label { font-size: 9px; font-weight: 500; color: rgb(148 163 184); }
+
+.filter-select, .edit-input { appearance: none; }
+.filter-select { background-image: linear-gradient(45deg, transparent 50%, rgb(100 116 139) 50%), linear-gradient(135deg, rgb(100 116 139) 50%, transparent 50%); background-position: calc(100% - 12px) 50%, calc(100% - 8px) 50%; background-size: 4px 4px, 4px 4px; background-repeat: no-repeat; }
+
+input[type='checkbox'] {
+  appearance: none;
+  height: 14px;
+  width: 14px;
+  flex: 0 0 auto;
+  border: 1px solid rgb(148 163 184);
+  border-radius: 4px;
+  background: white;
+}
+
+input[type='checkbox']:checked {
+  border-color: rgb(37 99 235);
+  background: rgb(37 99 235);
+  box-shadow: inset 0 0 0 3px white;
+}
+
 .detail-metric {
   border-radius: 6px;
   border: 1px solid rgb(226 232 240);
@@ -1239,6 +1322,52 @@ const periodLabel = (period: string) => {
   display: block;
   font-size: 16px;
   color: rgb(15 23 42);
+}
+
+.platform-chip, .account-chip, .source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  border: 1px solid rgb(191 219 254);
+  border-radius: 999px;
+  background: rgb(239 246 255);
+  padding: 3px 7px;
+  color: rgb(30 64 175);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.platform-chip-meta { border-color: rgb(191 219 254); background: rgb(239 246 255); color: rgb(30 64 175); }
+
+.account-chip, .source-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  max-width: 180px;
+  border: 1px solid rgb(191 219 254);
+  border-radius: 999px;
+  background: rgb(239 246 255);
+  padding: 3px 7px;
+  color: rgb(30 64 175);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.source-chip {
+  border-color: rgb(226 232 240);
+  background: rgb(248 250 252);
+  color: rgb(71 85 105);
+}
+
+.asset-status { color: rgb(5 150 105); font-size: 9px; font-weight: 600; }
+.asset-status-missing { color: rgb(100 116 139); }
+
+.account-dot {
+  height: 6px;
+  width: 6px;
+  border-radius: 999px;
+  background: rgb(37 99 235);
 }
 
 .detail-row {

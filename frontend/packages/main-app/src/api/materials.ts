@@ -46,7 +46,7 @@ export interface MaterialPlatformAsset {
   id: string
   material_id: string
   connection_id: string
-  platform: 'Meta'
+  platform: string
   ad_account_id: string
   asset_type: 'image' | 'video'
   external_asset_id: string
@@ -165,7 +165,7 @@ export async function getMaterialDetail(materialId: string): Promise<Material> {
 
 export async function publishMaterialToMeta(
   materialId: string,
-  data: { connection_id: string; ad_account_id: string; asset_type: 'image' | 'video' },
+  data: { platform?: string; connection_id: string; ad_account_id: string; asset_type: 'image' | 'video' },
 ): Promise<MaterialMetaAssetResult> {
   return http.post<MaterialMetaAssetResult>(`/materials/${materialId}/meta/publish`, data)
 }
@@ -173,7 +173,7 @@ export async function publishMaterialToMeta(
 export async function deleteMaterialMetaAsset(
   materialId: string,
   assetId: string,
-  data: { connection_id: string; ad_account_id: string; asset_type: 'image' | 'video'; external_asset_id: string },
+  data: { platform?: string; connection_id: string; ad_account_id: string; asset_type: 'image' | 'video'; external_asset_id: string },
 ): Promise<MaterialMetaAssetResult> {
   return http.delete<MaterialMetaAssetResult>(`/materials/${materialId}/meta/assets/${assetId}`, { body: data })
 }

@@ -64,12 +64,14 @@ class MetaMaterialSyncRequest(BaseModel):
 
 
 class MetaMaterialPublishRequest(BaseModel):
+    platform: str = "Meta"
     connection_id: str
     ad_account_id: str
     asset_type: str
 
 
 class MetaMaterialDeleteRequest(BaseModel):
+    platform: str = "Meta"
     connection_id: str
     ad_account_id: str
     asset_type: str
@@ -141,7 +143,8 @@ async def list_materials(
     asset_rows = (
         await session.scalars(
             select(MaterialPlatformAsset).where(
-                MaterialPlatformAsset.user_id == current_user["id"]
+                MaterialPlatformAsset.user_id == current_user["id"],
+                MaterialPlatformAsset.remote_status != "missing",
             )
         )
     ).all()
@@ -295,6 +298,8 @@ async def publish_material_to_meta(
         raise HTTPException(status_code=404, detail="Material not found")
     if material["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
+    if request.platform != "Meta":
+        raise HTTPException(status_code=400, detail=f"Platform provider not implemented: {request.platform}")
     if request.asset_type not in {"image", "video"}:
         raise HTTPException(status_code=400, detail="asset_type must be image or video")
 
@@ -330,7 +335,7 @@ async def publish_material_to_meta(
             material_id=material_id,
             user_id=current_user["id"],
             connection_id=connection.id,
-            platform="Meta",
+            platform=request.platform,
             ad_account_id=binding.sub_account_id,
             asset_type=published.asset_type,
             external_asset_id=published.external_asset_id,
@@ -363,6 +368,8 @@ async def delete_material_meta_asset(
         raise HTTPException(status_code=404, detail="Material not found")
     if material["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
+    if request.platform != "Meta":
+        raise HTTPException(status_code=400, detail=f"Platform provider not implemented: {request.platform}")
     connection, binding = await _get_meta_binding(
         session, current_user["id"], request.connection_id, request.ad_account_id
     )
@@ -394,9 +401,10 @@ async def delete_material_meta_asset(
             asset_type=asset.asset_type,
             external_asset_id=asset.image_hash or asset.external_asset_id,
         )
-        asset.remote_status = "missing"
+        result = _platform_asset_result(asset, action="deleted")
+        await session.delete(asset)
         await session.commit()
-        return _platform_asset_result(asset, action="deleted")
+        return result
     except Exception as exc:
         await session.rollback()
         raise HTTPException(status_code=502, detail=_sanitize_error_message(exc)) from exc
