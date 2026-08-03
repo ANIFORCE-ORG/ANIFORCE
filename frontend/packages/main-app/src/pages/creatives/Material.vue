@@ -758,45 +758,6 @@ const periodLabel = (period: string) => {
             {{ error }}
           </div>
 
-          <div class="overflow-x-auto rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-            <div class="flex items-center justify-between border-b border-slate-100 px-[14px] py-[10px] dark:border-slate-800">
-              <div>
-                <strong class="text-[12px] text-slate-900 dark:text-white">素材周期看板</strong>
-                <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">{{ accountLabel }} · {{ periodLabel(periodFilter) }} · {{ filteredRows.length }} 个素材</p>
-              </div>
-              <div class="text-[10px] text-slate-500 dark:text-slate-400">{{ overview.spendingMaterials }} 个素材产生消耗</div>
-            </div>
-            <div class="flex min-w-[980px] divide-x divide-slate-100 dark:divide-slate-800">
-              <div v-for="card in overviewCards" :key="card.label" class="min-h-[82px] flex-1 px-[16px] py-[13px]">
-                <div class="flex items-center gap-[6px] text-[12px] font-semibold text-slate-500 dark:text-slate-400">
-                  <span>{{ card.label }}</span>
-                  <span class="material-symbols-outlined text-[15px] text-slate-400">{{ card.icon }}</span>
-                </div>
-                <div class="mt-[7px] truncate text-[22px] font-bold leading-none text-slate-900 dark:text-white">{{ card.value }}</div>
-                <div class="mt-[6px] truncate text-[11px] text-slate-500 dark:text-slate-400">{{ card.sub }}</div>
-              </div>
-            </div>
-          </div>
-
-          <div class="mt-[12px] overflow-x-auto rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
-            <div class="flex items-center justify-between border-b border-slate-100 px-[14px] py-[10px] dark:border-slate-800">
-              <div>
-                <strong class="text-[12px] text-slate-900 dark:text-white">素材智能分析</strong>
-                <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">基于当前账号、周期和筛选条件生成</p>
-              </div>
-              <button class="rounded-md border border-slate-200 px-[8px] py-[5px] text-[10px] font-medium text-slate-600 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" @click="refreshMaterials">刷新分析</button>
-            </div>
-            <div class="flex min-w-[980px] gap-[12px] p-[12px]">
-              <div v-for="item in analysisCards" :key="item.title" class="min-h-[112px] flex-1 rounded-md border px-[13px] py-[12px]" :class="analysisClass(item.tone)">
-                <div class="inline-flex min-h-[22px] items-center gap-[6px] rounded-full bg-white/70 px-[8px] text-[11px] font-semibold dark:bg-slate-900/40">
-                  <span class="material-symbols-outlined text-[14px]">{{ item.icon }}</span>
-                  <span>{{ item.title }}</span>
-                </div>
-                <p class="mt-[8px] text-[12px] leading-relaxed opacity-85">{{ item.body }}</p>
-              </div>
-            </div>
-          </div>
-
           <div class="mt-[14px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
             <div class="border-b border-slate-200 dark:border-slate-800 px-[12px] py-[11px]">
               <div class="flex flex-wrap items-center gap-[8px]">
