@@ -39,6 +39,23 @@ export interface Material {
   last_used_at?: string
   processing_status?: string
   processing_error?: string
+  platform_assets?: MaterialPlatformAsset[]
+}
+
+export interface MaterialPlatformAsset {
+  id: string
+  material_id: string
+  connection_id: string
+  platform: 'Meta'
+  ad_account_id: string
+  asset_type: 'image' | 'video'
+  external_asset_id: string
+  image_hash?: string
+  remote_name?: string
+  remote_status?: string
+  remote_url?: string
+  remote_thumbnail_url?: string
+  last_seen_at?: string
 }
 
 export interface UploadMaterialMetadata {
@@ -96,6 +113,11 @@ export interface MetaAdAccountOption {
   connection_id: string
 }
 
+export interface MaterialMetaAssetResult {
+  action: 'created' | 'reused' | 'deleted' | 'skipped'
+  platform_asset: MaterialPlatformAsset
+}
+
 export interface MaterialSyncRun {
   run_id: string
   status: 'running' | 'succeeded' | 'partially_succeeded' | 'failed'
@@ -103,6 +125,7 @@ export interface MaterialSyncRun {
   ad_account_id: string
   discovered_count: number
   created_count: number
+  reused_count: number
   updated_count: number
   skipped_count: number
   failed_count: number
@@ -138,6 +161,21 @@ export async function getMaterials(params?: {
  */
 export async function getMaterialDetail(materialId: string): Promise<Material> {
   return http.get<Material>(`/materials/${materialId}`)
+}
+
+export async function publishMaterialToMeta(
+  materialId: string,
+  data: { connection_id: string; ad_account_id: string; asset_type: 'image' | 'video' },
+): Promise<MaterialMetaAssetResult> {
+  return http.post<MaterialMetaAssetResult>(`/materials/${materialId}/meta/publish`, data)
+}
+
+export async function deleteMaterialMetaAsset(
+  materialId: string,
+  assetId: string,
+  data: { connection_id: string; ad_account_id: string; asset_type: 'image' | 'video'; external_asset_id: string },
+): Promise<MaterialMetaAssetResult> {
+  return http.delete<MaterialMetaAssetResult>(`/materials/${materialId}/meta/assets/${assetId}`, { body: data })
 }
 
 /**

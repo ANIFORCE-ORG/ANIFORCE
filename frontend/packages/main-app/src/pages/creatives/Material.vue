@@ -12,11 +12,14 @@ import {
   getMaterials,
   getMetaAdAccounts,
   syncMetaMaterials,
+  publishMaterialToMeta,
+  deleteMaterialMetaAsset,
   updateMaterial,
   uploadMaterialWithMetadata,
   type Material,
   type MaterialSyncRun,
   type MetaAdAccountOption,
+  type MaterialPlatformAsset,
 } from '@/api/materials'
 import { navItems } from '@/config/navigation'
 import { useToast } from '@/composables/useToast'
@@ -103,6 +106,12 @@ const selectedMetaAccountKey = ref('')
 const metaSyncAssetTypes = ref<Array<'image' | 'video'>>(['image', 'video'])
 const syncingMeta = ref(false)
 const metaSyncResult = ref<MaterialSyncRun | null>(null)
+const showMetaPublishModal = ref(false)
+const publishingMeta = ref(false)
+const publishMaterial = ref<MaterialRow | null>(null)
+const publishAssetType = ref<'image' | 'video'>('image')
+const publishAccountKey = ref('')
+const publishError = ref('')
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -311,6 +320,65 @@ const openMetaSyncModal = async () => {
 
 const closeMetaSyncModal = () => {
   if (!syncingMeta.value) showMetaSyncModal.value = false
+}
+
+const openMetaPublishModal = async (row: MaterialRow, assetType: 'image' | 'video') => {
+  publishMaterial.value = row
+  publishAssetType.value = assetType
+  publishError.value = ''
+  showMetaPublishModal.value = true
+  loadingMetaAccounts.value = true
+  try {
+    metaAccounts.value = await getMetaAdAccounts()
+    if (!publishAccountKey.value && metaAccounts.value[0]) {
+      publishAccountKey.value = `${metaAccounts.value[0].connection_id}|${metaAccounts.value[0].account_id}`
+    }
+  } catch (err: any) {
+    publishError.value = err.message || '加载 Meta 广告账户失败'
+  } finally {
+    loadingMetaAccounts.value = false
+  }
+}
+
+const closeMetaPublishModal = () => {
+  if (!publishingMeta.value) showMetaPublishModal.value = false
+}
+
+const runMetaPublish = async () => {
+  if (!publishMaterial.value || !publishAccountKey.value) return
+  const [connectionId, accountId] = publishAccountKey.value.split('|')
+  publishingMeta.value = true
+  publishError.value = ''
+  try {
+    const result = await publishMaterialToMeta(publishMaterial.value.id, {
+      connection_id: connectionId,
+      ad_account_id: accountId,
+      asset_type: publishAssetType.value,
+    })
+    success(result.action === 'reused' ? 'Meta 账户中已有该素材' : '素材已推送到 Meta')
+    showMetaPublishModal.value = false
+    await loadPageData()
+  } catch (err: any) {
+    publishError.value = err.message || 'Meta 素材推送失败'
+  } finally {
+    publishingMeta.value = false
+  }
+}
+
+const removeMetaAsset = async (row: MaterialRow, asset: MaterialPlatformAsset) => {
+  if (!window.confirm(`确认从 Meta 广告账户 ${asset.ad_account_id} 删除这个素材资产？`)) return
+  try {
+    await deleteMaterialMetaAsset(row.id, asset.id, {
+      connection_id: asset.connection_id,
+      ad_account_id: asset.ad_account_id,
+      asset_type: asset.asset_type,
+      external_asset_id: asset.external_asset_id,
+    })
+    success('Meta 素材资产已删除')
+    await loadPageData()
+  } catch (err: any) {
+    showError(err.message || 'Meta 素材删除失败')
+  }
 }
 
 const runMetaSync = async () => {
@@ -814,7 +882,7 @@ const periodLabel = (period: string) => {
                         </div>
                       </div>
                     </td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300">{{ row.material.source_account || '未绑定' }}</td>
+                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300">{{ row.material.platform_assets?.length ? row.material.platform_assets.map(asset => asset.ad_account_id).join(' · ') : row.material.source_account || '未绑定' }}</td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300">{{ row.sourceLabel }}</td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.mediaKind === 'video' ? '视频' : '图片' }} · {{ row.format }}</td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.material.width && row.material.height ? `${row.material.width} × ${row.material.height}` : '-' }} · {{ row.ratio }}</td>
@@ -895,9 +963,10 @@ const periodLabel = (period: string) => {
                 <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>类型 / 格式</dt><dd>{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div><div class="detail-row"><dt>尺寸 / 比例</dt><dd>{{ selectedRow.material.width && selectedRow.material.height ? `${selectedRow.material.width} × ${selectedRow.material.height}` : '-' }} · {{ selectedRow.material.ratio || '-' }}</dd></div><div class="detail-row"><dt>文件大小</dt><dd>{{ selectedRow.material.file_size ? `${(selectedRow.material.file_size / 1024 / 1024).toFixed(2)} MB` : '-' }}</dd></div><div class="detail-row"><dt>视频时长</dt><dd>{{ selectedRow.material.duration ? `${selectedRow.material.duration} 秒` : '-' }}</dd></div><div class="detail-row"><dt>处理状态</dt><dd>{{ selectedRow.statusLabel }}</dd></div></dl>
               </section>
               <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
-                <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">Meta 广告账户</h3><span class="text-[10px] text-slate-400">素材归属</span></div>
-                <div v-if="selectedRow.material.source_account" class="mt-[12px] border border-blue-100 bg-blue-50 px-[12px] py-[10px] text-[12px] font-semibold text-blue-800 dark:border-blue-900 dark:bg-blue-950/30 dark:text-blue-200">{{ selectedRow.material.source_account }}</div>
-                <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[16px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未绑定 Meta 广告账户</div>
+                <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">Meta 广告账户</h3><span class="text-[10px] text-slate-400">素材资产</span></div>
+                <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center justify-between gap-[8px] border border-slate-200 px-[10px] py-[9px] dark:border-slate-700"><div class="min-w-0"><div class="truncate text-[11px] font-semibold text-slate-700 dark:text-slate-200">{{ asset.ad_account_id }}</div><div class="mt-[3px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ asset.remote_status || 'unknown' }}</div></div><button class="text-[10px] font-semibold text-red-600 hover:text-red-700" @click="removeMetaAsset(selectedRow, asset)">删除</button></div></div>
+                <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[12px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未绑定 Meta 广告账户</div>
+                <div class="mt-[12px] flex gap-[8px]"><button v-if="selectedRow.mediaKind === 'image'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'image')">推送到 Meta</button><button v-if="selectedRow.mediaKind === 'video'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'video')">推送到 Meta</button></div>
               </section>
               <section class="rounded-md bg-white p-[18px] dark:bg-slate-900">
                 <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">素材信息</h3>
@@ -1081,6 +1150,14 @@ const periodLabel = (period: string) => {
           {{ syncingMeta ? '同步中...' : '开始同步' }}
         </button>
       </div>
+    </div>
+  </div>
+
+  <div v-if="showMetaPublishModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeMetaPublishModal">
+    <div class="w-full max-w-[480px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
+      <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700"><div><h2 class="text-[15px] font-bold text-slate-900 dark:text-white">推送到 Meta</h2><p class="mt-[3px] text-[11px] text-slate-500 dark:text-slate-400">只创建 AdImage / AdVideo，不创建广告</p></div><button class="rounded-md p-[6px] hover:bg-slate-100 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal"><span class="material-symbols-outlined text-[18px]">close</span></button></div>
+      <div class="space-y-[14px] p-[18px]"><div class="rounded-md bg-slate-50 px-[12px] py-[10px] text-[12px] text-slate-600 dark:bg-slate-900 dark:text-slate-300"><span class="font-semibold">素材：</span>{{ publishMaterial?.name }}<span class="ml-[8px] text-slate-400">{{ publishAssetType === 'video' ? 'AdVideo' : 'AdImage' }}</span></div><label class="block"><span class="mb-[6px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">Meta 广告账户</span><select v-model="publishAccountKey" class="edit-input" :disabled="loadingMetaAccounts || publishingMeta"><option value="">{{ loadingMetaAccounts ? '正在加载广告账户...' : '请选择广告账户' }}</option><option v-for="account in metaAccounts" :key="`${account.connection_id}|${account.account_id}`" :value="`${account.connection_id}|${account.account_id}`">{{ account.account_name }} · {{ account.account_id }}</option></select></label><p v-if="publishError" class="rounded-md bg-red-50 px-[10px] py-[8px] text-[11px] text-red-600">{{ publishError }}</p></div>
+      <div class="flex justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700"><button class="rounded-md px-[12px] py-[7px] text-[11px] text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal">取消</button><button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50" :disabled="publishingMeta || loadingMetaAccounts || !publishAccountKey" @click="runMetaPublish"><span v-if="publishingMeta" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>{{ publishingMeta ? '推送中...' : '确认推送' }}</button></div>
     </div>
   </div>
 

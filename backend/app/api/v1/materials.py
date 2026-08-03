@@ -12,6 +12,7 @@ from app.repositories.protocols import CampaignRepository, MaterialRepository, P
 from app.models import (
     MaterialSyncRun,
     MaterialSyncRunItem,
+    MaterialPlatformAsset,
     PlatformConnection,
     SubAccountBinding,
 )
@@ -24,7 +25,9 @@ from app.services.meta_material_sync import (
     MetaMaterialSyncService,
     MetaSdkMaterialSource,
     OssMaterialMediaImporter,
+    _sanitize_error_message,
 )
+from app.services.meta_material_publisher import MetaMaterialPublisher
 from app.services.object_storage import AliyunOssStorageService, ObjectStorageError
 
 router = APIRouter(prefix="/materials", tags=["materials"])
@@ -58,6 +61,19 @@ class MetaMaterialSyncRequest(BaseModel):
     connection_id: str
     ad_account_id: str
     asset_types: list[str] = Field(default_factory=lambda: ["image", "video"])
+
+
+class MetaMaterialPublishRequest(BaseModel):
+    connection_id: str
+    ad_account_id: str
+    asset_type: str
+
+
+class MetaMaterialDeleteRequest(BaseModel):
+    connection_id: str
+    ad_account_id: str
+    asset_type: str
+    external_asset_id: str
 
 
 class UpdateMaterialRequest(BaseModel):
@@ -96,6 +112,7 @@ async def list_materials(
     material_repo: MaterialRepository = Depends(get_material_repo),
     project_repo: ProjectRepository = Depends(get_project_repo),
     campaign_repo: CampaignRepository = Depends(get_campaign_repo),
+    session: AsyncSession = Depends(get_db),
 ):
     """获取素材列表"""
     if project_id:
@@ -118,6 +135,34 @@ async def list_materials(
             current_user["id"], type=type, limit=limit
         )
     
+    if not hasattr(session, "scalars"):
+        return {"materials": materials}
+
+    asset_rows = (
+        await session.scalars(
+            select(MaterialPlatformAsset).where(
+                MaterialPlatformAsset.user_id == current_user["id"]
+            )
+        )
+    ).all()
+    assets_by_material: dict[str, list[dict]] = {}
+    for asset in asset_rows:
+        assets_by_material.setdefault(asset.material_id, []).append({
+            "id": asset.id,
+            "connection_id": asset.connection_id,
+            "platform": asset.platform,
+            "ad_account_id": asset.ad_account_id,
+            "asset_type": asset.asset_type,
+            "external_asset_id": asset.external_asset_id,
+            "image_hash": asset.image_hash,
+            "remote_name": asset.remote_name,
+            "remote_status": asset.remote_status,
+            "remote_url": asset.remote_url,
+            "remote_thumbnail_url": asset.remote_thumbnail_url,
+            "last_seen_at": asset.last_seen_at.isoformat(),
+        })
+    for material in materials:
+        material["platform_assets"] = assets_by_material.get(material["id"], [])
     return {"materials": materials}
 
 
@@ -234,6 +279,172 @@ async def sync_meta_materials(
 
     await session.commit()
     return result
+
+
+@router.post("/{material_id}/meta/publish")
+async def publish_material_to_meta(
+    material_id: str,
+    request: MetaMaterialPublishRequest,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    """Publish one material asset to a bound Meta ad account."""
+    material = await material_repo.get_by_id(material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    if material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    if request.asset_type not in {"image", "video"}:
+        raise HTTPException(status_code=400, detail="asset_type must be image or video")
+
+    connection, binding = await _get_meta_binding(
+        session, current_user["id"], request.connection_id, request.ad_account_id
+    )
+    existing = await session.scalar(
+        select(MaterialPlatformAsset).where(
+            MaterialPlatformAsset.material_id == material_id,
+            MaterialPlatformAsset.connection_id == connection.id,
+            MaterialPlatformAsset.ad_account_id == binding.sub_account_id,
+            MaterialPlatformAsset.asset_type == request.asset_type,
+            MaterialPlatformAsset.remote_status != "missing",
+        )
+    )
+    if existing:
+        return _platform_asset_result(existing, action="reused")
+    if not settings.META_APP_ID or not settings.META_APP_SECRET:
+        raise HTTPException(status_code=500, detail="Meta app configuration is missing")
+
+    try:
+        publisher = MetaMaterialPublisher(
+            access_token=connection.access_token,
+            app_id=settings.META_APP_ID,
+            app_secret=settings.META_APP_SECRET,
+        )
+        published = await publisher.publish(
+            material=material,
+            ad_account_id=binding.sub_account_id,
+            asset_type=request.asset_type,
+        )
+        asset = MaterialPlatformAsset(
+            material_id=material_id,
+            user_id=current_user["id"],
+            connection_id=connection.id,
+            platform="Meta",
+            ad_account_id=binding.sub_account_id,
+            asset_type=published.asset_type,
+            external_asset_id=published.external_asset_id,
+            image_hash=published.image_hash,
+            remote_name=published.name,
+            remote_status=published.status or "ready",
+            remote_url=published.remote_url,
+        )
+        session.add(asset)
+        await session.commit()
+        await session.refresh(asset)
+        return _platform_asset_result(asset, action="created")
+    except Exception as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=_sanitize_error_message(exc)) from exc
+
+
+@router.delete("/{material_id}/meta/assets/{asset_id}")
+async def delete_material_meta_asset(
+    material_id: str,
+    asset_id: str,
+    request: MetaMaterialDeleteRequest,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+    session: AsyncSession = Depends(get_db),
+):
+    """Delete one Meta AdImage/AdVideo asset and retain a missing marker."""
+    material = await material_repo.get_by_id(material_id)
+    if not material:
+        raise HTTPException(status_code=404, detail="Material not found")
+    if material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=403, detail="Permission denied")
+    connection, binding = await _get_meta_binding(
+        session, current_user["id"], request.connection_id, request.ad_account_id
+    )
+    asset = await session.scalar(
+        select(MaterialPlatformAsset).where(
+            MaterialPlatformAsset.id == asset_id,
+            MaterialPlatformAsset.material_id == material_id,
+            MaterialPlatformAsset.user_id == current_user["id"],
+            MaterialPlatformAsset.connection_id == connection.id,
+            MaterialPlatformAsset.ad_account_id == binding.sub_account_id,
+            MaterialPlatformAsset.asset_type == request.asset_type,
+        )
+    )
+    if not asset:
+        raise HTTPException(status_code=404, detail="Meta material asset not found")
+    if asset.remote_status == "missing":
+        return _platform_asset_result(asset, action="skipped")
+    if not settings.META_APP_ID or not settings.META_APP_SECRET:
+        raise HTTPException(status_code=500, detail="Meta app configuration is missing")
+
+    try:
+        publisher = MetaMaterialPublisher(
+            access_token=connection.access_token,
+            app_id=settings.META_APP_ID,
+            app_secret=settings.META_APP_SECRET,
+        )
+        await publisher.delete(
+            ad_account_id=binding.sub_account_id,
+            asset_type=asset.asset_type,
+            external_asset_id=asset.image_hash or asset.external_asset_id,
+        )
+        asset.remote_status = "missing"
+        await session.commit()
+        return _platform_asset_result(asset, action="deleted")
+    except Exception as exc:
+        await session.rollback()
+        raise HTTPException(status_code=502, detail=_sanitize_error_message(exc)) from exc
+
+
+async def _get_meta_binding(
+    session: AsyncSession, user_id: str, connection_id: str, ad_account_id: str
+):
+    connection = await session.scalar(
+        select(PlatformConnection).where(
+            PlatformConnection.id == connection_id,
+            PlatformConnection.user_id == user_id,
+        )
+    )
+    if not connection or connection.platform != "Meta":
+        raise HTTPException(status_code=404, detail="Meta connection not found")
+    if connection.status != "active" or not connection.access_token:
+        raise HTTPException(status_code=400, detail="Meta connection is not authorized")
+    normalized = ad_account_id.removeprefix("act_")
+    binding = await session.scalar(
+        select(SubAccountBinding).where(
+            SubAccountBinding.parent_connection_id == connection.id,
+            SubAccountBinding.sub_account_id.in_([ad_account_id, normalized]),
+            SubAccountBinding.status == "active",
+        )
+    )
+    if not binding:
+        raise HTTPException(status_code=404, detail="Meta ad account is not bound to this connection")
+    return connection, binding
+
+
+def _platform_asset_result(asset: MaterialPlatformAsset, *, action: str) -> dict:
+    return {
+        "action": action,
+        "platform_asset": {
+            "id": asset.id,
+            "material_id": asset.material_id,
+            "connection_id": asset.connection_id,
+            "platform": asset.platform,
+            "ad_account_id": asset.ad_account_id,
+            "asset_type": asset.asset_type,
+            "external_asset_id": asset.external_asset_id,
+            "image_hash": asset.image_hash,
+            "remote_name": asset.remote_name,
+            "remote_status": asset.remote_status,
+            "remote_url": asset.remote_url,
+        },
+    }
 
 
 @router.get("/sync-runs/{run_id}")
