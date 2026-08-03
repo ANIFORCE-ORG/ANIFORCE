@@ -176,6 +176,7 @@ const filteredRows = computed(() => {
   })
 
   rows = [...rows].sort((a, b) => {
+    if (sortKey.value === 'name') return a.name.localeCompare(b.name)
     if (sortKey.value === 'spend') return b.metrics.spend - a.metrics.spend
     if (sortKey.value === 'ctr') return b.metrics.ctr - a.metrics.ctr
     if (sortKey.value === 'roas') return b.metrics.roas - a.metrics.roas
@@ -709,16 +710,12 @@ const periodLabel = (period: string) => {
         <header class="h-[54px] shrink-0 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[18px]">
           <div class="min-w-0">
             <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">素材管理</h1>
-            <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">条式预览 · 数据评估 · OSS 预览</p>
+            <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">统一管理站内文件与 Meta 广告账户素材</p>
           </div>
           <div class="flex items-center gap-[8px]">
             <button class="inline-flex items-center gap-[5px] px-[10px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="openMetaSyncModal">
               <span class="material-symbols-outlined text-[15px]">sync</span>
               同步
-            </button>
-            <button class="inline-flex items-center gap-[5px] px-[10px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800">
-              <span class="material-symbols-outlined text-[15px]">download</span>
-              导出
             </button>
             <button class="inline-flex items-center gap-[5px] px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-semibold hover:bg-primary/90" @click="openUploadModal">
               <span class="material-symbols-outlined text-[15px]">upload</span>
@@ -737,27 +734,11 @@ const periodLabel = (period: string) => {
               <div class="flex flex-wrap items-center gap-[8px]">
                 <div class="relative min-w-[220px] flex-1">
                   <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">search</span>
-                  <input v-model="searchQuery" type="text" placeholder="搜索素材名称、ID、标签、平台" class="w-full pl-[31px] pr-[10px] py-[7px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <input v-model="searchQuery" type="text" placeholder="搜索素材名称、ID 或标签" class="w-full pl-[31px] pr-[10px] py-[7px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
-                <select v-model="periodFilter" class="filter-select">
-                  <option value="7d">近 7 天</option>
-                  <option value="14d">近 14 天</option>
-                  <option value="30d">近 30 天</option>
-                  <option value="all">全部周期</option>
-                </select>
                 <select v-model="accountFilter" class="filter-select min-w-[150px]">
                   <option value="all">全部广告账户</option>
                   <option v-for="account in accountOptions" :key="account" :value="account">{{ account }}</option>
-                </select>
-                <select v-model="statusFilter" class="filter-select">
-                  <option value="all">全部状态</option>
-                  <option value="running">投放中</option>
-                  <option value="ready">待投放</option>
-                  <option value="fatigue">已疲劳</option>
-                </select>
-                <select v-model="platformFilter" class="filter-select">
-                  <option value="all">全部平台</option>
-                  <option v-for="platform in platformOptions" :key="platform" :value="platform">{{ platform }}</option>
                 </select>
                 <select v-model="sourceFilter" class="filter-select">
                   <option value="all">全部来源</option>
@@ -773,49 +754,36 @@ const periodLabel = (period: string) => {
                   <option value="4:5">4:5</option>
                   <option value="未知">未知</option>
                 </select>
-                <select v-model="metricFilter" class="filter-select">
-                  <option value="all">全部表现</option>
-                  <option value="high_ctr">高 CTR</option>
-                  <option value="fatigue">疲劳风险</option>
-                  <option value="low_score">低评分</option>
-                </select>
                 <select v-model="sortKey" class="filter-select">
                   <option value="created_at">最近创建</option>
-                  <option value="spend">消耗最高</option>
-                  <option value="ctr">CTR 最高</option>
-                  <option value="roas">ROAS 最高</option>
-                  <option value="fatigue">疲劳最高</option>
+                  <option value="name">名称</option>
                 </select>
               </div>
             </div>
 
             <div class="overflow-x-auto">
-              <table class="min-w-[1360px] w-full text-left">
+              <table class="min-w-[980px] w-full text-left">
                 <thead class="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase text-slate-500 dark:text-slate-400">
                   <tr>
                     <th class="px-[12px] py-[9px] font-semibold">素材</th>
-                    <th class="px-[10px] py-[9px] font-semibold">打压搬运</th>
+                    <th class="px-[10px] py-[9px] font-semibold">Meta 广告账户</th>
                     <th class="px-[10px] py-[9px] font-semibold">来源</th>
+                    <th class="px-[10px] py-[9px] font-semibold">类型 / 格式</th>
+                    <th class="px-[10px] py-[9px] font-semibold">尺寸 / 比例</th>
+                    <th class="px-[10px] py-[9px] font-semibold">大小 / 时长</th>
                     <th class="px-[10px] py-[9px] font-semibold">创建时间</th>
-                    <th class="px-[10px] py-[9px] font-semibold">时长</th>
-                    <th class="px-[10px] py-[9px] font-semibold text-right">消耗</th>
-                    <th class="px-[10px] py-[9px] font-semibold text-right">展示</th>
-                    <th class="px-[10px] py-[9px] font-semibold text-right">点击</th>
-                    <th class="px-[10px] py-[9px] font-semibold text-right">CTR</th>
-                    <th class="px-[10px] py-[9px] font-semibold text-right">ROAS</th>
-                    <th class="px-[10px] py-[9px] font-semibold text-right">CPA</th>
                     <th class="px-[10px] py-[9px] font-semibold">操作</th>
                   </tr>
                 </thead>
                 <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
                   <tr v-if="loading">
-                    <td colspan="12" class="px-[12px] py-[42px] text-center text-[11px] text-slate-500">
+                    <td colspan="8" class="px-[12px] py-[42px] text-center text-[11px] text-slate-500">
                       <span class="material-symbols-outlined text-[18px] animate-spin align-middle mr-[6px]">progress_activity</span>
                       正在加载素材数据
                     </td>
                   </tr>
                   <tr v-else-if="filteredRows.length === 0">
-                    <td colspan="12" class="px-[12px] py-[42px] text-center text-[11px] text-slate-500">
+                    <td colspan="8" class="px-[12px] py-[42px] text-center text-[11px] text-slate-500">
                       暂无匹配素材
                     </td>
                   </tr>
@@ -841,7 +809,6 @@ const periodLabel = (period: string) => {
                         <div class="min-w-0">
                           <div class="flex items-center gap-[6px]">
                             <p class="truncate text-[12px] font-semibold text-slate-900 dark:text-white">{{ row.name }}</p>
-                            <span class="rounded border px-[5px] py-[2px] text-[9px] font-medium" :class="statusClass(row.status)">{{ row.statusLabel }}</span>
                           </div>
                           <p class="mt-[3px] text-[10px] text-slate-500 dark:text-slate-400 truncate">{{ row.id }} · {{ row.format }} · {{ row.ratio }}</p>
                           <div class="mt-[5px] flex flex-wrap gap-[4px]">
@@ -850,16 +817,12 @@ const periodLabel = (period: string) => {
                         </div>
                       </div>
                     </td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300">{{ row.transportCount }} 次</td>
+                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300">{{ row.material.source_account || '未绑定' }}</td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300">{{ row.sourceLabel }}</td>
+                    <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.mediaKind === 'video' ? '视频' : '图片' }} · {{ row.format }}</td>
+                    <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.material.width && row.material.height ? `${row.material.width} × ${row.material.height}` : '-' }} · {{ row.ratio }}</td>
+                    <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.fileSizeLabel }}<span v-if="row.durationLabel !== '-'"> · {{ row.durationLabel }}</span></td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.createdAtLabel }}</td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.durationLabel }}</td>
-                    <td class="px-[10px] py-[10px] text-right text-[11px] font-semibold text-slate-900 dark:text-white">{{ formatCurrency(row.metrics.spend) }}</td>
-                    <td class="px-[10px] py-[10px] text-right text-[11px] text-slate-700 dark:text-slate-300">{{ formatCompactNumber(row.metrics.impressions) }}</td>
-                    <td class="px-[10px] py-[10px] text-right text-[11px] text-slate-700 dark:text-slate-300">{{ formatCompactNumber(row.metrics.clicks) }}</td>
-                    <td class="px-[10px] py-[10px] text-right text-[11px] font-semibold text-emerald-600">{{ formatPercent(row.metrics.ctr) }}</td>
-                    <td class="px-[10px] py-[10px] text-right text-[11px] text-slate-700 dark:text-slate-300">{{ formatNumber(row.metrics.roas, 2) }}</td>
-                    <td class="px-[10px] py-[10px] text-right text-[11px] text-slate-700 dark:text-slate-300">{{ formatCurrency(row.metrics.cpa) }}</td>
                     <td class="px-[10px] py-[10px]">
                       <button class="rounded-md p-[5px] text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" title="删除素材" @click.stop="askDeleteMaterial(row)">
                         <span class="material-symbols-outlined text-[15px]">delete</span>
