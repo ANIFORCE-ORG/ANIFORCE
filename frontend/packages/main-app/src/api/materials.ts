@@ -103,7 +103,6 @@ export interface MaterialSyncRun {
   ad_account_id: string
   discovered_count: number
   created_count: number
-  reused_count: number
   updated_count: number
   skipped_count: number
   failed_count: number
