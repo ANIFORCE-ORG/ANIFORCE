@@ -511,11 +511,26 @@ async def delete_material_meta_asset(
         raise HTTPException(status_code=404, detail="Platform material asset not found")
     try:
         provider = create_material_platform_provider(connection)
-        await provider.delete(
-            ad_account_id=binding.sub_account_id,
-            asset_type=asset.asset_type,
-            external_asset_id=asset.image_hash or asset.external_asset_id,
-        )
+        remote_identity = asset.image_hash or asset.external_asset_id
+        try:
+            await provider.delete(
+                ad_account_id=binding.sub_account_id,
+                asset_type=asset.asset_type,
+                external_asset_id=remote_identity,
+            )
+        except Exception as delete_error:
+            try:
+                await provider.get_state(
+                    ad_account_id=binding.sub_account_id,
+                    asset_type=asset.asset_type,
+                    external_asset_id=remote_identity,
+                )
+            except PlatformAssetNotFound:
+                pass
+            except Exception:
+                raise delete_error
+            else:
+                raise delete_error
         result = _platform_asset_result(asset, action="deleted")
         run = MaterialSyncRun(
             user_id=current_user["id"], connection_id=connection.id,
