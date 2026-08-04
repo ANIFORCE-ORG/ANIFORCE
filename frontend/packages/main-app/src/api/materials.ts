@@ -10,8 +10,11 @@ export interface Material {
   project_ids: string[]
   campaign_ids: string[]
   name: string
+  original_filename?: string
   type: string
-  status: string  // running | ready | fatigue
+  status: string // legacy compatibility only
+  lifecycle_status?: 'active' | 'archived'
+  processing_status?: 'processing' | 'ready' | 'failed'
   url: string
   thumbnail_url?: string
   ctr_estimate?: number
@@ -37,7 +40,6 @@ export interface Material {
   score?: number
   fatigue?: number
   last_used_at?: string
-  processing_status?: string
   processing_error?: string
   platform_assets?: MaterialPlatformAsset[]
 }
@@ -45,14 +47,16 @@ export interface Material {
 export interface MaterialPlatformAsset {
   id: string
   material_id: string
-  connection_id: string
+  connection_id?: string
   platform: string
   ad_account_id: string
+  ad_account_name?: string
   asset_type: 'image' | 'video'
   external_asset_id: string
   image_hash?: string
   remote_name?: string
   remote_status?: string
+  normalized_status?: 'unknown' | 'processing' | 'ready' | 'failed'
   remote_url?: string
   remote_thumbnail_url?: string
   last_seen_at?: string
@@ -109,25 +113,29 @@ interface UploadMaterialsResponse {
 export interface MetaAdAccountOption {
   account_id: string
   account_name: string
-  channel: 'Meta'
+  channel: string
   connection_id: string
 }
 
 export interface MaterialMetaAssetResult {
-  action: 'created' | 'reused' | 'deleted' | 'skipped'
+  action: 'created' | 'reused' | 'updated' | 'deleted' | 'skipped'
   platform_asset: MaterialPlatformAsset
+  run_id?: string
 }
 
 export interface MaterialSyncRun {
   run_id: string
-  status: 'running' | 'succeeded' | 'partially_succeeded' | 'failed'
-  connection_id: string
+  status: 'running' | 'processing' | 'succeeded' | 'partially_succeeded' | 'failed'
+  direction?: 'import' | 'export' | 'delete'
+  platform?: string
+  connection_id?: string
   ad_account_id: string
   discovered_count: number
   created_count: number
   reused_count: number
   updated_count: number
   skipped_count: number
+  processing_count?: number
   failed_count: number
   error_summary?: string
   started_at: string
@@ -167,15 +175,22 @@ export async function publishMaterialToMeta(
   materialId: string,
   data: { platform?: string; connection_id: string; ad_account_id: string; asset_type: 'image' | 'video' },
 ): Promise<MaterialMetaAssetResult> {
-  return http.post<MaterialMetaAssetResult>(`/materials/${materialId}/meta/publish`, data)
+  return http.post<MaterialMetaAssetResult>(`/materials/${materialId}/platform-assets/publish`, data)
 }
 
 export async function deleteMaterialMetaAsset(
   materialId: string,
   assetId: string,
-  data: { platform?: string; connection_id: string; ad_account_id: string; asset_type: 'image' | 'video'; external_asset_id: string },
+  data: { platform?: string; connection_id: string; ad_account_id: string; asset_type: 'image' | 'video'; external_asset_id?: string },
 ): Promise<MaterialMetaAssetResult> {
-  return http.delete<MaterialMetaAssetResult>(`/materials/${materialId}/meta/assets/${assetId}`, { body: data })
+  return http.delete<MaterialMetaAssetResult>(`/materials/${materialId}/platform-assets/${assetId}`, { body: data })
+}
+
+export async function refreshMaterialPlatformAsset(
+  materialId: string,
+  assetId: string,
+): Promise<MaterialMetaAssetResult> {
+  return http.post<MaterialMetaAssetResult>(`/materials/${materialId}/platform-assets/${assetId}/refresh`, {})
 }
 
 /**

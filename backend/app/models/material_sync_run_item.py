@@ -29,6 +29,8 @@ class MaterialSyncRunItem(Base):
     external_asset_id: Mapped[str] = mapped_column(String(255), nullable=False)
     remote_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     action: Mapped[str] = mapped_column(String(20), nullable=False)
+    status: Mapped[str] = mapped_column(String(20), nullable=False, default="completed")
+    error_code: Mapped[str | None] = mapped_column(String(50), nullable=True)
     material_id: Mapped[str | None] = mapped_column(
         ForeignKey("materials.id", ondelete="SET NULL"), nullable=True, index=True
     )
@@ -38,6 +40,10 @@ class MaterialSyncRunItem(Base):
         index=True,
     )
     error_message: Mapped[str | None] = mapped_column(Text, nullable=True)
+    started_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     processed_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
+    )
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=datetime.utcnow, onupdate=datetime.utcnow
     )

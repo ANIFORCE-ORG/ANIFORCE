@@ -82,19 +82,18 @@ class MetaSdkMaterialSource:
         self, ad_account_id: str, asset_types: set[str]
     ) -> list[MetaMaterialAsset]:
         from facebook_business.api import FacebookAdsApi
+        from facebook_business.session import FacebookSession
         from facebook_business.adobjects.adaccount import AdAccount
         from facebook_business.adobjects.adimage import AdImage
         from facebook_business.adobjects.advideo import AdVideo
 
-        FacebookAdsApi.init(
-            app_id=self.app_id,
-            app_secret=self.app_secret,
-            access_token=self.access_token,
+        api = FacebookAdsApi(
+            FacebookSession(self.app_id, self.app_secret, self.access_token)
         )
         normalized_account_id = (
             ad_account_id if ad_account_id.startswith("act_") else f"act_{ad_account_id}"
         )
-        account = AdAccount(normalized_account_id)
+        account = AdAccount(normalized_account_id, api=api)
         assets: list[MetaMaterialAsset] = []
 
         if "image" in asset_types:
@@ -226,6 +225,7 @@ class MetaMaterialSyncService:
         connection_id: str,
         ad_account_id: str,
         asset_types: set[str],
+        ad_account_name: str | None = None,
         trigger_type: str = "manual",
     ) -> dict:
         invalid_types = asset_types - {"image", "video"}
@@ -236,6 +236,8 @@ class MetaMaterialSyncService:
             user_id=user_id,
             connection_id=connection_id,
             ad_account_id=ad_account_id,
+            direction="import",
+            platform="Meta",
             trigger_type=trigger_type,
             asset_types=json.dumps(sorted(asset_types)),
             status="running",
@@ -261,6 +263,7 @@ class MetaMaterialSyncService:
                     user_id=user_id,
                     connection_id=connection_id,
                     ad_account_id=ad_account_id,
+                    ad_account_name=ad_account_name,
                     asset=asset,
                 )
                 if action == "created":
@@ -308,6 +311,7 @@ class MetaMaterialSyncService:
         user_id: str,
         connection_id: str,
         ad_account_id: str,
+        ad_account_name: str | None,
         asset: MetaMaterialAsset,
     ) -> tuple[str, str, str]:
         existing = await self.session.scalar(
@@ -373,7 +377,9 @@ class MetaMaterialSyncService:
             user_id=user_id,
             connection_id=connection_id,
             platform="Meta",
+            created_via="import",
             ad_account_id=ad_account_id,
+            ad_account_name=ad_account_name,
             asset_type=asset.asset_type,
             external_asset_id=asset.external_asset_id,
             image_hash=asset.image_hash,
@@ -478,6 +484,7 @@ def _update_platform_asset(
         "image_hash": asset.image_hash,
         "remote_name": asset.name,
         "remote_status": asset.status,
+        "normalized_status": _normalize_remote_status(asset.status),
         "remote_url": asset.source_url,
         "remote_thumbnail_url": asset.thumbnail_url,
         "remote_created_at": asset.remote_created_at,
@@ -491,6 +498,12 @@ def _update_platform_asset(
         setattr(platform_asset, field_name, value)
     platform_asset.last_seen_at = datetime.utcnow()
     return changed
+
+
+def _normalize_remote_status(value: str | None) -> str:
+    from app.services.material_platform_provider import normalize_platform_status
+
+    return normalize_platform_status(value)
 
 
 def _sanitize_error_message(error: Exception | str) -> str:

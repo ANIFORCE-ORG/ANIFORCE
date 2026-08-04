@@ -33,6 +33,29 @@ class MaterialPlatformAsset(Base):
             "asset_type",
             "image_hash",
         ),
+        Index(
+            "ix_material_platform_assets_status",
+            "user_id",
+            "platform",
+            "normalized_status",
+        ),
+        Index(
+            "uq_material_platform_asset_target",
+            "material_id",
+            "platform",
+            "ad_account_id",
+            "asset_type",
+            unique=True,
+        ),
+        Index(
+            "uq_material_platform_asset_remote_identity",
+            "user_id",
+            "platform",
+            "ad_account_id",
+            "asset_type",
+            "external_asset_id",
+            unique=True,
+        ),
     )
 
     id: Mapped[str] = mapped_column(
@@ -44,18 +67,21 @@ class MaterialPlatformAsset(Base):
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    connection_id: Mapped[str] = mapped_column(
+    connection_id: Mapped[str | None] = mapped_column(
         ForeignKey("platform_connections.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
-    platform: Mapped[str] = mapped_column(String(32), nullable=False, default="Meta")
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
+    created_via: Mapped[str] = mapped_column(String(20), nullable=False, default="import")
     ad_account_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    ad_account_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     asset_type: Mapped[str] = mapped_column(String(20), nullable=False)
     external_asset_id: Mapped[str] = mapped_column(String(255), nullable=False)
     image_hash: Mapped[str | None] = mapped_column(String(128), nullable=True)
     remote_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
     remote_status: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    normalized_status: Mapped[str] = mapped_column(String(20), nullable=False, default="unknown")
     remote_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     remote_thumbnail_url: Mapped[str | None] = mapped_column(Text, nullable=True)
     remote_created_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
@@ -63,6 +89,8 @@ class MaterialPlatformAsset(Base):
     last_seen_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )
+    last_verified_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
+    last_error: Mapped[str | None] = mapped_column(Text, nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime, nullable=False, default=datetime.utcnow
     )

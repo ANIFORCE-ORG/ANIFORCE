@@ -100,6 +100,11 @@ class AliyunOssStorageService:
         params = {"x-oss-process": process} if process else None
         return self.bucket.sign_url("GET", object_key, expires, params=params, slash_safe=True)
 
+    def delete_object(self, object_key: str) -> None:
+        result = self.bucket.delete_object(object_key)
+        if result.status not in {200, 204}:
+            raise ObjectStorageError(f"OSS delete failed with status {result.status}")
+
     def object_key_from_url(self, url: str) -> str | None:
         prefixes = []
         if self.endpoint.startswith("https://"):

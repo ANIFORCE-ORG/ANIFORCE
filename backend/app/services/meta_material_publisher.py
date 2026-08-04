@@ -4,22 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import base64
-from dataclasses import dataclass
 from typing import Any
 
 import httpx
 
+from app.services.material_platform_provider import (
+    PlatformAssetNotFound,
+    PlatformAssetState,
+    PublishedPlatformAsset,
+    normalize_platform_status,
+)
 from app.services.object_storage import AliyunOssStorageService
-
-
-@dataclass(frozen=True)
-class PublishedMetaAsset:
-    asset_type: str
-    external_asset_id: str
-    image_hash: str | None
-    name: str | None
-    status: str | None
-    remote_url: str | None
 
 
 class MetaMaterialPublisher:
@@ -37,7 +32,7 @@ class MetaMaterialPublisher:
         material: dict[str, Any],
         ad_account_id: str,
         asset_type: str,
-    ) -> PublishedMetaAsset:
+    ) -> PublishedPlatformAsset:
         if asset_type not in {"image", "video"}:
             raise ValueError("asset_type must be image or video")
         if not material.get("url"):
@@ -63,22 +58,30 @@ class MetaMaterialPublisher:
             external_asset_id,
         )
 
+    async def get_state(
+        self,
+        *,
+        ad_account_id: str,
+        asset_type: str,
+        external_asset_id: str,
+    ) -> PlatformAssetState:
+        return await asyncio.to_thread(
+            self._get_state_sync,
+            ad_account_id,
+            asset_type,
+            external_asset_id,
+        )
+
     def _publish_sync(
         self,
         material: dict[str, Any],
         ad_account_id: str,
         asset_type: str,
-    ) -> PublishedMetaAsset:
-        from facebook_business.api import FacebookAdsApi
+    ) -> PublishedPlatformAsset:
         from facebook_business.adobjects.adaccount import AdAccount
 
-        FacebookAdsApi.init(
-            app_id=self.app_id,
-            app_secret=self.app_secret,
-            access_token=self.access_token,
-        )
         account_id = ad_account_id if ad_account_id.startswith("act_") else f"act_{ad_account_id}"
-        account = AdAccount(account_id)
+        account = AdAccount(account_id, api=self._api())
         name = material.get("name") or material.get("id")
 
         if asset_type == "image":
@@ -89,12 +92,15 @@ class MetaMaterialPublisher:
                 params={"bytes": base64.b64encode(data).decode("ascii")}
             )
             payload = self._image_payload(response)
-            return PublishedMetaAsset(
+            external_id = payload.get("id") or payload.get("hash")
+            if not external_id:
+                raise RuntimeError("Meta image upload returned no image identity")
+            return PublishedPlatformAsset(
                 asset_type="image",
-                external_asset_id=str(payload.get("id") or payload.get("hash")),
+                external_asset_id=str(external_id),
                 image_hash=payload.get("hash"),
                 name=payload.get("name") or name,
-                status=payload.get("status"),
+                remote_status=payload.get("status") or "ready",
                 remote_url=payload.get("url"),
             )
 
@@ -112,32 +118,79 @@ class MetaMaterialPublisher:
         external_id = payload.get("id") or payload.get("video_id")
         if not external_id:
             raise RuntimeError("Meta video upload returned no video ID")
-        return PublishedMetaAsset(
+        return PublishedPlatformAsset(
             asset_type="video",
             external_asset_id=str(external_id),
             image_hash=None,
             name=payload.get("title") or name,
-            status="processing",
+            remote_status="processing",
             remote_url=None,
         )
 
     def _delete_sync(self, ad_account_id: str, asset_type: str, external_asset_id: str) -> None:
-        from facebook_business.api import FacebookAdsApi
         from facebook_business.adobjects.adaccount import AdAccount
 
-        FacebookAdsApi.init(
-            app_id=self.app_id,
-            app_secret=self.app_secret,
-            access_token=self.access_token,
-        )
         account_id = ad_account_id if ad_account_id.startswith("act_") else f"act_{ad_account_id}"
-        account = AdAccount(account_id)
+        account = AdAccount(account_id, api=self._api())
         if asset_type == "image":
             account.delete_ad_images(params={"hash": external_asset_id})
         elif asset_type == "video":
             account.delete_ad_videos(params={"video_id": external_asset_id})
         else:
             raise ValueError("asset_type must be image or video")
+
+    def _get_state_sync(
+        self, ad_account_id: str, asset_type: str, external_asset_id: str
+    ) -> PlatformAssetState:
+        if asset_type == "image":
+            from facebook_business.adobjects.adaccount import AdAccount
+
+            account_id = ad_account_id if ad_account_id.startswith("act_") else f"act_{ad_account_id}"
+            rows = AdAccount(account_id, api=self._api()).get_ad_images(
+                fields=["hash", "status", "url", "url_128"],
+                params={"hashes": [external_asset_id]},
+            )
+            image = next(iter(rows), None)
+            if image is None:
+                raise PlatformAssetNotFound("Platform image asset no longer exists")
+            payload = image.export_all_data() if hasattr(image, "export_all_data") else dict(image)
+            remote_status = payload.get("status") or "ready"
+            return PlatformAssetState(
+                remote_status=remote_status,
+                normalized_status=normalize_platform_status(remote_status),
+                remote_url=payload.get("url"),
+                remote_thumbnail_url=payload.get("url_128"),
+            )
+        if asset_type != "video":
+            raise ValueError("asset_type must be image or video")
+
+        from facebook_business.adobjects.advideo import AdVideo
+
+        video = AdVideo(external_asset_id, api=self._api())
+        try:
+            payload = video.api_get(fields=["status", "source", "picture"]).export_all_data()
+        except Exception as exc:
+            if _is_not_found(exc):
+                raise PlatformAssetNotFound("Platform video asset no longer exists") from exc
+            raise
+        status_value = payload.get("status")
+        if isinstance(status_value, dict):
+            status_value = status_value.get("video_status") or status_value.get("status")
+        remote_status = str(status_value) if status_value is not None else None
+        return PlatformAssetState(
+            remote_status=remote_status,
+            normalized_status=normalize_platform_status(remote_status),
+            remote_url=payload.get("source"),
+            remote_thumbnail_url=payload.get("picture"),
+        )
+
+    def _api(self):
+        from facebook_business.api import FacebookAdsApi
+        from facebook_business.session import FacebookSession
+
+        return FacebookAdsApi(
+            FacebookSession(self.app_id, self.app_secret, self.access_token)
+        )
 
     def _signed_source_url(self, material: dict[str, Any]) -> str:
         object_key = material.get("storage_object_key")
@@ -168,3 +221,11 @@ class MetaMaterialPublisher:
         if isinstance(images, list) and images:
             return images[0]
         return data
+
+
+def _is_not_found(error: Exception) -> bool:
+    http_status = getattr(error, "http_status", None)
+    api_code = getattr(error, "api_error_code", None)
+    status = http_status() if callable(http_status) else None
+    code = api_code() if callable(api_code) else None
+    return status == 404 or code in {100}

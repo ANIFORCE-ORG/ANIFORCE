@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import asyncio
@@ -26,7 +26,7 @@ from facebook_business.exceptions import FacebookRequestError
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
 from app.config.database import get_db
-from app.models import PlatformConnection
+from app.models import MaterialPlatformAsset, MaterialSyncRun, PlatformConnection
 from app.models.sub_account_binding import SubAccountBinding
 from app.api.deps import get_current_user
 
@@ -534,7 +534,17 @@ async def delete_connection(
         if not connection:
             raise HTTPException(status_code=404, detail="连接不存在")
 
-        # 删除连接
+        # Authorization can be removed without deleting remote asset identities or transfer history.
+        await db.execute(
+            update(MaterialPlatformAsset)
+            .where(MaterialPlatformAsset.connection_id == connection.id)
+            .values(connection_id=None)
+        )
+        await db.execute(
+            update(MaterialSyncRun)
+            .where(MaterialSyncRun.connection_id == connection.id)
+            .values(connection_id=None)
+        )
         await db.delete(connection)
         await db.commit()
         logger.info(f"Deleted connection: {connection_id} for user: {user_id}")

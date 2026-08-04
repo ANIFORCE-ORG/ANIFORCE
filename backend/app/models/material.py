@@ -27,6 +27,8 @@ class Material(Base):
     __tablename__ = "materials"
     __table_args__ = (
         Index("ix_materials_user_checksum", "user_id", "checksum_sha256"),
+        Index("ix_materials_user_lifecycle", "user_id", "lifecycle_status"),
+        Index("ix_materials_user_processing", "user_id", "processing_status"),
     )
 
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
@@ -38,8 +40,12 @@ class Material(Base):
     
     # 素材信息
     name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    original_filename: Mapped[str | None] = mapped_column(String(255), nullable=True)
     type: Mapped[MaterialType] = mapped_column(Enum(MaterialType), nullable=False, index=True)
     status: Mapped[MaterialStatus] = mapped_column(Enum(MaterialStatus), nullable=False, default=MaterialStatus.READY, index=True)
+    lifecycle_status: Mapped[str] = mapped_column(String(20), nullable=False, default="active", index=True)
+    processing_status: Mapped[str] = mapped_column(String(20), nullable=False, default="ready", index=True)
+    archived_at: Mapped[datetime | None] = mapped_column(DateTime, nullable=True)
     url: Mapped[str] = mapped_column(Text, nullable=False)
     storage_object_key: Mapped[str | None] = mapped_column(Text, nullable=True)
     mime_type: Mapped[str | None] = mapped_column(String(100), nullable=True)
@@ -70,6 +76,7 @@ class Material(Base):
     duration: Mapped[int | None] = mapped_column(Integer, nullable=True)
     file_size: Mapped[int | None] = mapped_column(Integer, nullable=True)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    updated_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     
     # 关系
     user: Mapped["User"] = relationship(back_populates="materials")

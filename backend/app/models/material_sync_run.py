@@ -21,6 +21,7 @@ class MaterialSyncRun(Base):
             "started_at",
         ),
         Index("ix_material_sync_runs_user_status", "user_id", "status"),
+        Index("ix_material_sync_runs_user_direction", "user_id", "direction", "started_at"),
     )
 
     id: Mapped[str] = mapped_column(
@@ -29,12 +30,14 @@ class MaterialSyncRun(Base):
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
-    connection_id: Mapped[str] = mapped_column(
+    connection_id: Mapped[str | None] = mapped_column(
         ForeignKey("platform_connections.id", ondelete="CASCADE"),
-        nullable=False,
+        nullable=True,
         index=True,
     )
     ad_account_id: Mapped[str] = mapped_column(String(100), nullable=False)
+    direction: Mapped[str] = mapped_column(String(20), nullable=False, default="import")
+    platform: Mapped[str] = mapped_column(String(32), nullable=False)
     trigger_type: Mapped[str] = mapped_column(
         String(20), nullable=False, default="manual"
     )
@@ -45,6 +48,7 @@ class MaterialSyncRun(Base):
     reused_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     updated_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     skipped_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    processing_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     failed_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     error_summary: Mapped[str | None] = mapped_column(Text, nullable=True)
     started_at: Mapped[datetime] = mapped_column(

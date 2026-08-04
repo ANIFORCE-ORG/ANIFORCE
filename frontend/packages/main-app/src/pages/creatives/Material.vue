@@ -5,7 +5,6 @@ import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
-import { getCampaigns, type Campaign } from '@/api/campaigns'
 import {
   deleteMaterial,
   getMaterialImage,
@@ -14,6 +13,7 @@ import {
   syncMetaMaterials,
   publishMaterialToMeta,
   deleteMaterialMetaAsset,
+  refreshMaterialPlatformAsset,
   updateMaterial,
   uploadMaterialWithMetadata,
   type Material,
@@ -23,16 +23,7 @@ import {
 } from '@/api/materials'
 import { navItems } from '@/config/navigation'
 import { useToast } from '@/composables/useToast'
-import {
-  buildAnalysis,
-  calculateOverview,
-  formatCompactNumber,
-  formatCurrency,
-  formatNumber,
-  formatPercent,
-  toMaterialRows,
-  type MaterialRow,
-} from './materialsAdapter'
+import { toMaterialRows, type MaterialRow } from './materialsAdapter'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -42,7 +33,6 @@ const activeSession = ref('sess_g001')
 const loading = ref(false)
 const error = ref('')
 const materials = ref<Material[]>([])
-const campaigns = ref<Campaign[]>([])
 const materialPreviews = ref<Map<string, string>>(new Map())
 const materialOriginals = ref<Map<string, string>>(new Map())
 const materialMimeTypes = ref<Map<string, string>>(new Map())
@@ -58,13 +48,10 @@ const editForm = ref({
 const savingEdit = ref(false)
 
 const searchQuery = ref('')
-const periodFilter = ref('7d')
 const accountFilter = ref('all')
-const statusFilter = ref('all')
 const platformFilter = ref('all')
 const sourceFilter = ref('all')
 const ratioFilter = ref('all')
-const metricFilter = ref('all')
 const sortKey = ref('created_at')
 
 const showUploadModal = ref(false)
@@ -74,20 +61,7 @@ const uploadPosterPreview = ref('')
 const probingUpload = ref(false)
 const uploadForm = ref({
   name: '',
-  status: 'ready',
   tagsText: '',
-  ctrEstimate: '',
-  source: 'oss_upload',
-  sourceAccount: '',
-  platforms: ['Meta'],
-  placementsText: '',
-  campaignIds: [] as string[],
-  creator: '',
-  materialType: '自动识别',
-  materialUsage: '信息流素材',
-  materialTags: ['新上传'] as string[],
-  metaNote: '',
-  mediaKind: '',
   format: '',
   width: '',
   height: '',
@@ -130,74 +104,37 @@ type UploadMediaMetadata = {
 
 const materialRows = computed(() => toMaterialRows(
   materials.value,
-  campaigns.value,
   materialPreviews.value,
   materialMimeTypes.value,
 ))
 
-const platformOptions = computed(() => {
-  const names = new Set<string>()
-  materialRows.value.forEach(row => row.platforms.forEach(platform => names.add(platform)))
-  return Array.from(names).sort()
-})
+const platformOptions = computed(() => Array.from(new Set(
+  materialRows.value.flatMap(row => row.platforms)
+)).sort())
 
-const accountOptions = computed(() => {
-  const names = new Set<string>()
-  campaigns.value.forEach(campaign => {
-    if (campaign.account_id) names.add(campaign.account_id)
-  })
-  materialRows.value.forEach(row => {
-    if (row.material.source_account) names.add(row.material.source_account)
-  })
-  return Array.from(names).sort()
-})
+const accountOptions = computed(() => Array.from(new Set(
+  materials.value.flatMap(material => material.platform_assets?.map(asset => asset.ad_account_id) || [])
+)).sort())
 
 const uploadFile = computed(() => uploadFiles.value[0] || null)
 const uploadPreviewUrl = ref('')
 const uploadIsVideo = computed(() => uploadFile.value?.type.startsWith('video/') || false)
-const uploadPlatformOptions = ['Meta', 'Facebook', 'Instagram', 'TikTok', 'Google']
-const uploadTagOptions = ['新上传', 'UGC', 'Gameplay', 'Reward', 'Static']
 
 const filteredRows = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
-  let rows = materialRows.value.filter(row => {
-    if (statusFilter.value !== 'all' && row.status !== statusFilter.value) return false
-    if (accountFilter.value !== 'all') {
-      const campaignAccounts = row.campaigns.map(campaign => campaign.account_id).filter(Boolean)
-      if (row.material.source_account !== accountFilter.value && !campaignAccounts.includes(accountFilter.value)) return false
-    }
+  const rows = materialRows.value.filter(row => {
+    if (accountFilter.value !== 'all' && !row.material.platform_assets?.some(asset => asset.ad_account_id === accountFilter.value)) return false
     if (platformFilter.value !== 'all' && !row.platforms.includes(platformFilter.value)) return false
     if (sourceFilter.value !== 'all' && row.source !== sourceFilter.value) return false
     if (ratioFilter.value !== 'all' && row.ratio !== ratioFilter.value) return false
-    if (metricFilter.value === 'high_ctr' && row.metrics.ctr < 2) return false
-    if (metricFilter.value === 'fatigue' && row.fatigue < 70) return false
-    if (metricFilter.value === 'low_score' && row.score >= 60) return false
     if (!query) return true
-    return [
-      row.name,
-      row.id,
-      row.sourceLabel,
-      row.statusLabel,
-      row.format,
-      ...row.tags,
-      ...row.platforms,
-    ].some(value => value.toLowerCase().includes(query))
+    return [row.name, row.id, row.sourceLabel, row.format, ...row.tags, ...row.platforms]
+      .some(value => value.toLowerCase().includes(query))
   })
-
-  rows = [...rows].sort((a, b) => {
-    if (sortKey.value === 'name') return a.name.localeCompare(b.name)
-    if (sortKey.value === 'spend') return b.metrics.spend - a.metrics.spend
-    if (sortKey.value === 'ctr') return b.metrics.ctr - a.metrics.ctr
-    if (sortKey.value === 'roas') return b.metrics.roas - a.metrics.roas
-    if (sortKey.value === 'fatigue') return b.fatigue - a.fatigue
-    return new Date(b.material.created_at).getTime() - new Date(a.material.created_at).getTime()
-  })
-
-  return rows
+  return [...rows].sort((a, b) => sortKey.value === 'name'
+    ? a.name.localeCompare(b.name)
+    : new Date(b.material.created_at).getTime() - new Date(a.material.created_at).getTime())
 })
-
-const overview = computed(() => calculateOverview(filteredRows.value))
-const analysisCards = computed(() => buildAnalysis(filteredRows.value, overview.value))
 const selectedRow = computed(() => {
   if (!filteredRows.value.length) return null
   return filteredRows.value.find(row => row.id === selectedMaterialId.value) || filteredRows.value[0]
@@ -206,16 +143,6 @@ const selectedPreviewUrl = computed(() => {
   if (!selectedRow.value) return ''
   return materialOriginals.value.get(selectedRow.value.id) || selectedRow.value.previewUrl || ''
 })
-
-const overviewCards = computed(() => [
-  { label: '周期消耗', value: formatCurrency(overview.value.spend), sub: `${accountLabel.value} · ${periodLabel(periodFilter.value)}`, icon: 'payments' },
-  { label: '展示量', value: formatCompactNumber(overview.value.impressions), sub: `平均 ${formatCompactNumber(overview.value.averageImpressions)} / 素材`, icon: 'visibility' },
-  { label: '点击量', value: formatCompactNumber(overview.value.clicks), sub: `平均 ${formatCompactNumber(overview.value.averageClicks)} / 素材`, icon: 'ads_click' },
-  { label: '平均 ROAS', value: `${formatNumber(overview.value.roas, 2)}x`, sub: overview.value.roas >= 2.5 ? '回收健康' : overview.value.roas >= 1.8 ? '观察放量' : '需控预算', icon: 'monitoring' },
-  { label: '短视频消耗', value: formatCurrency(overview.value.shortVideoSpend), sub: '按素材关联计划估算', icon: 'movie' },
-])
-
-const accountLabel = computed(() => accountFilter.value === 'all' ? '全部广告账户' : accountFilter.value)
 
 onMounted(async () => {
   await loadPageData()
@@ -229,12 +156,8 @@ const loadPageData = async () => {
       await auth.login({ email: 'test@animagus.com', password: 'test123' })
     }
 
-    const [materialData, campaignData] = await Promise.all([
-      getMaterials({ limit: 200 }),
-      getCampaigns({ limit: 200 }),
-    ])
+    const materialData = await getMaterials({ limit: 200 })
     materials.value = materialData
-    campaigns.value = campaignData
 
     await loadPreviewSources(materialData)
     if (!selectedMaterialId.value && materialData.length > 0) {
@@ -350,6 +273,15 @@ const togglePublishAccount = (key: string) => {
     : [...publishAccountKeys.value, key]
 }
 
+const waitForPlatformAsset = async (materialId: string, asset: MaterialPlatformAsset) => {
+  if (asset.normalized_status !== 'processing') return
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    await new Promise(resolve => window.setTimeout(resolve, 2000))
+    const refreshed = await refreshMaterialPlatformAsset(materialId, asset.id)
+    if (refreshed.platform_asset.normalized_status !== 'processing') return
+  }
+}
+
 const runMetaPublish = async () => {
   if (!publishMaterial.value || !publishAccountKeys.value.length) return
   publishingMeta.value = true
@@ -358,12 +290,13 @@ const runMetaPublish = async () => {
   try {
     for (const key of publishAccountKeys.value) {
       const [connectionId, accountId] = key.split('|')
-      await publishMaterialToMeta(publishMaterial.value.id, {
+      const result = await publishMaterialToMeta(publishMaterial.value.id, {
         platform: publishPlatform.value,
         connection_id: connectionId,
         ad_account_id: accountId,
         asset_type: publishAssetType.value,
       })
+      await waitForPlatformAsset(publishMaterial.value.id, result.platform_asset)
       successCount += 1
     }
     success(`已处理 ${successCount} 个 Meta 广告账户`)
@@ -380,6 +313,10 @@ const runMetaPublish = async () => {
 const pendingMetaAssetDelete = ref<{ row: MaterialRow; asset: MaterialPlatformAsset } | null>(null)
 
 const removeMetaAsset = (row: MaterialRow, asset: MaterialPlatformAsset) => {
+  if (!asset.connection_id) {
+    showError('该平台资产当前没有可用授权，请重新连接平台后再删除')
+    return
+  }
   pendingMetaAssetDelete.value = { row, asset }
 }
 
@@ -387,6 +324,7 @@ const confirmRemoveMetaAsset = async () => {
   const pending = pendingMetaAssetDelete.value
   if (!pending) return
   const { row, asset } = pending
+  if (!asset.connection_id) return
   try {
     await deleteMaterialMetaAsset(row.id, asset.id, {
       platform: asset.platform,
@@ -461,20 +399,7 @@ const resetUploadForm = () => {
   uploadPreviewUrl.value = ''
   uploadForm.value = {
     name: '',
-    status: 'ready',
     tagsText: '',
-    ctrEstimate: '',
-    source: 'oss_upload',
-    sourceAccount: accountFilter.value !== 'all' ? accountFilter.value : '',
-    platforms: ['Meta'],
-    placementsText: 'Feed, Reels',
-    campaignIds: [],
-    creator: '',
-    materialType: '自动识别',
-    materialUsage: '信息流素材',
-    materialTags: ['新上传'],
-    metaNote: '',
-    mediaKind: '',
     format: '',
     width: '',
     height: '',
@@ -547,7 +472,6 @@ const prepareUploadMetadata = async (file: File) => {
   uploadForm.value.name = baseName
   uploadForm.value.format = ext
   uploadForm.value.fileSize = `${(file.size / 1024 / 1024).toFixed(2)} MB`
-  uploadForm.value.mediaKind = file.type.startsWith('video/') ? 'video' : 'image'
 
   try {
     const metadata = file.type.startsWith('video/')
@@ -655,11 +579,9 @@ const completeUpload = async () => {
   uploadProgress.value.clear()
   try {
     const baseName = uploadForm.value.name.trim()
-    const extraTags = uploadForm.value.tagsText.split(',').map(tag => tag.trim()).filter(Boolean)
-      const tags = Array.from(new Set([
-      ...uploadForm.value.materialTags,
-      ...extraTags,
-    ].filter(Boolean)))
+    const tags = Array.from(new Set(
+      uploadForm.value.tagsText.split(',').map(tag => tag.trim()).filter(Boolean)
+    ))
 
     for (const [index, file] of uploadFiles.value.entries()) {
       uploadProgress.value.set(file.name, 0)
@@ -676,8 +598,6 @@ const completeUpload = async () => {
         format: file.name.split('.').pop()?.toUpperCase() || uploadForm.value.format || undefined,
         media_kind: mediaKind,
         source: 'oss_upload',
-        creator: uploadForm.value.creator.trim() || undefined,
-        review_status: '待审核',
       }, isFirst ? uploadPoster.value || undefined : undefined)
       uploadProgress.value.set(file.name, 100)
     }
@@ -756,34 +676,10 @@ const confirmDeleteMaterial = async () => {
   }
 }
 
-const platformAssetStatus = (status?: string) => ({ processing: '平台处理中', ready: '已同步', published: '已同步', failed: '同步失败' }[status || ''] || status || '未知')
+const platformAssetStatus = (status?: string) => ({ processing: '平台处理中', ready: '已同步', failed: '同步失败', unknown: '待确认' }[status || ''] || '待确认')
 const materialFileStatus = (status?: string) => ({ processing: '处理中', ready: '已就绪', active: '已就绪', failed: '处理失败' }[status || ''] || status || '未知')
 const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chip platform-chip-meta' : 'platform-chip'
 
-const statusClass = (status: string) => {
-  const classes: Record<string, string> = {
-    running: 'text-emerald-700 bg-emerald-50 border-emerald-200 dark:text-emerald-300 dark:bg-emerald-900/20 dark:border-emerald-800',
-    ready: 'text-blue-700 bg-blue-50 border-blue-200 dark:text-blue-300 dark:bg-blue-900/20 dark:border-blue-800',
-    fatigue: 'text-amber-700 bg-amber-50 border-amber-200 dark:text-amber-300 dark:bg-amber-900/20 dark:border-amber-800',
-  }
-  return classes[status] || 'text-slate-600 bg-slate-50 border-slate-200 dark:text-slate-300 dark:bg-slate-800 dark:border-slate-700'
-}
-
-const analysisClass = (tone: string) => {
-  if (tone === 'good') return 'border-emerald-200 bg-emerald-50/70 text-emerald-900 dark:border-emerald-900 dark:bg-emerald-950/30 dark:text-emerald-100'
-  if (tone === 'warning') return 'border-amber-200 bg-amber-50/80 text-amber-900 dark:border-amber-900 dark:bg-amber-950/30 dark:text-amber-100'
-  return 'border-slate-200 bg-slate-50 text-slate-800 dark:border-slate-700 dark:bg-slate-800/60 dark:text-slate-100'
-}
-
-const periodLabel = (period: string) => {
-  const labels: Record<string, string> = {
-    '7d': '近 7 天',
-    '14d': '近 14 天',
-    '30d': '近 30 天',
-    all: '全部周期',
-  }
-  return labels[period] || period
-}
 </script>
 
 <template>
@@ -908,7 +804,7 @@ const periodLabel = (period: string) => {
                         </div>
                       </div>
                     </td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><div v-if="row.material.platform_assets?.length" class="space-y-[4px]"><div v-for="asset in row.material.platform_assets" :key="asset.id" class="flex flex-wrap items-center gap-[4px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_id }}</span><span class="asset-status">{{ platformAssetStatus(asset.remote_status) }}</span></div></div><span v-else class="text-slate-400">未绑定</span></td>
+                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><div v-if="row.material.platform_assets?.length" class="space-y-[4px]"><div v-for="asset in row.material.platform_assets" :key="asset.id" class="flex flex-wrap items-center gap-[4px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span><span class="asset-status">{{ platformAssetStatus(asset.normalized_status) }}</span></div></div><span v-else class="text-slate-400">未绑定</span></td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><span class="source-chip">{{ row.sourceLabel }}</span></td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.mediaKind === 'video' ? '视频' : '图片' }} · {{ row.format }}</td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.material.width && row.material.height ? `${row.material.width} × ${row.material.height}` : '-' }} · {{ row.ratio }}</td>
@@ -990,7 +886,7 @@ const periodLabel = (period: string) => {
               </section>
               <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">平台资产</h3><span class="text-[10px] text-slate-400">平台归属</span></div>
-                <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center justify-between gap-[8px] border border-slate-200 px-[10px] py-[10px] dark:border-slate-700"><div class="min-w-0"><div class="flex flex-wrap items-center gap-[5px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_id }}</span></div><div class="mt-[5px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ platformAssetStatus(asset.remote_status) }}</div></div><button class="text-[10px] font-semibold text-red-600 hover:text-red-700" @click="removeMetaAsset(selectedRow, asset)">删除</button></div></div>
+                <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center justify-between gap-[8px] border border-slate-200 px-[10px] py-[10px] dark:border-slate-700"><div class="min-w-0"><div class="flex flex-wrap items-center gap-[5px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span></div><div class="mt-[5px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ platformAssetStatus(asset.normalized_status) }}</div></div><button class="text-[10px] font-semibold text-red-600 hover:text-red-700" @click="removeMetaAsset(selectedRow, asset)">删除</button></div></div>
                 <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[12px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未绑定 Meta 广告账户</div>
                 <div class="mt-[12px] flex gap-[8px]"><button v-if="selectedRow.mediaKind === 'image'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'image')">推送到 Meta</button><button v-if="selectedRow.mediaKind === 'video'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'video')">推送到 Meta</button></div>
               </section>
