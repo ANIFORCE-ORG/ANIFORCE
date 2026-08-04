@@ -1684,7 +1684,13 @@ async def get_ad_accounts(
         if not bindings:
             logger.warning(f"No sub-accounts found for user: {user_id}, channel: {channel}. User may need to sync ad accounts first.")
 
-        # 转换为响应格式
+        # 一个广告账户可能因重复同步或多条授权连接出现多个 binding。
+        # 账户选择器按平台账户身份展示一行，保留排序后的第一条有效绑定。
+        unique_bindings: dict[str, SubAccountBinding] = {}
+        for binding in bindings:
+            normalized_account_id = binding.sub_account_id.removeprefix("act_")
+            unique_bindings.setdefault(normalized_account_id, binding)
+
         accounts = [
             AdAccountOption(
                 account_id=binding.sub_account_id,
@@ -1692,10 +1698,13 @@ async def get_ad_accounts(
                 channel=channel,
                 connection_id=binding.parent_connection_id
             )
-            for binding in bindings
+            for binding in unique_bindings.values()
         ]
 
-        logger.info(f"Successfully fetched {len(accounts)} {channel} ad accounts for user: {user_id}")
+        logger.info(
+            f"Successfully fetched {len(accounts)} unique {channel} ad accounts "
+            f"from {len(bindings)} bindings for user: {user_id}"
+        )
         return accounts
 
     except Exception as e:

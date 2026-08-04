@@ -226,12 +226,22 @@ const refreshMaterials = async () => {
   success('素材数据已刷新')
 }
 
+const uniqueMetaAccounts = (accounts: MetaAdAccountOption[]) => {
+  const seen = new Set<string>()
+  return accounts.filter(account => {
+    const normalizedId = account.account_id.replace(/^act_/, '')
+    if (seen.has(normalizedId)) return false
+    seen.add(normalizedId)
+    return true
+  })
+}
+
 const openMetaSyncModal = async () => {
   showMetaSyncModal.value = true
   metaSyncResult.value = null
   loadingMetaAccounts.value = true
   try {
-    metaAccounts.value = await getMetaAdAccounts()
+    metaAccounts.value = uniqueMetaAccounts(await getMetaAdAccounts())
     selectedMetaAccountKey.value = metaAccounts.value[0]
       ? `${metaAccounts.value[0].connection_id}|${metaAccounts.value[0].account_id}`
       : ''
@@ -254,7 +264,7 @@ const openMetaPublishModal = async (row: MaterialRow, assetType: 'image' | 'vide
   showMetaPublishModal.value = true
   loadingMetaAccounts.value = true
   try {
-    metaAccounts.value = await getMetaAdAccounts()
+    metaAccounts.value = uniqueMetaAccounts(await getMetaAdAccounts())
     publishAccountKeys.value = []
   } catch (err: any) {
     publishError.value = err.message || '加载 Meta 广告账户失败'
