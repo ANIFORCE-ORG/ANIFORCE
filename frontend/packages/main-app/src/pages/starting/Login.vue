@@ -14,6 +14,7 @@ const email = ref('')
 const password = ref('')
 const loading = ref(false)
 const error = ref('')
+const demoMode = import.meta.env.VITE_DEMO_MODE === 'true'
 
 // Bilingual copy
 const copy = {
@@ -68,10 +69,16 @@ const copy = {
 const t = computed(() => copy[language.value])
 
 async function handleLogin() {
-if (!email.value && !password.value) {
-  error.value = t.value.errors.emailAndPassword
-  return
-}
+  if (demoMode) {
+    auth.fakeLogin()
+    router.push('/home')
+    return
+  }
+
+  if (!email.value && !password.value) {
+    error.value = t.value.errors.emailAndPassword
+    return
+  }
 
   if (!email.value) {
     error.value = t.value.errors.invalidEmail
