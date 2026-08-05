@@ -60,6 +60,8 @@ export interface MaterialPlatformAsset {
   remote_url?: string
   remote_thumbnail_url?: string
   last_seen_at?: string
+  last_verified_at?: string
+  last_error?: string
 }
 
 export interface UploadMaterialMetadata {

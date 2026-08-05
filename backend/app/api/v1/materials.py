@@ -167,6 +167,7 @@ async def list_materials(
             "remote_thumbnail_url": asset.remote_thumbnail_url,
             "last_seen_at": asset.last_seen_at.isoformat(),
             "last_verified_at": asset.last_verified_at.isoformat() if asset.last_verified_at else None,
+            "last_error": asset.last_error,
         })
     for material in materials:
         material["platform_assets"] = assets_by_material.get(material["id"], [])
@@ -355,17 +356,32 @@ async def publish_material_to_meta(
             existing.remote_url = state.remote_url or existing.remote_url
             existing.remote_thumbnail_url = state.remote_thumbnail_url or existing.remote_thumbnail_url
             existing.last_verified_at = datetime.utcnow()
-            existing.last_error = None
+            existing.last_error = (
+                _sanitize_error_message(state.error_message)[:2000]
+                if state.error_message
+                else None
+            )
         except PlatformAssetNotFound:
             await session.delete(existing)
             await session.commit()
             existing = None
         except Exception as exc:
-            existing.last_error = _sanitize_error_message(exc)[:2000]
+            message = _sanitize_error_message(exc)[:2000]
+            existing.last_error = message
+            existing.normalized_status = "unknown"
             await session.commit()
-        if existing:
+            raise HTTPException(
+                status_code=502,
+                detail=f"无法确认已有平台素材的状态，请稍后重试：{message}",
+            ) from exc
+        if existing and existing.normalized_status in {"ready", "processing"}:
             await _record_export_result(session, current_user["id"], connection, binding.sub_account_id, material_id, existing, "reused")
             return _platform_asset_result(existing, action="reused")
+        if existing and existing.normalized_status == "unknown":
+            raise HTTPException(
+                status_code=502,
+                detail=f"Meta 返回了无法识别的素材状态：{existing.remote_status or 'empty'}",
+            )
 
     run = MaterialSyncRun(
         user_id=current_user["id"],
@@ -501,7 +517,11 @@ async def refresh_material_platform_asset(
         asset.remote_url = state.remote_url or asset.remote_url
         asset.remote_thumbnail_url = state.remote_thumbnail_url or asset.remote_thumbnail_url
         asset.last_verified_at = datetime.utcnow()
-        asset.last_error = None
+        asset.last_error = (
+            _sanitize_error_message(state.error_message)[:2000]
+            if state.error_message
+            else None
+        )
         if state.normalized_status != "processing":
             item = await session.scalar(
                 select(MaterialSyncRunItem)
@@ -613,6 +633,7 @@ def _serialize_platform_asset(asset: MaterialPlatformAsset) -> dict:
         "remote_thumbnail_url": asset.remote_thumbnail_url,
         "last_seen_at": asset.last_seen_at.isoformat(),
         "last_verified_at": asset.last_verified_at.isoformat() if asset.last_verified_at else None,
+        "last_error": asset.last_error,
     }
 
 
@@ -634,6 +655,8 @@ def _platform_asset_result(asset: MaterialPlatformAsset, *, action: str) -> dict
             "normalized_status": asset.normalized_status,
             "remote_url": asset.remote_url,
             "remote_thumbnail_url": asset.remote_thumbnail_url,
+            "last_verified_at": asset.last_verified_at.isoformat() if asset.last_verified_at else None,
+            "last_error": asset.last_error,
         },
     }
 

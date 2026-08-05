@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 
+import pytest
+from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -99,6 +101,47 @@ def test_publish_and_refresh_platform_asset_lifecycle(monkeypatch) -> None:
                 "material-1", asset_id, {"id": "user-1"}, session
             )
             assert refreshed["platform_asset"]["normalized_status"] == "ready"
+
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_existing_asset_verification_error_is_not_reported_as_reused(monkeypatch) -> None:
+    class VerificationErrorProvider(FakeProvider):
+        async def get_state(self, **_):
+            raise RuntimeError("Meta verification unavailable")
+
+    async def scenario() -> None:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        provider = VerificationErrorProvider()
+        monkeypatch.setattr(material_api, "create_material_platform_provider", lambda _: provider)
+
+        async with maker() as session:
+            repo = await _seed(session)
+            asset = MaterialPlatformAsset(
+                id="asset-existing", material_id="material-1", user_id="user-1",
+                connection_id="connection-1", platform="Meta", ad_account_id="act_123",
+                asset_type="video", external_asset_id="video-existing", normalized_status="ready",
+            )
+            session.add(asset)
+            await session.commit()
+            request = MetaMaterialPublishRequest(
+                platform="Meta", connection_id="connection-1", ad_account_id="123", asset_type="video"
+            )
+
+            with pytest.raises(HTTPException) as error:
+                await publish_material_to_meta(
+                    "material-1", request, {"id": "user-1"}, repo, session
+                )
+            assert error.value.status_code == 502
+            assert "无法确认已有平台素材" in error.value.detail
+            await session.refresh(asset)
+            assert asset.normalized_status == "unknown"
+            assert provider.publish_calls == 0
 
         await engine.dispose()
 

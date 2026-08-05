@@ -71,8 +71,8 @@ const resolveSource = (source?: string, url?: string): MaterialSourceKind => {
 }
 
 const sourceLabel = (source: MaterialSourceKind): string => ({
-  oss: 'OSS 上传',
-  local: '本地素材',
+  oss: '手动上传',
+  local: '历史素材',
   imported: '外部导入',
   meta_import: 'Meta 导入',
   google_import: 'Google 导入',

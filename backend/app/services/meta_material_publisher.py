@@ -100,7 +100,8 @@ class MetaMaterialPublisher:
                 external_asset_id=str(external_id),
                 image_hash=payload.get("hash"),
                 name=payload.get("name") or name,
-                remote_status=payload.get("status") or "ready",
+                # A returned hash confirms acceptance; readiness is verified by GET /adimages.
+                remote_status=payload.get("status") or "processing",
                 remote_url=payload.get("url"),
             )
 
@@ -173,7 +174,9 @@ class MetaMaterialPublisher:
             if _is_not_found(exc):
                 raise PlatformAssetNotFound("Platform video asset no longer exists") from exc
             raise
-        status_value = payload.get("status")
+        status_payload = payload.get("status")
+        error_message = _video_error_message(status_payload)
+        status_value = status_payload
         if isinstance(status_value, dict):
             status_value = status_value.get("video_status") or status_value.get("status")
         remote_status = str(status_value) if status_value is not None else None
@@ -182,6 +185,7 @@ class MetaMaterialPublisher:
             normalized_status=normalize_platform_status(remote_status),
             remote_url=payload.get("source"),
             remote_thumbnail_url=payload.get("picture"),
+            error_message=error_message,
         )
 
     def _api(self):
@@ -221,6 +225,30 @@ class MetaMaterialPublisher:
         if isinstance(images, list) and images:
             return images[0]
         return data
+
+
+def _video_error_message(status: Any) -> str | None:
+    if not isinstance(status, dict):
+        return None
+    processing_phase = status.get("processing_phase")
+    errors = (
+        processing_phase.get("errors")
+        if isinstance(processing_phase, dict)
+        else None
+    ) or status.get("errors")
+    if not errors:
+        return None
+    if not isinstance(errors, list):
+        errors = [errors]
+    messages = []
+    for error in errors:
+        if isinstance(error, dict):
+            message = error.get("message") or error.get("error_message") or error.get("description")
+            if message:
+                messages.append(str(message))
+        elif error:
+            messages.append(str(error))
+    return "; ".join(messages) or "Meta video processing failed"
 
 
 def _is_not_found(error: Exception) -> bool:

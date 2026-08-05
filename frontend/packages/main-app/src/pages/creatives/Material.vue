@@ -288,37 +288,53 @@ const togglePublishAccount = (key: string) => {
     : [...publishAccountKeys.value, key]
 }
 
-const waitForPlatformAsset = async (materialId: string, asset: MaterialPlatformAsset) => {
-  if (asset.normalized_status !== 'processing') return
+const waitForPlatformAsset = async (
+  materialId: string,
+  asset: MaterialPlatformAsset,
+): Promise<MaterialPlatformAsset> => {
+  let current = asset
+  if (current.normalized_status === 'ready' || current.normalized_status === 'failed') return current
   for (let attempt = 0; attempt < 6; attempt += 1) {
     await new Promise(resolve => window.setTimeout(resolve, 2000))
-    const refreshed = await refreshMaterialPlatformAsset(materialId, asset.id)
-    if (refreshed.platform_asset.normalized_status !== 'processing') return
+    current = (await refreshMaterialPlatformAsset(materialId, current.id)).platform_asset
+    if (current.normalized_status === 'ready' || current.normalized_status === 'failed') return current
   }
+  return current
 }
 
 const runMetaPublish = async () => {
   if (!publishMaterial.value || !publishAccountKeys.value.length) return
   publishingMeta.value = true
   publishError.value = ''
-  let successCount = 0
+  let readyCount = 0
+  let processingCount = 0
+  const failures: string[] = []
   try {
     for (const key of publishAccountKeys.value) {
       const [connectionId, accountId] = key.split('|')
-      const result = await publishMaterialToMeta(publishMaterial.value.id, {
-        platform: publishPlatform.value,
-        connection_id: connectionId,
-        ad_account_id: accountId,
-        asset_type: publishAssetType.value,
-      })
-      await waitForPlatformAsset(publishMaterial.value.id, result.platform_asset)
-      successCount += 1
+      const account = metaAccounts.value.find(item => `${item.connection_id}|${item.account_id}` === key)
+      try {
+        const result = await publishMaterialToMeta(publishMaterial.value.id, {
+          platform: publishPlatform.value,
+          connection_id: connectionId,
+          ad_account_id: accountId,
+          asset_type: publishAssetType.value,
+        })
+        const finalAsset = await waitForPlatformAsset(publishMaterial.value.id, result.platform_asset)
+        if (finalAsset.normalized_status === 'failed') {
+          throw new Error(finalAsset.last_error || 'Meta 处理素材失败')
+        }
+        if (finalAsset.normalized_status === 'ready') readyCount += 1
+        else processingCount += 1
+      } catch (err: any) {
+        failures.push(`${account?.account_name || accountId}：${err.message || '发布失败'}`)
+      }
     }
-    success(`已向 ${successCount} 个 Meta 广告账户提交发布`)
-    showMetaPublishModal.value = false
-    await loadPageData()
-  } catch (err: any) {
-    publishError.value = `${successCount} 个账户已完成；${err.message || '其余账户发布失败'}`
+    const summary = `发布结果：成功 ${readyCount}，处理中 ${processingCount}，失败 ${failures.length}`
+    if (failures.length) showError(summary)
+    else success(summary)
+    publishError.value = failures.join('\n')
+    if (!failures.length) showMetaPublishModal.value = false
     await loadPageData()
   } finally {
     publishingMeta.value = false
@@ -713,8 +729,8 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                 </select>
                 <select v-model="sourceFilter" class="filter-select">
                   <option value="all">全部来源</option>
-                  <option value="oss">OSS 上传</option>
-                  <option value="local">本地素材</option>
+                  <option value="oss">手动上传</option>
+                  <option value="local">历史素材</option>
                   <option value="meta_import">Meta 导入</option>
                   <option value="google_import">Google 导入</option>
                   <option value="tiktok_import">TikTok 导入</option>
@@ -1064,7 +1080,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
   <div v-if="showMetaPublishModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeMetaPublishModal">
     <div class="w-full max-w-[480px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
       <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700"><div><h2 class="text-[15px] font-bold text-slate-900 dark:text-white">发布素材</h2><p class="mt-[3px] text-[11px] text-slate-500 dark:text-slate-400">在目标账户创建媒体资产，不创建广告</p></div><button class="rounded-md p-[6px] hover:bg-slate-100 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal"><span class="material-symbols-outlined text-[18px]">close</span></button></div>
-      <div class="space-y-[14px] p-[18px]"><div class="rounded-md bg-slate-50 px-[12px] py-[10px] text-[12px] text-slate-600 dark:bg-slate-900 dark:text-slate-300"><span class="font-semibold">素材：</span>{{ publishMaterial?.name }}<span class="ml-[8px] text-slate-400">{{ publishAssetType === 'video' ? 'AdVideo' : 'AdImage' }}</span></div><div><span class="mb-[7px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">目标平台</span><div class="flex gap-[7px]"><button class="platform-option platform-option-active" type="button" @click="publishPlatform = 'Meta'"><span class="platform-dot platform-dot-meta"></span>Meta</button><button class="platform-option" type="button" disabled title="Google provider 尚未接入"><span class="platform-dot platform-dot-google"></span>Google<span class="coming-label">即将支持</span></button><button class="platform-option" type="button" disabled title="TikTok provider 尚未接入"><span class="platform-dot platform-dot-tiktok"></span>TikTok<span class="coming-label">即将支持</span></button></div></div><div><div class="mb-[6px] flex items-center justify-between"><span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">平台账户</span><span class="text-[10px] text-slate-400">已选 {{ publishAccountKeys.length }} 个</span></div><div v-if="loadingMetaAccounts" class="px-[10px] py-[18px] text-center text-[11px] text-slate-400">正在加载广告账户...</div><div v-else class="max-h-[220px] space-y-[6px] overflow-y-auto"> <label v-for="account in metaAccounts" :key="`${account.connection_id}|${account.account_id}`" class="flex cursor-pointer items-center gap-[9px] border border-slate-200 px-[10px] py-[9px] text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"><input type="checkbox" :checked="publishAccountKeys.includes(`${account.connection_id}|${account.account_id}`)" :disabled="publishingMeta" class="h-[14px] w-[14px] accent-primary" @change="togglePublishAccount(`${account.connection_id}|${account.account_id}`)" /><span class="min-w-0 truncate"><b>{{ account.account_name }}</b><span class="ml-[5px] text-slate-400">{{ account.account_id }}</span></span></label><div v-if="!metaAccounts.length" class="px-[10px] py-[18px] text-center text-[11px] text-slate-400">暂无可用 Meta 广告账户</div></div></div><p v-if="publishError" class="rounded-md bg-red-50 px-[10px] py-[8px] text-[11px] text-red-600">{{ publishError }}</p></div>
+      <div class="space-y-[14px] p-[18px]"><div class="rounded-md bg-slate-50 px-[12px] py-[10px] text-[12px] text-slate-600 dark:bg-slate-900 dark:text-slate-300"><span class="font-semibold">素材：</span>{{ publishMaterial?.name }}<span class="ml-[8px] text-slate-400">{{ publishAssetType === 'video' ? 'AdVideo' : 'AdImage' }}</span></div><div><span class="mb-[7px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">目标平台</span><div class="flex gap-[7px]"><button class="platform-option platform-option-active" type="button" @click="publishPlatform = 'Meta'"><span class="platform-dot platform-dot-meta"></span>Meta</button><button class="platform-option" type="button" disabled title="Google provider 尚未接入"><span class="platform-dot platform-dot-google"></span>Google<span class="coming-label">即将支持</span></button><button class="platform-option" type="button" disabled title="TikTok provider 尚未接入"><span class="platform-dot platform-dot-tiktok"></span>TikTok<span class="coming-label">即将支持</span></button></div></div><div><div class="mb-[6px] flex items-center justify-between"><span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">平台账户</span><span class="text-[10px] text-slate-400">已选 {{ publishAccountKeys.length }} 个</span></div><div v-if="loadingMetaAccounts" class="px-[10px] py-[18px] text-center text-[11px] text-slate-400">正在加载广告账户...</div><div v-else class="max-h-[220px] space-y-[6px] overflow-y-auto"> <label v-for="account in metaAccounts" :key="`${account.connection_id}|${account.account_id}`" class="flex cursor-pointer items-center gap-[9px] border border-slate-200 px-[10px] py-[9px] text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"><input type="checkbox" :checked="publishAccountKeys.includes(`${account.connection_id}|${account.account_id}`)" :disabled="publishingMeta" class="h-[14px] w-[14px] accent-primary" @change="togglePublishAccount(`${account.connection_id}|${account.account_id}`)" /><span class="min-w-0 truncate"><b>{{ account.account_name }}</b><span class="ml-[5px] text-slate-400">{{ account.account_id }}</span></span></label><div v-if="!metaAccounts.length" class="px-[10px] py-[18px] text-center text-[11px] text-slate-400">暂无可用 Meta 广告账户</div></div></div><p v-if="publishError" class="whitespace-pre-line rounded-md bg-red-50 px-[10px] py-[8px] text-[11px] text-red-600">{{ publishError }}</p></div>
       <div class="flex justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700"><button class="rounded-md px-[12px] py-[7px] text-[11px] text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal">取消</button><button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50" :disabled="publishingMeta || loadingMetaAccounts || !publishAccountKeys.length" @click="runMetaPublish"><span v-if="publishingMeta" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>{{ publishingMeta ? '发布中...' : '确认发布' }}</button></div>
     </div>
   </div>

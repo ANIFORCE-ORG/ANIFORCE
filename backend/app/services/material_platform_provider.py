@@ -24,6 +24,7 @@ class PlatformAssetState:
     normalized_status: str
     remote_url: str | None = None
     remote_thumbnail_url: str | None = None
+    error_message: str | None = None
 
 
 class PlatformAssetNotFound(RuntimeError):
@@ -74,6 +75,6 @@ def normalize_platform_status(value: str | None) -> str:
         return "ready"
     if normalized in {"processing", "pending", "uploading", "in_progress"}:
         return "processing"
-    if normalized in {"failed", "error", "rejected", "disapproved"}:
+    if normalized in {"failed", "error", "rejected", "disapproved", "deleted"}:
         return "failed"
     return "unknown"
