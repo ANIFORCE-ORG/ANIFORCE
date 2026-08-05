@@ -46,7 +46,7 @@ export interface Material {
 
 export interface MaterialPlatformAsset {
   id: string
-  material_id: string
+  material_id?: string
   connection_id?: string
   platform: string
   ad_account_id: string
@@ -176,14 +176,6 @@ export async function publishMaterialToMeta(
   data: { platform?: string; connection_id: string; ad_account_id: string; asset_type: 'image' | 'video' },
 ): Promise<MaterialMetaAssetResult> {
   return http.post<MaterialMetaAssetResult>(`/materials/${materialId}/platform-assets/publish`, data)
-}
-
-export async function deleteMaterialMetaAsset(
-  materialId: string,
-  assetId: string,
-  data: { platform?: string; connection_id: string; ad_account_id: string; asset_type: 'image' | 'video'; external_asset_id?: string },
-): Promise<MaterialMetaAssetResult> {
-  return http.delete<MaterialMetaAssetResult>(`/materials/${materialId}/platform-assets/${assetId}`, { body: data })
 }
 
 export async function refreshMaterialPlatformAsset(

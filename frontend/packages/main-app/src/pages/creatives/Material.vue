@@ -12,7 +12,6 @@ import {
   getMetaAdAccounts,
   syncMetaMaterials,
   publishMaterialToMeta,
-  deleteMaterialMetaAsset,
   refreshMaterialPlatformAsset,
   updateMaterial,
   uploadMaterialWithMetadata,
@@ -128,7 +127,12 @@ const filteredRows = computed(() => {
     if (sourceFilter.value !== 'all' && row.source !== sourceFilter.value) return false
     if (ratioFilter.value !== 'all' && row.ratio !== ratioFilter.value) return false
     if (!query) return true
-    return [row.name, row.id, row.sourceLabel, row.format, ...row.tags, ...row.platforms]
+    const accountTerms = row.material.platform_assets?.flatMap(asset => [
+      asset.ad_account_name || '',
+      asset.ad_account_id,
+      asset.external_asset_id,
+    ]) || []
+    return [row.name, row.material.original_filename || '', row.id, row.sourceLabel, row.format, ...row.tags, ...row.platforms, ...accountTerms]
       .some(value => value.toLowerCase().includes(query))
   })
   return [...rows].sort((a, b) => sortKey.value === 'name'
@@ -153,7 +157,8 @@ const loadPageData = async () => {
     loading.value = true
     error.value = ''
     if (!auth.isLoggedIn) {
-      await auth.login({ email: 'test@animagus.com', password: 'test123' })
+      await router.push('/login')
+      return
     }
 
     const materialData = await getMaterials({ limit: 200 })
@@ -309,45 +314,14 @@ const runMetaPublish = async () => {
       await waitForPlatformAsset(publishMaterial.value.id, result.platform_asset)
       successCount += 1
     }
-    success(`已处理 ${successCount} 个 Meta 广告账户`)
+    success(`已向 ${successCount} 个 Meta 广告账户提交发布`)
     showMetaPublishModal.value = false
     await loadPageData()
   } catch (err: any) {
-    publishError.value = `${successCount} 个账户已完成；${err.message || '其余账户推送失败'}`
+    publishError.value = `${successCount} 个账户已完成；${err.message || '其余账户发布失败'}`
     await loadPageData()
   } finally {
     publishingMeta.value = false
-  }
-}
-
-const pendingMetaAssetDelete = ref<{ row: MaterialRow; asset: MaterialPlatformAsset } | null>(null)
-
-const removeMetaAsset = (row: MaterialRow, asset: MaterialPlatformAsset) => {
-  if (!asset.connection_id) {
-    showError('该平台资产当前没有可用授权，请重新连接平台后再删除')
-    return
-  }
-  pendingMetaAssetDelete.value = { row, asset }
-}
-
-const confirmRemoveMetaAsset = async () => {
-  const pending = pendingMetaAssetDelete.value
-  if (!pending) return
-  const { row, asset } = pending
-  if (!asset.connection_id) return
-  try {
-    await deleteMaterialMetaAsset(row.id, asset.id, {
-      platform: asset.platform,
-      connection_id: asset.connection_id,
-      ad_account_id: asset.ad_account_id,
-      asset_type: asset.asset_type,
-      external_asset_id: asset.external_asset_id,
-    })
-    success('平台素材资产已删除')
-    pendingMetaAssetDelete.value = null
-    await loadPageData()
-  } catch (err: any) {
-    showError(err.message || 'Meta 素材删除失败')
   }
 }
 
@@ -374,15 +348,15 @@ const runMetaSync = async () => {
     })
     metaSyncResult.value = result
     if (result.status === 'succeeded') {
-      success(`Meta 素材同步完成：新增 ${result.created_count}，更新 ${result.updated_count}`)
+      success(`Meta 素材导入完成：新增 ${result.created_count}，更新 ${result.updated_count}`)
     } else if (result.status === 'partially_succeeded') {
-      showError(`Meta 素材部分同步成功，失败 ${result.failed_count} 个`)
+      showError(`Meta 素材部分导入成功，失败 ${result.failed_count} 个`)
     } else {
-      showError(result.error_summary || 'Meta 素材同步失败')
+      showError(result.error_summary || 'Meta 素材导入失败')
     }
     await loadPageData()
   } catch (err: any) {
-    showError(err.message || 'Meta 素材同步失败')
+    showError(err.message || 'Meta 素材导入失败')
   } finally {
     syncingMeta.value = false
   }
@@ -672,7 +646,7 @@ const confirmDeleteMaterial = async () => {
   deleting.value = true
   try {
     await deleteMaterial(deletingMaterial.value.id)
-    success('素材记录已删除')
+    success('素材已从 ANIFORCE 删除，平台账户中的素材不受影响')
     if (selectedMaterialId.value === deletingMaterial.value.id) {
       selectedMaterialId.value = null
       detailOpen.value = false
@@ -680,13 +654,13 @@ const confirmDeleteMaterial = async () => {
     deletingMaterial.value = null
     await loadPageData()
   } catch (err: any) {
-    showError(err.message || '删除素材失败')
+    showError(err.message || '删除站内素材失败')
   } finally {
     deleting.value = false
   }
 }
 
-const platformAssetStatus = (status?: string) => ({ processing: '平台处理中', ready: '已同步', failed: '同步失败', unknown: '待确认' }[status || ''] || '待确认')
+const platformAssetStatus = (status?: string) => ({ processing: '发布处理中', ready: '已发布', failed: '发布失败', unknown: '待验证' }[status || ''] || '待验证')
 const materialFileStatus = (status?: string) => ({ processing: '处理中', ready: '已就绪', active: '已就绪', failed: '处理失败' }[status || ''] || status || '未知')
 const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chip platform-chip-meta' : 'platform-chip'
 
@@ -707,12 +681,12 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
         <header class="h-[54px] shrink-0 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[18px]">
           <div class="min-w-0">
             <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">素材管理</h1>
-            <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">统一管理站内文件与 Meta 广告账户素材</p>
+            <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
           </div>
           <div class="flex items-center gap-[8px]">
             <button class="inline-flex items-center gap-[5px] px-[10px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="openMetaSyncModal">
-              <span class="material-symbols-outlined text-[15px]">sync</span>
-              同步
+              <span class="material-symbols-outlined text-[15px]">download</span>
+              从 Meta 导入
             </button>
             <button class="inline-flex items-center gap-[5px] px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-semibold hover:bg-primary/90" @click="openUploadModal">
               <span class="material-symbols-outlined text-[15px]">upload</span>
@@ -741,7 +715,10 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                   <option value="all">全部来源</option>
                   <option value="oss">OSS 上传</option>
                   <option value="local">本地素材</option>
-                  <option value="imported">外部导入</option>
+                  <option value="meta_import">Meta 导入</option>
+                  <option value="google_import">Google 导入</option>
+                  <option value="tiktok_import">TikTok 导入</option>
+                  <option value="imported">其他外部导入</option>
                   <option value="unknown">未知来源</option>
                 </select>
                 <select v-model="ratioFilter" class="filter-select">
@@ -821,7 +798,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.fileSizeLabel }}<span v-if="row.durationLabel !== '-'"> · {{ row.durationLabel }}</span></td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.createdAtLabel }}</td>
                     <td class="px-[10px] py-[10px]">
-                      <button class="rounded-md p-[5px] text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" title="删除素材" @click.stop="askDeleteMaterial(row)">
+                      <button class="rounded-md p-[5px] text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" title="从 ANIFORCE 删除" @click.stop="askDeleteMaterial(row)">
                         <span class="material-symbols-outlined text-[15px]">delete</span>
                       </button>
                     </td>
@@ -885,7 +862,6 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                 <div><dt class="text-slate-400">素材类型</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div>
                 <div><dt class="text-slate-400">创建时间</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.createdAtLabel }}</dd></div>
                 <div><dt class="text-slate-400">来源</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.sourceLabel }}</dd></div>
-                <div><dt class="text-slate-400">授权状态</dt><dd class="mt-[5px] font-semibold text-slate-700 dark:text-slate-200">{{ selectedRow.material.rights || '-' }}</dd></div>
               </dl>
             </aside>
 
@@ -896,13 +872,13 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
               </section>
               <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">平台资产</h3><span class="text-[10px] text-slate-400">平台归属</span></div>
-                <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center justify-between gap-[8px] border border-slate-200 px-[10px] py-[10px] dark:border-slate-700"><div class="min-w-0"><div class="flex flex-wrap items-center gap-[5px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span></div><div class="mt-[5px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ platformAssetStatus(asset.normalized_status) }}</div></div><button class="text-[10px] font-semibold text-red-600 hover:text-red-700" @click="removeMetaAsset(selectedRow, asset)">删除</button></div></div>
-                <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[12px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未绑定 Meta 广告账户</div>
-                <div class="mt-[12px] flex gap-[8px]"><button v-if="selectedRow.mediaKind === 'image'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'image')">推送到 Meta</button><button v-if="selectedRow.mediaKind === 'video'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'video')">推送到 Meta</button></div>
+                <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center gap-[8px] border border-slate-200 px-[10px] py-[10px] dark:border-slate-700"><div class="min-w-0"><div class="flex flex-wrap items-center gap-[5px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span></div><div class="mt-[5px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ platformAssetStatus(asset.normalized_status) }}</div></div></div></div>
+                <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[12px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未发布到广告平台账户</div>
+                <div class="mt-[12px] flex gap-[8px]"><button v-if="selectedRow.mediaKind === 'image'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'image')">发布到平台</button><button v-if="selectedRow.mediaKind === 'video'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'video')">发布到平台</button></div>
               </section>
               <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">素材信息</h3>
-                <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>来源</dt><dd>{{ selectedRow.sourceLabel }}</dd></div><div class="detail-row"><dt>创建时间</dt><dd>{{ selectedRow.createdAtLabel }}</dd></div><div class="detail-row"><dt>创作者</dt><dd>{{ selectedRow.material.creator || '-' }}</dd></div><div class="detail-row"><dt>权利信息</dt><dd>{{ selectedRow.material.rights || '-' }}</dd></div><div class="detail-row"><dt>标签</dt><dd>{{ selectedRow.tags.length ? selectedRow.tags.join(' · ') : '-' }}</dd></div></dl>
+                <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>来源</dt><dd>{{ selectedRow.sourceLabel }}</dd></div><div class="detail-row"><dt>原始文件名</dt><dd class="break-all">{{ selectedRow.material.original_filename || '-' }}</dd></div><div class="detail-row"><dt>创建时间</dt><dd>{{ selectedRow.createdAtLabel }}</dd></div><div class="detail-row"><dt>标签</dt><dd>{{ selectedRow.tags.length ? selectedRow.tags.join(' · ') : '-' }}</dd></div></dl>
               </section>
             </main>
           </div>
@@ -919,7 +895,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
         <div class="sticky top-0 z-10 flex items-start justify-between gap-[16px] border-b border-slate-200 bg-white px-[18px] py-[16px] dark:border-slate-800 dark:bg-slate-900">
           <div>
             <h2 class="text-[20px] font-bold leading-tight text-slate-900 dark:text-white">上传到 ANIFORCE 素材库</h2>
-            <p class="mt-[4px] text-[12px] text-slate-500 dark:text-slate-400">保存原始文件，之后可单独推送到 Meta 广告账户</p>
+            <p class="mt-[4px] text-[12px] text-slate-500 dark:text-slate-400">保存原始文件，之后可发布到一个或多个广告平台账户</p>
           </div>
           <button class="grid h-[36px] w-[36px] place-items-center rounded-md border border-slate-200 text-[22px] text-slate-500 hover:bg-slate-50 dark:border-slate-700 dark:hover:bg-slate-800" @click="closeUploadModal">×</button>
         </div>
@@ -1000,7 +976,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
               <div class="grid gap-[12px] md:col-span-2 md:grid-cols-3">
                 <label class="block"><span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">识别尺寸</span><input class="edit-input" type="text" :value="uploadForm.width && uploadForm.height ? `${uploadForm.width} × ${uploadForm.height}` : '-'" readonly /></label>
                 <label class="block"><span class="mb-[6px] block text-[12px] font-semibold text-slate-600 dark:text-slate-300">比例 / 时长</span><input class="edit-input" type="text" :value="`${uploadForm.ratio || '-'} / ${uploadForm.duration ? uploadForm.duration + 's' : '-'}`" readonly /></label>
-                <div class="rounded-md border border-slate-200 bg-slate-50 px-[10px] py-[9px] text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800">平台账户绑定在“推送到 Meta”时选择，不在本地上传时预设。</div>
+                <div class="rounded-md border border-slate-200 bg-slate-50 px-[10px] py-[9px] text-[11px] text-slate-500 dark:border-slate-700 dark:bg-slate-800">平台账户在发布素材时选择，本地上传不预设远端归属。</div>
               </div>
             </div>
           </section>
@@ -1022,7 +998,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
     <div class="w-full max-w-[560px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
       <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700">
         <div>
-          <h2 class="text-[15px] font-bold text-slate-900 dark:text-white">从 Meta 同步素材</h2>
+          <h2 class="text-[15px] font-bold text-slate-900 dark:text-white">从 Meta 导入素材</h2>
           <p class="mt-[3px] text-[11px] text-slate-500 dark:text-slate-400">从一个广告账户导入图片和视频到 ANIFORCE 素材库</p>
         </div>
         <button class="rounded-md p-[6px] hover:bg-slate-100 disabled:opacity-40 dark:hover:bg-slate-700" :disabled="syncingMeta" @click="closeMetaSyncModal">
@@ -1058,11 +1034,11 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 
         <div v-if="syncingMeta" class="flex min-h-[84px] items-center justify-center gap-[8px] rounded-md bg-slate-50 text-[12px] text-slate-600 dark:bg-slate-900 dark:text-slate-300">
           <span class="material-symbols-outlined animate-spin text-[18px]">progress_activity</span>
-          正在读取 Meta 素材并转存 OSS
+          正在从 Meta 读取文件并保存到 ANIFORCE
         </div>
 
         <div v-if="metaSyncResult" class="rounded-md border border-slate-200 bg-slate-50 p-[12px] dark:border-slate-700 dark:bg-slate-900">
-          <div class="text-[11px] font-semibold text-slate-800 dark:text-slate-100">同步结果 · {{ metaSyncResult.status }}</div>
+          <div class="text-[11px] font-semibold text-slate-800 dark:text-slate-100">导入结果 · {{ metaSyncResult.status }}</div>
           <div class="mt-[10px] grid grid-cols-5 gap-[8px] text-center">
             <div><b class="block text-[16px] text-slate-900 dark:text-white">{{ metaSyncResult.discovered_count }}</b><span class="text-[10px] text-slate-500">发现</span></div>
             <div><b class="block text-[16px] text-emerald-600">{{ metaSyncResult.created_count }}</b><span class="text-[10px] text-slate-500">新增</span></div>
@@ -1079,7 +1055,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
         <button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white hover:bg-primary/90 disabled:cursor-not-allowed disabled:opacity-50" :disabled="syncingMeta || loadingMetaAccounts || !selectedMetaAccountKey || !metaSyncAssetTypes.length" @click="runMetaSync">
           <span v-if="syncingMeta" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>
           <span v-else class="material-symbols-outlined text-[14px]">sync</span>
-          {{ syncingMeta ? '同步中...' : '开始同步' }}
+          {{ syncingMeta ? '导入中...' : '开始导入' }}
         </button>
       </div>
     </div>
@@ -1087,9 +1063,9 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 
   <div v-if="showMetaPublishModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeMetaPublishModal">
     <div class="w-full max-w-[480px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
-      <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700"><div><h2 class="text-[15px] font-bold text-slate-900 dark:text-white">推送素材</h2><p class="mt-[3px] text-[11px] text-slate-500 dark:text-slate-400">只创建 AdImage / AdVideo，不创建广告</p></div><button class="rounded-md p-[6px] hover:bg-slate-100 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal"><span class="material-symbols-outlined text-[18px]">close</span></button></div>
+      <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700"><div><h2 class="text-[15px] font-bold text-slate-900 dark:text-white">发布素材</h2><p class="mt-[3px] text-[11px] text-slate-500 dark:text-slate-400">在目标账户创建媒体资产，不创建广告</p></div><button class="rounded-md p-[6px] hover:bg-slate-100 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal"><span class="material-symbols-outlined text-[18px]">close</span></button></div>
       <div class="space-y-[14px] p-[18px]"><div class="rounded-md bg-slate-50 px-[12px] py-[10px] text-[12px] text-slate-600 dark:bg-slate-900 dark:text-slate-300"><span class="font-semibold">素材：</span>{{ publishMaterial?.name }}<span class="ml-[8px] text-slate-400">{{ publishAssetType === 'video' ? 'AdVideo' : 'AdImage' }}</span></div><div><span class="mb-[7px] block text-[11px] font-semibold text-slate-700 dark:text-slate-300">目标平台</span><div class="flex gap-[7px]"><button class="platform-option platform-option-active" type="button" @click="publishPlatform = 'Meta'"><span class="platform-dot platform-dot-meta"></span>Meta</button><button class="platform-option" type="button" disabled title="Google provider 尚未接入"><span class="platform-dot platform-dot-google"></span>Google<span class="coming-label">即将支持</span></button><button class="platform-option" type="button" disabled title="TikTok provider 尚未接入"><span class="platform-dot platform-dot-tiktok"></span>TikTok<span class="coming-label">即将支持</span></button></div></div><div><div class="mb-[6px] flex items-center justify-between"><span class="text-[11px] font-semibold text-slate-700 dark:text-slate-300">平台账户</span><span class="text-[10px] text-slate-400">已选 {{ publishAccountKeys.length }} 个</span></div><div v-if="loadingMetaAccounts" class="px-[10px] py-[18px] text-center text-[11px] text-slate-400">正在加载广告账户...</div><div v-else class="max-h-[220px] space-y-[6px] overflow-y-auto"> <label v-for="account in metaAccounts" :key="`${account.connection_id}|${account.account_id}`" class="flex cursor-pointer items-center gap-[9px] border border-slate-200 px-[10px] py-[9px] text-[11px] text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-700"><input type="checkbox" :checked="publishAccountKeys.includes(`${account.connection_id}|${account.account_id}`)" :disabled="publishingMeta" class="h-[14px] w-[14px] accent-primary" @change="togglePublishAccount(`${account.connection_id}|${account.account_id}`)" /><span class="min-w-0 truncate"><b>{{ account.account_name }}</b><span class="ml-[5px] text-slate-400">{{ account.account_id }}</span></span></label><div v-if="!metaAccounts.length" class="px-[10px] py-[18px] text-center text-[11px] text-slate-400">暂无可用 Meta 广告账户</div></div></div><p v-if="publishError" class="rounded-md bg-red-50 px-[10px] py-[8px] text-[11px] text-red-600">{{ publishError }}</p></div>
-      <div class="flex justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700"><button class="rounded-md px-[12px] py-[7px] text-[11px] text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal">取消</button><button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50" :disabled="publishingMeta || loadingMetaAccounts || !publishAccountKeys.length" @click="runMetaPublish"><span v-if="publishingMeta" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>{{ publishingMeta ? '推送中...' : '确认推送' }}</button></div>
+      <div class="flex justify-end gap-[8px] border-t border-slate-200 px-[18px] py-[12px] dark:border-slate-700"><button class="rounded-md px-[12px] py-[7px] text-[11px] text-slate-600 hover:bg-slate-100 dark:text-slate-300 dark:hover:bg-slate-700" :disabled="publishingMeta" @click="closeMetaPublishModal">取消</button><button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[12px] py-[7px] text-[11px] font-semibold text-white disabled:opacity-50" :disabled="publishingMeta || loadingMetaAccounts || !publishAccountKeys.length" @click="runMetaPublish"><span v-if="publishingMeta" class="material-symbols-outlined animate-spin text-[14px]">progress_activity</span>{{ publishingMeta ? '发布中...' : '确认发布' }}</button></div>
     </div>
   </div>
 
@@ -1122,22 +1098,10 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
   </div>
 
   <ConfirmDialog
-    :show="Boolean(pendingMetaAssetDelete)"
-    title="删除平台素材资产"
-    :message="pendingMetaAssetDelete ? `确认从 ${pendingMetaAssetDelete.asset.platform} 广告账户 ${pendingMetaAssetDelete.asset.ad_account_id} 删除该平台资产？此操作不会删除 ANIFORCE 原始素材。` : ''"
-    confirm-text="删除平台资产"
-    cancel-text="取消"
-    confirm-button-class="bg-red-600 hover:bg-red-700"
-    @confirm="confirmRemoveMetaAsset"
-    @cancel="pendingMetaAssetDelete = null"
-    @close="pendingMetaAssetDelete = null"
-  />
-
-  <ConfirmDialog
     :show="Boolean(deletingMaterial)"
-    title="删除素材"
-    :message="deletingMaterial ? `确认删除素材「${deletingMaterial.name}」？当前后端会删除素材记录。` : ''"
-    confirm-text="删除"
+    title="从 ANIFORCE 删除"
+    :message="deletingMaterial ? `删除 ANIFORCE 中的素材「${deletingMaterial.name}」及站内文件？Meta 等平台账户中的素材不会被删除；之后可再次从平台导入。` : ''"
+    confirm-text="删除站内素材"
     cancel-text="取消"
     confirm-button-class="bg-red-600 hover:bg-red-700"
     @confirm="confirmDeleteMaterial"

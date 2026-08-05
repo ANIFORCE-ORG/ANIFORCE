@@ -157,7 +157,7 @@ class SqliteMaterialRepository:
         """查询用户的素材列表"""
         await self._ensure_schema()
         query = select(Material).where(Material.user_id == user_id)
-        
+
         if type:
             query = query.where(Material.type == MaterialType(type))
         
@@ -215,6 +215,7 @@ class SqliteMaterialRepository:
             "status",
             "lifecycle_status",
             "processing_status",
+            "archived_at",
             "thumbnail_url",
             "poster_url",
             "preview_url",
@@ -238,7 +239,9 @@ class SqliteMaterialRepository:
             "file_size",
         }
         for key, value in kwargs.items():
-            if key not in allowed_fields or value is None:
+            if key not in allowed_fields:
+                continue
+            if value is None:
                 continue
             if key == "status":
                 setattr(material, key, MaterialStatus(value))

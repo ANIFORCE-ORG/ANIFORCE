@@ -61,8 +61,8 @@ class MaterialPlatformAsset(Base):
     id: Mapped[str] = mapped_column(
         String(36), primary_key=True, default=lambda: str(uuid.uuid4())
     )
-    material_id: Mapped[str] = mapped_column(
-        ForeignKey("materials.id", ondelete="CASCADE"), nullable=False, index=True
+    material_id: Mapped[str | None] = mapped_column(
+        ForeignKey("materials.id", ondelete="SET NULL"), nullable=True, index=True
     )
     user_id: Mapped[str] = mapped_column(
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True

@@ -8,7 +8,7 @@ from uuid import uuid4
 from typing import Annotated
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from pydantic import BaseModel, Field
-from sqlalchemy import or_, select
+from sqlalchemy import or_, select, update
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 from app.repositories.protocols import CampaignRepository, MaterialRepository, ProjectRepository
@@ -75,14 +75,6 @@ class MetaMaterialPublishRequest(BaseModel):
     connection_id: str
     ad_account_id: str
     asset_type: str
-
-
-class MetaMaterialDeleteRequest(BaseModel):
-    platform: str = "Meta"
-    connection_id: str
-    ad_account_id: str
-    asset_type: str
-    external_asset_id: str | None = None
 
 
 class UpdateMaterialRequest(BaseModel):
@@ -157,6 +149,8 @@ async def list_materials(
     ).all()
     assets_by_material: dict[str, list[dict]] = {}
     for asset in asset_rows:
+        if not asset.material_id:
+            continue
         assets_by_material.setdefault(asset.material_id, []).append({
             "id": asset.id,
             "connection_id": asset.connection_id,
@@ -474,89 +468,6 @@ async def publish_material_to_meta(
         ))
         await session.commit()
         raise HTTPException(status_code=502, detail=message) from exc
-
-
-@router.delete("/{material_id}/meta/assets/{asset_id}")
-@router.delete("/{material_id}/platform-assets/{asset_id}")
-async def delete_material_meta_asset(
-    material_id: str,
-    asset_id: str,
-    request: MetaMaterialDeleteRequest,
-    current_user: dict = Depends(get_current_user),
-    material_repo: MaterialRepository = Depends(get_material_repo),
-    session: AsyncSession = Depends(get_db),
-):
-    """Delete one remote platform asset and its local identity record."""
-    material = await material_repo.get_by_id(material_id)
-    if not material:
-        raise HTTPException(status_code=404, detail="Material not found")
-    if material["user_id"] != current_user["id"]:
-        raise HTTPException(status_code=403, detail="Permission denied")
-    connection, binding = await _get_platform_binding(
-        session, current_user["id"], request.connection_id, request.ad_account_id
-    )
-    if request.platform and request.platform != connection.platform:
-        raise HTTPException(status_code=400, detail="Request platform does not match connection")
-    asset = await session.scalar(
-        select(MaterialPlatformAsset).where(
-            MaterialPlatformAsset.id == asset_id,
-            MaterialPlatformAsset.material_id == material_id,
-            MaterialPlatformAsset.user_id == current_user["id"],
-            MaterialPlatformAsset.platform == connection.platform,
-            MaterialPlatformAsset.ad_account_id == binding.sub_account_id,
-            MaterialPlatformAsset.asset_type == request.asset_type,
-        )
-    )
-    if not asset:
-        raise HTTPException(status_code=404, detail="Platform material asset not found")
-    try:
-        provider = create_material_platform_provider(connection)
-        remote_identity = asset.image_hash or asset.external_asset_id
-        try:
-            await provider.delete(
-                ad_account_id=binding.sub_account_id,
-                asset_type=asset.asset_type,
-                external_asset_id=remote_identity,
-            )
-        except Exception as delete_error:
-            try:
-                await provider.get_state(
-                    ad_account_id=binding.sub_account_id,
-                    asset_type=asset.asset_type,
-                    external_asset_id=remote_identity,
-                )
-            except PlatformAssetNotFound:
-                pass
-            except Exception:
-                raise delete_error
-            else:
-                raise delete_error
-        result = _platform_asset_result(asset, action="deleted")
-        run = MaterialSyncRun(
-            user_id=current_user["id"], connection_id=connection.id,
-            ad_account_id=binding.sub_account_id, direction="delete",
-            platform=connection.platform, trigger_type="manual",
-            asset_types=json.dumps([asset.asset_type]), status="succeeded",
-            discovered_count=1, updated_count=1, finished_at=datetime.utcnow(),
-        )
-        session.add(run)
-        await session.flush()
-        session.add(MaterialSyncRunItem(
-            run_id=run.id, asset_type=asset.asset_type,
-            external_asset_id=asset.external_asset_id, remote_name=asset.remote_name,
-            action="deleted", status="completed", material_id=material_id,
-            platform_asset_id=asset.id,
-        ))
-        await session.flush()
-        await session.delete(asset)
-        await session.commit()
-        result["run_id"] = run.id
-        return result
-    except HTTPException:
-        raise
-    except Exception as exc:
-        await session.rollback()
-        raise HTTPException(status_code=502, detail=_sanitize_error_message(exc)) from exc
 
 
 @router.post("/{material_id}/platform-assets/{asset_id}/refresh")
@@ -1210,18 +1121,14 @@ async def delete_material(
     if material["user_id"] != current_user["id"]:
         raise HTTPException(status_code=403, detail="Permission denied")
 
-    platform_asset = await session.scalar(
-        select(MaterialPlatformAsset.id).where(
+    await session.execute(
+        update(MaterialPlatformAsset)
+        .where(
             MaterialPlatformAsset.material_id == material_id,
             MaterialPlatformAsset.user_id == current_user["id"],
-        ).limit(1)
-    )
-    if platform_asset:
-        raise HTTPException(
-            status_code=409,
-            detail="Remove all platform assets before deleting this material",
         )
-
+        .values(material_id=None)
+    )
     await material_repo.delete(material_id)
     await session.commit()
     object_key = material.get("storage_object_key")

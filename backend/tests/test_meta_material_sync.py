@@ -129,6 +129,24 @@ def test_sync_is_idempotent_and_reuses_materials_across_accounts() -> None:
             assert second["skipped_count"] == 2
             assert len(importer.calls) == 2
 
+            image_material = await session.scalar(
+                select(Material).where(Material.media_kind == "image")
+            )
+            image_material.lifecycle_status = "archived"
+            image_material.archived_at = datetime.utcnow()
+            await session.commit()
+            restored = await service.sync_account(
+                user_id="user-1",
+                connection_id="connection-1",
+                ad_account_id="act-account-a",
+                asset_types={"image"},
+            )
+            await session.commit()
+            await session.refresh(image_material)
+            assert restored["updated_count"] == 1
+            assert image_material.lifecycle_status == "active"
+            assert image_material.archived_at is None
+
             third = await service.sync_account(
                 user_id="user-1",
                 connection_id="connection-1",
@@ -142,13 +160,70 @@ def test_sync_is_idempotent_and_reuses_materials_across_accounts() -> None:
             assert len(importer.calls) == 2
             assert await session.scalar(select(func.count()).select_from(Material)) == 2
             assert await session.scalar(select(func.count()).select_from(MaterialPlatformAsset)) == 4
-            assert await session.scalar(select(func.count()).select_from(MaterialSyncRun)) == 3
-            assert await session.scalar(select(func.count()).select_from(MaterialSyncRunItem)) == 6
+            assert await session.scalar(select(func.count()).select_from(MaterialSyncRun)) == 4
+            assert await session.scalar(select(func.count()).select_from(MaterialSyncRunItem)) == 7
 
             materials = (await session.scalars(select(Material))).all()
             assert {item.mime_type for item in materials} == {"image/jpg", "video/mp4"}
             assert all(item.storage_object_key for item in materials)
             assert all(item.checksum_sha256 for item in materials)
+
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_sync_recreates_material_for_detached_platform_asset() -> None:
+    async def scenario() -> None:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+
+        async with maker() as session:
+            session.add(User(id="user-1", email="u@example.com", password_hash="hash"))
+            session.add(
+                PlatformConnection(
+                    id="connection-1",
+                    user_id="user-1",
+                    platform="Meta",
+                    account_id="meta-user-1",
+                    access_token="token",
+                    status="active",
+                )
+            )
+            await session.commit()
+            importer = FakeImporter()
+            service = MetaMaterialSyncService(session, FakeSource(), importer)
+            await service.sync_account(
+                user_id="user-1",
+                connection_id="connection-1",
+                ad_account_id="act-account-a",
+                asset_types={"image"},
+            )
+            await session.commit()
+
+            platform_asset = await session.scalar(select(MaterialPlatformAsset))
+            original_material_id = platform_asset.material_id
+            original_material = await session.get(Material, original_material_id)
+            platform_asset.material_id = None
+            await session.delete(original_material)
+            await session.commit()
+
+            result = await service.sync_account(
+                user_id="user-1",
+                connection_id="connection-1",
+                ad_account_id="act-account-a",
+                asset_types={"image"},
+            )
+            await session.commit()
+            await session.refresh(platform_asset)
+
+            assert result["created_count"] == 1
+            assert platform_asset.material_id is not None
+            assert platform_asset.material_id != original_material_id
+            assert await session.get(Material, platform_asset.material_id) is not None
+            assert importer.calls == ["account-a:image-1", "account-a:image-1"]
 
         await engine.dispose()
 

@@ -316,7 +316,8 @@ class MetaMaterialSyncService:
     ) -> tuple[str, str, str]:
         existing = await self.session.scalar(
             select(MaterialPlatformAsset).where(
-                MaterialPlatformAsset.connection_id == connection_id,
+                MaterialPlatformAsset.user_id == user_id,
+                MaterialPlatformAsset.platform == "Meta",
                 MaterialPlatformAsset.ad_account_id == ad_account_id,
                 MaterialPlatformAsset.asset_type == asset.asset_type,
                 MaterialPlatformAsset.external_asset_id == asset.external_asset_id,
@@ -324,52 +325,38 @@ class MetaMaterialSyncService:
         )
         if existing:
             changed = _update_platform_asset(existing, asset)
-            return (
-                "updated" if changed else "skipped",
-                existing.material_id,
-                existing.id,
+            existing.connection_id = connection_id
+            existing.ad_account_name = ad_account_name or existing.ad_account_name
+            material = (
+                await self.session.get(Material, existing.material_id)
+                if existing.material_id
+                else None
             )
+            if material:
+                if material.lifecycle_status != "active":
+                    material.lifecycle_status = "active"
+                    material.archived_at = None
+                    changed = True
+                return (
+                    "updated" if changed else "skipped",
+                    material.id,
+                    existing.id,
+                )
+
+            material_id = await self._create_material(user_id, ad_account_id, asset)
+            existing.material_id = material_id
+            return "created", material_id, existing.id
 
         reusable_material_id = await self._find_reusable_material(user_id, asset)
         if reusable_material_id:
             material_id = reusable_material_id
+            material = await self.session.get(Material, material_id)
+            if material and material.lifecycle_status != "active":
+                material.lifecycle_status = "active"
+                material.archived_at = None
             action = "reused"
         else:
-            imported = await self.media_importer.import_media(asset, user_id)
-            material = Material(
-                user_id=user_id,
-                name=asset.name,
-                type=(
-                    MaterialType.FULL_VIDEO
-                    if asset.asset_type == "video"
-                    else MaterialType.A_SEGMENT
-                ),
-                status=MaterialStatus.READY,
-                url=imported.original_url,
-                storage_object_key=imported.storage_object_key,
-                mime_type=imported.content_type,
-                checksum_sha256=imported.checksum_sha256,
-                thumbnail_url=imported.thumbnail_url,
-                poster_url=(
-                    imported.thumbnail_url if asset.asset_type == "video" else None
-                ),
-                preview_url=imported.thumbnail_url,
-                tags=json.dumps(["Meta同步"], ensure_ascii=False),
-                media_kind=asset.asset_type,
-                format=imported.format,
-                width=asset.width,
-                height=asset.height,
-                ratio=_ratio_label(asset.width, asset.height),
-                source="meta_import",
-                platforms=json.dumps(["Meta"]),
-                review_status=asset.status,
-                source_account=ad_account_id,
-                duration=(round(asset.duration) if asset.duration else None),
-                file_size=imported.size,
-            )
-            self.session.add(material)
-            await self.session.flush()
-            material_id = material.id
+            material_id = await self._create_material(user_id, ad_account_id, asset)
             action = "created"
 
         platform_asset = MaterialPlatformAsset(
@@ -388,6 +375,46 @@ class MetaMaterialSyncService:
         self.session.add(platform_asset)
         await self.session.flush()
         return action, material_id, platform_asset.id
+
+    async def _create_material(
+        self,
+        user_id: str,
+        ad_account_id: str,
+        asset: MetaMaterialAsset,
+    ) -> str:
+        imported = await self.media_importer.import_media(asset, user_id)
+        material = Material(
+            user_id=user_id,
+            name=asset.name,
+            type=(
+                MaterialType.FULL_VIDEO
+                if asset.asset_type == "video"
+                else MaterialType.A_SEGMENT
+            ),
+            status=MaterialStatus.READY,
+            url=imported.original_url,
+            storage_object_key=imported.storage_object_key,
+            mime_type=imported.content_type,
+            checksum_sha256=imported.checksum_sha256,
+            thumbnail_url=imported.thumbnail_url,
+            poster_url=(imported.thumbnail_url if asset.asset_type == "video" else None),
+            preview_url=imported.thumbnail_url,
+            tags=json.dumps(["Meta导入"], ensure_ascii=False),
+            media_kind=asset.asset_type,
+            format=imported.format,
+            width=asset.width,
+            height=asset.height,
+            ratio=_ratio_label(asset.width, asset.height),
+            source="meta_import",
+            platforms=json.dumps(["Meta"]),
+            review_status=asset.status,
+            source_account=ad_account_id,
+            duration=(round(asset.duration) if asset.duration else None),
+            file_size=imported.size,
+        )
+        self.session.add(material)
+        await self.session.flush()
+        return material.id
 
     def _add_run_item(
         self,

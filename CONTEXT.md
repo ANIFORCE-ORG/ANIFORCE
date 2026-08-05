@@ -9,12 +9,12 @@ A media file managed by ANIFORCE, independent of any advertising platform identi
 _Avoid_: Creative, ad creative, platform asset
 
 **Platform Asset**:
-A platform-specific identity for a Material in one Advertising Account, such as a Meta AdImage or AdVideo.
+A media identity in one Advertising Account, such as a Meta AdImage or AdVideo. It may be associated with a Material but outlives that Material when the local file is deleted.
 _Avoid_: Material, creative
 
-**Material Sync Run**:
-One attempt to import selected asset types from one Advertising Account into the Material library.
-_Avoid_: Campaign sync, Business Portfolio sync
+**Material Transfer Run**:
+One attempt to import media from an Advertising Account or publish a Material to one or more Advertising Accounts.
+_Avoid_: Material sync, Campaign sync, Business Portfolio sync
 
 ## Platform Access
 

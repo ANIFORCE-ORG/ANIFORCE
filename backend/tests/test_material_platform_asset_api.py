@@ -5,8 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 import sys
 
-import pytest
-from fastapi import HTTPException
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -14,10 +12,9 @@ backend_root = Path(__file__).parent.parent
 sys.path.insert(0, str(backend_root))
 
 from app.api.v1 import materials as material_api
-from app.api.v1.materials import (    MetaMaterialDeleteRequest,
+from app.api.v1.materials import (
     MetaMaterialPublishRequest,
     delete_material,
-    delete_material_meta_asset,
     get_material,
     publish_material_to_meta,
     refresh_material_platform_asset,
@@ -28,7 +25,6 @@ from app.models import Material, MaterialPlatformAsset, MaterialSyncRun, Materia
 from app.models.material import MaterialStatus, MaterialType
 from app.repositories.impl.sqlite_material_repo import SqliteMaterialRepository
 from app.services.material_platform_provider import (
-    PlatformAssetNotFound,
     PlatformAssetState,
     PublishedPlatformAsset,
 )
@@ -42,9 +38,6 @@ class FakeProvider:
     async def publish(self, **_):
         self.publish_calls += 1
         return PublishedPlatformAsset("video", "video-1", None, "Video", "processing", None)
-
-    async def delete(self, **_):
-        self.delete_calls += 1
 
     async def get_state(self, **_):
         return PlatformAssetState("ready", "ready", remote_url="https://meta.example/video-1.mp4")
@@ -69,7 +62,7 @@ async def _seed(session) -> SqliteMaterialRepository:
     return SqliteMaterialRepository(session)
 
 
-def test_publish_refresh_delete_platform_asset_lifecycle(monkeypatch) -> None:
+def test_publish_and_refresh_platform_asset_lifecycle(monkeypatch) -> None:
     async def scenario() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         async with engine.begin() as connection:
@@ -107,66 +100,38 @@ def test_publish_refresh_delete_platform_asset_lifecycle(monkeypatch) -> None:
             )
             assert refreshed["platform_asset"]["normalized_status"] == "ready"
 
-            with pytest.raises(HTTPException) as blocked:
-                await delete_material("material-1", {"id": "user-1"}, repo, session)
-            assert blocked.value.status_code == 409
-
-            deleted = await delete_material_meta_asset(
-                "material-1", asset_id,
-                MetaMaterialDeleteRequest(platform="Meta", connection_id="connection-1", ad_account_id="123", asset_type="video"),
-                {"id": "user-1"}, repo, session,
-            )
-            assert deleted["action"] == "deleted"
-            assert provider.delete_calls == 1
-            assert await session.scalar(select(func.count()).select_from(MaterialPlatformAsset)) == 0
-
-            detail = await get_material("material-1", {"id": "user-1"}, repo, session)
-            assert detail["platform_assets"] == []
-
         await engine.dispose()
 
     asyncio.run(scenario())
 
 
-def test_delete_treats_already_missing_remote_asset_as_success(monkeypatch) -> None:
-    class MissingOnDeleteProvider(FakeProvider):
-        async def delete(self, **_):
-            self.delete_calls += 1
-            raise RuntimeError('Meta returned HTTP 200 with success=false')
-
-        async def get_state(self, **_):
-            raise PlatformAssetNotFound('Platform asset no longer exists')
-
+def test_deleting_local_material_detaches_platform_asset_without_remote_delete(monkeypatch) -> None:
     async def scenario() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
         async with engine.begin() as connection:
             await connection.run_sync(Base.metadata.create_all)
         maker = async_sessionmaker(engine, expire_on_commit=False)
-        provider = MissingOnDeleteProvider()
+        provider = FakeProvider()
         monkeypatch.setattr(material_api, "create_material_platform_provider", lambda _: provider)
 
         async with maker() as session:
             repo = await _seed(session)
             asset = MaterialPlatformAsset(
-                id="asset-missing", material_id="material-1", user_id="user-1",
+                id="asset-detached", material_id="material-1", user_id="user-1",
                 connection_id="connection-1", platform="Meta", ad_account_id="act_123",
-                ad_account_name="Account One", asset_type="video", external_asset_id="video-missing",
+                ad_account_name="Account One", asset_type="video", external_asset_id="video-remote",
                 normalized_status="ready",
             )
             session.add(asset)
             await session.commit()
 
-            deleted = await delete_material_meta_asset(
-                "material-1", asset.id,
-                MetaMaterialDeleteRequest(
-                    platform="Meta", connection_id="connection-1",
-                    ad_account_id="123", asset_type="video",
-                ),
-                {"id": "user-1"}, repo, session,
-            )
-            assert deleted["action"] == "deleted"
-            assert provider.delete_calls == 1
-            assert await session.get(MaterialPlatformAsset, asset.id) is None
+            result = await delete_material("material-1", {"id": "user-1"}, repo, session)
+            assert result["message"] == "Material deleted successfully"
+            assert await session.get(Material, "material-1") is None
+            await session.refresh(asset)
+            assert asset.material_id is None
+            assert asset.external_asset_id == "video-remote"
+            assert provider.delete_calls == 0
 
         await engine.dispose()
 

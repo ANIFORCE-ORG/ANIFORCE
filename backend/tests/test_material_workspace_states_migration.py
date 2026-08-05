@@ -55,7 +55,7 @@ def test_material_workspace_states_migration_roundtrip() -> None:
         db_path.unlink(missing_ok=True)
 
 
-def test_material_asset_identity_migration_is_current_head() -> None:
+def test_detached_platform_assets_migration_is_current_head() -> None:
     db_path = PROJECT_ROOT / "drafts" / "260728" / "260728_04_material_asset_identity.db"
     db_path.unlink(missing_ok=True)
     try:
@@ -74,9 +74,17 @@ def test_material_asset_identity_migration_is_current_head() -> None:
             "uq_material_platform_asset_remote_identity",
         } <= indexes(db_path, "material_platform_assets")
         with sqlite3.connect(db_path) as connection:
-            asset_connection = next(row for row in connection.execute("PRAGMA table_info(material_platform_assets)") if row[1] == "connection_id")
+            asset_columns = list(connection.execute("PRAGMA table_info(material_platform_assets)"))
+            asset_connection = next(row for row in asset_columns if row[1] == "connection_id")
+            asset_material = next(row for row in asset_columns if row[1] == "material_id")
             run_connection = next(row for row in connection.execute("PRAGMA table_info(material_sync_runs)") if row[1] == "connection_id")
+            material_fk = next(
+                row for row in connection.execute("PRAGMA foreign_key_list(material_platform_assets)")
+                if row[3] == "material_id"
+            )
         assert asset_connection[3] == 0
+        assert asset_material[3] == 0
         assert run_connection[3] == 0
+        assert material_fk[6] == "SET NULL"
     finally:
         db_path.unlink(missing_ok=True)
