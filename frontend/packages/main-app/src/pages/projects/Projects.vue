@@ -340,9 +340,11 @@ const handleSubmitCampaign = async (data: any) => {
     <main class="projects-main">
       <!-- Header -->
       <div class="projects-page-bar">
-        <div>
+        <div class="projects-page-title-wrap">
+          <span class="projects-page-icon">
+            <span class="material-symbols-outlined">folder_open</span>
+          </span>
           <h1 class="projects-page-title">项目管理</h1>
-          <p class="projects-page-description">浏览、筛选并打开当前账号下的投放项目。</p>
         </div>
         <div class="projects-page-actions">
           <!-- View Toggle -->
@@ -386,7 +388,7 @@ const handleSubmitCampaign = async (data: any) => {
           <input
             v-model="searchQuery"
             type="text"
-            placeholder="搜索项目名称或标签..."
+            placeholder="搜索项目名称或标签…"
             aria-label="搜索项目名称或标签"
             @input="handleSearch"
           />
@@ -409,6 +411,7 @@ const handleSubmitCampaign = async (data: any) => {
           <div class="projects-content-meta" aria-live="polite">
             <span>共 {{ filteredProjects.length }} 个项目</span>
             <span v-if="selectedProjectCount > 0" class="projects-selection-meta">
+              <span class="material-symbols-outlined">check</span>
               已选择 {{ selectedProjectCount }} 个
             </span>
           </div>
@@ -433,9 +436,13 @@ const handleSubmitCampaign = async (data: any) => {
 
           <!-- Empty State -->
           <div v-else class="projects-empty-state">
-            <span class="material-symbols-outlined">folder_off</span>
-            <p>未找到匹配的项目</p>
-            <span>尝试调整搜索关键词或项目状态。</span>
+            <div>
+              <span class="projects-empty-icon">
+                <span class="material-symbols-outlined">folder_off</span>
+              </span>
+              <h2>没有找到匹配项目</h2>
+              <p>尝试更换关键词或筛选条件。</p>
+            </div>
           </div>
         </div>
       </div>
@@ -490,50 +497,63 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 .projects-page-bar {
-  min-height: 92px;
+  min-height: 54px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 20px clamp(24px, 3vw, 48px);
-  border-bottom: 1px solid #e7e5e2;
+  gap: 20px;
+  padding: 0 clamp(24px, 3vw, 48px);
+  border-bottom: 1px solid #e5e3df;
+  background: rgba(255, 255, 255, .88);
+}
+
+.projects-page-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects-page-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #f6f5f4;
+  color: #37352f;
+}
+
+.projects-page-icon .material-symbols-outlined {
+  font-size: 16px;
 }
 
 .projects-page-title {
   margin: 0;
-  color: #191919;
-  font-size: 24px;
-  font-weight: 700;
-  line-height: 1.25;
-  letter-spacing: -0.025em;
-}
-
-.projects-page-description {
-  margin: 5px 0 0;
-  color: #787774;
-  font-size: 12px;
-  line-height: 1.55;
+  color: #1a1a1a;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.2px;
 }
 
 .projects-page-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 7px;
 }
 
 .projects-view-switch {
   display: flex;
   align-items: center;
-  padding: 3px;
-  border: 1px solid #e7e5e2;
+  gap: 2px;
+  padding: 2px;
   border-radius: 8px;
-  background: #f7f7f5;
+  background: #f6f5f4;
 }
 
 .projects-view-button {
-  width: 34px;
-  height: 32px;
+  width: 29px;
+  height: 29px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -546,7 +566,7 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 .projects-view-button .material-symbols-outlined {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .projects-view-button:hover {
@@ -561,45 +581,40 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 .projects-create-button {
-  min-height: 38px;
+  min-height: 34px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   gap: 7px;
-  padding: 0 14px;
-  border: 1px solid #137fec;
-  border-radius: 7px;
-  background: #137fec;
+  padding: 0 13px;
+  border: 1px solid #37352f;
+  border-radius: 8px;
+  background: #37352f;
   color: #ffffff;
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 11px;
+  font-weight: 500;
   cursor: pointer;
-  box-shadow: 0 1px 2px rgba(19, 127, 236, 0.16);
-  transition: background-color 0.16s ease, border-color 0.16s ease, transform 0.16s ease;
+  transition: background-color .16s ease, border-color .16s ease;
 }
 
 .projects-create-button:hover {
-  border-color: #0c6cd4;
-  background: #0c6cd4;
-}
-
-.projects-create-button:active {
-  transform: translateY(1px);
+  border-color: #1a1a1a;
+  background: #1a1a1a;
 }
 
 .projects-create-button .material-symbols-outlined {
-  font-size: 18px;
+  font-size: 16px;
 }
 
 .projects-toolbar {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 132px;
+  grid-template-columns: minmax(220px, 1fr) 118px;
   align-items: center;
-  gap: 12px;
+  gap: 9px;
   padding: 12px clamp(24px, 3vw, 48px);
-  border-bottom: 1px solid #e7e5e2;
-  background: #ffffff;
+  border-bottom: 1px solid #e5e3df;
+  background: #fafaf9;
 }
 
 .projects-search-field {
@@ -612,41 +627,41 @@ const handleSubmitCampaign = async (data: any) => {
   left: 12px;
   top: 50%;
   transform: translateY(-50%);
-  color: #9b9a97;
-  font-size: 17px;
+  color: #a4a097;
+  font-size: 15px;
   pointer-events: none;
 }
 
 .projects-search-field input,
 .projects-status-filter {
   width: 100%;
-  height: 38px;
-  border: 1px solid #dedbd7;
-  border-radius: 7px;
+  height: 36px;
+  border: 1px solid #c8c4be;
+  border-radius: 8px;
   background: #ffffff;
   color: #37352f;
-  font-size: 12px;
+  font-size: 11px;
   outline: none;
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
 
 .projects-search-field input {
-  padding: 0 13px 0 38px;
+  padding: 0 12px 0 35px;
 }
 
 .projects-search-field input::placeholder {
-  color: #aaa8a4;
+  color: #a4a097;
 }
 
 .projects-status-filter {
-  padding: 0 32px 0 12px;
+  padding: 0 29px 0 10px;
   cursor: pointer;
 }
 
 .projects-search-field input:focus,
 .projects-status-filter:focus {
-  border-color: #98c3f0;
-  box-shadow: 0 0 0 3px rgba(19, 127, 236, 0.12);
+  border: 2px solid #37352f;
+  box-shadow: none;
 }
 
 .projects-scroll-area {
@@ -659,30 +674,35 @@ const handleSubmitCampaign = async (data: any) => {
 .projects-content {
   width: min(100%, 1320px);
   margin: 0 auto;
-  padding: 22px clamp(24px, 3vw, 48px) 78px;
+  padding: 24px clamp(24px, 3vw, 48px) 78px;
 }
 
 .projects-content-meta {
-  min-height: 24px;
+  min-height: 22px;
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  margin-bottom: 12px;
-  color: #9b9a97;
-  font-size: 11px;
+  margin-bottom: 10px;
+  color: #a4a097;
+  font-size: 10px;
 }
 
 .projects-selection-meta {
-  padding-left: 12px;
-  border-left: 1px solid #dedbd7;
-  color: #137fec;
-  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #37352f;
+}
+
+.projects-selection-meta .material-symbols-outlined {
+  font-size: 12px;
 }
 
 .projects-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 16px;
+  gap: 12px;
 }
 
 .projects-grid.is-list {
@@ -691,33 +711,40 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 .projects-empty-state {
-  min-height: 250px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 7px;
-  border: 1px dashed #d8d5d0;
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  padding: 42px;
+  border: 1px dashed #c8c4be;
   border-radius: 12px;
   background: #fafaf9;
-  color: #9b9a97;
   text-align: center;
 }
 
-.projects-empty-state .material-symbols-outlined {
-  margin-bottom: 3px;
-  color: #b4b2ae;
-  font-size: 42px;
+.projects-empty-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+  border-radius: 10px;
+  background: #f6f5f4;
+  color: #5d5b54;
+}
+
+.projects-empty-icon .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.projects-empty-state h2 {
+  margin: 0;
+  color: #1a1a1a;
+  font-size: 15px;
 }
 
 .projects-empty-state p {
-  margin: 0;
-  color: #37352f;
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.projects-empty-state span:last-child {
+  margin: 6px 0 0;
+  color: #787671;
   font-size: 11px;
 }
 
@@ -737,7 +764,6 @@ const handleSubmitCampaign = async (data: any) => {
   color: #f3f3f2;
 }
 
-.dark .projects-page-description,
 .dark .projects-content-meta {
   color: #a6a6a2;
 }
@@ -772,20 +798,15 @@ const handleSubmitCampaign = async (data: any) => {
 
 @media (max-width: 720px) {
   .projects-page-bar {
-    min-height: 78px;
-    padding: 16px 20px;
-  }
-
-  .projects-page-description {
-    display: none;
+    min-height: 54px;
   }
 
   .projects-toolbar {
-    padding: 12px 20px;
+    grid-template-columns: minmax(0, 1fr) 104px;
   }
 
   .projects-content {
-    padding: 18px 20px 60px;
+    padding-top: 18px;
   }
 
   .projects-grid {
@@ -794,8 +815,9 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 @media (max-width: 520px) {
-  .projects-page-title {
-    font-size: 20px;
+  .projects-page-bar {
+    min-height: 58px;
+    padding: 0 14px;
   }
 
   .projects-view-switch {
@@ -803,7 +825,7 @@ const handleSubmitCampaign = async (data: any) => {
   }
 
   .projects-create-button {
-    width: 38px;
+    width: 34px;
     padding: 0;
   }
 
@@ -813,10 +835,24 @@ const handleSubmitCampaign = async (data: any) => {
 
   .projects-toolbar {
     grid-template-columns: 1fr;
+    padding: 10px 14px;
   }
 
   .projects-status-filter {
     display: none;
+  }
+
+  .projects-content {
+    padding: 18px 14px 58px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projects-view-button,
+  .projects-create-button,
+  .projects-search-field input,
+  .projects-status-filter {
+    transition-duration: .01ms !important;
   }
 }
 </style>
