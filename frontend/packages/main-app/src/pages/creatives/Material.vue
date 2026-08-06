@@ -683,7 +683,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-[#f6f7f9] dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -692,36 +692,41 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
       @switch-session="switchSession"
     />
 
-    <main class="flex-1 min-w-0 bg-white dark:bg-slate-900">
+    <main class="min-w-0 flex-1 bg-transparent">
       <section class="min-w-0 flex h-full flex-col">
-        <header class="h-[54px] shrink-0 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[18px]">
+        <header class="flex h-[68px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-[28px] dark:border-slate-800 dark:bg-slate-900">
           <div class="min-w-0">
-            <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">素材管理</h1>
-            <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
+            <div class="flex items-center gap-[10px]">
+              <span class="grid h-[30px] w-[30px] place-items-center rounded-lg bg-primary/10 text-primary"><span class="material-symbols-outlined text-[17px]">video_library</span></span>
+              <div>
+                <h1 class="text-[18px] font-bold text-slate-900 dark:text-white">素材管理</h1>
+                <p class="mt-[2px] text-[11px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
+              </div>
+            </div>
           </div>
           <div class="flex items-center gap-[8px]">
-            <button class="inline-flex items-center gap-[5px] px-[10px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800" @click="openMetaSyncModal">
+            <button class="inline-flex items-center gap-[6px] rounded-md border border-slate-200 px-[11px] py-[7px] text-[11px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" @click="openMetaSyncModal">
               <span class="material-symbols-outlined text-[15px]">download</span>
               从 Meta 导入
             </button>
-            <button class="inline-flex items-center gap-[5px] px-[12px] py-[6px] rounded-md bg-primary text-white text-[11px] font-semibold hover:bg-primary/90" @click="openUploadModal">
+            <button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[13px] py-[7px] text-[11px] font-semibold text-white shadow-sm hover:bg-primary/90" @click="openUploadModal">
               <span class="material-symbols-outlined text-[15px]">upload</span>
               上传素材
             </button>
           </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto px-[18px] py-[16px]">
+        <div class="flex-1 overflow-y-auto px-[28px] py-[22px] max-md:px-[16px] max-md:py-[16px]">
           <div v-if="error" class="mb-[12px] rounded-md border border-red-200 bg-red-50 px-[12px] py-[9px] text-[11px] text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
             {{ error }}
           </div>
 
-          <div class="mt-[14px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900">
-            <div class="border-b border-slate-200 dark:border-slate-800 px-[12px] py-[11px]">
+          <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <div class="border-b border-slate-200 px-[16px] py-[14px] dark:border-slate-800">
               <div class="flex flex-wrap items-center gap-[8px]">
-                <div class="relative min-w-[220px] flex-1">
+                <div class="relative min-w-[240px] flex-1">
                   <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">search</span>
-                  <input v-model="searchQuery" type="text" placeholder="搜索素材名称、ID 或标签" class="w-full pl-[31px] pr-[10px] py-[7px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary" />
+                  <input v-model="searchQuery" type="text" placeholder="搜索名称、文件名、标签或平台账户" class="w-full pl-[31px] pr-[10px] py-[7px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary" />
                 </div>
                 <select v-model="accountFilter" class="filter-select min-w-[150px]">
                   <option value="all">全部广告账户</option>
@@ -751,6 +756,10 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
               </div>
             </div>
 
+            <div class="flex items-center justify-between border-b border-slate-100 px-[16px] py-[9px] dark:border-slate-800">
+              <span class="text-[10px] font-medium text-slate-400">{{ filteredRows.length }} 项素材</span>
+              <span class="text-[10px] text-slate-400">点击素材查看完整信息</span>
+            </div>
             <div class="overflow-x-auto">
               <table class="min-w-[980px] w-full text-left">
                 <thead class="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase text-slate-500 dark:text-slate-400">
@@ -781,14 +790,14 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                     v-for="row in filteredRows"
                     v-else
                     :key="row.id"
-                    class="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                    :class="selectedRow?.id === row.id ? 'bg-blue-50/70 dark:bg-blue-950/20' : ''"
+                    class="cursor-pointer border-l-2 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60"
+                    :class="selectedRow?.id === row.id ? 'border-l-primary bg-primary/[.04] dark:bg-primary/[.08]' : ''"
                     @click="selectRow(row)"
                   >
                     <td class="px-[12px] py-[10px]">
                       <div class="flex items-center gap-[10px] min-w-[280px]">
-                        <div class="relative h-[82px] w-[54px] shrink-0 overflow-hidden rounded-md bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                          <img v-if="row.previewUrl" :src="row.previewUrl" :alt="row.name" class="h-full w-full object-cover" />
+                        <div class="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+                          <img v-if="row.previewUrl" :src="row.previewUrl" :alt="row.name" class="h-full w-full object-cover" loading="lazy" />
                           <span v-if="row.previewUrl && row.mediaKind === 'video'" class="absolute left-1/2 top-1/2 grid h-[28px] w-[28px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white/90 bg-slate-950/40 text-white">
                             <span class="material-symbols-outlined text-[15px]">play_arrow</span>
                           </span>
@@ -807,7 +816,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                         </div>
                       </div>
                     </td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><div v-if="row.material.platform_assets?.length" class="space-y-[4px]"><div v-for="asset in row.material.platform_assets" :key="asset.id" class="flex flex-wrap items-center gap-[4px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span><span class="asset-status">{{ platformAssetStatus(asset.normalized_status) }}</span></div></div><span v-else class="text-slate-400">未绑定</span></td>
+                    <td class="max-w-[250px] px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><div v-if="row.material.platform_assets?.length" class="space-y-[4px]"><div v-for="asset in row.material.platform_assets" :key="asset.id" class="flex flex-wrap items-center gap-[4px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span><span class="asset-status">{{ platformAssetStatus(asset.normalized_status) }}</span></div></div><span v-else class="text-slate-400">未绑定</span></td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><span class="source-chip">{{ row.sourceLabel }}</span></td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.mediaKind === 'video' ? '视频' : '图片' }} · {{ row.format }}</td>
                     <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.material.width && row.material.height ? `${row.material.width} × ${row.material.height}` : '-' }} · {{ row.ratio }}</td>
@@ -828,29 +837,29 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 
       <div v-if="detailOpen" class="fixed inset-0 z-40 bg-slate-950/20" @click="closeDetailDrawer"></div>
       <aside
-        class="fixed right-0 top-0 bottom-0 z-50 flex h-screen w-[min(1120px,72vw)] max-w-[100vw] flex-col overflow-hidden bg-slate-50 shadow-2xl transition-all duration-200 dark:bg-slate-950 max-lg:w-screen"},{
+        class="fixed bottom-0 right-0 top-0 z-50 flex h-screen w-[min(620px,calc(100vw-52px))] max-w-[100vw] flex-col overflow-hidden border-l border-slate-200 bg-[#f6f7f9] shadow-2xl transition-all duration-200 dark:border-slate-800 dark:bg-slate-950 max-lg:w-screen"
         :class="detailOpen ? 'translate-x-0 opacity-100' : 'translate-x-[108%] opacity-0 pointer-events-none'"
       >
-        <div class="h-[70px] shrink-0 border-b border-slate-200 bg-white px-[6px] dark:border-slate-800 dark:bg-slate-900 flex items-center gap-[18px] pr-[24px]">
-          <button class="grid h-[42px] w-[42px] place-items-center rounded-r-md bg-primary text-white hover:bg-primary/90" title="关闭详情" @click="closeDetailDrawer">
+        <div class="flex h-[64px] shrink-0 items-center gap-[12px] border-b border-slate-200 bg-white px-[18px] pr-[22px] dark:border-slate-800 dark:bg-slate-900">
+          <button class="grid h-[32px] w-[32px] place-items-center rounded-md text-slate-500 hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white" title="关闭详情" @click="closeDetailDrawer">
             <span class="material-symbols-outlined text-[22px]">close</span>
           </button>
-          <div class="flex h-full items-center gap-[24px] text-[14px] font-semibold">
-            <span class="flex h-full items-center border-b-2 border-primary text-slate-900 dark:text-white">详情</span>
+          <div class="flex h-full items-center text-[14px] font-semibold">
+            <span class="text-slate-900 dark:text-white">素材详情</span>
           </div>
           <button v-if="selectedRow" class="ml-auto text-[12px] font-semibold text-primary hover:text-primary/80" @click="openEditMaterial(selectedRow)">编辑素材</button>
         </div>
 
-        <div v-if="selectedRow" class="flex-1 overflow-y-auto p-[24px] max-sm:p-[14px]">
-          <div class="grid gap-[22px] xl:grid-cols-[minmax(0,1.55fr)_minmax(300px,.75fr)]">
-            <aside class="rounded-xl border border-slate-200 bg-white p-[24px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
+        <div v-if="selectedRow" class="flex-1 overflow-y-auto p-[18px] max-sm:p-[14px]">
+          <div class="grid gap-[12px]">
+            <aside class="rounded-lg border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
               <div class="mb-[12px] flex items-center justify-between gap-[10px]"><h3 class="text-[16px] font-bold text-slate-900 dark:text-white">原始素材</h3><span class="text-[11px] text-slate-400">{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }}</span></div>
-              <div class="mt-[16px] overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div class="mt-[14px] overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                 <div class="bg-black">
                   <video
                     v-if="selectedRow.mediaKind === 'video' && selectedPreviewUrl"
                     :src="selectedPreviewUrl"
-                    class="max-h-[620px] min-h-[500px] w-full object-contain"
+                    class="aspect-[16/10] max-h-[480px] min-h-0 w-full object-contain"
                     controls
                     playsinline
                     preload="metadata"
@@ -859,9 +868,9 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                     v-else-if="selectedPreviewUrl"
                     :src="selectedPreviewUrl"
                     :alt="selectedRow.name"
-                    class="max-h-[620px] min-h-[500px] w-full object-contain"
+                    class="aspect-[16/10] max-h-[480px] min-h-0 w-full object-contain"
                   />
-                  <div v-else class="grid h-[500px] place-items-center text-slate-500">
+                  <div v-else class="grid aspect-[16/10] place-items-center text-slate-500">
                     <span class="material-symbols-outlined text-[40px]">broken_image</span>
                   </div>
                 </div>
@@ -882,17 +891,17 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
             </aside>
 
             <main class="space-y-[14px]">
-              <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <section class="rounded-lg border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">文件信息</h3>
                 <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>类型 / 格式</dt><dd>{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div><div class="detail-row"><dt>尺寸 / 比例</dt><dd>{{ selectedRow.material.width && selectedRow.material.height ? `${selectedRow.material.width} × ${selectedRow.material.height}` : '-' }} · {{ selectedRow.material.ratio || '-' }}</dd></div><div class="detail-row"><dt>文件大小</dt><dd>{{ selectedRow.material.file_size ? `${(selectedRow.material.file_size / 1024 / 1024).toFixed(2)} MB` : '-' }}</dd></div><div class="detail-row"><dt>视频时长</dt><dd>{{ selectedRow.material.duration ? `${selectedRow.material.duration} 秒` : '-' }}</dd></div><div class="detail-row"><dt>处理状态</dt><dd>{{ materialFileStatus(selectedRow.material.processing_status || selectedRow.material.status) }}</dd></div></dl>
               </section>
-              <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <section class="rounded-lg border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
                 <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">平台资产</h3><span class="text-[10px] text-slate-400">平台归属</span></div>
                 <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center gap-[8px] border border-slate-200 px-[10px] py-[10px] dark:border-slate-700"><div class="min-w-0"><div class="flex flex-wrap items-center gap-[5px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span></div><div class="mt-[5px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ platformAssetStatus(asset.normalized_status) }}</div></div></div></div>
                 <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[12px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未发布到广告平台账户</div>
                 <div class="mt-[12px] flex gap-[8px]"><button v-if="selectedRow.mediaKind === 'image'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'image')">发布到平台</button><button v-if="selectedRow.mediaKind === 'video'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'video')">发布到平台</button></div>
               </section>
-              <section class="rounded-xl border border-slate-200 bg-white p-[22px] shadow-sm dark:border-slate-800 dark:bg-slate-900">
+              <section class="rounded-lg border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">素材信息</h3>
                 <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>来源</dt><dd>{{ selectedRow.sourceLabel }}</dd></div><div class="detail-row"><dt>原始文件名</dt><dd class="break-all">{{ selectedRow.material.original_filename || '-' }}</dd></div><div class="detail-row"><dt>创建时间</dt><dd>{{ selectedRow.createdAtLabel }}</dd></div><div class="detail-row"><dt>标签</dt><dd>{{ selectedRow.tags.length ? selectedRow.tags.join(' · ') : '-' }}</dd></div></dl>
               </section>
@@ -948,7 +957,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                   <video v-if="uploadIsVideo && uploadPreviewUrl" :src="uploadPreviewUrl" class="h-full min-h-[112px] w-full object-contain" controls muted playsinline />
                   <img v-else-if="uploadPreviewUrl" :src="uploadPreviewUrl" :alt="uploadFile.name" class="h-full min-h-[112px] w-full object-cover" />
                   <div v-else class="grid h-full min-h-[112px] place-items-center text-[12px] text-slate-400">素材预览</div>
-                  <span class="absolute left-[8px] top-[8px bg-slate-950/70 px-[8px] py-[3px] text-[10px] font-bold text-white">{{ uploadFiles.length > 1 ? `1 / ${uploadFiles.length}` : uploadIsVideo ? '视频' : '图片' }}</span>
+                  <span class="absolute left-[8px] top-[8px] rounded bg-slate-950/70 px-[8px] py-[3px] text-[10px] font-bold text-white">{{ uploadFiles.length > 1 ? `1 / ${uploadFiles.length}` : uploadIsVideo ? '视频' : '图片' }}</span>
                 </div>
                 <div class="grid gap-[7px]">
                   <div v-for="(file, index) in uploadFiles" :key="`${file.name}-${index}`" class="rounded-md border border-slate-100 bg-white p-[8px] dark:border-slate-700 dark:bg-slate-900">
@@ -1131,10 +1140,11 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 <style scoped>
 .filter-select {
   min-width: 96px;
+  height: 32px;
   border-radius: 6px;
   border: 1px solid rgb(226 232 240);
   background: white;
-  padding: 7px 28px 7px 10px;
+  padding: 6px 28px 6px 10px;
   font-size: 11px;
   color: rgb(51 65 85);
   outline: none;
@@ -1244,6 +1254,17 @@ input[type='checkbox']:checked {
   border-color: rgb(226 232 240);
   background: rgb(248 250 252);
   color: rgb(71 85 105);
+}
+
+/* Keep the library quiet: platform ownership gets color; file provenance stays neutral. */
+tbody tr {
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+:global(.dark) .source-chip {
+  border-color: rgb(51 65 85);
+  background: rgb(30 41 59);
+  color: rgb(203 213 225);
 }
 
 .asset-status { color: rgb(5 150 105); font-size: 9px; font-weight: 600; }
