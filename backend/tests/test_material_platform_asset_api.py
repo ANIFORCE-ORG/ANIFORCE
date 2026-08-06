@@ -8,6 +8,7 @@ import sys
 import pytest
 from fastapi import HTTPException
 from sqlalchemy import func, select
+from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
 backend_root = Path(__file__).parent.parent
@@ -16,6 +17,7 @@ sys.path.insert(0, str(backend_root))
 from app.api.v1 import materials as material_api
 from app.api.v1.materials import (
     MetaMaterialPublishRequest,
+    reconcile_stale_material_sync_runs,
     delete_material,
     get_material,
     publish_material_to_meta,
@@ -62,6 +64,50 @@ async def _seed(session) -> SqliteMaterialRepository:
     ))
     await session.commit()
     return SqliteMaterialRepository(session)
+
+
+def test_stale_material_sync_runs_are_reconciled() -> None:
+    async def scenario() -> None:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        async with maker() as session:
+            await _seed(session)
+            stale = MaterialSyncRun(
+                id="stale-run", user_id="user-1", connection_id="connection-1",
+                ad_account_id="act_123", direction="export", platform="Meta",
+                asset_types='["video"]', status="running",
+                started_at=datetime.utcnow() - timedelta(hours=2),
+            )
+            fresh = MaterialSyncRun(
+                id="fresh-run", user_id="user-1", connection_id="connection-1",
+                ad_account_id="act_123", direction="export", platform="Meta",
+                asset_types='["video"]', status="running",
+                started_at=datetime.utcnow(),
+            )
+            processing = MaterialSyncRun(
+                id="processing-run", user_id="user-1", connection_id="connection-1",
+                ad_account_id="act_123", direction="export", platform="Meta",
+                asset_types='["video"]', status="processing",
+                started_at=datetime.utcnow() - timedelta(hours=2),
+            )
+            session.add_all([stale, fresh, processing])
+            await session.commit()
+
+            count = await reconcile_stale_material_sync_runs(session, timeout=timedelta(minutes=30))
+            assert count == 1
+            await session.refresh(stale)
+            await session.refresh(fresh)
+            await session.refresh(processing)
+            assert stale.status == "failed"
+            assert stale.finished_at is not None
+            assert "服务中断" in (stale.error_summary or "")
+            assert fresh.status == "running"
+            assert processing.status == "processing"
+        await engine.dispose()
+
+    asyncio.run(scenario())
 
 
 def test_publish_and_refresh_platform_asset_lifecycle(monkeypatch) -> None:

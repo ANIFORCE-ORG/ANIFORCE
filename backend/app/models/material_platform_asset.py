@@ -68,7 +68,7 @@ class MaterialPlatformAsset(Base):
         ForeignKey("users.id", ondelete="CASCADE"), nullable=False, index=True
     )
     connection_id: Mapped[str | None] = mapped_column(
-        ForeignKey("platform_connections.id", ondelete="CASCADE"),
+        ForeignKey("platform_connections.id", ondelete="SET NULL"),
         nullable=True,
         index=True,
     )

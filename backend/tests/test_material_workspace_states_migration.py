@@ -82,9 +82,19 @@ def test_detached_platform_assets_migration_is_current_head() -> None:
                 row for row in connection.execute("PRAGMA foreign_key_list(material_platform_assets)")
                 if row[3] == "material_id"
             )
+            asset_connection_fk = next(
+                row for row in connection.execute("PRAGMA foreign_key_list(material_platform_assets)")
+                if row[3] == "connection_id"
+            )
+            run_connection_fk = next(
+                row for row in connection.execute("PRAGMA foreign_key_list(material_sync_runs)")
+                if row[3] == "connection_id"
+            )
         assert asset_connection[3] == 0
         assert asset_material[3] == 0
         assert run_connection[3] == 0
         assert material_fk[6] == "SET NULL"
+        assert asset_connection_fk[6] == "SET NULL"
+        assert run_connection_fk[6] == "SET NULL"
     finally:
         db_path.unlink(missing_ok=True)

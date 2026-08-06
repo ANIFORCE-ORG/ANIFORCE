@@ -2,7 +2,7 @@
 import os
 import base64
 import json
-from datetime import datetime
+from datetime import datetime, timedelta
 from pathlib import Path
 from uuid import uuid4
 from typing import Annotated
@@ -39,6 +39,36 @@ from app.services.object_storage import AliyunOssStorageService, ObjectStorageEr
 
 router = APIRouter(prefix="/materials", tags=["materials"])
 settings = get_settings()
+
+
+async def reconcile_stale_material_sync_runs(
+    session: AsyncSession,
+    *,
+    user_id: str | None = None,
+    timeout: timedelta = timedelta(minutes=30),
+) -> int:
+    """Close transfer runs left open by a crashed request or worker."""
+    cutoff = datetime.utcnow() - timeout
+    conditions = [
+        MaterialSyncRun.status == "running",
+        MaterialSyncRun.started_at < cutoff,
+        MaterialSyncRun.finished_at.is_(None),
+    ]
+    if user_id is not None:
+        conditions.append(MaterialSyncRun.user_id == user_id)
+    runs = (
+        await session.scalars(
+            select(MaterialSyncRun).where(*conditions)
+        )
+    ).all()
+    for run in runs:
+        run.status = "failed"
+        run.finished_at = datetime.utcnow()
+        run.error_summary = "任务因服务中断未完成，请重新发起传输"
+    if runs:
+        await session.flush()
+    return len(runs)
+
 
 # 图像存储路径
 IMAGES_DIR = Path(__file__).parent.parent.parent.parent / "data" / "images"
@@ -272,11 +302,13 @@ async def sync_meta_materials(
         raise HTTPException(status_code=404, detail="Meta ad account is not bound to this connection")
     if binding.status != "active":
         raise HTTPException(status_code=400, detail="Meta ad account is not active")
-    app_id = connection.account_id if connection.account_secret else settings.META_APP_ID
-    app_secret = connection.account_secret or settings.META_APP_SECRET
+    # account_id identifies the OAuth subject, not the Meta application.
+    app_id = settings.META_APP_ID
+    app_secret = settings.META_APP_SECRET
     if not app_id or not app_secret:
         raise HTTPException(status_code=500, detail="Meta connection app configuration is missing")
 
+    await reconcile_stale_material_sync_runs(session, user_id=current_user["id"])
     try:
         service = MetaMaterialSyncService(
             session=session,
@@ -329,6 +361,7 @@ async def publish_material_to_meta(
     connection, binding = await _get_platform_binding(
         session, current_user["id"], request.connection_id, request.ad_account_id
     )
+    await reconcile_stale_material_sync_runs(session, user_id=current_user["id"])
     if request.platform and request.platform != connection.platform:
         raise HTTPException(status_code=400, detail="Request platform does not match connection")
     try:

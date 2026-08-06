@@ -92,6 +92,43 @@ def test_sync_endpoint_requires_bound_account_before_meta_call() -> None:
     asyncio.run(scenario())
 
 
+def test_sync_endpoint_uses_configured_meta_app_id_when_connection_has_secret(monkeypatch) -> None:
+    async def scenario() -> None:
+        engine = create_async_engine("sqlite+aiosqlite:///:memory:")
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+        captured = {}
+
+        class CapturingSource(FakeSource):
+            def __init__(self, **kwargs):
+                captured.update(kwargs)
+
+        async with maker() as session:
+            await _seed(session)
+            connection = await session.get(PlatformConnection, "connection-1")
+            connection.account_secret = "connection-secret"
+            await session.commit()
+            monkeypatch.setattr(material_api.settings, "META_APP_ID", "configured-app-id")
+            monkeypatch.setattr(material_api.settings, "META_APP_SECRET", "configured-app-secret")
+            monkeypatch.setattr(material_api, "MetaSdkMaterialSource", CapturingSource)
+            monkeypatch.setattr(material_api, "OssMaterialMediaImporter", FakeImporter)
+
+            await sync_meta_materials(
+                request=MetaMaterialSyncRequest(
+                    connection_id="connection-1", ad_account_id="123", asset_types=["image"]
+                ),
+                current_user={"id": "user-1"},
+                session=session,
+            )
+
+            assert captured["app_id"] == "configured-app-id"
+            assert captured["app_secret"] == "configured-app-secret"
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+
 def test_sync_endpoint_runs_for_owned_connection_and_bound_account(monkeypatch) -> None:
     async def scenario() -> None:
         engine = create_async_engine("sqlite+aiosqlite:///:memory:")
