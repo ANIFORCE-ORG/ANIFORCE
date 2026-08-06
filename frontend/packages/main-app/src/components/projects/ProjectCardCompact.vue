@@ -4,9 +4,14 @@ import type { Project } from '@/api/projects'
 
 interface Props {
   project: Project
+  selected?: boolean
+  viewType?: 'compact' | 'detailed'
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  selected: false,
+  viewType: 'compact'
+})
 const emit = defineEmits<{
   edit: [project: Project]
   viewTasks: [project: Project]
@@ -19,6 +24,7 @@ const router = useRouter()
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
     active: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
+    running: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
     paused: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600',
     completed: 'bg-slate-50 dark:bg-slate-900/30 text-slate-600',
     draft: 'bg-blue-50 dark:bg-blue-900/30 text-blue-600'
@@ -29,6 +35,7 @@ const getStatusColor = (status: string) => {
 const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
     active: '进行中',
+    running: '进行中',
     paused: '已暂停',
     completed: '已完成',
     draft: '草稿'
@@ -47,11 +54,18 @@ const handleViewDetail = () => {
 </script>
 
 <template>
-  <article class="project-card">
+  <article
+    class="project-card"
+    :class="{
+      selected,
+      'is-list': viewType === 'detailed'
+    }"
+  >
     <!-- Checkbox -->
     <label class="select-check">
       <input
         type="checkbox"
+        :checked="selected"
         class="w-[12px] h-[12px] rounded border-slate-300 text-primary focus:ring-primary/20"
         @change="handleCheckboxChange"
       />
@@ -105,30 +119,43 @@ const handleViewDetail = () => {
 <style scoped>
 /* Project Card */
 .project-card {
-  min-height: 228px;
+  min-width: 0;
+  min-height: 242px;
   display: flex;
   flex-direction: column;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
+  border: 1px solid #e3e1dd;
+  border-radius: 12px;
   padding: 17px;
   background: #fff;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  color: #37352f;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, background-color 0.16s ease, transform 0.16s ease;
 }
 
 .project-card:hover {
-  border-color: #b9d3f5;
-  box-shadow: 0 11px 25px rgba(15, 23, 42, 0.06);
+  border-color: #c8c5c0;
+  box-shadow: 0 8px 24px rgba(15, 15, 15, 0.055);
   transform: translateY(-1px);
 }
 
+.project-card.selected {
+  border-color: #98c3f0;
+  background: #f7fbff;
+  box-shadow: 0 0 0 1px rgba(19, 127, 236, 0.08);
+}
+
 .dark .project-card {
-  background: #1e293b;
-  border-color: #334155;
+  background: #242424;
+  border-color: #464646;
 }
 
 .dark .project-card:hover {
-  border-color: #475569;
+  border-color: #5b5b5b;
   box-shadow: 0 11px 25px rgba(0, 0, 0, 0.2);
+}
+
+.dark .project-card.selected {
+  border-color: #4f9ae8;
+  background: #202b36;
 }
 
 /* Select Checkbox */
@@ -136,8 +163,14 @@ const handleViewDetail = () => {
   display: flex;
   align-items: center;
   align-self: flex-start;
-  margin-bottom: 9px;
+  min-height: 22px;
+  margin-bottom: 11px;
   cursor: pointer;
+}
+
+.select-check span {
+  color: #787774;
+  font-size: 11px;
 }
 
 /* Project Card Head */
@@ -146,7 +179,7 @@ const handleViewDetail = () => {
   align-items: flex-start;
   justify-content: space-between;
   gap: 12px;
-  margin-bottom: 9px;
+  margin-bottom: 10px;
 }
 
 .project-card-title {
@@ -160,46 +193,58 @@ const handleViewDetail = () => {
 }
 
 .project-card-title h3 {
-  margin-bottom: 6px;
-  font-size: 13px;
-  line-height: 1.35;
-  letter-spacing: 0;
+  display: -webkit-box;
+  min-height: 40px;
+  margin: 0 0 8px;
+  overflow: hidden;
+  color: #191919;
+  font-size: 15px;
+  line-height: 1.38;
+  letter-spacing: -0.012em;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .project-card-title p {
   margin: 0;
-  color: #64748b;
-  line-height: 1.7;
+  color: #787774;
+  font-size: 11px;
+  line-height: 1.6;
 }
 
 .dark .project-card-title p {
-  color: #94a3b8;
+  color: #a6a6a2;
+}
+
+.dark .project-card-title h3 {
+  color: #f3f3f2;
 }
 
 /* Scope List / Chips */
 .scope-list {
   display: flex;
   flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
+  gap: 5px;
+  margin-top: 10px;
   margin-bottom: auto;
 }
 
 .chip {
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 3px;
-  background: #f1f5f9;
-  color: #475569;
-  font-size: 9px;
-  font-weight: 600;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #f2f1ef;
+  color: #5f5e5a;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.2;
   white-space: nowrap;
 }
 
 .dark .chip {
-  background: #334155;
-  color: #cbd5e1;
+  background: #373737;
+  color: #d1d1cf;
 }
 
 /* Project Card Actions */
@@ -207,9 +252,10 @@ const handleViewDetail = () => {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   margin-top: auto;
-  padding-top: 19px;
+  padding-top: 18px;
+  border-top: 1px solid #efeeec;
 }
 
 /* Button Styles */
@@ -222,20 +268,21 @@ const handleViewDetail = () => {
   gap: 5px;
   width: 100%;
   min-width: 0;
+  min-height: 32px;
   padding: 6px 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 5px;
+  border: 1px solid #dedbd7;
+  border-radius: 6px;
   background: #fff;
-  color: #1e293b;
-  font-size: 9px;
+  color: #37352f;
+  font-size: 10px;
   font-weight: 600;
   cursor: pointer;
   transition: all 0.16s ease;
 }
 
 .btn-soft:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
+  border-color: #c8c5c0;
+  background: #f7f7f5;
   color: #137fec;
 }
 
@@ -264,15 +311,15 @@ const handleViewDetail = () => {
 
 .dark .btn-soft,
 .dark .btn-ghost {
-  background: #1e293b;
-  border-color: #334155;
-  color: #e2e8f0;
+  background: #242424;
+  border-color: #464646;
+  color: #e8e8e6;
 }
 
 .dark .btn-soft:hover,
 .dark .btn-ghost:hover {
-  background: #334155;
-  border-color: #475569;
+  background: #303030;
+  border-color: #5b5b5b;
   color: #60a5fa;
 }
 
@@ -286,8 +333,96 @@ const handleViewDetail = () => {
   border-color: #2563eb;
 }
 
+/* Reference list-view logic: keep the same card content and actions. */
+.project-card.is-list {
+  min-height: 146px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(230px, 1fr) minmax(320px, auto);
+  grid-template-areas:
+    "select scope actions"
+    "head scope actions";
+  align-items: start;
+  column-gap: 24px;
+  row-gap: 4px;
+}
+
+.project-card.is-list .select-check {
+  grid-area: select;
+  margin: 0;
+}
+
+.project-card.is-list .project-card-head {
+  grid-area: head;
+  margin: 0;
+}
+
+.project-card.is-list .project-card-title h3 {
+  min-height: auto;
+  -webkit-line-clamp: 1;
+}
+
+.project-card.is-list .scope-list {
+  grid-area: scope;
+  align-content: flex-start;
+  margin: 28px 0 0;
+}
+
+.project-card.is-list .project-card-actions {
+  grid-area: actions;
+  align-self: stretch;
+  min-width: 320px;
+  margin: 0;
+  padding: 28px 0 0;
+  border-top: 0;
+}
+
 /* Responsive */
-@media (max-width: 768px) {
+@media (max-width: 1180px) {
+  .project-card.is-list {
+    grid-template-columns: minmax(220px, 1fr) minmax(220px, 1fr);
+    grid-template-areas:
+      "select scope"
+      "head scope"
+      "actions actions";
+  }
+
+  .project-card.is-list .project-card-actions {
+    min-width: 0;
+    padding-top: 14px;
+    border-top: 1px solid #efeeec;
+  }
+}
+
+@media (max-width: 720px) {
+  .project-card.is-list {
+    display: flex;
+    min-height: 242px;
+  }
+
+  .project-card.is-list .select-check {
+    margin-bottom: 11px;
+  }
+
+  .project-card.is-list .project-card-head {
+    margin-bottom: 10px;
+  }
+
+  .project-card.is-list .project-card-title h3 {
+    min-height: 40px;
+    -webkit-line-clamp: 2;
+  }
+
+  .project-card.is-list .scope-list {
+    margin-top: 10px;
+  }
+
+  .project-card.is-list .project-card-actions {
+    margin-top: auto;
+    padding-top: 18px;
+  }
+}
+
+@media (max-width: 520px) {
   .project-card-actions {
     grid-template-columns: 1fr;
   }
