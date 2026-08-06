@@ -25,7 +25,7 @@ function money(value: unknown): string {
 }
 
 function statusLabel(status?: string): string {
-  if (status === 'active') return '进行中'
+  if (status === 'active' || status === 'running') return '进行中'
   if (status === 'draft') return '草稿'
   if (status === 'paused') return '暂停'
   if (status === 'completed') return '已完成'
@@ -33,7 +33,7 @@ function statusLabel(status?: string): string {
 }
 
 function statusTone(status?: string): string {
-  if (status === 'active') return 'active'
+  if (status === 'active' || status === 'running') return 'active'
   if (status === 'paused') return 'paused'
   if (status === 'completed') return 'completed'
   return 'default'
@@ -72,7 +72,7 @@ function openInWorkspace(): void {
         </div>
         <div class="project-meta">
           <span class="budget">{{ money(project.total_budget) }}</span>
-          <span class="status" :class="statusTone(project.status)">{{ statusLabel(project.status) }}</span>
+          <span class="status status-chip" :data-status="project.status" :class="statusTone(project.status)">{{ statusLabel(project.status) }}</span>
         </div>
       </div>
       

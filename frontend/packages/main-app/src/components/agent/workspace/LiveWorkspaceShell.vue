@@ -213,7 +213,11 @@ function formatToolResult(value: unknown): string {
         </div>
 
         <div class="mt-3 flex flex-wrap items-center gap-2">
-          <span class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold" :class="statusMeta[status].badge">
+          <span
+            class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold"
+            :class="[statusMeta[status].badge, { 'status-chip': status === 'running' }]"
+            :data-status="status === 'running' ? 'running' : undefined"
+          >
             <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': status === 'running' || status === 'applying' }">
               {{ statusMeta[status].icon }}
             </span>

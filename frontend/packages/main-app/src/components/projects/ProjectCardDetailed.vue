@@ -16,6 +16,7 @@ const emit = defineEmits<{
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
     active: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
+    running: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
     paused: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600',
     completed: 'bg-slate-50 dark:bg-slate-900/30 text-slate-600'
   }
@@ -25,6 +26,7 @@ const getStatusColor = (status: string) => {
 const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
     active: '进行中',
+    running: '进行中',
     paused: '已暂停',
     completed: '已完成'
   }
@@ -40,7 +42,8 @@ const getStatusLabel = (status: string) => {
         <div class="flex items-center gap-3 mb-2">
           <h4 class="text-base font-semibold text-slate-900 dark:text-white">{{ project.name }}</h4>
           <span
-            class="text-xs font-semibold px-2 py-0.5 rounded-full"
+            class="status-chip"
+            :data-status="project.status"
             :class="getStatusColor(project.status)"
           >
             {{ getStatusLabel(project.status) }}

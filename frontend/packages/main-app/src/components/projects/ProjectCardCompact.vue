@@ -77,7 +77,8 @@ const handleViewDetail = () => {
       <h2 class="project-name">{{ project.name }}</h2>
       <!-- Status Badge -->
       <span
-        class="status-badge"
+        class="status-badge status-chip"
+        :data-status="project.status"
         :class="[getStatusColor(project.status), `status-${project.status}`]"
       >
         {{ getStatusLabel(project.status) }}

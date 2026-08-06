@@ -282,7 +282,8 @@ const getStatusColor = (status: string) => {
                   {{ campaign.platform }}
                 </span>
                 <span
-                  class="text-[10px] font-semibold px-[6px] py-[2px] rounded"
+                  class="status-chip"
+                  :data-status="campaign.status"
                   :class="getStatusColor(campaign.status)"
                 >
                   {{ getStatusText(campaign.status) }}

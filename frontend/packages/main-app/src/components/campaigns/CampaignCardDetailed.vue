@@ -84,7 +84,7 @@ const handleDelete = () => {
       <div class="flex-1 min-w-0">
         <h3 class="text-[14px] font-semibold text-slate-900 dark:text-white mb-[8px] truncate">
           {{ campaign.name }}
-          <span class="inline-flex items-center gap-[6px] px-[8px] py-[4px] rounded-lg text-[10px] font-medium border" :class="getStatusChipClass(campaign.status)">
+          <span class="status-chip" :data-status="campaign.status" :class="getStatusChipClass(campaign.status)">
             Status: {{ getStatusText(campaign.status) }}
           </span>
         </h3>

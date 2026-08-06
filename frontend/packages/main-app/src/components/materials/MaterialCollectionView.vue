@@ -53,7 +53,7 @@ function getStatusLabel(status: string) {
             <span class="material-symbols-outlined text-6xl text-slate-400 dark:text-slate-500">video_library</span>
           </div>
           <div class="absolute right-2 top-2">
-            <span class="rounded-md px-2 py-1 text-xs font-semibold backdrop-blur-sm" :class="getStatusColor(creative.status)">
+            <span class="status-chip backdrop-blur-sm" :data-status="creative.status" :class="getStatusColor(creative.status)">
               {{ getStatusLabel(creative.status) }}
             </span>
           </div>
