@@ -9,12 +9,14 @@
 所有调试脚本统一使用以下 LLM 供应商和模型：
 
 ```python
+import os
+
 from openai import AsyncOpenAI
 from agents.models.openai_chatcompletions import OpenAIChatCompletionsModel
 
 MODEL = "deepseek-v4-pro"
 BASE_URL = "https://copilot.huya.info/api/openai/v1"
-API_KEY = "sk-hvtAUe3lPjYQtwiZqLMfYg"
+API_KEY = os.environ["OPENAI_API_KEY"]
 
 client = AsyncOpenAI(api_key=API_KEY, base_url=BASE_URL, timeout=90.0, max_retries=0)
 model = OpenAIChatCompletionsModel(model=MODEL, openai_client=client)
