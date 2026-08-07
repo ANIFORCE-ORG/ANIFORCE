@@ -794,28 +794,28 @@ const handleSave = async () => {
   <Transition name="fade">
     <div
       v-if="show"
-      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+      class="adunit-drawer-layer fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
       @click.self="handleClose"
     >
       <Transition name="slide">
         <div
           v-if="show"
-          class="fixed right-0 top-0 h-full bg-white dark:bg-slate-800 shadow-2xl w-full max-w-[600px] overflow-hidden flex flex-col rounded-l-md"
+          class="adunit-drawer fixed right-0 top-0 h-full bg-white dark:bg-slate-800 shadow-2xl w-full max-w-[600px] overflow-hidden flex flex-col rounded-l-md"
         >
-          <div class="flex items-center justify-between px-[15px] py-[10px] border-b border-slate-200 dark:border-slate-700">
+          <div class="adunit-drawer-head flex items-center justify-between px-[15px] py-[10px] border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">
               {{ displayText('创建 AdUnit（广告单元）', 'Create AdUnit') }}
             </h3>
             <button
               type="button"
-              class="text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
+              class="adunit-close text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors"
               @click="handleClose"
             >
               <span class="material-symbols-outlined text-[18px]">close</span>
             </button>
           </div>
 
-          <div class="flex-1 overflow-y-auto px-[15px] py-[12px]">
+          <div class="adunit-drawer-body flex-1 overflow-y-auto px-[15px] py-[12px]">
             <div v-if="errors.submit" class="mb-[10px] p-[8px] rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
               <div class="flex items-center gap-[6px]">
                 <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[14px]">error</span>
@@ -824,14 +824,14 @@ const handleSave = async () => {
             </div>
 
             <!-- 说明文字 -->
-            <div class="mb-[13px] p-[10px] bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
+            <div class="adunit-framework-note mb-[13px] p-[10px] bg-blue-50 dark:bg-blue-900/20 rounded-md border border-blue-200 dark:border-blue-800">
               <p class="text-[10px] text-blue-700 dark:text-blue-300 leading-relaxed">
                 <strong class="text-blue-800 dark:text-blue-200">{{ displayText('AdSet 配置说明', 'AdSet setup guide') }}</strong><br>
                 {{ displayText('AdSet 对应 Meta 广告组层级，包含定向、预算、出价、排期等配置。请按需展开各个配置模块。', 'AdSet maps to the Meta ad set level and includes targeting, budget, bid, and schedule settings. Expand each section as needed.') }}
               </p>
             </div>
 
-            <div class="flex items-center gap-[10px] py-[10px]">
+            <div class="adunit-form-divider flex items-center gap-[10px] py-[10px]">
                 <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
                 <span class="text-[9px] font-medium text-slate-500 dark:text-slate-400">
                    {{ displayText('AdUnit 配置', 'AdUnit settings') }}
@@ -839,9 +839,9 @@ const handleSave = async () => {
                 <div class="h-px flex-1 bg-slate-200 dark:bg-slate-700"></div>
             </div>
 
-            <form @submit.prevent="handleSave" class="space-y-[10px]">
+            <form @submit.prevent="handleSave" class="adunit-form space-y-[10px]">
               <!-- 1️⃣ 基本信息 -->
-              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+              <div class="adunit-accordion border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
                   class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -950,7 +950,7 @@ const handleSave = async () => {
               </div>
 
               <!-- 5️⃣ 推广对象配置 -->
-              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+              <div class="adunit-accordion border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
                   class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -1113,7 +1113,7 @@ const handleSave = async () => {
               </div>
 
               <!-- 2️⃣ 预算与出价 -->
-              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+              <div class="adunit-accordion border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
                   class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -1278,7 +1278,7 @@ const handleSave = async () => {
               </div>
 
               <!-- 3️⃣ 投放周期 -->
-              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+              <div class="adunit-accordion border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
                   class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -1339,7 +1339,7 @@ const handleSave = async () => {
               </div>
 
               <!-- 4️⃣ 受众定向 -->
-              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+              <div class="adunit-accordion border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
                   class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -1438,7 +1438,7 @@ const handleSave = async () => {
               </div>
 
               <!-- 6️⃣ Ads 配置 -->
-              <div class="border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
+              <div class="adunit-accordion border border-slate-200 dark:border-slate-700 rounded-md overflow-hidden">
                 <button
                   type="button"
                   class="w-full flex items-center justify-between px-[12px] py-[8px] bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
@@ -1923,10 +1923,10 @@ const handleSave = async () => {
             </form>
           </div>
 
-          <div class="flex items-center justify-end gap-[8px] px-[15px] py-[10px] border-t border-slate-200 dark:border-slate-700">
+          <div class="adunit-drawer-actions flex items-center justify-end gap-[8px] px-[15px] py-[10px] border-t border-slate-200 dark:border-slate-700">
             <button
               type="button"
-              class="px-[12px] py-[6px] text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+              class="adunit-secondary px-[12px] py-[6px] text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
               @click="handleClose"
               :disabled="submitting"
             >
@@ -1934,7 +1934,7 @@ const handleSave = async () => {
             </button>
             <button
               type="button"
-              class="px-[12px] py-[6px] text-[11px] font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="adunit-confirm px-[12px] py-[6px] text-[11px] font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               @click="handleSave"
               :disabled="submitting"
             >
@@ -1948,6 +1948,65 @@ const handleSave = async () => {
 </template>
 
 <style scoped>
+.adunit-drawer-layer {
+  --au-surface: #f6f5f4;
+  --au-surface-soft: #fafaf9;
+  --au-line: #e5e3df;
+  --au-line-soft: #ede9e4;
+  --au-line-strong: #c8c4be;
+  --au-ink: #1a1a1a;
+  --au-charcoal: #37352f;
+  --au-slate: #5d5b54;
+  --au-steel: #787671;
+  --au-stone: #a4a097;
+  background: rgba(26,26,26,.48) !important;
+  font-family: "Notion Sans", "Avenir Next", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.adunit-drawer { width: min(680px,100vw) !important; max-width: none !important; border-left: 1px solid var(--au-line); border-radius: 0 !important; background: #fff !important; box-shadow: rgba(15,15,15,.20) -18px 0 52px -18px !important; }
+.adunit-drawer-head { min-height: 57px; padding: 0 18px !important; border-color: var(--au-line) !important; }
+.adunit-drawer-head h3 { margin: 0; color: var(--au-ink) !important; font-size: 15px !important; font-weight: 600; letter-spacing: -.2px; }
+.adunit-close { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--au-steel) !important; }
+.adunit-close:hover { background: var(--au-surface); color: var(--au-ink) !important; }
+.adunit-close .material-symbols-outlined { font-size: 18px !important; }
+.adunit-drawer-body { padding: 14px 18px 24px !important; scrollbar-color: var(--au-line-strong) transparent; }
+.adunit-framework-note { margin-bottom: 14px !important; padding: 12px !important; border: 0 !important; border-radius: 8px; background: var(--au-surface) !important; }
+.adunit-framework-note p { margin: 0; color: var(--au-slate) !important; font-size: 10px !important; line-height: 1.55; }
+.adunit-framework-note strong { display: inline-block; margin-bottom: 4px; color: var(--au-charcoal) !important; font-size: 10px; font-weight: 600; }
+.adunit-form-divider { margin: 13px 0 10px; padding: 0 !important; color: var(--au-stone); font-size: 9px; font-weight: 500; }
+.adunit-form-divider > div { background: var(--au-line-soft) !important; }
+.adunit-form { display: grid; gap: 8px; }
+.adunit-form > div { margin: 0 !important; }
+.adunit-accordion { border-color: var(--au-line) !important; border-radius: 8px !important; background: #fff; }
+.adunit-accordion > button { min-height: 36px; padding: 0 11px !important; background: var(--au-surface-soft) !important; color: var(--au-charcoal); }
+.adunit-accordion > button:hover { background: var(--au-surface) !important; }
+.adunit-accordion > button span:first-child { color: var(--au-charcoal) !important; font-size: 10px !important; font-weight: 600; }
+.adunit-accordion > button span:nth-child(2) { color: var(--au-stone) !important; font-size: 8px !important; font-weight: 400; }
+.adunit-accordion > div { border-color: var(--au-line-soft) !important; background: #fff !important; }
+.adunit-form label { color: var(--au-slate) !important; font-size: 10px !important; font-weight: 500 !important; }
+.adunit-form input:not([type="radio"]):not([type="checkbox"]),.adunit-form select,.adunit-form textarea { width: 100%; border: 1px solid var(--au-line-strong) !important; border-radius: 8px !important; outline: none; background: #fff !important; color: var(--au-charcoal) !important; font-size: 11px !important; box-shadow: none !important; }
+.adunit-form input:not([type="radio"]):not([type="checkbox"]),.adunit-form select { height: 38px; padding: 0 10px !important; }
+.adunit-form textarea { min-height: 72px; padding: 9px 10px !important; line-height: 1.5; }
+.adunit-form input::placeholder,.adunit-form textarea::placeholder { color: var(--au-stone); }
+.adunit-form input:focus,.adunit-form select:focus,.adunit-form textarea:focus { border: 2px solid var(--au-charcoal) !important; box-shadow: none !important; }
+.adunit-form input:disabled,.adunit-form select:disabled { border-color: var(--au-line) !important; background: var(--au-surface-soft) !important; color: var(--au-stone) !important; opacity: 1 !important; }
+.adunit-form input[type="radio"],.adunit-form input[type="checkbox"] { width: 14px; height: 14px; accent-color: var(--au-charcoal); }
+.adunit-drawer-actions { min-height: 58px; padding: 0 18px !important; border-color: var(--au-line) !important; background: rgba(255,255,255,.96); }
+.adunit-secondary,.adunit-confirm { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0 14px !important; border-radius: 8px !important; font-size: 11px !important; font-weight: 500; }
+.adunit-secondary { border: 1px solid var(--au-line-strong) !important; background: #fff !important; color: var(--au-charcoal) !important; }
+.adunit-secondary:hover { border-color: var(--au-charcoal) !important; color: var(--au-ink) !important; }
+.adunit-confirm { border: 1px solid #2383e2 !important; background: #2383e2 !important; color: #fff !important; }
+.adunit-confirm:hover { border-color: #1b6fc1 !important; background: #1b6fc1 !important; }
+@media (max-width: 720px) {
+  .adunit-drawer { width: 100vw !important; border-left: 0; }
+  .adunit-drawer-body { padding: 14px 14px 24px !important; }
+  .adunit-drawer-head,.adunit-drawer-actions { padding-right: 14px !important; padding-left: 14px !important; }
+}
+@media (max-width: 520px) {
+  .adunit-form .grid-cols-2 { grid-template-columns: 1fr; }
+  .adunit-form .col-span-2 { grid-column: auto; }
+  .adunit-drawer-head { min-height: 52px; }
+  .adunit-drawer-actions { min-height: 56px; }
+}
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;

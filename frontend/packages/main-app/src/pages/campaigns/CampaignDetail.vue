@@ -172,9 +172,7 @@ const formatDate = (dateString?: string) => {
 </script>
 
 <template>
-  <!-- 三栏布局容器 -->
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
-    <!-- 左侧功能导航抽屉 -->
+  <div class="campaign-detail-notion">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -183,99 +181,45 @@ const formatDate = (dateString?: string) => {
       @switch-session="switchSession"
     />
 
-    <!-- 中间广告详情展示区 -->
-    <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-      <!-- Header -->
-      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center px-[19px]">
-        <div class="flex items-center gap-[12px]">
-          <button
-            class="flex items-center gap-[6px] text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
-            @click="handleBack"
-          >
-            <span class="material-symbols-outlined text-[15px]">arrow_back</span>
-            <span class="text-[11px] font-medium">返回广告列表</span>
-          </button>
-        </div>
-      </div>
+    <main class="campaign-workspace">
+      <header class="campaign-page-bar">
+        <button class="campaign-back" type="button" @click="handleBack">
+          <span class="material-symbols-outlined">arrow_back</span>
+          返回广告列表
+        </button>
+      </header>
 
-      <!-- Content -->
-      <div class="flex-1 overflow-y-auto p-[19px]">
-        <!-- Campaign 详情信息 -->
-        <aside class="mb-[15px] p-[16px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 shadow-sm">
-          <div class="flex items-center gap-[12px] mb-[6px]">
-            <h2 class="text-[17px] font-bold text-slate-900 dark:text-white">{{ campaign?.name }}</h2>
-            <div class="h-[19px] w-px bg-slate-200 dark:bg-slate-800"></div>
-            <div class="flex-1">
-              <h3 class="text-[14px] font-semibold text-slate-900 dark:text-white tracking-tight">Campaign 信息</h3>
-              <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed mt-[4px]">所属项目: {{ campaign?.project_name || '暂无' }}</p>
+      <div class="campaign-content">
+        <section class="campaign-panel" aria-labelledby="campaign-page-title">
+          <div class="campaign-head">
+            <h1 id="campaign-page-title">{{ campaign?.name || '-' }}</h1>
+            <span class="campaign-divider"></span>
+            <div class="campaign-heading-copy">
+              <h2>Campaign 信息</h2>
+              <p>所属项目：{{ campaign?.project_name || '暂无' }}</p>
             </div>
           </div>
 
-          <div class="grid grid-cols-4 gap-[8px]">
-            <!-- 平台 -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">平台</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.platform || '-' }}</strong>
-            </div>
+          <dl class="campaign-properties">
+            <div class="campaign-property"><dt>平台</dt><dd>{{ campaign?.platform || '-' }}</dd></div>
+            <div class="campaign-property"><dt>广告账户</dt><dd :title="campaign?.account_id || '-'">{{ campaign?.account_id || '-' }}</dd></div>
+            <div class="campaign-property"><dt>预算优化</dt><dd>{{ campaign?.campaign_budget_optimization || '-' }}</dd></div>
+            <div class="campaign-property"><dt>预算</dt><dd>${{ campaign?.budget?.toLocaleString() || '0' }}</dd></div>
+            <div class="campaign-property"><dt>Buying Type</dt><dd>{{ campaign?.buying_type || '-' }}</dd></div>
+            <div class="campaign-property"><dt>开始 / 结束</dt><dd>{{ formatDate(campaign?.start_date) }} / {{ formatDate(campaign?.end_date) }}</dd></div>
+            <div class="campaign-property"><dt>状态</dt><dd><span class="status-chip" :data-status="campaign?.status || 'draft'">{{ campaign?.status || '-' }}</span></dd></div>
+          </dl>
+        </section>
 
-            <!-- 广告账户 -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">广告账户</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.account_id || '-' }}</strong>
-            </div>
-
-            <!-- Budget Level -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">CampaignBudgetOptimization</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.campaign_budget_optimization}}</strong>
-            </div>
-
-            <!-- 预算 -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">预算</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">${{ campaign?.budget?.toLocaleString() || '-' }}</strong>
-            </div>
-
-            <!-- Buying Type -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">Buying Type</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.buying_type || '-' }}</strong>
-            </div>
-
-            <!-- Bid Strategy -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">Objective</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.objective || '-' }}</strong>
-            </div>
-
-            <!-- 开始/结束日期 -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">开始 / 结束</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ formatDate(campaign?.start_date) }} / {{ formatDate(campaign?.end_date) }}</strong>
-            </div>
-
-            <!-- 状态 -->
-            <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
-              <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">状态</span>
-              <strong class="block text-[10px] text-slate-900 dark:text-white mt-[2px] break-words">{{ campaign?.status || '-' }}</strong>
-            </div>
-          </div>
-        </aside>
-
-        <!-- 广告单元列表 (Ad Sets) -->
-        <div>
-          <div class="flex items-center justify-between mb-[12px]">
-            <h4 class="text-[11px] font-semibold text-slate-900 dark:text-white">广告单元 Ad Sets ({{ adUnits.length }})</h4>
-            <button
-              class="flex items-center gap-[6px] px-[9px] py-[6px] rounded-md text-[11px] font-medium text-primary hover:bg-primary/10 transition-colors"
-              @click="handleAddAdUnit"
-            >
-              <span class="material-symbols-outlined text-[15px]">add</span>
-              创建新广告单元
+        <section aria-labelledby="adset-title">
+          <div class="campaign-section-head">
+            <h2 id="adset-title">广告单元 Ad Sets ({{ adUnits.length }})</h2>
+            <button class="campaign-action" type="button" @click="handleAddAdUnit">
+              <span class="material-symbols-outlined">add</span><span>创建新广告单元</span>
             </button>
           </div>
 
-          <div class="space-y-[12px]">
+          <div v-if="adUnits.length" class="adunit-list">
             <AdUnitCardDetailed
               v-for="adUnit in adUnits"
               :key="adUnit.id"
@@ -285,33 +229,27 @@ const formatDate = (dateString?: string) => {
             />
           </div>
 
-          <!-- Empty State -->
-          <div v-if="adUnits.length === 0" class="flex flex-col items-center justify-center py-[50px]">
-            <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">campaign</span>
-            <p class="text-[11px] text-slate-500 dark:text-slate-400 mb-[12px]">暂无广告单元</p>
-            <button
-              class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
-              @click="handleAddAdUnit"
-            >
-              <span class="material-symbols-outlined text-[15px]">add</span>
-              <span class="text-[11px] font-medium">创建首个广告单元</span>
-            </button>
+          <div v-else class="campaign-empty-state">
+            <div class="campaign-empty-inner">
+              <div class="campaign-empty-icon"><span class="material-symbols-outlined">campaign</span></div>
+              <h3>暂无广告单元</h3>
+              <p>广告单元用于设置受众、预算、排期和版位。创建后即可继续添加广告素材。</p>
+              <button class="campaign-action" type="button" @click="handleAddAdUnit">
+                <span class="material-symbols-outlined">add</span>创建首个广告单元
+              </button>
+            </div>
           </div>
-        </div>
+        </section>
       </div>
     </main>
 
-    <!-- 右侧对话区 -->
     <ChatPanel
-      :messages="messages"
+      :session-id="activeSession"
       :quick-hints="quickHints"
-      :chat-input="chatInput"
-      @send-message="handleSendMessage"
-      @hint-click="handleHintClick"
-      @update:chat-input="chatInput = $event"
+      initial-collapsed
+      compact-collapsed
     />
 
-    <!-- 创建 Ad Unit 弹窗 -->
     <CreateAdUnitModal
       ref="createAdUnitModalRef"
       :show="showCreateAdUnitModal"
@@ -324,3 +262,80 @@ const formatDate = (dateString?: string) => {
     />
   </div>
 </template>
+
+<style scoped>
+.campaign-detail-notion {
+  --c-surface: #f6f5f4;
+  --c-surface-soft: #fafaf9;
+  --c-line: #e5e3df;
+  --c-line-soft: #ede9e4;
+  --c-line-strong: #c8c4be;
+  --c-ink: #1a1a1a;
+  --c-charcoal: #37352f;
+  --c-slate: #5d5b54;
+  --c-steel: #787671;
+  --c-stone: #a4a097;
+  width: 100%;
+  height: calc(100vh - 100px);
+  display: flex;
+  overflow: hidden;
+  background: #fff;
+  color: var(--c-charcoal);
+  font-family: "Notion Sans", "Avenir Next", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.campaign-workspace { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+.campaign-page-bar { min-height: 54px; flex: 0 0 auto; display: flex; align-items: center; padding: 0 clamp(24px,3vw,48px); border-bottom: 1px solid var(--c-line); background: rgba(255,255,255,.88); }
+.campaign-back { min-height: 31px; display: inline-flex; align-items: center; gap: 7px; padding: 0 8px; border: 0; border-radius: 6px; background: transparent; color: var(--c-slate); font-size: 11px; font-weight: 500; cursor: pointer; }
+.campaign-back:hover { background: var(--c-surface); color: var(--c-ink); }
+.campaign-back .material-symbols-outlined { font-size: 16px; }
+.campaign-content { width: min(100%,1240px); margin: 0 auto; padding: 24px clamp(24px,3vw,48px) 78px; overflow-y: auto; }
+.campaign-panel { border: 1px solid var(--c-line); border-radius: 12px; background: #fff; overflow: hidden; }
+.campaign-head { min-height: 54px; display: flex; align-items: center; gap: 12px; padding: 0 18px; border-bottom: 1px solid var(--c-line-soft); }
+.campaign-head h1 { margin: 0; color: var(--c-ink); font-size: 17px; font-weight: 650; letter-spacing: -.35px; }
+.campaign-divider { width: 1px; height: 16px; background: var(--c-line-strong); }
+.campaign-heading-copy { min-width: 0; display: flex; align-items: baseline; gap: 9px; }
+.campaign-heading-copy h2 { margin: 0; color: var(--c-charcoal); font-size: 12px; font-weight: 600; }
+.campaign-heading-copy p { margin: 0; overflow: hidden; color: var(--c-steel); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.campaign-properties { display: grid; grid-template-columns: .7fr 1.35fr 1.25fr .65fr .8fr 1.25fr .75fr; margin: 0; padding: 0 18px; }
+.campaign-property { min-width: 0; padding: 13px 14px 14px; border-right: 1px solid var(--c-line-soft); }
+.campaign-property:first-child { padding-left: 0; }
+.campaign-property:last-child { padding-right: 0; border-right: 0; }
+.campaign-property dt { margin: 0; color: var(--c-steel); font-size: 9px; line-height: 1.3; }
+.campaign-property dd { margin: 4px 0 0; overflow: hidden; color: var(--c-ink); font-size: 10px; font-weight: 600; line-height: 1.4; text-overflow: ellipsis; white-space: nowrap; }
+.campaign-property .status-chip { min-height: 20px; padding: 2px 7px; border-radius: 6px; font-size: 8px; }
+.campaign-section-head { display: flex; align-items: center; justify-content: space-between; gap: 18px; margin: 28px 0 11px; }
+.campaign-section-head h2 { margin: 0; color: var(--c-ink); font-size: 14px; font-weight: 600; }
+.campaign-action { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid var(--c-charcoal); border-radius: 8px; background: var(--c-charcoal); color: #fff; font-size: 11px; font-weight: 500; cursor: pointer; }
+.campaign-action:hover { border-color: var(--c-ink); background: var(--c-ink); }
+.campaign-action .material-symbols-outlined { font-size: 16px; }
+.adunit-list { display: grid; gap: 12px; }
+.campaign-empty-state { min-height: 270px; display: grid; place-items: center; border-top: 1px solid var(--c-line-soft); }
+.campaign-empty-inner { width: min(620px,100%); padding: 48px 18px; text-align: center; }
+.campaign-empty-icon { width: 42px; height: 42px; display: grid; place-items: center; margin: 0 auto 14px; border: 1px solid var(--c-line); border-radius: 10px; background: var(--c-surface-soft); color: var(--c-stone); }
+.campaign-empty-icon .material-symbols-outlined { font-size: 21px; }
+.campaign-empty-state h3 { margin: 0; color: var(--c-charcoal); font-size: 13px; font-weight: 600; }
+.campaign-empty-state p { margin: 7px auto 17px; overflow: hidden; color: var(--c-steel); font-size: 10px; line-height: 1.55; text-overflow: ellipsis; white-space: nowrap; }
+@media (max-width: 1000px) {
+  .campaign-properties { grid-template-columns: repeat(4,minmax(0,1fr)); }
+  .campaign-property { border-bottom: 1px solid var(--c-line-soft); }
+  .campaign-property:nth-child(4n) { border-right: 0; }
+}
+@media (max-width: 760px) {
+  .campaign-properties { grid-template-columns: repeat(2,minmax(0,1fr)); }
+  .campaign-property:nth-child(odd) { padding-left: 0; }
+  .campaign-property:nth-child(even) { padding-right: 0; border-right: 0; }
+}
+@media (max-width: 520px) {
+  .campaign-page-bar { padding: 0 14px; }
+  .campaign-content { padding: 18px 14px 58px; }
+  .campaign-head { min-height: auto; display: grid; gap: 4px; padding: 15px; }
+  .campaign-divider { display: none; }
+  .campaign-heading-copy { display: block; }
+  .campaign-heading-copy p { margin-top: 3px; white-space: normal; }
+  .campaign-properties { grid-template-columns: 1fr; padding: 0 15px; }
+  .campaign-property,.campaign-property:nth-child(odd),.campaign-property:nth-child(even) { padding: 11px 0; border-right: 0; border-bottom: 1px solid var(--c-line-soft); }
+  .campaign-property:last-child { border-bottom: 0; }
+  .campaign-section-head .campaign-action span:last-child { display: none; }
+  .campaign-empty-state p { white-space: normal; }
+}
+</style>

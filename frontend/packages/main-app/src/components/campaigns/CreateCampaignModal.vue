@@ -221,6 +221,22 @@ const isCampaignBudgetEnabled = computed(() => {
   return formData.value.campaignBudget === '开启'
 })
 
+const campaignStatusLabel = computed(() => {
+  const labels: Record<string, string> = {
+    draft: '草稿',
+    running: '进行中',
+    active: '进行中',
+    paused: '暂停'
+  }
+  return labels[formData.value.campaignStatus] || formData.value.campaignStatus
+})
+
+const campaignStatusTone = computed(() => {
+  if (formData.value.campaignStatus === 'paused') return 'paused'
+  if (formData.value.campaignStatus === 'running' || formData.value.campaignStatus === 'active') return 'active'
+  return 'draft'
+})
+
 // 监听 Buying Type 改变，自动调整 Objective
 watch(() => formData.value.buyingType, (newBuyingType) => {
   const allowedObjectives = filteredObjectiveOptions.value
@@ -437,22 +453,22 @@ defineExpose({
   <Transition name="fade">
     <div
       v-if="show"
-      class="fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
+      class="campaign-drawer-layer fixed inset-0 bg-black/50 backdrop-blur-sm z-50"
       @click.self="handleClose"
     >
       <!-- 弹窗容器 - 右侧抽屉 -->
       <Transition name="slide">
         <div
           v-if="show"
-          class="fixed right-0 top-0 h-full bg-white dark:bg-slate-800 shadow-2xl w-full max-w-[600px] overflow-hidden flex flex-col rounded-l-md"
+          class="campaign-drawer fixed right-0 top-0 h-full bg-white dark:bg-slate-800 shadow-2xl w-full max-w-[600px] overflow-hidden flex flex-col rounded-l-md"
         >
           <!-- 弹窗头部 -->
-          <div class="flex items-center justify-between px-[15px] py-[10px] border-b border-slate-200 dark:border-slate-700">
+          <div class="campaign-drawer-head flex items-center justify-between px-[15px] py-[10px] border-b border-slate-200 dark:border-slate-700">
             <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">
               {{ isEditMode ? '编辑 Campaign' : '创建 Campaign' }}
             </h3>
             <button
-              class="p-[4px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+              class="campaign-close p-[4px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
               @click="handleClose"
               :disabled="submitting"
             >
@@ -461,9 +477,9 @@ defineExpose({
           </div>
 
           <!-- 弹窗内容 -->
-          <div class="flex-1 overflow-y-auto px-[15px] py-[10px]">
+          <div class="campaign-drawer-body flex-1 overflow-y-auto px-[15px] py-[10px]">
             <!-- 说明文字 -->
-            <div class="mb-[13px] p-[10px] bg-slate-50 dark:bg-slate-700/30 rounded-md">
+            <div class="campaign-framework-note mb-[13px] p-[10px] bg-slate-50 dark:bg-slate-700/30 rounded-md">
               <p class="text-[10px] text-slate-600 dark:text-slate-400 leading-relaxed">
                 <strong class="text-slate-700 dark:text-slate-300">Meta Campaign 框架</strong><br>
                 项目对应 Meta Campaign 层级；下层计划对应 Meta Ad Set，素材对应 Meta Ad 素材配置。这里配置项目归属与 Campaign 字段。
@@ -471,7 +487,7 @@ defineExpose({
             </div>
 
             <!-- 表单 -->
-            <form @submit.prevent="handleSave" class="space-y-[10px]">
+            <form @submit.prevent="handleSave" class="campaign-form space-y-[10px]">
               <!-- 第一行：投放渠道 + 广告账户 -->
               <div class="grid grid-cols-2 gap-[10px]">
                 <!-- 投放渠道 -->
@@ -627,8 +643,8 @@ defineExpose({
 
                 <!-- Campaign Status -->
                 <div>
-                  <label class="block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
-                    Campaign Status
+                  <label class="campaign-status-label block text-[10px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
+                    <span>Campaign Status</span><span class="campaign-status-indicator" :class="campaignStatusTone">{{ campaignStatusLabel }}</span>
                   </label>
                   <select
                     v-model="formData.campaignStatus"
@@ -769,10 +785,10 @@ defineExpose({
           </div>
 
           <!-- 弹窗底部 -->
-          <div class="flex items-center justify-end gap-[8px] px-[15px] py-[10px] border-t border-slate-200 dark:border-slate-700">
+          <div class="campaign-drawer-actions flex items-center justify-end gap-[8px] px-[15px] py-[10px] border-t border-slate-200 dark:border-slate-700">
             <button
               type="button"
-              class="px-[12px] py-[6px] text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
+              class="campaign-secondary px-[12px] py-[6px] text-[11px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
               @click="handleClose"
               :disabled="submitting"
             >
@@ -780,7 +796,7 @@ defineExpose({
             </button>
             <button
               type="button"
-              class="px-[12px] py-[6px] text-[11px] font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+              class="campaign-confirm px-[12px] py-[6px] text-[11px] font-medium text-white bg-blue-600 rounded-md hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
               @click="handleSave"
               :disabled="submitting"
             >
@@ -794,6 +810,59 @@ defineExpose({
 </template>
 
 <style scoped>
+.campaign-drawer-layer {
+  --cm-surface: #f6f5f4;
+  --cm-surface-soft: #fafaf9;
+  --cm-line: #e5e3df;
+  --cm-line-soft: #ede9e4;
+  --cm-line-strong: #c8c4be;
+  --cm-ink: #1a1a1a;
+  --cm-charcoal: #37352f;
+  --cm-slate: #5d5b54;
+  --cm-steel: #787671;
+  --cm-stone: #a4a097;
+  background: rgba(26,26,26,.48) !important;
+  font-family: "Notion Sans", "Avenir Next", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+.campaign-drawer { width: min(680px,100vw) !important; max-width: none !important; border-left: 1px solid var(--cm-line); border-radius: 0 !important; background: #fff !important; box-shadow: rgba(15,15,15,.20) -18px 0 52px -18px !important; }
+.campaign-drawer-head { min-height: 57px; padding: 0 18px !important; border-color: var(--cm-line) !important; }
+.campaign-drawer-head h3 { margin: 0; color: var(--cm-ink) !important; font-size: 15px !important; font-weight: 600; letter-spacing: -.2px; }
+.campaign-close { width: 30px; height: 30px; display: grid; place-items: center; padding: 0 !important; border: 0; border-radius: 6px; background: transparent; color: var(--cm-steel); }
+.campaign-close:hover { background: var(--cm-surface) !important; color: var(--cm-ink); }
+.campaign-close .material-symbols-outlined { font-size: 18px !important; }
+.campaign-drawer-body { padding: 14px 18px 24px !important; scrollbar-color: var(--cm-line-strong) transparent; }
+.campaign-framework-note { margin-bottom: 15px !important; padding: 12px !important; border: 0 !important; border-radius: 8px; background: var(--cm-surface) !important; }
+.campaign-framework-note p { margin: 0; color: var(--cm-slate) !important; font-size: 10px !important; line-height: 1.55; }
+.campaign-framework-note strong { display: inline-block; margin-bottom: 4px; color: var(--cm-charcoal) !important; font-size: 10px; font-weight: 600; }
+.campaign-form { display: grid; gap: 11px; }
+.campaign-form > div { margin: 0 !important; }
+.campaign-form label { color: var(--cm-slate) !important; font-size: 10px !important; font-weight: 500 !important; }
+.campaign-form input,.campaign-form select { width: 100%; height: 38px; padding: 0 10px !important; border: 1px solid var(--cm-line-strong) !important; border-radius: 8px !important; outline: none; background: #fff !important; color: var(--cm-charcoal) !important; font-size: 11px !important; box-shadow: none !important; }
+.campaign-form input::placeholder { color: var(--cm-stone); }
+.campaign-form input:focus,.campaign-form select:focus { border: 2px solid var(--cm-charcoal) !important; box-shadow: none !important; }
+.campaign-form input:disabled,.campaign-form select:disabled { border-color: var(--cm-line) !important; background: var(--cm-surface-soft) !important; color: var(--cm-stone) !important; opacity: 1 !important; }
+.campaign-status-label { display: flex !important; align-items: center; justify-content: space-between; gap: 8px; }
+.campaign-status-indicator { min-height: 20px; display: inline-flex; align-items: center; gap: 5px; padding: 2px 6px; border-radius: 6px; font-size: 8px; font-weight: 600; }
+.campaign-status-indicator::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+.campaign-status-indicator.draft { background: #fff3d6; color: #805700; }
+.campaign-status-indicator.active { background: #ecfdf5; color: #047857; }
+.campaign-status-indicator.paused { border: 1px solid #fdba74; background: #fff7ed; color: #ea580c; }
+.campaign-drawer-actions { min-height: 58px; padding: 0 18px !important; border-color: var(--cm-line) !important; background: rgba(255,255,255,.96); }
+.campaign-secondary,.campaign-confirm { min-height: 34px; display: inline-flex; align-items: center; justify-content: center; padding: 0 14px !important; border-radius: 8px !important; font-size: 11px !important; font-weight: 500; }
+.campaign-secondary { border: 1px solid var(--cm-line-strong) !important; background: #fff !important; color: var(--cm-charcoal) !important; }
+.campaign-secondary:hover { border-color: var(--cm-charcoal) !important; color: var(--cm-ink) !important; }
+.campaign-confirm { border: 1px solid #2383e2 !important; background: #2383e2 !important; color: #fff !important; }
+.campaign-confirm:hover { border-color: #1b6fc1 !important; background: #1b6fc1 !important; }
+@media (max-width: 720px) {
+  .campaign-drawer { width: 100vw !important; border-left: 0; }
+  .campaign-drawer-body { padding: 14px 14px 24px !important; }
+  .campaign-drawer-head,.campaign-drawer-actions { padding-right: 14px !important; padding-left: 14px !important; }
+}
+@media (max-width: 520px) {
+  .campaign-form .grid-cols-2 { grid-template-columns: 1fr; }
+  .campaign-drawer-head { min-height: 52px; }
+  .campaign-drawer-actions { min-height: 56px; }
+}
 .fade-enter-active,
 .fade-leave-active {
   transition: opacity 0.2s ease;
