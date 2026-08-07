@@ -8,7 +8,7 @@ import ProjectListWorkspace from './ProjectListWorkspace.vue'
 import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus } from '../TaskStatusPanel.vue'
 import ProjectCollectionView from '@/components/projects/ProjectCollectionView.vue'
 import CampaignCollectionView from '@/components/campaigns/CampaignCollectionView.vue'
-import MaterialCollectionView from '@/components/materials/MaterialCollectionView.vue'
+import MaterialLibraryView from '@/components/materials/MaterialLibraryView.vue'
 import type { Project } from '@/api/projects'
 import type { Campaign } from '@/api/campaigns'
 import type { Material } from '@/api/materials'
@@ -302,7 +302,7 @@ function formatToolResult(value: unknown): string {
                   {{ materialItems.length }} 个素材
                 </span>
               </div>
-              <MaterialCollectionView
+              <MaterialLibraryView
                 :materials="materialItems"
                 embedded
               />

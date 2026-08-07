@@ -1,9 +1,10 @@
 <script setup lang="ts">
+import MaterialLibraryView from './MaterialLibraryView.vue'
 import type { Material } from '@/api/materials'
+import type { MaterialRow } from '@/pages/creatives/materialsAdapter'
 
-defineProps<{
+const props = defineProps<{
   materials: Material[]
-  materialImages?: Map<string, string>
   embedded?: boolean
 }>()
 
@@ -13,124 +14,17 @@ const emit = defineEmits<{
   preview: [material: Material]
 }>()
 
-function getMaterialImageSrc(materialImages: Map<string, string> | undefined, material: Material): string | undefined {
-  return materialImages?.get(material.id)
-    || material.poster_url
-    || material.preview_url
-    || material.thumbnail_url
-    || material.url
-    || undefined
-}
-
-function getStatusColor(status: string) {
-  const colors: Record<string, string> = {
-    running: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
-    ready: 'bg-blue-50 dark:bg-blue-900/30 text-blue-600',
-    fatigue: 'bg-orange-50 dark:bg-orange-900/30 text-orange-600'
-  }
-  return colors[status] || 'bg-slate-50 dark:bg-slate-800 text-slate-600'
-}
-
-function getStatusLabel(status: string) {
-  const labels: Record<string, string> = {
-    running: '投放中',
-    ready: '待投放',
-    fatigue: '已疲劳'
-  }
-  return labels[status] || status
+function handleSelect(row: MaterialRow): void {
+  emit('select', row.material)
+  emit('preview', row.material)
 }
 </script>
 
 <template>
-  <div>
-    <div
-      v-if="materials.length"
-      class="grid gap-4"
-      :class="embedded ? 'grid-cols-1 2xl:grid-cols-2' : 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4'"
-    >
-      <div
-        v-for="creative in materials"
-        :key="creative.id"
-        class="group relative cursor-pointer overflow-hidden rounded-md border border-slate-200 bg-white transition-all hover:shadow-lg dark:border-slate-700 dark:bg-slate-800"
-        @click="emit('preview', creative)"
-      >
-        <div class="relative aspect-[9/16] overflow-hidden bg-slate-100 dark:bg-slate-800">
-          <img
-            v-if="getMaterialImageSrc(materialImages, creative)"
-            :src="getMaterialImageSrc(materialImages, creative)"
-            :alt="creative.name"
-            class="h-full w-full object-cover"
-          />
-          <div v-else class="flex h-full w-full items-center justify-center bg-gradient-to-br from-slate-200 to-slate-300 dark:from-slate-700 dark:to-slate-800">
-            <span class="material-symbols-outlined text-6xl text-slate-400 dark:text-slate-500">video_library</span>
-          </div>
-          <div class="absolute right-2 top-2">
-            <span class="rounded-md px-2 py-1 text-xs font-semibold backdrop-blur-sm" :class="getStatusColor(creative.status)">
-              {{ getStatusLabel(creative.status) }}
-            </span>
-          </div>
-          <div class="absolute inset-0 flex items-center justify-center bg-black/20 opacity-0 transition-opacity group-hover:opacity-100">
-            <div class="flex h-12 w-12 items-center justify-center rounded-full bg-white/90 text-primary backdrop-blur-sm">
-              <span class="material-symbols-outlined text-2xl">visibility</span>
-            </div>
-          </div>
-        </div>
-
-        <div class="p-3">
-          <h3 class="mb-2 truncate text-xs font-bold text-slate-900 dark:text-white">{{ creative.name }}</h3>
-          <div class="mb-2 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-            <span v-if="creative.duration">{{ creative.duration }}s</span>
-            <span v-if="creative.duration && creative.tags && creative.tags.length > 0">·</span>
-            <span v-if="creative.tags && creative.tags.length > 0" class="truncate">{{ creative.tags[0] }}</span>
-          </div>
-          <div class="grid grid-cols-2 gap-2">
-            <div class="text-left">
-              <div class="mb-0.5 text-[10px] text-slate-400">CTR预估</div>
-              <div class="text-xs font-bold text-slate-900 dark:text-white">{{ creative.ctr_estimate?.toFixed(1) || 'N/A' }}%</div>
-            </div>
-            <div class="text-left">
-              <div class="mb-0.5 text-[10px] text-slate-400">文件大小</div>
-              <div class="text-xs font-bold text-slate-900 dark:text-white">{{ creative.file_size ? (creative.file_size / 1024).toFixed(0) + 'KB' : 'N/A' }}</div>
-            </div>
-          </div>
-          <div v-if="embedded" class="mt-3 flex gap-2 border-t border-slate-100 pt-3 dark:border-slate-700" @click.stop>
-            <button class="flex-1 rounded bg-primary/10 px-2 py-1.5 text-[11px] font-semibold text-primary hover:bg-primary/15" @click="emit('preview', creative)">
-              预览
-            </button>
-          </div>
-        </div>
-        <button
-          v-if="embedded"
-          class="mention-btn absolute top-[8px] right-[8px] z-10 rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-all hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
-          title="引用到对话"
-          @click.stop="emit('mention', creative)"
-        >
-          @mention
-        </button>
-      </div>
-    </div>
-
-    <div v-else class="flex flex-col items-center justify-center py-16">
-      <span class="material-symbols-outlined mb-4 text-6xl text-slate-300 dark:text-slate-700">video_library</span>
-      <p class="text-sm text-slate-500 dark:text-slate-400">暂无素材</p>
-    </div>
-  </div>
+  <MaterialLibraryView
+    :materials="props.materials"
+    :embedded="props.embedded"
+    @select="handleSelect"
+    @mention="emit('mention', $event)"
+  />
 </template>
-
-<style scoped>
-.mention-btn {
-  cursor: pointer;
-}
-
-.mention-btn:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
-  background: white !important;
-  border-color: rgb(var(--color-primary)) !important;
-}
-
-.mention-btn:active {
-  transform: translateY(0) scale(0.95);
-  transition-duration: 0.1s;
-}
-</style>

@@ -6,7 +6,7 @@
 import { computed, ref, watch } from 'vue'
 import ProjectCollectionView from '@/components/projects/ProjectCollectionView.vue'
 import CampaignCollectionView from '@/components/campaigns/CampaignCollectionView.vue'
-import MaterialCollectionView from '@/components/materials/MaterialCollectionView.vue'
+import MaterialLibraryView from '@/components/materials/MaterialLibraryView.vue'
 import WorkspaceProjectCreate from './WorkspaceProjectCreate.vue'
 import CreateProjectForm from '@/components/projects/CreateProjectForm.vue'
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
@@ -15,6 +15,7 @@ import { getProjectDetail, type Project } from '@/api/projects'
 import { getCampaignDetail, type Campaign } from '@/api/campaigns'
 import { getMaterialDetail, type Material } from '@/api/materials'
 import { fromCreateProjectArgs, toCreateProjectPayload, type ProjectFormModel } from '@/components/projects/projectFormModel'
+import type { MaterialRow } from '@/pages/creatives/materialsAdapter'
 
 const props = defineProps<{
   projection: WorkspaceProjection | null
@@ -375,6 +376,10 @@ function handlePreviewMaterial(material: Material): void {
   handleSelectMaterial(material)
   emit('viewMaterial', material.id)
 }
+
+function handleMaterialRowSelect(row: MaterialRow): void {
+  handlePreviewMaterial(row.material)
+}
 </script>
 
 <template>
@@ -445,13 +450,12 @@ function handlePreviewMaterial(material: Material): void {
       <div v-if="projection.mode === 'loading'" class="flex items-center justify-center py-[40px]">
         <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
-      <MaterialCollectionView
+      <MaterialLibraryView
         v-else
         :materials="materials"
         embedded
-        @select="handleSelectMaterial"
+        @select="handleMaterialRowSelect"
         @mention="handleMentionMaterial"
-        @preview="handlePreviewMaterial"
       />
     </div>
 
@@ -652,16 +656,15 @@ function handlePreviewMaterial(material: Material): void {
           @view="campaignId => emit('viewCampaign', campaignId)"
         />
 
-        <MaterialCollectionView
+        <MaterialLibraryView
           v-else-if="approvalDomain === 'material' && materialApprovalList.length"
           :materials="materialApprovalList"
           embedded
-          @preview="handlePreviewMaterial"
-          @select="handleSelectMaterial"
+          @select="handleMaterialRowSelect"
           @mention="handleMentionMaterial"
         />
 
-        <MaterialCollectionView
+        <MaterialLibraryView
           v-else-if="approvalDomain === 'material' && approvalAction === 'create' && materialApprovalList.length"
           :materials="materialApprovalList"
           embedded

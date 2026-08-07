@@ -1,10 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
+import MaterialLibraryView from '@/components/materials/MaterialLibraryView.vue'
 import {
   deleteMaterial,
   getMaterialImage,
@@ -24,6 +25,7 @@ import { navItems } from '@/config/navigation'
 import { useToast } from '@/composables/useToast'
 import { toMaterialRows, type MaterialRow } from './materialsAdapter'
 
+const route = useRoute()
 const router = useRouter()
 const auth = useAuthStore()
 const { success, error: showError } = useToast()
@@ -32,9 +34,7 @@ const activeSession = ref('sess_g001')
 const loading = ref(false)
 const error = ref('')
 const materials = ref<Material[]>([])
-const materialPreviews = ref<Map<string, string>>(new Map())
 const materialOriginals = ref<Map<string, string>>(new Map())
-const materialMimeTypes = ref<Map<string, string>>(new Map())
 const selectedMaterialId = ref<string | null>(null)
 const detailOpen = ref(false)
 const deletingMaterial = ref<MaterialRow | null>(null)
@@ -45,13 +45,6 @@ const editForm = ref({
   tagsText: '',
 })
 const savingEdit = ref(false)
-
-const searchQuery = ref('')
-const accountFilter = ref('all')
-const platformFilter = ref('all')
-const sourceFilter = ref('all')
-const ratioFilter = ref('all')
-const sortKey = ref('created_at')
 
 const showUploadModal = ref(false)
 const uploadFiles = ref<File[]>([])
@@ -101,47 +94,14 @@ type UploadMediaMetadata = {
   poster?: Blob
 }
 
-const materialRows = computed(() => toMaterialRows(
-  materials.value,
-  materialPreviews.value,
-  materialMimeTypes.value,
-))
-
-const platformOptions = computed(() => Array.from(new Set(
-  materialRows.value.flatMap(row => row.platforms)
-)).sort())
-
-const accountOptions = computed(() => Array.from(new Set(
-  materials.value.flatMap(material => material.platform_assets?.map(asset => asset.ad_account_id) || [])
-)).sort())
-
 const uploadFile = computed(() => uploadFiles.value[0] || null)
 const uploadPreviewUrl = ref('')
 const uploadIsVideo = computed(() => uploadFile.value?.type.startsWith('video/') || false)
 
-const filteredRows = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
-  const rows = materialRows.value.filter(row => {
-    if (accountFilter.value !== 'all' && !row.material.platform_assets?.some(asset => asset.ad_account_id === accountFilter.value)) return false
-    if (platformFilter.value !== 'all' && !row.platforms.includes(platformFilter.value)) return false
-    if (sourceFilter.value !== 'all' && row.source !== sourceFilter.value) return false
-    if (ratioFilter.value !== 'all' && row.ratio !== ratioFilter.value) return false
-    if (!query) return true
-    const accountTerms = row.material.platform_assets?.flatMap(asset => [
-      asset.ad_account_name || '',
-      asset.ad_account_id,
-      asset.external_asset_id,
-    ]) || []
-    return [row.name, row.material.original_filename || '', row.id, row.sourceLabel, row.format, ...row.tags, ...row.platforms, ...accountTerms]
-      .some(value => value.toLowerCase().includes(query))
-  })
-  return [...rows].sort((a, b) => sortKey.value === 'name'
-    ? a.name.localeCompare(b.name)
-    : new Date(b.material.created_at).getTime() - new Date(a.material.created_at).getTime())
-})
 const selectedRow = computed(() => {
-  if (!filteredRows.value.length) return null
-  return filteredRows.value.find(row => row.id === selectedMaterialId.value) || filteredRows.value[0]
+  const material = materials.value.find(item => item.id === selectedMaterialId.value) || materials.value[0]
+  if (!material) return null
+  return toMaterialRows([material], new Map(), new Map())[0] || null
 })
 const selectedPreviewUrl = computed(() => {
   if (!selectedRow.value) return ''
@@ -164,8 +124,13 @@ const loadPageData = async () => {
     const materialData = await getMaterials({ limit: 200 })
     materials.value = materialData
 
-    await loadPreviewSources(materialData)
-    if (!selectedMaterialId.value && materialData.length > 0) {
+    const requestedMaterialId = typeof route.query.material_id === 'string' ? route.query.material_id : ''
+    const requestedMaterial = materialData.find(material => material.id === requestedMaterialId)
+    if (requestedMaterial) {
+      selectedMaterialId.value = requestedMaterial.id
+      detailOpen.value = true
+      await loadOriginalSource(requestedMaterial)
+    } else if (!selectedMaterialId.value && materialData.length > 0) {
       selectedMaterialId.value = materialData[0].id
     }
   } catch (err: any) {
@@ -174,27 +139,6 @@ const loadPageData = async () => {
   } finally {
     loading.value = false
   }
-}
-
-const loadPreviewSources = async (data: Material[]) => {
-  await Promise.all(data.map(async material => {
-    if (materialPreviews.value.has(material.id)) return
-    try {
-      const preview = await getMaterialImage(material.id, true)
-      materialPreviews.value.set(material.id, preview.url || preview.data || '')
-      materialMimeTypes.value.set(material.id, preview.mime_type || '')
-    } catch {
-      try {
-        const original = await getMaterialImage(material.id, false)
-        materialPreviews.value.set(material.id, original.url || original.data || '')
-        materialMimeTypes.value.set(material.id, original.mime_type || '')
-      } catch {
-        if (material.thumbnail_url || material.url) {
-          materialPreviews.value.set(material.id, material.thumbnail_url || material.url)
-        }
-      }
-    }
-  }))
 }
 
 const loadOriginalSource = async (material: Material) => {
@@ -721,117 +665,14 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
             {{ error }}
           </div>
 
-          <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-            <div class="border-b border-slate-200 px-[16px] py-[14px] dark:border-slate-800">
-              <div class="flex flex-wrap items-center gap-[8px]">
-                <div class="relative min-w-[240px] flex-1">
-                  <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">search</span>
-                  <input v-model="searchQuery" type="text" placeholder="搜索名称、文件名、标签或平台账户" class="w-full pl-[31px] pr-[10px] py-[7px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary" />
-                </div>
-                <select v-model="accountFilter" class="filter-select min-w-[150px]">
-                  <option value="all">全部广告账户</option>
-                  <option v-for="account in accountOptions" :key="account" :value="account">{{ account }}</option>
-                </select>
-                <select v-model="sourceFilter" class="filter-select">
-                  <option value="all">全部来源</option>
-                  <option value="oss">手动上传</option>
-                  <option value="local">历史素材</option>
-                  <option value="meta_import">Meta 导入</option>
-                  <option value="google_import">Google 导入</option>
-                  <option value="tiktok_import">TikTok 导入</option>
-                  <option value="imported">其他外部导入</option>
-                  <option value="unknown">未知来源</option>
-                </select>
-                <select v-model="ratioFilter" class="filter-select">
-                  <option value="all">全部比例</option>
-                  <option value="9:16">9:16</option>
-                  <option value="1:1">1:1</option>
-                  <option value="4:5">4:5</option>
-                  <option value="未知">未知</option>
-                </select>
-                <select v-model="sortKey" class="filter-select">
-                  <option value="created_at">最近创建</option>
-                  <option value="name">名称</option>
-                </select>
-              </div>
-            </div>
-
-            <div class="flex items-center justify-between border-b border-slate-100 px-[16px] py-[9px] dark:border-slate-800">
-              <span class="text-[10px] font-medium text-slate-400">{{ filteredRows.length }} 项素材</span>
-              <span class="text-[10px] text-slate-400">点击素材查看完整信息</span>
-            </div>
-            <div class="overflow-x-auto">
-              <table class="min-w-[980px] w-full text-left">
-                <thead class="bg-slate-50 dark:bg-slate-800/60 text-[10px] uppercase text-slate-500 dark:text-slate-400">
-                  <tr>
-                    <th class="px-[12px] py-[9px] font-semibold">素材</th>
-                    <th class="px-[10px] py-[9px] font-semibold">平台 / 账户</th>
-                    <th class="px-[10px] py-[9px] font-semibold">来源</th>
-                    <th class="px-[10px] py-[9px] font-semibold">类型 / 格式</th>
-                    <th class="px-[10px] py-[9px] font-semibold">尺寸 / 比例</th>
-                    <th class="px-[10px] py-[9px] font-semibold">大小 / 时长</th>
-                    <th class="px-[10px] py-[9px] font-semibold">创建时间</th>
-                    <th class="px-[10px] py-[9px] font-semibold">操作</th>
-                  </tr>
-                </thead>
-                <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
-                  <tr v-if="loading">
-                    <td colspan="8" class="px-[12px] py-[42px] text-center text-[11px] text-slate-500">
-                      <span class="material-symbols-outlined text-[18px] animate-spin align-middle mr-[6px]">progress_activity</span>
-                      正在加载素材数据
-                    </td>
-                  </tr>
-                  <tr v-else-if="filteredRows.length === 0">
-                    <td colspan="8" class="px-[12px] py-[42px] text-center text-[11px] text-slate-500">
-                      暂无匹配素材
-                    </td>
-                  </tr>
-                  <tr
-                    v-for="row in filteredRows"
-                    v-else
-                    :key="row.id"
-                    class="cursor-pointer border-l-2 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60"
-                    :class="selectedRow?.id === row.id ? 'border-l-primary bg-primary/[.04] dark:bg-primary/[.08]' : ''"
-                    @click="selectRow(row)"
-                  >
-                    <td class="px-[12px] py-[10px]">
-                      <div class="flex items-center gap-[10px] min-w-[280px]">
-                        <div class="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
-                          <img v-if="row.previewUrl" :src="row.previewUrl" :alt="row.name" class="h-full w-full object-cover" loading="lazy" />
-                          <span v-if="row.previewUrl && row.mediaKind === 'video'" class="absolute left-1/2 top-1/2 grid h-[28px] w-[28px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white/90 bg-slate-950/40 text-white">
-                            <span class="material-symbols-outlined text-[15px]">play_arrow</span>
-                          </span>
-                          <div v-if="!row.previewUrl" class="h-full w-full flex items-center justify-center">
-                            <span class="material-symbols-outlined text-[18px] text-slate-400">image</span>
-                          </div>
-                        </div>
-                        <div class="min-w-0">
-                          <div class="flex items-center gap-[6px]">
-                            <p class="truncate text-[12px] font-semibold text-slate-900 dark:text-white">{{ row.name }}</p>
-                          </div>
-                          <p class="mt-[3px] text-[10px] text-slate-500 dark:text-slate-400 truncate">{{ row.id }} · {{ row.format }} · {{ row.ratio }}</p>
-                          <div class="mt-[5px] flex flex-wrap gap-[4px]">
-                            <span v-for="tag in row.tags.slice(0, 3)" :key="tag" class="rounded bg-slate-100 dark:bg-slate-800 px-[5px] py-[2px] text-[9px] text-slate-600 dark:text-slate-300">{{ tag }}</span>
-                          </div>
-                        </div>
-                      </div>
-                    </td>
-                    <td class="max-w-[250px] px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><div v-if="row.material.platform_assets?.length" class="space-y-[4px]"><div v-for="asset in row.material.platform_assets" :key="asset.id" class="flex flex-wrap items-center gap-[4px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span><span class="asset-status">{{ platformAssetStatus(asset.normalized_status) }}</span></div></div><span v-else class="text-slate-400">未绑定</span></td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-700 dark:text-slate-300"><span class="source-chip">{{ row.sourceLabel }}</span></td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.mediaKind === 'video' ? '视频' : '图片' }} · {{ row.format }}</td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.material.width && row.material.height ? `${row.material.width} × ${row.material.height}` : '-' }} · {{ row.ratio }}</td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.fileSizeLabel }}<span v-if="row.durationLabel !== '-'"> · {{ row.durationLabel }}</span></td>
-                    <td class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.createdAtLabel }}</td>
-                    <td class="px-[10px] py-[10px]">
-                      <button class="rounded-md p-[5px] text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" title="从 ANIFORCE 删除" @click.stop="askDeleteMaterial(row)">
-                        <span class="material-symbols-outlined text-[15px]">delete</span>
-                      </button>
-                    </td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-          </div>
+          <MaterialLibraryView
+            :materials="materials"
+            :loading="loading"
+            :selected-material-id="selectedMaterialId"
+            allow-delete
+            @select="selectRow"
+            @delete="askDeleteMaterial"
+          />
         </div>
       </section>
 
