@@ -4,6 +4,12 @@ import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import { navItems } from '@/config/navigation'
 
+const props = withDefaults(defineProps<{
+  embedded?: boolean
+}>(), {
+  embedded: false,
+})
+
 const router = useRouter()
 const activeSession = ref('sess-g001')
 const period = ref('7')
@@ -128,8 +134,9 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="dashboard-shell">
+  <div class="dashboard-shell" :class="{ embedded: props.embedded }">
     <SidebarNav
+      v-if="!props.embedded"
       :nav-items="navItems"
       :sessions="sessions"
       @switch-panel="switchPanel"
@@ -255,6 +262,90 @@ onBeforeUnmount(() => {
   display: flex;
   overflow: hidden;
   background: #fff;
+}
+
+.dashboard-shell.embedded {
+  height: 100%;
+  min-height: 0;
+}
+
+.dashboard-shell.embedded .replay-page {
+  min-width: 0;
+}
+
+.dashboard-shell.embedded .replay-bar {
+  align-items: flex-start;
+  flex-direction: column;
+  padding-top: 10px;
+  padding-bottom: 10px;
+}
+
+.dashboard-shell.embedded .replay-actions {
+  display: grid;
+  width: 100%;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  overflow: visible;
+  padding-bottom: 2px;
+}
+
+.dashboard-shell.embedded .filter-field .period-select,
+.dashboard-shell.embedded .refresh-button {
+  width: 100%;
+  min-width: 0;
+}
+
+.dashboard-shell.embedded .replay-content {
+  padding: 12px 12px 52px;
+}
+
+.dashboard-shell.embedded .replay-kpis {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.dashboard-shell.embedded .replay-kpi {
+  border-bottom: 1px solid #f3f2f0;
+}
+
+.dashboard-shell.embedded .replay-kpi:nth-child(2n)::after {
+  display: none;
+}
+
+.dashboard-shell.embedded .replay-kpi:nth-last-child(-n + 2) {
+  border-bottom: 0;
+}
+
+.dashboard-shell.embedded .trend-grid,
+.dashboard-shell.embedded .replay-split {
+  grid-template-columns: 1fr;
+}
+
+.dashboard-shell.embedded .chart-summary {
+  width: 100%;
+  height: auto;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-rows: 1fr;
+}
+
+.dashboard-shell.embedded .summary-box {
+  border-right: 1px solid var(--hairline-soft);
+  border-bottom: 0;
+}
+
+.dashboard-shell.embedded .summary-box:last-child {
+  border-right: 0;
+}
+
+.dashboard-shell.embedded .segment-grid,
+.dashboard-shell.embedded .platform-grid {
+  grid-template-columns: 1fr;
+}
+
+.dashboard-shell.embedded .platform-card {
+  display: block;
+}
+
+.dashboard-shell.embedded .platform-card .platform-top {
+  border-right: 0;
 }
 
 .replay-page {

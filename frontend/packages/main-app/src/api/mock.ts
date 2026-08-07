@@ -52,8 +52,34 @@ const members: any[] = [
 ]
 
 const agentSessions: any[] = [
-  { id: 'session-001', session_id: 'session-001', title: 'Candy Match 素材诊断', status: 'completed', created_at: '2026-08-04T09:20:00Z', updated_at: '2026-08-04T09:28:00Z', messages: [{ id: 'msg-001', role: 'assistant', content: 'Candy Match 当前高点击素材集中在失败钩子与连击爽感，建议优先扩展 UGC 变体。', created_at: '2026-08-04T09:28:00Z' }] },
-  { id: 'session-002', session_id: 'session-002', title: '日韩短剧投放计划', status: 'completed', created_at: '2026-08-03T15:10:00Z', updated_at: '2026-08-03T15:18:00Z', messages: [{ id: 'msg-002', role: 'assistant', content: '日韩短剧测试建议按情绪冲突、身份反转、悬念截断三类钩子分组测试。', created_at: '2026-08-03T15:18:00Z' }] },
+  {
+    id: 'session-001',
+    session_id: 'session-001',
+    title: 'Candy Match 素材诊断',
+    status: 'completed',
+    created_at: '2026-08-04T09:20:00Z',
+    updated_at: '2026-08-04T09:28:00Z',
+    messages: [
+      { id: 'msg-001-user-1', role: 'user', content: '帮我看一下 Candy Match 最近 7 天的素材表现，重点找出高点击素材的共同点。', created_at: '2026-08-04T09:20:00Z' },
+      { id: 'msg-001-assistant-1', role: 'assistant', content: '我先按点击率、转化率和素材疲劳度做了初步对比。当前表现较好的主要是「UGC 玩家差一步通关」和「糖果连击爽感展示」，点击率分别约为 3.42% 和 2.86%。', created_at: '2026-08-04T09:22:00Z' },
+      { id: 'msg-001-user-2', role: 'user', content: '这两类素材为什么点击高？下一轮应该优先扩展什么方向？', created_at: '2026-08-04T09:25:00Z' },
+      { id: 'msg-001', role: 'assistant', content: 'Candy Match 当前高点击素材集中在失败钩子与连击爽感，建议优先扩展 UGC 变体。', created_at: '2026-08-04T09:28:00Z' },
+    ],
+  },
+  {
+    id: 'session-002',
+    session_id: 'session-002',
+    title: '日韩短剧投放计划',
+    status: 'completed',
+    created_at: '2026-08-03T15:10:00Z',
+    updated_at: '2026-08-03T15:18:00Z',
+    messages: [
+      { id: 'msg-002-user-1', role: 'user', content: '帮我给日韩短剧项目整理一轮素材测试计划，先聚焦 TikTok 冷启动。', created_at: '2026-08-03T15:10:00Z' },
+      { id: 'msg-002-assistant-1', role: 'assistant', content: '当前可用素材以情绪冲突和身份反转为主。建议先用小预算验证前三秒停留、点击率和付费转化，再决定是否扩量。', created_at: '2026-08-03T15:12:00Z' },
+      { id: 'msg-002-user-2', role: 'user', content: '测试结构怎么分组比较清楚？日本和韩国先共用一套框架。', created_at: '2026-08-03T15:15:00Z' },
+      { id: 'msg-002', role: 'assistant', content: '日韩短剧测试建议按情绪冲突、身份反转、悬念截断三类钩子分组测试。', created_at: '2026-08-03T15:18:00Z' },
+    ],
+  },
 ]
 
 let lastAgentPrompt = ''
