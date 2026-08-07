@@ -111,18 +111,18 @@ onMounted(() => {
 
 <template>
   <aside
-    class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
+    class="sidebar-notion bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
     :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
   >
-    <nav class="flex-1 overflow-y-auto pb-0 p-[12px] pt-[20px] space-y-[20px] overflow-x-hidden">
+    <nav class="sidebar-scroll flex-1 overflow-y-auto pb-0 p-[12px] pt-[20px] space-y-[20px] overflow-x-hidden">
       <div>
         <div
-          class="mb-[6px]"
+          class="sidebar-section-head mb-[6px]"
           :class="isCollapsed ? '' : 'flex items-center justify-between px-[6px]'"
         >
-          <span v-if="!isCollapsed" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
+          <span v-if="!isCollapsed" class="sidebar-section-title text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
           <button
-            class="rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
+            class="sidebar-collapse rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
             :class="isCollapsed ? 'w-full py-[10px]' : 'p-[6px]'"
             @click="toggleCollapse"
           >
@@ -131,16 +131,16 @@ onMounted(() => {
             </span>
           </button>
         </div>
-        <ul class="space-y-[12px]">
+        <ul class="sidebar-nav-list space-y-[12px]">
           <li
             v-for="item in navItems"
             :key="item.id"
-            class="flex items-center rounded-lg cursor-pointer transition-all relative group"
+            class="sidebar-nav-item flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
               isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel(item.id)
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ? 'sidebar-item-active'
+                : 'sidebar-item-idle'
             ]"
             @click="handleNavClick(item)"
           >
@@ -157,12 +157,12 @@ onMounted(() => {
 
           <li
             v-if="isAdmin"
-            class="flex items-center rounded-lg cursor-pointer transition-all relative group"
+            class="sidebar-nav-item flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
               isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel('system-admin')
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ? 'sidebar-item-active'
+                : 'sidebar-item-idle'
             ]"
             @click="handleNavClick({ id: 'system-admin', icon: 'admin_panel_settings', label: '系统管理', path: '/system-admin' })"
           >
@@ -179,26 +179,26 @@ onMounted(() => {
         </ul>
       </div>
 
-      <div v-if="displaySessions.length > 0 && !isCollapsed">
-        <div class="mb-[6px] flex items-center justify-between px-[6px]">
-          <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">历史会话</span>
+      <div v-if="displaySessions.length > 0 && !isCollapsed" class="sidebar-session-group">
+        <div class="sidebar-session-head mb-[6px] flex items-center justify-between px-[6px]">
+          <span class="sidebar-section-title text-[10px] font-semibold text-slate-500 dark:text-slate-400">历史会话</span>
           <button
             v-if="sessionCreate"
-            class="flex h-[22px] w-[22px] items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+            class="sidebar-create-session flex h-[22px] w-[22px] items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
             title="新建对话"
             @click.stop="handleCreateSession"
           >
             <span class="material-symbols-outlined text-[14px]">add</span>
           </button>
         </div>
-        <ul class="space-y-[4px]">
+        <ul class="sidebar-session-list space-y-[4px]">
           <li
             v-for="session in displaySessions"
             :key="session.id"
-            class="group flex items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
+            class="sidebar-session-item group flex items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
             :class="session.active
-              ? 'bg-primary/10 text-primary font-semibold'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+              ? 'sidebar-item-active'
+              : 'sidebar-item-idle'"
             @click="handleSessionClick(session)"
           >
             <span class="material-symbols-outlined text-[11px]">chat</span>
@@ -219,14 +219,146 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.sidebar-notion {
+  --sidebar-canvas: #f7f7f5;
+  --sidebar-surface: #efefed;
+  --sidebar-surface-hover: #e9e9e7;
+  --sidebar-line: #e5e3df;
+  --sidebar-ink: #1a1a1a;
+  --sidebar-charcoal: #37352f;
+  --sidebar-slate: #5d5b54;
+  --sidebar-steel: #787671;
+  border-color: var(--sidebar-line) !important;
+  background: var(--sidebar-canvas) !important;
+  color: var(--sidebar-charcoal);
+  font-family: "Notion Sans", "Avenir Next", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.sidebar-scroll {
+  padding: 18px 8px 12px !important;
+}
+
+.sidebar-section-head,
+.sidebar-session-head {
+  min-height: 28px;
+  margin-bottom: 4px !important;
+  padding: 0 6px !important;
+}
+
+.sidebar-section-title {
+  color: var(--sidebar-steel) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+.sidebar-collapse,
+.sidebar-create-session {
+  border: 0;
+  border-radius: 6px !important;
+  background: transparent;
+  color: var(--sidebar-steel) !important;
+}
+
+.sidebar-collapse {
+  width: 28px;
+  height: 28px;
+  padding: 0 !important;
+}
+
+.sidebar-collapse:hover,
+.sidebar-create-session:hover {
+  background: var(--sidebar-surface-hover) !important;
+  color: var(--sidebar-ink) !important;
+}
+
+.sidebar-collapse .material-symbols-outlined {
+  color: inherit !important;
+  font-size: 16px !important;
+}
+
+.sidebar-nav-list,
+.sidebar-session-list {
+  display: grid;
+  gap: 2px;
+}
+
+.sidebar-nav-item,
+.sidebar-session-item {
+  min-height: 34px;
+  padding: 6px 8px !important;
+  border-radius: 6px !important;
+  font-weight: 400 !important;
+  line-height: 1.35;
+}
+
+.sidebar-nav-item {
+  gap: 9px !important;
+}
+
+.sidebar-nav-item > .material-symbols-outlined {
+  width: 18px;
+  flex: 0 0 18px;
+  color: inherit;
+  font-size: 17px !important;
+  text-align: center;
+}
+
+.sidebar-nav-item > span:not(.material-symbols-outlined),
+.sidebar-session-item > span:last-of-type {
+  color: inherit;
+  font-size: 11px !important;
+  font-weight: inherit;
+}
+
+.sidebar-item-idle {
+  color: var(--sidebar-slate) !important;
+}
+
+.sidebar-item-idle:hover {
+  background: var(--sidebar-surface-hover) !important;
+  color: var(--sidebar-charcoal) !important;
+}
+
+.sidebar-item-active {
+  background: var(--sidebar-surface) !important;
+  color: var(--sidebar-ink) !important;
+  font-weight: 500 !important;
+}
+
+.sidebar-session-group {
+  margin-top: 18px;
+}
+
+.sidebar-session-item {
+  gap: 7px !important;
+}
+
+.sidebar-session-item > .material-symbols-outlined {
+  width: 16px;
+  flex: 0 0 16px;
+  font-size: 15px !important;
+}
+
+.sidebar-session-item button {
+  border-radius: 4px !important;
+  color: var(--sidebar-steel) !important;
+}
+
+.sidebar-session-item button:hover {
+  background: rgba(55, 53, 47, 0.08) !important;
+  color: var(--sidebar-ink) !important;
+}
+
 nav::-webkit-scrollbar {
   width: 3px;
 }
 nav::-webkit-scrollbar-thumb {
-  background-color: rgb(203 213 225);
+  background-color: var(--sidebar-line);
   border-radius: 1px;
 }
 nav::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(148 163 184);
+  background-color: #c8c4be;
 }
 </style>
