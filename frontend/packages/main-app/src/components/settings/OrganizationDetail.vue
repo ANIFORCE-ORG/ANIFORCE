@@ -53,7 +53,7 @@
       <section class="settings-modal compact" role="dialog" aria-modal="true" aria-labelledby="add-member-title">
         <header class="settings-modal-head"><h2 id="add-member-title">添加成员</h2><button class="settings-modal-close" type="button" aria-label="关闭" @click="showAddMemberDialog = false"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button></header>
         <div class="settings-modal-body"><div class="sn-input-group"><label>成员邮箱 *</label><input v-model="addMemberEmail" class="sn-input" type="email" placeholder="请输入成员邮箱地址" @keyup.enter="handleAddMember" /><span class="sn-help">成员将收到团队邀请，接受后加入当前团队。</span><span v-if="addMemberError" class="sn-error">{{ addMemberError }}</span></div></div>
-        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="showAddMemberDialog = false">取消</button><button class="sn-button primary" type="button" @click="handleAddMember">添加成员</button></footer>
+        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="showAddMemberDialog = false">取消</button><button class="sn-button confirm" type="button" @click="handleAddMember">添加成员</button></footer>
       </section>
     </div>
   </Teleport>

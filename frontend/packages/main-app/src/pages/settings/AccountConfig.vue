@@ -424,7 +424,7 @@ onMounted(() => {
                 </button>
                 <div v-else class="sn-inline-editor">
                   <input v-model="newName" class="sn-input" aria-label="用户名" />
-                  <button class="sn-button primary" type="button" @click="handleSaveName">保存</button>
+                  <button class="sn-button confirm" type="button" @click="handleSaveName">保存</button>
                   <button class="sn-button" type="button" @click="handleCancelEditName">取消</button>
                 </div>
               </div>
@@ -441,7 +441,7 @@ onMounted(() => {
                   <div class="sn-input-group"><label>当前密码</label><input v-model="passwordForm.currentPassword" class="sn-input" type="password" placeholder="请输入当前密码" /></div>
                   <div class="sn-input-group"><label>新密码</label><input v-model="passwordForm.newPassword" class="sn-input" :type="showNewPassword ? 'text' : 'password'" placeholder="请输入新密码（至少 6 个字符）" /></div>
                   <div class="sn-input-group"><label>确认新密码</label><input v-model="passwordForm.confirmPassword" class="sn-input" :type="showConfirmPassword ? 'text' : 'password'" placeholder="请再次输入新密码" /><span v-if="passwordError" class="sn-error">{{ passwordError }}</span></div>
-                  <div class="sn-password-actions"><button class="sn-button primary" type="button" @click="handleSavePassword">保存密码</button><button class="sn-button" type="button" @click="handleCancelChangePassword">取消</button></div>
+                  <div class="sn-password-actions"><button class="sn-button confirm" type="button" @click="handleSavePassword">保存密码</button><button class="sn-button" type="button" @click="handleCancelChangePassword">取消</button></div>
                 </div>
               </div>
             </div>
@@ -491,7 +491,7 @@ onMounted(() => {
           <div class="sn-input-group"><label>团队描述</label><textarea v-model="createOrgForm.description" class="sn-textarea" placeholder="请输入团队描述（可选）"></textarea></div>
           <span v-if="createOrgError" class="sn-error">{{ createOrgError }}</span>
         </div></div>
-        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="handleCancelCreateOrg">取消</button><button class="sn-button primary" type="button" @click="handleSubmitCreateOrg">创建团队</button></footer>
+        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="handleCancelCreateOrg">取消</button><button class="sn-button confirm" type="button" @click="handleSubmitCreateOrg">创建团队</button></footer>
       </section>
     </div>
 
@@ -503,7 +503,7 @@ onMounted(() => {
           <div class="sn-input-group"><label>邀请码 *</label><input v-model="joinOrgForm.inviteCode" class="sn-input" placeholder="请输入邀请码" /><span class="sn-help">请向团队管理员获取邀请码。</span></div>
           <span v-if="joinOrgError" class="sn-error">{{ joinOrgError }}</span>
         </div></div>
-        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="handleCancelJoinOrg">取消</button><button class="sn-button primary" type="button" @click="handleSubmitJoinOrg">加入团队</button></footer>
+        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="handleCancelJoinOrg">取消</button><button class="sn-button confirm" type="button" @click="handleSubmitJoinOrg">加入团队</button></footer>
       </section>
     </div>
   </Teleport>

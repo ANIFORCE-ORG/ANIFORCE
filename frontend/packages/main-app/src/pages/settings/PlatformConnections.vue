@@ -430,7 +430,7 @@ onMounted(() => {
       <section class="settings-modal compact" role="dialog" aria-modal="true" aria-labelledby="add-sub-title">
         <header class="settings-modal-head"><h2 id="add-sub-title">添加子账号</h2><button class="settings-modal-close" type="button" aria-label="关闭" @click="closeAddSubAccountDialog"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button></header>
         <div class="settings-modal-body"><div class="settings-modal-form"><div class="sn-input-group"><label>子账号名称 *</label><input v-model="newSubAccountName" class="sn-input" placeholder="请输入子账号名称" /></div><div class="sn-input-group"><label>Customer ID *</label><input v-model="newSubAccountCustomerId" class="sn-input" placeholder="请输入 Google Customer ID" /><span class="sn-help">格式：123-456-7890</span></div></div></div>
-        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="closeAddSubAccountDialog">取消</button><button class="sn-button primary" type="button" :disabled="!newSubAccountName || !newSubAccountCustomerId" @click="handleAddSubAccount">确定添加</button></footer>
+        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="closeAddSubAccountDialog">取消</button><button class="sn-button confirm" type="button" :disabled="!newSubAccountName || !newSubAccountCustomerId" @click="handleAddSubAccount">确定添加</button></footer>
       </section>
     </div>
   </Teleport>
