@@ -1,5 +1,67 @@
 <template>
   <Teleport to="body">
+    <div v-if="show" class="settings-modal-layer" @click="handleBackdropClick">
+      <section class="settings-modal wide" role="dialog" aria-modal="true" aria-labelledby="team-detail-title" @click.stop>
+        <header class="settings-modal-head">
+          <h2 id="team-detail-title">团队详情</h2>
+          <button class="settings-modal-close" type="button" aria-label="关闭" @click="handleClose">
+            <svg class="sn-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg>
+          </button>
+        </header>
+        <div class="settings-modal-body">
+          <div class="sn-team-summary">
+            <h3>团队信息</h3>
+            <div class="sn-summary-grid">
+              <div class="sn-summary-item"><span>团队名称</span><strong>{{ organization?.name }}</strong></div>
+              <div class="sn-summary-item"><span>团队代码</span><strong>{{ organization?.org_code }}</strong></div>
+              <div class="sn-summary-item"><span>成员数量</span><strong>{{ organization?.member_count }} 人</strong></div>
+              <div class="sn-summary-item"><span>团队描述</span><strong>{{ organization?.description || '暂无描述' }}</strong></div>
+              <div class="sn-summary-item"><span>创建时间</span><strong>{{ formatDate(organization?.created_at) }}</strong></div>
+              <div v-if="isAdmin" class="sn-invite-row"><div class="sn-invite-code">{{ inviteCode || '加载中...' }}</div><button class="sn-button primary" type="button" :disabled="!inviteCode" @click="copyInviteCode">复制邀请码</button></div>
+            </div>
+          </div>
+
+          <div class="sn-members">
+            <div class="sn-members-head">
+              <div class="sn-members-title">团队成员 <button v-if="isAdmin" class="sn-button primary" type="button" @click="showAddMemberDialog = true"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>添加成员</button></div>
+              <input v-model="searchQuery" class="sn-search" placeholder="搜索成员…" @input="handleSearch" />
+            </div>
+
+            <div v-if="loading" class="sn-loading">加载中...</div>
+            <div v-else-if="members.length === 0" class="sn-loading">暂无成员</div>
+            <div v-else class="sn-table-wrap">
+              <table class="sn-member-table">
+                <thead><tr><th>成员</th><th>邮箱</th><th>角色</th><th>加入时间</th><th v-if="isAdmin">操作</th></tr></thead>
+                <tbody>
+                  <tr v-for="member in members" :key="member.id">
+                    <td><span class="sn-member-name"><span class="sn-mini-avatar"><svg class="sn-icon" viewBox="0 0 24 24"><circle cx="12" cy="8" r="3" /><path d="M5 20c0-4 2.8-6 7-6s7 2 7 6" /></svg></span>{{ member.user_name }}</span></td>
+                    <td>{{ member.user_email }}</td>
+                    <td><span class="sn-badge" :class="{ 'role-admin': member.role === 'admin' }">{{ member.role === 'admin' ? '管理员' : '成员' }}</span></td>
+                    <td>{{ formatDate(member.joined_at) }}</td>
+                    <td v-if="isAdmin"><button v-if="member.role !== 'admin'" class="sn-icon-button" type="button" aria-label="移除成员" @click="handleRemoveMember(member)"><svg class="sn-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><path d="M3 19c0-3.2 2.4-5 6-5 1.5 0 2.8.3 3.8.9M16 12h6" /></svg></button><span v-else>—</span></td>
+                  </tr>
+                </tbody>
+              </table>
+              <div v-if="totalPages > 1" class="sn-pagination"><button class="sn-button" type="button" :disabled="currentPage === 1" @click="handlePrevPage">上一页</button><span>第 {{ currentPage }} / {{ totalPages }} 页</span><button class="sn-button" type="button" :disabled="currentPage === totalPages" @click="handleNextPage">下一页</button></div>
+            </div>
+          </div>
+        </div>
+      </section>
+    </div>
+
+    <div v-if="showAddMemberDialog" class="settings-modal-layer" style="z-index:120" @click.self="showAddMemberDialog = false">
+      <section class="settings-modal compact" role="dialog" aria-modal="true" aria-labelledby="add-member-title">
+        <header class="settings-modal-head"><h2 id="add-member-title">添加成员</h2><button class="settings-modal-close" type="button" aria-label="关闭" @click="showAddMemberDialog = false"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button></header>
+        <div class="settings-modal-body"><div class="sn-input-group"><label>成员邮箱 *</label><input v-model="addMemberEmail" class="sn-input" type="email" placeholder="请输入成员邮箱地址" @keyup.enter="handleAddMember" /><span class="sn-help">成员将收到团队邀请，接受后加入当前团队。</span><span v-if="addMemberError" class="sn-error">{{ addMemberError }}</span></div></div>
+        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="showAddMemberDialog = false">取消</button><button class="sn-button primary" type="button" @click="handleAddMember">添加成员</button></footer>
+      </section>
+    </div>
+  </Teleport>
+
+  <ConfirmDialog variant="notion" :show="showConfirmDialog" :title="confirmDialogConfig.title" :message="confirmDialogConfig.message" :confirm-text="confirmDialogConfig.confirmText" :confirm-button-class="confirmDialogConfig.confirmButtonClass" @confirm="handleConfirmDialogConfirm" @cancel="handleConfirmDialogClose" @close="handleConfirmDialogClose" />
+
+  <template v-if="false">
+  <Teleport to="body">
     <Transition name="fade">
       <div
         v-if="show"
@@ -267,6 +329,7 @@
       @close="handleConfirmDialogClose"
     />
   </Teleport>
+  </template>
 </template>
 
 <script setup lang="ts">
@@ -274,6 +337,7 @@ import { ref, computed, watch } from 'vue'
 import { organizationApi, type OrganizationResponse, type OrganizationMember } from '../../api/organization'
 import { useToast } from '@/composables/useToast'
 import ConfirmDialog from '../toasts/ConfirmDialog.vue'
+import '@/styles/settings-notion.css'
 
 const { success, error: showError } = useToast()
 

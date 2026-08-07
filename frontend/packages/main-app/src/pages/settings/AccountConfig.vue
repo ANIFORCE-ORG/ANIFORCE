@@ -10,6 +10,7 @@ import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import OrganizationDetail from '@/components/settings/OrganizationDetail.vue'
 import { useToast } from '@/composables/useToast'
+import '@/styles/settings-notion.css'
 
 const router = useRouter()
 const auth = useAuthStore()
@@ -384,6 +385,144 @@ onMounted(() => {
 </script>
 
 <template>
+  <div class="settings-notion">
+    <SidebarNav
+      :nav-items="navItems"
+      :sessions="sessions"
+      :active-panel="activePanel"
+      @switch-panel="switchPanel"
+      @switch-session="switchSession"
+    />
+
+    <main class="sn-main">
+      <header class="sn-page-head">
+        <button class="sn-back" type="button" aria-label="返回设置" @click="router.push('/settings')">
+          <svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg>
+        </button>
+        <div class="sn-page-title">
+          <h1>系统账号设置</h1>
+          <p>管理团队成员、登录身份和基础账号信息</p>
+        </div>
+      </header>
+
+      <div class="sn-scroll">
+        <div class="sn-content">
+          <section class="sn-section">
+            <h2 class="sn-section-title">登录账户信息</h2>
+            <div class="sn-panel sn-account-panel">
+              <div class="sn-account-row">
+                <div class="sn-field-meta"><span>邮箱地址</span><strong>{{ userEmail }}</strong></div>
+                <div class="sn-row-value">已验证</div>
+                <span class="sn-badge">不可修改</span>
+              </div>
+
+              <div class="sn-account-row">
+                <div class="sn-field-meta"><span>用户名</span><strong>{{ userName }}</strong></div>
+                <div v-if="!isEditingName" class="sn-row-value">用于团队和任务署名</div>
+                <button v-if="!isEditingName" class="sn-icon-button" type="button" aria-label="编辑用户名" @click="handleEditName">
+                  <svg class="sn-icon" viewBox="0 0 24 24"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 00-3-3l-10 10zM14 7l3 3" /></svg>
+                </button>
+                <div v-else class="sn-inline-editor">
+                  <input v-model="newName" class="sn-input" aria-label="用户名" />
+                  <button class="sn-button primary" type="button" @click="handleSaveName">保存</button>
+                  <button class="sn-button" type="button" @click="handleCancelEditName">取消</button>
+                </div>
+              </div>
+
+              <div class="sn-account-row">
+                <div class="sn-field-meta"><span>密码</span><strong>••••••••</strong></div>
+                <div class="sn-row-value">上次修改于 2026/05/27</div>
+                <button class="sn-icon-button" type="button" aria-label="修改密码" @click="isChangingPassword ? handleCancelChangePassword() : handleChangePassword()">
+                  <svg class="sn-icon" viewBox="0 0 24 24"><path d="M4 20l4.5-1 10-10a2.1 2.1 0 00-3-3l-10 10zM14 7l3 3" /></svg>
+                </button>
+              </div>
+              <div v-if="isChangingPassword" class="sn-password-editor">
+                <div class="sn-password-grid">
+                  <div class="sn-input-group"><label>当前密码</label><input v-model="passwordForm.currentPassword" class="sn-input" type="password" placeholder="请输入当前密码" /></div>
+                  <div class="sn-input-group"><label>新密码</label><input v-model="passwordForm.newPassword" class="sn-input" :type="showNewPassword ? 'text' : 'password'" placeholder="请输入新密码（至少 6 个字符）" /></div>
+                  <div class="sn-input-group"><label>确认新密码</label><input v-model="passwordForm.confirmPassword" class="sn-input" :type="showConfirmPassword ? 'text' : 'password'" placeholder="请再次输入新密码" /><span v-if="passwordError" class="sn-error">{{ passwordError }}</span></div>
+                  <div class="sn-password-actions"><button class="sn-button primary" type="button" @click="handleSavePassword">保存密码</button><button class="sn-button" type="button" @click="handleCancelChangePassword">取消</button></div>
+                </div>
+              </div>
+            </div>
+          </section>
+
+          <section class="sn-section">
+            <h2 class="sn-section-title">我的团队</h2>
+            <div class="sn-panel sn-team-panel">
+              <div class="sn-team-actions">
+                <button class="sn-button primary" type="button" @click="handleCreateOrganization">
+                  <svg class="sn-icon" viewBox="0 0 24 24"><path d="M12 5v14M5 12h14" /></svg>创建团队
+                </button>
+                <button class="sn-button" type="button" @click="handleJoinOrganization">
+                  <svg class="sn-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><path d="M3 19c0-3.2 2.4-5 6-5s6 1.8 6 5M18 7v6M15 10h6" /></svg>加入团队
+                </button>
+              </div>
+              <div class="sn-team-label">您所属的团队（{{ myOrganizations.length }}）</div>
+              <div v-if="myOrganizations.length" class="sn-team-list">
+                <article v-for="org in myOrganizations" :key="org.id" class="sn-team-row">
+                  <span class="sn-team-avatar"><svg class="sn-icon" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3" /><circle cx="17" cy="9" r="2" /><path d="M3 19c0-3 2.5-5 6-5s6 2 6 5M15 15c3 0 5 1.3 5 4" /></svg></span>
+                  <div class="sn-team-copy">
+                    <div class="sn-team-name-line"><span class="sn-team-name">{{ org.name }}</span><span class="sn-badge" :class="{ admin: org.role === 'admin' }">{{ org.role === 'admin' ? '管理员' : '成员' }}</span></div>
+                    <div class="sn-team-meta"><span>{{ org.member_count }} 名成员</span><span>创建于 {{ new Date(org.created_at).toLocaleDateString() }}</span></div>
+                  </div>
+                  <div class="sn-team-buttons">
+                    <button class="sn-button" type="button" @click="handleViewOrganization(org)">{{ org.role === 'admin' ? '管理成员' : '团队详情' }}</button>
+                    <button v-if="org.role === 'admin'" class="sn-button danger" type="button" @click="handleDisbandOrganization(org.id)">解散团队</button>
+                    <button v-else class="sn-button danger" type="button" @click="handleLeaveOrganization(org.id)">离开团队</button>
+                  </div>
+                </article>
+              </div>
+              <div v-else class="sn-empty-inline">您还没有加入任何团队</div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <Teleport to="body">
+    <div v-if="showCreateOrgDialog" class="settings-modal-layer" @click.self="handleCancelCreateOrg">
+      <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="create-org-title">
+        <header class="settings-modal-head"><h2 id="create-org-title">创建团队</h2><button class="settings-modal-close" type="button" aria-label="关闭" @click="handleCancelCreateOrg"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button></header>
+        <div class="settings-modal-body"><div class="settings-modal-form">
+          <div class="sn-input-group"><label>团队名称 *</label><input v-model="createOrgForm.name" class="sn-input" placeholder="请输入团队名称" /></div>
+          <div class="sn-input-group"><label>团队 ID *</label><input v-model="createOrgForm.orgId" class="sn-input" placeholder="请输入团队 ID（英文字母、数字、下划线）" /><span class="sn-help">团队 ID 用于邀请成员加入，创建后不可修改。</span></div>
+          <div class="sn-input-group"><label>团队描述</label><textarea v-model="createOrgForm.description" class="sn-textarea" placeholder="请输入团队描述（可选）"></textarea></div>
+          <span v-if="createOrgError" class="sn-error">{{ createOrgError }}</span>
+        </div></div>
+        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="handleCancelCreateOrg">取消</button><button class="sn-button primary" type="button" @click="handleSubmitCreateOrg">创建团队</button></footer>
+      </section>
+    </div>
+
+    <div v-if="showJoinOrgDialog" class="settings-modal-layer" @click.self="handleCancelJoinOrg">
+      <section class="settings-modal compact" role="dialog" aria-modal="true" aria-labelledby="join-org-title">
+        <header class="settings-modal-head"><h2 id="join-org-title">加入团队</h2><button class="settings-modal-close" type="button" aria-label="关闭" @click="handleCancelJoinOrg"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button></header>
+        <div class="settings-modal-body"><div class="settings-modal-form">
+          <div class="sn-input-group"><label>团队 ID *</label><input v-model="joinOrgForm.orgId" class="sn-input" placeholder="请输入团队 ID" /></div>
+          <div class="sn-input-group"><label>邀请码 *</label><input v-model="joinOrgForm.inviteCode" class="sn-input" placeholder="请输入邀请码" /><span class="sn-help">请向团队管理员获取邀请码。</span></div>
+          <span v-if="joinOrgError" class="sn-error">{{ joinOrgError }}</span>
+        </div></div>
+        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="handleCancelJoinOrg">取消</button><button class="sn-button primary" type="button" @click="handleSubmitJoinOrg">加入团队</button></footer>
+      </section>
+    </div>
+  </Teleport>
+
+  <ConfirmDialog
+    variant="notion"
+    :show="showConfirmDialog"
+    :title="confirmDialogConfig.title"
+    :message="confirmDialogConfig.message"
+    :confirm-text="confirmDialogConfig.confirmText"
+    :confirm-button-class="confirmDialogConfig.confirmButtonClass"
+    @confirm="handleConfirmDialogConfirm"
+    @cancel="handleConfirmDialogClose"
+    @close="handleConfirmDialogClose"
+  />
+  <OrganizationDetail :show="showOrgDetailDialog" :organization="selectedOrganization" @close="handleCloseOrgDetail" @refresh="handleRefreshOrganizations" />
+  <ToastContainer />
+
+  <template v-if="false">
   <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <SidebarNav 
       :nav-items="navItems"
@@ -844,4 +983,5 @@ onMounted(() => {
 
   <!-- Toast 提示容器 -->
   <ToastContainer />
+  </template>
 </template>
