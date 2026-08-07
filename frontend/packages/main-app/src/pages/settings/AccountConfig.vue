@@ -496,7 +496,7 @@ onMounted(() => {
     </div>
 
     <div v-if="showJoinOrgDialog" class="settings-modal-layer" @click.self="handleCancelJoinOrg">
-      <section class="settings-modal compact" role="dialog" aria-modal="true" aria-labelledby="join-org-title">
+      <section class="settings-modal" role="dialog" aria-modal="true" aria-labelledby="join-org-title">
         <header class="settings-modal-head"><h2 id="join-org-title">加入团队</h2><button class="settings-modal-close" type="button" aria-label="关闭" @click="handleCancelJoinOrg"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button></header>
         <div class="settings-modal-body"><div class="settings-modal-form">
           <div class="sn-input-group"><label>团队 ID *</label><input v-model="joinOrgForm.orgId" class="sn-input" placeholder="请输入团队 ID" /></div>
