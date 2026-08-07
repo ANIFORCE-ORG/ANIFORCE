@@ -3,7 +3,7 @@
 #  ANIFORCE 统一部署脚本（默认不启动 Nginx）
 #  用法:
 #    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80]
-#                       [--frontend-port 3020] [--backend-port 18010] [--agent-port 18020]
+#                       [--frontend-port 3010] [--backend-port 8010] [--agent-port 8020]
 #                       [--only all|agent|backend|frontend|nginx] [--skip-install] [--without-agent]
 #                       [--with-nginx] [--ssl]
 # ============================================================
@@ -100,9 +100,9 @@ SKIP_INSTALL=0
 WITHOUT_AGENT=0
 WITH_NGINX=0
 NGINX_PORT=80
-FRONTEND_PORT=3020
-BACKEND_PORT=18010
-AGENT_PORT=18020
+FRONTEND_PORT=3010
+BACKEND_PORT=8010
+AGENT_PORT=8020
 DEMO_MODE=false
 USE_SSL=false
 
@@ -131,9 +131,9 @@ while [[ $# -gt 0 ]]; do
       echo "选项:"
       echo "  --mode           启动模式: local(默认) / cloud"
       echo "  --nginx-port     Nginx 端口 (默认: 80)"
-      echo "  --frontend-port  前端端口 (默认: 3020)"
-      echo "  --backend-port   后端端口 (默认: 18010)"
-      echo "  --agent-port     Agent 服务端口 (默认: 18020)"
+      echo "  --frontend-port  前端端口 (默认: 3010)"
+      echo "  --backend-port   后端端口 (默认: 8010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo "  --only           仅启动: all(默认) / agent / backend / frontend / nginx"
       echo "  --skip-install   跳过依赖安装"
       echo "  --without-agent  跳过 Agent 服务部署"

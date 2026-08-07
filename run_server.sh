@@ -2,7 +2,7 @@
 # ============================================================
 #  ANIMAGUS 一键启动脚本（本地 / 云端）
 #  用法:
-#    ./run_server.sh [--mode local|cloud] [--frontend-port 3020] [--backend-port 18010]
+#    ./run_server.sh [--mode local|cloud] [--frontend-port 3010] [--backend-port 8010]
 #                   [--only all|backend|frontend] [--skip-install] [--host 0.0.0.0]
 #                   [--daemon]
 # ============================================================
@@ -122,9 +122,9 @@ BACKEND_PORT_EXPLICIT=0
 AGENT_PORT_EXPLICIT=0
 
 # ---------- 默认端口 ----------
-FRONTEND_PORT=3020
-BACKEND_PORT=18010
-AGENT_PORT=18020
+FRONTEND_PORT=3010
+BACKEND_PORT=8010
+AGENT_PORT=8020
 PHOENIX_PORT=${PHOENIX_PORT:-6006}
 
 # ---------- 日志配置 ----------
@@ -153,9 +153,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --skip-install   跳过依赖安装（云端更常用）"
       echo "  --host           监听地址（默认: 0.0.0.0）"
       echo "  --demo           启用 Demo 模式（设置 DEMO_MODE=true,默认: false 生产模式）"
-      echo "  --frontend-port  前端端口 (默认: 3020；cloud 模式若存在环境变量 PORT 且未显式指定,将使用 PORT)"
-      echo "  --backend-port   后端端口 (默认: 18010)"
-      echo "  --agent-port     Agent 服务端口 (默认: 18020)"
+      echo "  --frontend-port  前端端口 (默认: 3010；cloud 模式若存在环境变量 PORT 且未显式指定,将使用 PORT)"
+      echo "  --backend-port   后端端口 (默认: 8010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
       echo "  --daemon         后台常驻运行，退出终端后服务继续运行"
       echo ""

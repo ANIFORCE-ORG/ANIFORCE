@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  ANIMAGUS 一键停止服务脚本
-#  用法: ./stop_server.sh [--frontend-port 3020] [--backend-port 18010] [--agent-port 18020] [--only all|agent|backend|frontend]
+#  用法: ./stop_server.sh [--frontend-port 3010] [--backend-port 8010] [--agent-port 8020] [--only all|agent|backend|frontend]
 # ============================================================
 set -euo pipefail
 
@@ -18,9 +18,9 @@ PORT_FILE="$ROOT_DIR/.server_ports"
 SUPERVISOR_PID_FILE="$ROOT_DIR/.server_supervisor_pid"
 
 # ---------- 默认参数 ----------
-FRONTEND_PORT=3020
-BACKEND_PORT=18010
-AGENT_PORT=18020
+FRONTEND_PORT=3010
+BACKEND_PORT=8010
+AGENT_PORT=8020
 PHOENIX_PORT=6006
 MODE=local
 ONLY=all
@@ -39,9 +39,9 @@ while [[ $# -gt 0 ]]; do
     --only) ONLY="$2"; shift 2 ;;
     -h|--help)
       echo "用法: $0 [--frontend-port PORT] [--backend-port PORT] [--agent-port PORT] [--only all|agent|backend|frontend]"
-      echo "  --frontend-port  前端端口 (默认: 3020)"
-      echo "  --backend-port   后端端口 (默认: 18010)"
-      echo "  --agent-port     Agent 服务端口 (默认: 18020)"
+      echo "  --frontend-port  前端端口 (默认: 3010)"
+      echo "  --backend-port   后端端口 (默认: 8010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo "  --only           仅停止: all(默认) / agent / backend / frontend"
       echo "  若 run_server.sh 使用了自定义参数，脚本会自动读取"
       exit 0 ;;

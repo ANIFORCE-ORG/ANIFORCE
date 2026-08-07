@@ -16,9 +16,9 @@ FRONTEND_LOG="${LOG_DIR}/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
 PID_FILE="${RUN_DIR}/${LOG_ENV}.stack.pids"
 
 HOST="${HOST:-127.0.0.1}"
-BACKEND_PORT="${BACKEND_PORT:-18010}"
-AGENT_PORT="${AGENT_PORT:-18020}"
-FRONTEND_PORT="${FRONTEND_PORT:-3020}"
+BACKEND_PORT="${BACKEND_PORT:-8010}"
+AGENT_PORT="${AGENT_PORT:-8020}"
+FRONTEND_PORT="${FRONTEND_PORT:-3010}"
 PHOENIX_PORT="${PHOENIX_PORT:-6006}"
 PYPI_INDEX_URL="${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 LOCAL_NO_PROXY="localhost,127.0.0.1,0.0.0.0,::1,${HOST}"
@@ -34,9 +34,9 @@ Usage:
 
 Options:
   --host HOST             Default: 127.0.0.1
-  --backend-port PORT     Default: 18010
-  --agent-port PORT       Default: 18020
-  --frontend-port PORT    Default: 3020
+  --backend-port PORT     Default: 8010
+  --agent-port PORT       Default: 8020
+  --frontend-port PORT    Default: 3010
   --reload                Enable backend/agent uvicorn reload
   --skip-install          Skip dependency installation
   --no-clear-ports        Do not clear selected ports

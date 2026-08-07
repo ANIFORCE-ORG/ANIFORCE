@@ -17,9 +17,9 @@ DEPLOY_CONFIG="$ROOT_DIR/.deploy_config"
 
 # ---------- 默认参数 ----------
 NGINX_PORT=80
-FRONTEND_PORT=3020
-BACKEND_PORT=18010
-AGENT_PORT=18020
+FRONTEND_PORT=3010
+BACKEND_PORT=8010
+AGENT_PORT=8020
 ONLY=all
 USE_SSL=false
 WITH_NGINX=0
@@ -70,9 +70,9 @@ while [[ $# -gt 0 ]]; do
       echo "  --only           仅停止: all(默认) / agent / backend / frontend / nginx"
       echo "  --ssl            停止 HTTPS 模式的 Nginx"
       echo "  --nginx-port     Nginx 端口 (默认: 80)"
-      echo "  --frontend-port  前端端口 (默认: 3020)"
-      echo "  --backend-port   后端端口 (默认: 18010)"
-      echo "  --agent-port     Agent 服务端口 (默认: 18020)"
+      echo "  --frontend-port  前端端口 (默认: 3010)"
+      echo "  --backend-port   后端端口 (默认: 8010)"
+      echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo ""
       echo "示例:"
       echo "  # 停止所有服务"
