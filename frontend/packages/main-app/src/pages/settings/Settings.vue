@@ -1,13 +1,10 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
-const auth = useAuthStore()
-
 const activePanel = ref('settings')
 const activeSession = ref('sess_g001')
 
@@ -17,71 +14,51 @@ const sessions = ref([
   { id: 'sess_g003', name: '东南亚市场测试', active: false }
 ])
 
-const showSystemPanel = ref(false)
-
 const settingCards = [
   {
     id: 'agent-account',
-    icon: 'admin_panel_settings',
     title: '系统账号设置',
-    description: '管理团队成员、登录身份和基础账号信息',
+    description: '管理团队成员、登录身份和基础账号信息。',
     action: '进入账号设置',
-    enabled: true,
-    path: '/account-config'
+    path: '/account-config',
+    icon: 'account'
   },
   {
     id: 'platform-connections',
-    icon: 'hub',
     title: '平台连接',
-    description: '连接 Meta、Google、TikTok 广告平台和同步广告账户',
+    description: '连接 Meta、Google、TikTok 广告平台和同步广告账户。',
     action: '管理平台连接',
-    enabled: true,
-    path: '/platform-connections'
+    path: '/platform-connections',
+    icon: 'platform'
   },
   {
     id: 'ai-usage',
-    icon: 'monitoring',
     title: 'AI 使用量',
-    description: '查看模型调用、Token 消耗、场景日志和预算限制',
+    description: '查看模型调用、Token 消耗、场景日志和预算限制。',
     action: '查看使用量',
-    enabled: true,
-    path: '/ai-usage-config'
+    path: '/ai-usage-config',
+    icon: 'usage'
   }
 ]
 
 const switchPanel = (item: any) => {
-  if (item.path) {
-    router.push(item.path)
-  }
+  if (item.path) router.push(item.path)
 }
 
 const switchSession = (session: any) => {
   activeSession.value = session.id
-  sessions.value.forEach(s => s.active = s.id === session.id)
+  sessions.value.forEach(item => {
+    item.active = item.id === session.id
+  })
 }
 
-const handleCardClick = (cardId: string) => {
-  const card = settingCards.find(c => c.id === cardId)
-
-  if (card?.path) {
-    router.push(card.path)
-    return
-  }
-
-  switch (cardId) {
-    case 'system':
-      showSystemPanel.value = true
-      break
-  }
+const openSetting = (path: string) => {
+  router.push(path)
 }
-
-onMounted(() => {
-  console.log('设置页面加载')
-})
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="settings-shell">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -90,55 +67,204 @@ onMounted(() => {
       @switch-session="switchSession"
     />
 
-    <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-      <div class="border-b border-slate-200 dark:border-slate-800 px-[19px] py-[12px]">
-        <h1 class="text-[15px] font-bold text-slate-900 dark:text-white">设置</h1>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400 mt-1">管理 Agent 系统账号、系统配置和广告平台连接</p>
-      </div>
-
-      <div class="flex-1 overflow-y-auto p-[19px]">
-        <!-- 卡片式设置入口 -->
-        <div v-if="!showSystemPanel" class="grid gap-[12px] md:grid-cols-3">
-          <section
-            v-for="card in settingCards"
-            :key="card.id"
-            class="rounded-md border border-slate-200 dark:border-slate-700 p-[16px] bg-white dark:bg-slate-800 hover:border-primary/50 transition-all"
-          >
-            <div class="flex items-center gap-[8px]">
-              <span class="material-symbols-outlined text-primary text-[17px]">{{ card.icon }}</span>
-              <h2 class="font-semibold text-[13px] text-slate-900 dark:text-white">{{ card.title }}</h2>
-            </div>
-            <p class="mt-[8px] text-[11px] text-slate-500 dark:text-slate-400 min-h-[31px]">{{ card.description }}</p>
-            <button
-              class="mt-[15px] px-[12px] py-[6px] rounded-md text-[11px] font-medium transition-colors"
-              :class="card.enabled
-                ? 'bg-primary text-white hover:bg-primary/90'
-                : 'border border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-not-allowed'"
-              :disabled="!card.enabled"
-              @click="handleCardClick(card.id)"
-            >
-              {{ card.action }}
-            </button>
-          </section>
+    <main class="settings-main">
+      <header class="settings-page-head">
+        <div class="settings-page-title">
+          <h1>设置</h1>
+          <p>管理 Agent 系统账号、系统配置和广告平台连接</p>
         </div>
+      </header>
 
-        <!-- 系统设置详细面板 -->
-        <div v-if="showSystemPanel" class="max-w-[750px] mx-auto">
-          <div class="flex items-center gap-[8px] mb-[19px]">
+      <div class="settings-scroll-area">
+        <div class="settings-content">
+          <div class="settings-grid">
             <button
-              class="p-[6px] rounded-md hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
-              @click="showSystemPanel = false"
+              v-for="card in settingCards"
+              :key="card.id"
+              class="settings-card"
+              type="button"
+              @click="openSetting(card.path)"
             >
-              <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[17px]">arrow_back</span>
+              <span class="settings-card-icon" aria-hidden="true">
+                <svg v-if="card.icon === 'account'" class="settings-icon" viewBox="0 0 24 24">
+                  <circle cx="9" cy="8" r="3" />
+                  <path d="M4 19c0-3 2-5 5-5 1.2 0 2.3.3 3.1.9M17 12l4 1.7V17c0 2.2-1.3 3.8-4 5-2.7-1.2-4-2.8-4-5v-3.3z" />
+                </svg>
+                <svg v-else-if="card.icon === 'platform'" class="settings-icon" viewBox="0 0 24 24">
+                  <circle cx="12" cy="5" r="2" />
+                  <circle cx="5" cy="12" r="2" />
+                  <circle cx="19" cy="12" r="2" />
+                  <circle cx="12" cy="19" r="2" />
+                  <path d="M10.5 6.5L6.5 10.5M13.5 6.5l4 4M6.5 13.5l4 4M17.5 13.5l-4 4" />
+                </svg>
+                <svg v-else class="settings-icon" viewBox="0 0 24 24">
+                  <path d="M4 17l6-6 4 4 6-8M15 7h5v5" />
+                </svg>
+              </span>
+              <h2>{{ card.title }}</h2>
+              <p>{{ card.description }}</p>
+              <span class="settings-card-link">
+                {{ card.action }}
+                <svg class="settings-arrow" viewBox="0 0 24 24" aria-hidden="true">
+                  <path d="M5 12h14M14 7l5 5-5 5" />
+                </svg>
+              </span>
             </button>
-            <h2 class="text-[15px] font-bold text-slate-900 dark:text-white">系统设置</h2>
-          </div>
-          <div class="bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg p-[23px] text-center">
-            <span class="material-symbols-outlined text-slate-400 text-[37px] mb-[8px]">construction</span>
-            <p class="text-[13px] text-slate-500 dark:text-slate-400">系统设置功能开发中...</p>
           </div>
         </div>
       </div>
     </main>
   </div>
 </template>
+
+<style scoped>
+.settings-shell {
+  display: flex;
+  width: 100%;
+  height: calc(100vh - 100px);
+  overflow: hidden;
+  background: #ffffff;
+  color: #37352f;
+}
+
+.settings-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+}
+
+.settings-page-head {
+  min-height: 72px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 clamp(22px, 3vw, 38px);
+  border-bottom: 1px solid #e5e3df;
+}
+
+.settings-page-title h1 {
+  margin: 0;
+  color: #1a1a1a;
+  font-size: 17px;
+  font-weight: 650;
+  line-height: 1.2;
+  letter-spacing: -0.3px;
+}
+
+.settings-page-title p {
+  margin: 5px 0 0;
+  color: #787671;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.settings-scroll-area {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+}
+
+.settings-content {
+  width: min(100%, 1220px);
+  margin: 0 auto;
+  padding: 24px clamp(22px, 3vw, 38px) 72px;
+}
+
+.settings-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.settings-card {
+  min-height: 170px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  padding: 20px;
+  border: 1px solid #e5e3df;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #37352f;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 140ms ease, background-color 140ms ease;
+}
+
+.settings-card:hover {
+  border-color: #c8c4be;
+  background: #fafaf9;
+}
+
+.settings-card:focus-visible {
+  outline: 2px solid #37352f;
+  outline-offset: 2px;
+}
+
+.settings-card-icon {
+  width: 32px;
+  height: 32px;
+  display: grid;
+  place-items: center;
+  margin-bottom: 16px;
+  border-radius: 8px;
+  background: #f6f5f4;
+  color: #37352f;
+}
+
+.settings-icon,
+.settings-arrow {
+  display: block;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.settings-icon {
+  width: 18px;
+  height: 18px;
+}
+
+.settings-card h2 {
+  margin: 0;
+  color: #1a1a1a;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+.settings-card p {
+  margin: 8px 0 18px;
+  color: #787671;
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+.settings-card-link {
+  margin-top: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #37352f;
+  font-size: 10px;
+  font-weight: 550;
+  line-height: 1.2;
+}
+
+.settings-arrow {
+  width: 14px;
+  height: 14px;
+}
+
+@media (max-width: 900px) {
+  .settings-grid {
+    grid-template-columns: 1fr;
+  }
+}
+</style>
