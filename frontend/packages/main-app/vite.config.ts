@@ -3,7 +3,7 @@ import vue from '@vitejs/plugin-vue'
 import { resolve } from 'path'
 
 export default defineConfig(() => {
-  const backendPort = process.env.VITE_BACKEND_PORT || '18010'
+  const backendPort = process.env.VITE_BACKEND_PORT || '8010'
   const backendHost = process.env.VITE_BACKEND_HOST || '127.0.0.1'
   return {
     plugins: [vue()],
@@ -14,7 +14,7 @@ export default defineConfig(() => {
     },
     server: {
       host: '0.0.0.0',
-      port: Number(process.env.VITE_FRONTEND_PORT || 3020),
+      port: Number(process.env.VITE_FRONTEND_PORT || 3010),
       allowedHosts: [
         'localhost',
         '127.0.0.1',

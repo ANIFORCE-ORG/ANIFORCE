@@ -71,9 +71,6 @@ drafts/
 test-results/
 frontend/test-results/
 aniforce-agent/tests/
-!aniforce-agent/tests/
-!aniforce-agent/tests/*.py
-aniforce-agent/tests/test_mcp_multiworker_config.py
 /notebooks/
 
 # ===== 旧 runtime 目录已废弃 =====

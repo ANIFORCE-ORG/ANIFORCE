@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # OpenAI Agent Service 一键启动脚本
-# - 固定端口：18020
+# - 固定端口：8020
 # - 启动前释放端口
 # - 日志覆盖写入：logs/YYYYMMDD.dev.agent.uvicorn.log
 
 set -euo pipefail
 cd "$(dirname "$0")"
 
-PORT=18020
+PORT=8020
 LOG_DATE="$(date +%Y%m%d)"
 LOG_ENV="${LOG_ENV:-dev}"
 LOG_FILE="logs/${LOG_DATE}.${LOG_ENV}.agent.uvicorn.log"

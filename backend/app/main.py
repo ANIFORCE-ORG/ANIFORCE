@@ -36,8 +36,8 @@ allow_origins = [
     "http://localhost:3000",
     "http://localhost:3001",
     "http://localhost:3002",
-    "http://localhost:3020",
-    "http://127.0.0.1:3020",
+    "http://localhost:3010",
+    "http://127.0.0.1:3010",
 ]
 if settings.CORS_ALLOW_ORIGINS.strip():
     allow_origins = [o.strip() for o in settings.CORS_ALLOW_ORIGINS.split(",") if o.strip()]
