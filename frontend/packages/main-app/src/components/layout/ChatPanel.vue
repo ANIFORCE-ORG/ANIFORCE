@@ -17,6 +17,8 @@ interface Props {
   sessionId?: string
   quickHints?: string[]
   autoFocus?: boolean
+  initialCollapsed?: boolean
+  compactCollapsed?: boolean
 }
 
 const props = withDefaults(defineProps<Props>(), {
@@ -27,7 +29,9 @@ const props = withDefaults(defineProps<Props>(), {
     '优化投放策略',
     '查看数据报表'
   ],
-  autoFocus: false
+  autoFocus: false,
+  initialCollapsed: false,
+  compactCollapsed: false
 })
 
 const emit = defineEmits<{
@@ -49,7 +53,7 @@ const showHITLDialog = ref(false)
 
 // 折叠状态 - 从localStorage读取初始值
 const CHATPANEL_COLLAPSED_KEY = 'aniforce_chatpanel_collapsed'
-const isCollapsed = ref(localStorage.getItem(CHATPANEL_COLLAPSED_KEY) === 'true')
+const isCollapsed = ref(props.initialCollapsed || localStorage.getItem(CHATPANEL_COLLAPSED_KEY) === 'true')
 
 // 监听sessionId变化
 watch(() => props.sessionId, (newSessionId) => {
@@ -317,12 +321,13 @@ if (props.sessionId) {
   <!-- 右侧对话区 -->
   <aside 
     class="bg-slate-50 dark:bg-slate-900/50 border-l border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300 relative"
-    :class="isCollapsed ? 'w-[50px]' : 'w-[300px]'"
+    :class="isCollapsed ? (compactCollapsed ? 'w-[34px]' : 'w-[50px]') : 'w-[300px]'"
   >
     <!-- Collapsed State - Vertical Expand Button -->
     <div v-if="isCollapsed" class="flex-1 flex items-center justify-center">
       <button
-        class="writing-mode-vertical-rl p-[12px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors rounded-lg flex items-center gap-[6px]"
+        class="writing-mode-vertical-rl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors rounded-lg flex items-center gap-[6px]"
+        :class="compactCollapsed ? 'h-[126px] w-full p-0' : 'p-[12px]'"
         @click="toggleCollapse"
       >
         <span class="material-symbols-outlined text-[17px] text-slate-600 dark:text-slate-400 rotate-180">chevron_left</span>
