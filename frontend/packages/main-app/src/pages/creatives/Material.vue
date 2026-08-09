@@ -99,6 +99,102 @@ const uploadFile = computed(() => uploadFiles.value[0] || null)
 const uploadPreviewUrl = ref('')
 const uploadIsVideo = computed(() => uploadFile.value?.type.startsWith('video/') || false)
 
+type OverviewCard = {
+  label: string
+  value: string
+  sub: string
+  icon: string
+}
+
+type AnalysisCard = {
+  title: string
+  body: string
+  icon: string
+  panelClass: string
+  pillClass: string
+}
+
+const formatCompactNumber = (value: number) => new Intl.NumberFormat('zh-CN', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+}).format(value)
+
+const formatCurrency = (value: number) => new Intl.NumberFormat('zh-CN', {
+  style: 'currency',
+  currency: 'CNY',
+  maximumFractionDigits: 0,
+}).format(value)
+
+const formatNumber = (value: number, digits = 2) => value.toFixed(digits)
+
+const mockOverview = {
+  periodLabel: '近 7 天',
+  updatedAt: '14:06',
+  spend: 12840,
+  impressions: 2140000,
+  clicks: 31840,
+  roas: 2.86,
+  shortVideoSpend: 7640,
+  activeMaterials: 26,
+}
+
+const overviewCards = computed<OverviewCard[]>(() => [
+  {
+    label: '周期消耗',
+    value: formatCurrency(mockOverview.spend),
+    sub: `${mockOverview.periodLabel} · 更新时间 ${mockOverview.updatedAt}`,
+    icon: 'payments',
+  },
+  {
+    label: '展示量',
+    value: formatCompactNumber(mockOverview.impressions),
+    sub: `活跃素材 ${mockOverview.activeMaterials} 个`,
+    icon: 'visibility',
+  },
+  {
+    label: '点击量',
+    value: formatCompactNumber(mockOverview.clicks),
+    sub: '以视频素材贡献为主',
+    icon: 'ads_click',
+  },
+  {
+    label: '平均 ROAS',
+    value: `${formatNumber(mockOverview.roas)}x`,
+    sub: mockOverview.roas >= 2.5 ? '回收健康' : '需观察',
+    icon: 'monitoring',
+  },
+  {
+    label: '短视频消耗',
+    value: formatCurrency(mockOverview.shortVideoSpend),
+    sub: '竖版素材占比更高',
+    icon: 'movie',
+  },
+])
+
+const analysisCards = computed<AnalysisCard[]>(() => [
+  {
+    title: '高效素材',
+    body: '竖版视频在当前周期的表现更稳，建议优先复制同主题脚本并扩大投放频次。',
+    icon: 'trending_up',
+    panelClass: 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-50',
+    pillClass: 'bg-white/75 text-emerald-800 dark:bg-slate-900/50 dark:text-emerald-200',
+  },
+  {
+    title: '风险提示',
+    body: '部分静态图在连续曝光后开始疲劳，建议尽快替换首帧和 CTA 文案。',
+    icon: 'warning',
+    panelClass: 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-50',
+    pillClass: 'bg-white/75 text-amber-800 dark:bg-slate-900/50 dark:text-amber-200',
+  },
+  {
+    title: '优化建议',
+    body: '新增 1:1 与 4:5 备选尺寸后，素材在信息流和故事流的适配会更稳定。',
+    icon: 'auto_awesome',
+    panelClass: 'border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-50',
+    pillClass: 'bg-white/75 text-sky-800 dark:bg-slate-900/50 dark:text-sky-200',
+  },
+])
+
 const selectedRow = computed(() => {
   const material = materials.value.find(item => item.id === selectedMaterialId.value) || materials.value[0]
   if (!material) return null
@@ -684,15 +780,15 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 
     <main class="min-w-0 flex-1 bg-transparent">
       <section class="min-w-0 flex h-full flex-col">
-        <header class="flex h-[54px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-[18px] dark:border-slate-800 dark:bg-slate-900">
+        <header class="flex min-h-[54px] shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
           <div class="min-w-0">
             <div class="flex items-center gap-[8px]">
-              <span class="grid h-[26px] w-[26px] place-items-center rounded-[6px] bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+              <span class="grid h-[26px] w-[26px] place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
                 <span class="material-symbols-outlined text-[16px]">video_library</span>
               </span>
-              <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">素材管理</h1>
+              <h1 class="m-0 text-[16px] font-semibold tracking-[-0.2px] text-[#1a1a1a] dark:text-white">素材管理</h1>
             </div>
-            <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
+            <p class="ml-[34px] mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
           </div>
           <div class="flex items-center gap-[7px]">
             <button class="inline-flex min-h-[34px] items-center justify-center gap-[7px] rounded-[8px] border border-slate-200 bg-white px-[13px] text-[11px] font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" @click="openMetaSyncModal">
@@ -709,6 +805,55 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
         <div class="flex-1 overflow-y-auto px-[28px] py-[22px] max-md:px-[16px] max-md:py-[16px]">
           <div v-if="error" class="mb-[12px] rounded-md border border-red-200 bg-red-50 px-[12px] py-[9px] text-[11px] text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
             {{ error }}
+          </div>
+
+          <div class="mb-[14px] space-y-[12px]">
+            <section class="overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+              <div class="flex items-center justify-between border-b border-slate-100 px-[14px] py-[10px] dark:border-slate-800">
+                <div>
+                  <strong class="text-[12px] font-semibold text-slate-900 dark:text-white">素材周期看板</strong>
+                  <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">{{ mockOverview.periodLabel }} · 前端演示数据</p>
+                </div>
+                <div class="text-[10px] text-slate-500 dark:text-slate-400">更新时间 {{ mockOverview.updatedAt }}</div>
+              </div>
+              <div class="grid gap-[10px] p-[12px] sm:grid-cols-2 xl:grid-cols-5">
+                <div
+                  v-for="card in overviewCards"
+                  :key="card.label"
+                  class="min-h-[92px] rounded-md border border-slate-200 bg-slate-50 px-[13px] py-[12px] dark:border-slate-800 dark:bg-slate-950/40"
+                >
+                  <div class="flex items-center gap-[6px] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+                    <span>{{ card.label }}</span>
+                    <span class="material-symbols-outlined text-[15px] text-slate-400">{{ card.icon }}</span>
+                  </div>
+                  <div class="mt-[8px] truncate text-[21px] font-bold leading-none text-slate-900 dark:text-white">{{ card.value }}</div>
+                  <div class="mt-[6px] truncate text-[10px] text-slate-500 dark:text-slate-400">{{ card.sub }}</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+              <div class="flex items-center justify-between border-b border-slate-100 px-[14px] py-[10px] dark:border-slate-800">
+                <div>
+                  <strong class="text-[12px] font-semibold text-slate-900 dark:text-white">素材智能分析</strong>
+                  <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">基于当前素材表现生成的前端演示结论</p>
+                </div>
+              </div>
+              <div class="grid gap-[10px] p-[12px] md:grid-cols-3">
+                <div
+                  v-for="item in analysisCards"
+                  :key="item.title"
+                  class="min-h-[116px] rounded-md border px-[13px] py-[12px]"
+                  :class="item.panelClass"
+                >
+                  <div :class="['inline-flex min-h-[22px] items-center gap-[6px] rounded-full px-[8px] text-[11px] font-semibold', item.pillClass]">
+                    <span class="material-symbols-outlined text-[14px]">{{ item.icon }}</span>
+                    <span>{{ item.title }}</span>
+                  </div>
+                  <p class="mt-[8px] text-[12px] leading-relaxed opacity-80">{{ item.body }}</p>
+                </div>
+              </div>
+            </section>
           </div>
 
           <MaterialLibraryView

@@ -69,9 +69,14 @@ const openSetting = (path: string) => {
 
     <main class="settings-main">
       <header class="settings-page-head">
-        <div class="settings-page-title">
-          <h1>设置</h1>
-          <p>管理 Agent 系统账号、系统配置和广告平台连接</p>
+        <div class="settings-page-title-wrap">
+          <span class="settings-page-icon">
+            <span class="material-symbols-outlined">settings</span>
+          </span>
+          <div class="settings-page-title">
+            <h1>设置</h1>
+            <p>管理 Agent 系统账号、系统配置和广告平台连接</p>
+          </div>
         </div>
       </header>
 
@@ -137,29 +142,56 @@ const openSetting = (path: string) => {
 }
 
 .settings-page-head {
-  min-height: 72px;
+  min-height: 54px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
-  gap: 12px;
-  padding: 0 clamp(22px, 3vw, 38px);
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 clamp(24px, 3vw, 48px);
   border-bottom: 1px solid #e5e3df;
+  background: rgba(255, 255, 255, .88);
+}
+
+.settings-page-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-page-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #f6f5f4;
+  color: #37352f;
+}
+
+.settings-page-icon .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.settings-page-title {
+  min-width: 0;
 }
 
 .settings-page-title h1 {
   margin: 0;
   color: #1a1a1a;
-  font-size: 17px;
-  font-weight: 650;
+  font-size: 16px;
+  font-weight: 600;
   line-height: 1.2;
-  letter-spacing: -0.3px;
+  letter-spacing: -0.2px;
 }
 
 .settings-page-title p {
-  margin: 5px 0 0;
+  margin: 2px 0 0;
   color: #787671;
   font-size: 10px;
-  line-height: 1.35;
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .settings-scroll-area {

@@ -353,7 +353,10 @@ const handleSubmitCampaign = async (data: any) => {
           <span class="projects-page-icon">
             <span class="material-symbols-outlined">folder_open</span>
           </span>
-          <h1 class="projects-page-title">项目管理</h1>
+          <div class="projects-page-title-content">
+            <h1 class="projects-page-title">项目管理</h1>
+            <p class="projects-page-subtitle">管理项目列表、筛选视图与 Campaign 创建入口</p>
+          </div>
         </div>
         <div class="projects-page-actions">
           <!-- View Toggle -->
@@ -523,6 +526,10 @@ const handleSubmitCampaign = async (data: any) => {
   gap: 8px;
 }
 
+.projects-page-title-content {
+  min-width: 0;
+}
+
 .projects-page-icon {
   width: 26px;
   height: 26px;
@@ -543,6 +550,14 @@ const handleSubmitCampaign = async (data: any) => {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -.2px;
+}
+
+.projects-page-subtitle {
+  margin: 2px 0 0;
+  color: #787774;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.2;
 }
 
 .projects-page-actions {
