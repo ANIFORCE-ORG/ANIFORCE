@@ -384,12 +384,18 @@ const switchPanel = (item: any) => {
 }
 
 async function createSessionForActiveMode() {
+  if (route.path === '/home' && route.query.session_id) {
+    void router.push('/home')
+  }
   agent.beginNewSession()
   hasInteracted.value = false
   inputText.value = ''
 }
 
 async function createChatSession() {
+  if (route.path === '/home' && route.query.session_id) {
+    void router.push('/home')
+  }
   activeIntentMode.value = 'chat'
   agent.beginNewSession()
   hasInteracted.value = false
@@ -399,9 +405,17 @@ async function createChatSession() {
 const switchSession = (session: any) => {
   const target = agent.sessions.value.find(item => item.id === session.id)
   if (target) {
-    hasInteracted.value = true
-    void agent.selectSession(target)
+    if (route.path !== '/home' || route.query.session_id !== target.id) {
+      void router.push({ path: '/home', query: { session_id: target.id } })
+      return
+    }
+    void selectSessionTarget(target)
   }
+}
+
+async function selectSessionTarget(target: typeof agent.sessions.value[number]): Promise<void> {
+  hasInteracted.value = true
+  await agent.selectSession(target)
 }
 
 async function selectSessionFromRoute(): Promise<boolean> {
@@ -409,9 +423,14 @@ async function selectSessionFromRoute(): Promise<boolean> {
   if (!querySessionId) return false
   const target = agent.sessions.value.find(session => session.id === querySessionId)
   if (!target) return false
-  hasInteracted.value = true
-  await agent.selectSession(target)
+  await selectSessionTarget(target)
   return true
+}
+
+function showNewConversationHome(): void {
+  agent.beginNewSession()
+  hasInteracted.value = false
+  inputText.value = ''
 }
 
 function openRenameSession(session: { id: string; name: string }) {
@@ -459,13 +478,7 @@ onMounted(async () => {
   document.addEventListener('visibilitychange', handleVisibilityChange)
   await Promise.all([agent.refreshModels(), agent.refreshSessions()])
   if (await selectSessionFromRoute()) return
-  const existing = agent.activeSession.value
-  const savedSessionId = localStorage.getItem('aniforce.activeSessionId')
-  const saved = savedSessionId ? agent.sessions.value.find(session => session.id === savedSessionId) : null
-  if (existing && agent.sessions.value.some(session => session.id === existing.id)) return
-  if (saved) await agent.selectSession(saved)
-  else if (agent.sessions.value.length > 0) await agent.selectSession(agent.sessions.value[0])
-  else await createSessionForActiveMode()
+  showNewConversationHome()
 })
 
 onActivated(() => {
@@ -474,7 +487,8 @@ onActivated(() => {
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   agent.resumeTypewriter?.()
-  void selectSessionFromRoute()
+  if (route.query.session_id) void selectSessionFromRoute()
+  else showNewConversationHome()
 })
 
 onBeforeUnmount(() => {
@@ -492,8 +506,9 @@ onDeactivated(() => {
 
 watch(
   () => route.query.session_id,
-  () => {
-    void selectSessionFromRoute()
+  sessionId => {
+    if (sessionId) void selectSessionFromRoute()
+    else showNewConversationHome()
   }
 )
 </script>
