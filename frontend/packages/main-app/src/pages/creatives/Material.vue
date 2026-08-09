@@ -781,14 +781,14 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
     <main class="min-w-0 flex-1 bg-transparent">
       <section class="min-w-0 flex h-full flex-col">
         <header class="flex min-h-[54px] shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
-          <div class="min-w-0">
-            <div class="flex items-center gap-[8px]">
-              <span class="grid h-[26px] w-[26px] place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
-                <span class="material-symbols-outlined text-[16px]">video_library</span>
-              </span>
+          <div class="flex min-w-0 items-center gap-[8px]">
+            <span class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
+              <span class="material-symbols-outlined text-[16px] leading-none">video_library</span>
+            </span>
+            <div class="min-w-0">
               <h1 class="m-0 text-[16px] font-semibold tracking-[-0.2px] text-[#1a1a1a] dark:text-white">素材管理</h1>
+              <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
             </div>
-            <p class="ml-[34px] mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
           </div>
           <div class="flex items-center gap-[7px]">
             <button class="inline-flex min-h-[34px] items-center justify-center gap-[7px] rounded-[8px] border border-slate-200 bg-white px-[13px] text-[11px] font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" @click="openMetaSyncModal">

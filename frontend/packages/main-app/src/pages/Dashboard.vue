@@ -146,9 +146,11 @@ onBeforeUnmount(() => {
     <main class="workspace replay-page">
       <header class="page-bar replay-bar">
         <div class="page-title replay-title">
-          <span class="page-icon material-symbols-outlined" aria-hidden="true">bar_chart</span>
+          <span class="page-icon" aria-hidden="true">
+            <span class="material-symbols-outlined">bar_chart</span>
+          </span>
           <div>
-            <h1>数据复盘</h1>
+            <h1>数据概览</h1>
             <p>跨平台投放表现、Campaign 预算消耗和素材信号</p>
           </div>
         </div>
@@ -373,15 +375,16 @@ onBeforeUnmount(() => {
 
 .page-bar { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 clamp(24px,3vw,48px); border-bottom: 1px solid var(--hairline); background: rgba(255,255,255,.86); }
 .page-title { display: flex; align-items: center; gap: 8px; }
-.page-title .page-icon { width: 26px; height: 26px; display: grid; place-items: center; border-radius: 6px; }
+.page-title .page-icon { width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 6px; }
+.page-title .page-icon .material-symbols-outlined { display: block; width: 16px; height: 16px; font-size: 16px; line-height: 16px; }
 .page-title h1 { margin: 0; color: var(--ink); font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
 .page-actions { display: flex; align-items: center; gap: 7px; }
 .period-select { height: 31px; min-width: 112px; padding: 0 29px 0 10px; border: 1px solid var(--hairline-strong); border-radius: 7px; outline: none; background: #fff; color: var(--slate); font-size: 11px; cursor: pointer; }
 .content { width: min(100%,1220px); margin: 0 auto; padding: 30px clamp(24px,3vw,48px) 74px; }
 
 .replay-bar { min-height: 64px; align-items: center; }
-.replay-title { align-items: flex-start; }
-.replay-title .page-icon { width: 22px; height: 22px; margin-top: 1px; background: transparent; color: var(--slate); font-size: 16px; }
+.replay-title { align-items: center; }
+.replay-title .page-icon { background: #f6f5f4; color: #37352f; }
 .replay-title h1 { font-size: 17px; }
 .replay-title p { margin: 2px 0 0; color: var(--steel); font-size: 10px; }
 .replay-actions { gap: 8px; }
