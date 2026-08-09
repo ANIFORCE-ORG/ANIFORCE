@@ -684,23 +684,23 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 
     <main class="min-w-0 flex-1 bg-transparent">
       <section class="min-w-0 flex h-full flex-col">
-        <header class="flex h-[68px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-[28px] dark:border-slate-800 dark:bg-slate-900">
+        <header class="flex h-[54px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-[18px] dark:border-slate-800 dark:bg-slate-900">
           <div class="min-w-0">
-            <div class="flex items-center gap-[10px]">
-              <span class="grid h-[30px] w-[30px] place-items-center rounded-lg bg-primary/10 text-primary"><span class="material-symbols-outlined text-[17px]">video_library</span></span>
-              <div>
-                <h1 class="text-[18px] font-bold text-slate-900 dark:text-white">素材管理</h1>
-                <p class="mt-[2px] text-[11px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
-              </div>
+            <div class="flex items-center gap-[8px]">
+              <span class="grid h-[26px] w-[26px] place-items-center rounded-[6px] bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300">
+                <span class="material-symbols-outlined text-[16px]">video_library</span>
+              </span>
+              <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">素材管理</h1>
             </div>
+            <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
           </div>
-          <div class="flex items-center gap-[8px]">
-            <button class="inline-flex items-center gap-[6px] rounded-md border border-slate-200 px-[11px] py-[7px] text-[11px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" @click="openMetaSyncModal">
-              <span class="material-symbols-outlined text-[15px]">download</span>
+          <div class="flex items-center gap-[7px]">
+            <button class="inline-flex min-h-[34px] items-center justify-center gap-[7px] rounded-[8px] border border-slate-200 bg-white px-[13px] text-[11px] font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" @click="openMetaSyncModal">
+              <span class="material-symbols-outlined text-[16px]">download</span>
               从 Meta 导入
             </button>
-            <button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[13px] py-[7px] text-[11px] font-semibold text-white shadow-sm hover:bg-primary/90" @click="openUploadModal">
-              <span class="material-symbols-outlined text-[15px]">upload</span>
+            <button type="button" class="material-create-button" @click="openUploadModal">
+              <span class="material-symbols-outlined">upload</span>
               上传素材
             </button>
           </div>
@@ -1202,6 +1202,32 @@ tbody tr {
 .edit-input:focus {
   border-color: rgb(var(--color-primary, 59 130 246));
   box-shadow: 0 0 0 1px rgb(var(--color-primary, 59 130 246));
+}
+
+.material-create-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid #37352f;
+  border-radius: 8px;
+  background: #37352f;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+
+.material-create-button:hover {
+  border-color: #1a1a1a;
+  background: #1a1a1a;
+}
+
+.material-create-button .material-symbols-outlined {
+  font-size: 16px;
 }
 
 :global(.dark) .filter-select {
