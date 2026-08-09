@@ -224,6 +224,9 @@ FRONTEND_DIR="$ROOT_DIR/frontend"
 if [[ "$LOG_DIR" != /* ]]; then
   LOG_DIR="$ROOT_DIR/$LOG_DIR"
 fi
+if [ "$MODE" = "local" ] || [ "$MODE" = "cloud" ]; then
+  LOG_DIR="$LOG_DIR/$MODE"
+fi
 
 # 创建日志目录
 mkdir -p "$LOG_DIR"
@@ -253,30 +256,18 @@ if [ "$DAEMON" -eq 1 ] && [ "$DAEMON_CHILD" -eq 0 ]; then
   exit 0
 fi
 
-# Local 写项目日志文件；Cloud 输出 JSON 到 stdout/stderr，由运行平台统一采集。
-if [ "$MODE" = "cloud" ]; then
-  SERVICE_LOG_OUTPUT="console"
-  BACKEND_API_LOG=""
-  AGENT_API_LOG=""
-  BACKEND_RECONCILE_LOG=""
-  BACKEND_UVICORN_LOG="/dev/stderr"
-  AGENT_UVICORN_LOG="/dev/stderr"
-  FRONTEND_LOG="/dev/stderr"
-  info "日志配置: stdout JSON（由容器或主机日志平台采集）"
-else
-  SERVICE_LOG_OUTPUT="file"
-  BACKEND_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend-api.jsonl"
-  AGENT_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-api.jsonl"
-  BACKEND_RECONCILE_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-reconcile-worker.jsonl"
-  BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.bootstrap.log"
-  AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.bootstrap.log"
-  FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
-  info "日志配置: 目录=$LOG_DIR"
-  info "Backend API: $BACKEND_API_LOG"
-  info "Agent API: $AGENT_API_LOG"
-  info "Reconcile Worker: $BACKEND_RECONCILE_LOG"
-  info "前端日志: $FRONTEND_LOG"
-fi
+SERVICE_LOG_OUTPUT="file"
+BACKEND_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend-api.jsonl"
+AGENT_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-api.jsonl"
+BACKEND_RECONCILE_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-reconcile-worker.jsonl"
+BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.bootstrap.log"
+AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.bootstrap.log"
+FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
+info "日志配置: 目录=$LOG_DIR"
+info "Backend API: $BACKEND_API_LOG"
+info "Agent API: $AGENT_API_LOG"
+info "Reconcile Worker: $BACKEND_RECONCILE_LOG"
+info "前端日志: $FRONTEND_LOG"
 
 # ---------- PID & 端口信息文件（用于清理） ----------
 PID_FILE="$ROOT_DIR/.server_pids"
@@ -680,11 +671,7 @@ fi
 
   info "启动 $AGENT_RUN_WORKERS 个 Agent Run Worker..."
   for ((worker_index=1; worker_index<=AGENT_RUN_WORKERS; worker_index++)); do
-    if [ "$MODE" = "cloud" ]; then
-      RUN_WORKER_LOG=""
-    else
-      RUN_WORKER_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-run-worker-${worker_index}.jsonl"
-    fi
+    RUN_WORKER_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-run-worker-${worker_index}.jsonl"
     APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$RUN_WORKER_LOG" \
     LOG_SERVICE=backend LOG_ROLE=agent-run-worker AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
     JWT_SECRET="$JWT_SECRET_VALUE" $PY scripts/run_agent_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &

@@ -95,7 +95,7 @@
 ./run_server.sh --mode local --daemon
 ```
 
-启动过程写入 `logs/YYYYMMDD.local.launcher.log`。可使用 `./check_server.sh` 查看状态，使用 `./stop_server.sh` 停止服务。
+启动过程写入 `logs/local/YYYYMMDD.local.launcher.log`。可使用 `./check_server.sh` 查看状态，使用 `./stop_server.sh` 停止服务。
 
 ### 仅启动后端
 
