@@ -11,6 +11,8 @@ import {
   emptyProjectForm,
   getDefaultStartDate,
   getDefaultEndDate,
+  projectCountryOptions as countryOptions,
+  projectStatusOptions as statusOptions,
   toCreateProjectPayload,
 } from './projectFormModel'
 

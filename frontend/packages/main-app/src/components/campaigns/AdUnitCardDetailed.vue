@@ -63,7 +63,7 @@ const roiClass = (value?: number | null) => {
           <span class="status-chip" :data-status="adUnit.status" :class="getStatusChipClass(adUnit.status)">
             Status: {{ getStatusText(adUnit.status) }}
           </span>
-        </div>
+        </h3>
         <p class="mt-[5px] text-[10px] text-slate-500 dark:text-slate-400">
           {{ adUnit.audience || '未配置受众' }}
         </p>

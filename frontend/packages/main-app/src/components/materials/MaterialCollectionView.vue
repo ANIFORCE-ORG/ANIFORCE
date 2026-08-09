@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import MaterialLibraryView from './MaterialLibraryView.vue'
 import type { Material } from '@/api/materials'
 import type { MaterialRow } from '@/pages/creatives/materialsAdapter'
@@ -17,6 +18,47 @@ const emit = defineEmits<{
 function handleSelect(row: MaterialRow): void {
   emit('select', row.material)
   emit('preview', row.material)
+}
+
+const materialImages = computed(() => new Map(
+  props.materials
+    .map(material => [
+      material.id,
+      material.poster_url || material.preview_url || material.thumbnail_url || material.url || '',
+    ] as const)
+    .filter(([, source]) => Boolean(source))
+))
+
+function getMaterialImageSrc(images: Map<string, string>, materialId: string): string {
+  return images.get(materialId) || ''
+}
+
+function getStatusLabel(status?: string): string {
+  const labels: Record<string, string> = {
+    active: '进行中',
+    running: '进行中',
+    ready: '可用',
+    fatigue: '疲劳',
+    archived: '已归档',
+    paused: '已暂停',
+    draft: '草稿',
+    failed: '失败',
+  }
+  return status ? labels[status] || status : '未知'
+}
+
+function getStatusColor(status?: string): string {
+  const classes: Record<string, string> = {
+    active: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    running: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300',
+    ready: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300',
+    fatigue: 'bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300',
+    archived: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    paused: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    draft: 'bg-slate-100 text-slate-600 dark:bg-slate-700 dark:text-slate-300',
+    failed: 'bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300',
+  }
+  return status ? classes[status] || classes.draft : classes.draft
 }
 </script>
 

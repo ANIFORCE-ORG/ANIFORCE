@@ -103,7 +103,7 @@ const platformClass = (platform?: string) => platform === 'Meta'
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  <div class="rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="border-b border-slate-200 px-[16px] py-[14px] dark:border-slate-800">
       <div class="flex flex-wrap items-center gap-[8px]">
         <div class="relative min-w-[220px] flex-1">
