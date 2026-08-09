@@ -136,7 +136,7 @@ const workflows = [
             <div class="p-6 border-b border-slate-200 dark:border-slate-700">
               <div class="flex items-center justify-between">
                 <h3 class="text-xl font-bold text-slate-900 dark:text-white">{{ workflow.title }}</h3>
-                <span class="flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+                <span class="status-chip gap-2" :data-status="workflow.status">
                   <span class="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
                   {{ workflow.status === 'running' ? '运行中' : '已完成' }}
                 </span>

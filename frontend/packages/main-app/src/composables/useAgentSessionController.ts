@@ -254,6 +254,22 @@ export function useAgentSessionController() {
     }
   }
 
+  function beginNewSession(): void {
+    if (store.agentRunning) return
+    store.activeSessionId = null
+    localStorage.removeItem('aniforce.activeSessionId')
+    store.loading = false
+    store.error = null
+    store.streamingMessage = null
+    store.agentPhase = null
+    executionPlan.value = null
+    executionTools.value = []
+    commandStatus.value = null
+    contextUsage.value = null
+    currentTask.value = null
+    store.clearStreamRuntime()
+  }
+
   async function selectSession(session: AgentSession): Promise<void> {
     const selectingActiveRun = store.agentRunning && store.activeRunSessionId === session.id
     store.activeSessionId = session.id
@@ -329,14 +345,14 @@ export function useAgentSessionController() {
       store.activeSessionId = null
       const nextSession = store.sessions[0]
       if (nextSession) await selectSession(nextSession)
-      else await createSession()
+      else beginNewSession()
     }
   }
 
   async function send(message: string, _images?: unknown, _route?: AgentRouteContext): Promise<void> {
     const text = message.trim()
     if (!text || store.agentRunning) return
-    if (!activeSession.value) await createSession()
+    if (!activeSession.value) await createSession(_route)
     if (!activeSession.value) return
 
     const perfStart = performance.now()
@@ -1343,6 +1359,7 @@ export function useAgentSessionController() {
     refreshModels,
     refreshSessions,
     createSession,
+    beginNewSession,
     selectSession,
     renameSession,
     deleteSession,

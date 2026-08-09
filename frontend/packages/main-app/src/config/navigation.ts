@@ -6,10 +6,9 @@ export interface NavItem {
 }
 
 export const navItems: NavItem[] = [
-  { id: 'new-task', icon: 'add_circle', label: '智能助手', path: '/home' },
+  { id: 'new-task', icon: 'add_circle', label: '新对话', path: '/home' },
   { id: 'dashboard', icon: 'bar_chart', label: '数据概览', path: '/dashboard' },
   { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
-  { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
   { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
   { id: 'settings', icon: 'settings', label: '账户设置', path: '/settings' }
 ]

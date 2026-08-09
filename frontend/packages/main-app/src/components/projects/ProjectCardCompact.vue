@@ -4,12 +4,16 @@ import type { Project } from '@/api/projects'
 
 interface Props {
   project: Project
+  selected?: boolean
+  viewType?: 'compact' | 'detailed'
 }
 
-const props = defineProps<Props>()
+const props = withDefaults(defineProps<Props>(), {
+  selected: false,
+  viewType: 'compact'
+})
 const emit = defineEmits<{
   edit: [project: Project]
-  viewDetail: [project: Project]
   viewTasks: [project: Project]
   createTask: [project: Project]
   select: [project: Project, selected: boolean]
@@ -20,6 +24,7 @@ const router = useRouter()
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
     active: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
+    running: 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600',
     paused: 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-600',
     completed: 'bg-slate-50 dark:bg-slate-900/30 text-slate-600',
     draft: 'bg-blue-50 dark:bg-blue-900/30 text-blue-600'
@@ -30,6 +35,7 @@ const getStatusColor = (status: string) => {
 const getStatusLabel = (status: string) => {
   const labels: Record<string, string> = {
     active: '进行中',
+    running: '进行中',
     paused: '已暂停',
     completed: '已完成',
     draft: '草稿'
@@ -48,54 +54,60 @@ const handleViewDetail = () => {
 </script>
 
 <template>
-  <article class="project-card">
+  <article
+    class="project-card"
+    :class="{
+      selected,
+      'is-list': viewType === 'detailed'
+    }"
+  >
     <!-- Checkbox -->
     <label class="select-check">
       <input
         type="checkbox"
-        class="w-[12px] h-[12px] rounded border-slate-300 text-primary focus:ring-primary/20"
+        :checked="selected"
+        class="project-checkbox"
         @change="handleCheckboxChange"
       />
-      <span class="ml-[6px] text-[10px] text-slate-500 dark:text-slate-400">选择项目</span>
+      <span>选择项目</span>
     </label>
 
     <!-- Project Header -->
-    <div class="project-card-head">
-      <div class="project-card-title">
-        <h3 class="text-[13px] font-semibold leading-tight text-slate-900 dark:text-white mb-[6px]">
-          {{ project.name }}
-        </h3>
-        <p class="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
-          {{ project.game_type }}<br>{{ project.target_market }}
-        </p>
-      </div>
+    <div class="card-heading">
+      <h2 class="project-name">{{ project.name }}</h2>
       <!-- Status Badge -->
       <span
-        class="status-badge text-[10px] font-semibold px-[6px] py-[2px] rounded-full whitespace-nowrap"
-        :class="getStatusColor(project.status)"
+        class="status-badge status-chip"
+        :data-status="project.status"
+        :class="[getStatusColor(project.status), `status-${project.status}`]"
       >
         {{ getStatusLabel(project.status) }}
       </span>
     </div>
 
+    <p class="project-info">
+      <span>{{ project.game_type }}</span>
+      <span>{{ project.target_market }}</span>
+    </p>
+
     <!-- Tags / Chips -->
-    <div class="scope-list">
-      <span class="chip">Meta Campaign</span>
-      <span class="chip">{{ project.tags[0] || '支付计划' }}</span>
-      <span class="chip">App promotion</span>
+    <div class="tag-list">
+      <span class="tag">Meta Campaign</span>
+      <span class="tag">{{ project.tags[0] || '支付计划' }}</span>
+      <span class="tag">App promotion</span>
     </div>
 
     <!-- Actions -->
-    <div class="project-card-actions">
-      <button class="btn-soft" type="button" @click="emit('createTask', project)">
+    <div class="card-actions">
+      <button class="card-button" type="button" @click="emit('createTask', project)">
         <span class="material-symbols-outlined text-[14px]">add_task</span>
         创建新任务
       </button>
-      <button class="btn-primary" type="button" @click="emit('edit', project)">
+      <button class="card-button edit" type="button" @click="emit('edit', project)">
         <span class="material-symbols-outlined text-[14px]">edit</span>
         编辑项目
       </button>
-      <button class="btn-soft" type="button" @click="handleViewDetail">
+      <button class="card-button" type="button" @click="handleViewDetail">
         <span class="material-symbols-outlined text-[14px]">assignment</span>
         查看任务
       </button>
@@ -104,194 +116,266 @@ const handleViewDetail = () => {
 </template>
 
 <style scoped>
-/* Project Card */
 .project-card {
   position: relative;
-  min-height: 228px;
+  min-width: 0;
+  min-height: 242px;
   display: flex;
   flex-direction: column;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
   padding: 17px;
-  background: #fff;
-  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.16s ease;
+  border: 1px solid #e5e3df;
+  border-radius: 12px;
+  background: #ffffff;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
 }
 
 .project-card:hover {
-  border-color: #b9d3f5;
-  box-shadow: 0 11px 25px rgba(15, 23, 42, 0.06);
+  border-color: #c8c4be;
+  box-shadow: rgba(15, 15, 15, .04) 0 1px 2px;
   transform: translateY(-1px);
 }
 
-.dark .project-card {
-  background: #1e293b;
-  border-color: #334155;
+.project-card.selected {
+  border-color: #c8c4be;
+  background: #fafaf9;
+  box-shadow: inset 0 0 0 1px #e5e3df;
 }
 
-.dark .project-card:hover {
-  border-color: #475569;
-  box-shadow: 0 11px 25px rgba(0, 0, 0, 0.2);
-}
-
-/* Select Checkbox */
 .select-check {
-  display: flex;
+  display: inline-flex;
   align-items: center;
-  align-self: flex-start;
-  margin-bottom: 9px;
+  gap: 7px;
+  color: #787671;
+  font-size: 10px;
   cursor: pointer;
 }
 
-/* Project Card Head */
-.project-card-head {
+.select-check input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
+  accent-color: #37352f;
+  cursor: pointer;
+}
+
+.card-heading {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 12px;
-  margin-bottom: 9px;
+  gap: 10px;
+  margin-top: 13px;
 }
 
-.project-card-title {
-  min-width: 0;
-  flex: 1;
+.project-name {
+  margin: 0;
+  overflow-wrap: anywhere;
+  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 600;
+  line-height: 1.3;
+  letter-spacing: -.2px;
 }
 
 .status-badge {
-  flex-shrink: 0;
-  align-self: flex-start;
-}
-
-.project-card-title h3 {
-  margin-bottom: 6px;
-  font-size: 13px;
-  line-height: 1.35;
-  letter-spacing: 0;
-}
-
-.project-card-title p {
-  margin: 0;
-  color: #64748b;
-  line-height: 1.7;
-}
-
-.dark .project-card-title p {
-  color: #94a3b8;
-}
-
-/* Scope List / Chips */
-.scope-list {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 9px;
-  margin-bottom: auto;
-}
-
-.chip {
+  min-height: 22px;
   display: inline-flex;
   align-items: center;
-  padding: 3px 8px;
-  border-radius: 3px;
-  background: #f1f5f9;
-  color: #475569;
+  gap: 5px;
+  flex: 0 0 auto;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: #eaf3ec;
+  color: #2f6f41;
   font-size: 9px;
   font-weight: 600;
   white-space: nowrap;
 }
 
-.dark .chip {
-  background: #334155;
-  color: #cbd5e1;
+.status-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
 }
 
-/* Project Card Actions */
-.project-card-actions {
-  display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  align-items: center;
-  gap: 8px;
-  margin-top: auto;
-  padding-top: 19px;
+.status-badge.status-paused {
+  background: #fbf3db;
+  color: #8a651b;
 }
 
-/* Button Styles */
-.btn-soft,
-.btn-primary,
-.btn-ghost {
+.status-badge.status-completed {
+  background: #f1f1ef;
+  color: #5d5b54;
+}
+
+.status-badge.status-draft {
+  background: #eef4fb;
+  color: #35658f;
+}
+
+.project-info {
+  min-height: 42px;
+  margin: 8px 0 0;
+  color: #787671;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.project-info span {
+  display: block;
+}
+
+.tag-list {
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-wrap: wrap;
   gap: 5px;
-  width: 100%;
-  min-width: 0;
-  padding: 6px 8px;
-  border: 1px solid #e2e8f0;
-  border-radius: 5px;
-  background: #fff;
-  color: #1e293b;
+  margin-top: 13px;
+}
+
+.tag {
+  padding: 3px 7px;
+  border-radius: 6px;
+  background: #f6f5f4;
+  color: #5d5b54;
   font-size: 9px;
   font-weight: 600;
+  white-space: nowrap;
+}
+
+.card-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+  margin-top: auto;
+  padding-top: 22px;
+}
+
+.card-button {
+  min-width: 0;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 0 8px;
+  border: 1px solid #c8c4be;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #37352f;
+  font-size: 10px;
+  font-weight: 500;
   cursor: pointer;
-  transition: all 0.16s ease;
+  white-space: nowrap;
 }
 
-.btn-soft:hover {
-  border-color: #cbd5e1;
-  background: #f8fafc;
-  color: #137fec;
+.card-button:hover {
+  border-color: #37352f;
+  color: #1a1a1a;
 }
 
-.btn-primary {
-  background: #137fec;
-  border-color: #137fec;
-  color: #fff;
+.card-button.edit {
+  border-color: #c8c4be;
+  background: #fafaf9;
+  color: #37352f;
 }
 
-.btn-primary:hover {
-  background: #0c6cd4;
-  border-color: #0c6cd4;
+.project-card.is-list {
+  min-height: 146px;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) minmax(230px, 1fr) auto;
+  grid-template-areas:
+    'select info actions'
+    'heading tags actions';
+  align-items: center;
+  gap: 18px;
 }
 
-.btn-ghost {
-  border-color: transparent;
-  background: transparent;
-  color: #1f2a44;
+.project-card.is-list .select-check {
+  grid-area: select;
+  position: absolute;
+  margin: 0;
 }
 
-.btn-ghost:hover {
-  border-color: #d9e8ff;
-  background: #f8fbff;
-  color: #137fec;
+.project-card.is-list .card-heading {
+  grid-area: heading;
+  margin: 25px 0 0;
 }
 
-.dark .btn-soft,
-.dark .btn-ghost {
-  background: #1e293b;
-  border-color: #334155;
-  color: #e2e8f0;
+.project-card.is-list .project-info {
+  grid-area: info;
+  margin: 0;
 }
 
-.dark .btn-soft:hover,
-.dark .btn-ghost:hover {
-  background: #334155;
-  border-color: #475569;
-  color: #60a5fa;
+.project-card.is-list .tag-list {
+  grid-area: tags;
+  margin-top: 7px;
 }
 
-.dark .btn-primary {
-  background: #3b82f6;
-  border-color: #3b82f6;
+.project-card.is-list .card-actions {
+  grid-area: actions;
+  min-width: 315px;
+  margin: 0;
+  padding: 0;
 }
 
-.dark .btn-primary:hover {
-  background: #2563eb;
-  border-color: #2563eb;
+@media (max-width: 1180px) {
+  .project-card.is-list {
+    grid-template-columns: minmax(180px, 1fr) minmax(200px, 1fr);
+    grid-template-areas:
+      'select info'
+      'heading tags'
+      'actions actions';
+  }
+
+  .project-card.is-list .card-actions {
+    min-width: 0;
+  }
 }
 
-/* Responsive */
-@media (max-width: 768px) {
-  .project-card-actions {
+@media (max-width: 720px) {
+  .project-card.is-list {
+    display: flex;
+    min-height: 242px;
+  }
+
+  .project-card.is-list .select-check {
+    position: static;
+  }
+
+  .project-card.is-list .card-heading {
+    margin-top: 13px;
+  }
+
+  .project-card.is-list .project-info {
+    margin-top: 8px;
+  }
+
+  .project-card.is-list .tag-list {
+    margin-top: 13px;
+  }
+
+  .project-card.is-list .card-actions {
+    min-width: 0;
+    margin-top: auto;
+    padding-top: 22px;
+  }
+}
+
+@media (max-width: 520px) {
+  .project-card {
+    padding: 15px;
+  }
+
+  .card-actions {
     grid-template-columns: 1fr;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .project-card,
+  .card-button {
+    transition-duration: .01ms !important;
   }
 }
 </style>

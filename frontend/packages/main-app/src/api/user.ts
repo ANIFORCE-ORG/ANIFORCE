@@ -19,11 +19,15 @@ export interface UserResponse {
 
 export const userApi = {
   async updateName(data: UpdateNameRequest): Promise<UserResponse> {
+    if (import.meta.env.VITE_DEMO_MODE === 'true') {
+      return { id: 'admin-001', email: 'admin@animagus.ai', name: data.name }
+    }
     const response = await axios.put(`${API_BASE}/name`, data)
     return response.data.data
   },
 
   async updatePassword(data: UpdatePasswordRequest): Promise<void> {
+    if (import.meta.env.VITE_DEMO_MODE === 'true') return
     await axios.put(`${API_BASE}/password`, data)
   }
 }

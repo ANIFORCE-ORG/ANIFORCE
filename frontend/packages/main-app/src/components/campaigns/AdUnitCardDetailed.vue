@@ -54,13 +54,14 @@ const roiClass = (value?: number | null) => {
 </script>
 
 <template>
-  <article class="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800/50 hover:border-primary/50 hover:shadow-sm transition-all duration-150">
-    <div class="flex items-start justify-between gap-[12px] px-[14px] py-[12px] border-b border-slate-100 dark:border-slate-700">
-      <div class="min-w-0">
-        <div class="flex flex-wrap items-center gap-[8px]">
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ adUnit.name }}</h3>
-          <span class="inline-flex px-[7px] py-[3px] rounded text-[9px] font-medium border" :class="getStatusChipClass(adUnit.status)">
-            {{ getStatusText(adUnit.status) }}
+  <article class="border border-slate-200 dark:border-slate-700 rounded-md p-[14px] bg-white dark:bg-slate-800/50 hover:border-primary/50 hover:shadow-lg transition-all duration-150">
+    <!-- Ad Unit Header -->
+    <div class="flex items-start justify-between gap-[12px] mb-[10px]">
+      <div class="flex-1 min-w-0">
+        <h3 class="text-[14px] font-semibold text-slate-900 dark:text-white mb-[8px] truncate">
+          {{ adUnit.name }}
+          <span class="status-chip" :data-status="adUnit.status" :class="getStatusChipClass(adUnit.status)">
+            Status: {{ getStatusText(adUnit.status) }}
           </span>
         </div>
         <p class="mt-[5px] text-[10px] text-slate-500 dark:text-slate-400">

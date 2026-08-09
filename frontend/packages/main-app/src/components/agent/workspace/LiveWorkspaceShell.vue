@@ -2,61 +2,39 @@
 import { computed, ref, watch } from 'vue'
 import CampaignDraftWorkspace from './CampaignDraftWorkspace.vue'
 import CreativeWorkspace from './CreativeWorkspace.vue'
-import EmbeddedTaskTimeline, { type WorkspaceStep } from './EmbeddedTaskTimeline.vue'
 import ProjectWorkspaceDetail from './ProjectWorkspaceDetail.vue'
 import ProjectListWorkspace from './ProjectListWorkspace.vue'
-import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus } from '../TaskStatusPanel.vue'
+import type { TaskPanelArtifact } from '../TaskStatusPanel.vue'
 import ProjectCollectionView from '@/components/projects/ProjectCollectionView.vue'
 import CampaignCollectionView from '@/components/campaigns/CampaignCollectionView.vue'
-import MaterialLibraryView from '@/components/materials/MaterialLibraryView.vue'
-import type { Project } from '@/api/projects'
-import type { Campaign } from '@/api/campaigns'
-import type { Material } from '@/api/materials'
+import MaterialCollectionView from '@/components/materials/MaterialCollectionView.vue'
+import DashboardPage from '@/pages/Dashboard.vue'
+import { getProjects, type Project } from '@/api/projects'
+import { getCampaigns, type Campaign } from '@/api/campaigns'
+import { getMaterials, type Material } from '@/api/materials'
 
 const props = defineProps<{
   visible: boolean
   collapsed?: boolean
   sessionId?: string
-  title: string
-  status: TaskPanelStatus
-  summary: string
-  tags: string[]
-  steps: WorkspaceStep[]
-  actions: TaskPanelAction[]
-  taskTypeLabel?: string
-  phaseLabel?: string
+  moduleHint?: 'auto' | 'dashboard' | 'projects' | 'campaigns' | 'materials'
   artifacts?: TaskPanelArtifact[]
   toolResults?: Array<{ id: string; name: string; result?: unknown; isError?: boolean }>
 }>()
 
 const emit = defineEmits<{
-  action: [key: string]
   toggleCollapse: []
   analyzeProject: [project: Project]
   openProject: [project: Project]
 }>()
 
-const statusMeta: Record<TaskPanelStatus, { label: string; icon: string; badge: string }> = {
-  created: { label: '已创建', icon: 'radio_button_unchecked', badge: 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-300' },
-  running: { label: '进行中', icon: 'progress_activity', badge: 'bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-300' },
-  waiting_user_input: { label: '等待补充', icon: 'edit_note', badge: 'bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-300' },
-  waiting_approval: { label: '等待确认', icon: 'approval_delegation', badge: 'bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-300' },
-  applying: { label: '执行中', icon: 'bolt', badge: 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300' },
-  completed: { label: '已完成', icon: 'check_circle', badge: 'bg-green-50 text-green-700 dark:bg-green-950/40 dark:text-green-300' },
-  failed: { label: '失败', icon: 'error', badge: 'bg-red-50 text-red-700 dark:bg-red-950/40 dark:text-red-300' },
-  canceled: { label: '已取消', icon: 'do_not_disturb_on', badge: 'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400' }
-}
-
 const artifacts = computed(() => props.artifacts || [])
 const toolResults = computed(() => props.toolResults || [])
-const workspaceHasContent = computed(() => artifacts.value.length > 0 || toolResults.value.length > 0)
 const workspaceKind = computed(() => {
   const artifactTypes = artifacts.value.map(item => item.type)
-  const label = props.taskTypeLabel || ''
-  if (artifactTypes.includes('campaign_draft') || label.includes('投放')) return 'campaign'
+  if (artifactTypes.includes('campaign_draft')) return 'campaign'
   if (
-    artifactTypes.some(type => ['creative_brief', 'image_asset', 'video_asset'].includes(String(type))) ||
-    label.includes('素材')
+    artifactTypes.some(type => ['creative_brief', 'image_asset', 'video_asset'].includes(String(type)))
   ) return 'creative'
   return 'empty'
 })
@@ -85,8 +63,10 @@ const projectItems = computed<Project[]>(() => {
 })
 
 const hasProjectResult = computed(() => Boolean(projectPayload.value))
+const fallbackProjects = ref<Project[]>([])
+const displayedProjectItems = computed(() => projectItems.value.length ? projectItems.value : fallbackProjects.value)
 const selectedProject = ref<Project | null>(null)
-const selectedProjectStorageKey = computed(() => `aniforce.workspace.selectedProject.${props.sessionId || props.title}`)
+const selectedProjectStorageKey = computed(() => `aniforce.workspace.selectedProject.${props.sessionId || props.moduleHint || 'default'}`)
 const legacySelectedProjectId = ref<string | null>(null)
 
 function readStoredSelectedProject(): Project | null {
@@ -105,7 +85,7 @@ function readStoredSelectedProject(): Project | null {
   }
 }
 
-watch(projectItems, items => {
+watch(displayedProjectItems, items => {
   const storedProject = readStoredSelectedProject()
   const rememberedId = selectedProject.value?.id || storedProject?.id || legacySelectedProjectId.value
   if (!rememberedId) return
@@ -147,6 +127,8 @@ const campaignItems = computed<Campaign[]>(() => {
 })
 
 const hasCampaignResult = computed(() => Boolean(campaignPayload.value))
+const fallbackCampaigns = ref<Campaign[]>([])
+const displayedCampaignItems = computed(() => campaignItems.value.length ? campaignItems.value : fallbackCampaigns.value)
 
 const materialPayload = computed<Record<string, unknown> | null>(() => {
   return unwrapToolPayload(latestToolResult('listMaterials')?.result)
@@ -160,6 +142,8 @@ const materialItems = computed<Material[]>(() => {
 })
 
 const hasMaterialResult = computed(() => Boolean(materialPayload.value))
+const fallbackMaterials = ref<Material[]>([])
+const displayedMaterialItems = computed(() => materialItems.value.length ? materialItems.value : fallbackMaterials.value)
 
 const projectListPayload = computed<Record<string, unknown> | null>(() => {
   const tool = latestToolResult('project_list')
@@ -171,6 +155,46 @@ const projectListPayload = computed<Record<string, unknown> | null>(() => {
 
 const hasProjectListResult = computed(() => Boolean(projectListPayload.value))
 const hasStructuredBusinessResult = computed(() => hasProjectResult.value || hasCampaignResult.value || hasMaterialResult.value || hasProjectListResult.value || workspaceKind.value !== 'empty')
+const moduleLoading = ref(false)
+const moduleLoadError = ref('')
+let moduleLoadVersion = 0
+
+watch(
+  () => props.moduleHint,
+  async moduleHint => {
+    const loadVersion = ++moduleLoadVersion
+    moduleLoadError.value = ''
+    if (!moduleHint || moduleHint === 'auto' || moduleHint === 'dashboard') {
+      moduleLoading.value = false
+      return
+    }
+
+    moduleLoading.value = true
+    try {
+      if (moduleHint === 'projects' && !projectItems.value.length) {
+        fallbackProjects.value = await getProjects({ limit: 50 })
+      }
+      if (moduleHint === 'campaigns' && !campaignItems.value.length) {
+        fallbackCampaigns.value = await getCampaigns({ limit: 50 })
+      }
+      if (moduleHint === 'materials' && !materialItems.value.length) {
+        fallbackMaterials.value = await getMaterials({ limit: 50 })
+      }
+    } catch (error) {
+      moduleLoadError.value = error instanceof Error ? error.message : '工作区模块加载失败'
+    } finally {
+      if (loadVersion === moduleLoadVersion) moduleLoading.value = false
+    }
+  },
+  { immediate: true },
+)
+
+const dashboardIsActive = computed(() => (
+  props.moduleHint === 'dashboard' &&
+  !selectedProject.value &&
+  workspaceKind.value === 'empty' &&
+  !hasStructuredBusinessResult.value
+))
 
 function formatToolResult(value: unknown): string {
   if (value === undefined) return '运行中...'
@@ -190,18 +214,16 @@ function formatToolResult(value: unknown): string {
         <span class="material-symbols-outlined text-lg">left_panel_open</span>
       </button>
       <div class="h-px w-8 bg-slate-200 dark:bg-slate-800"></div>
-      <span class="material-symbols-outlined text-lg" :class="{ 'animate-spin text-blue-600': status === 'running' || status === 'applying', 'text-slate-400': status !== 'running' && status !== 'applying' }">
-        {{ statusMeta[status].icon }}
-      </span>
-      <div class="writing-vertical text-xs font-semibold text-slate-400">Workspace</div>
+      <span class="material-symbols-outlined text-lg text-slate-400">dashboard_customize</span>
+      <div class="writing-vertical text-xs font-semibold text-slate-400">工作台</div>
     </div>
 
     <div v-else class="flex h-full w-full flex-col overflow-hidden">
-      <header class="border-b border-slate-200 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
+      <header class="border-b border-slate-200 bg-white px-4 py-2.5 dark:border-slate-800 dark:bg-slate-950">
         <div class="flex items-center justify-between gap-3">
           <div class="flex min-w-0 items-center gap-2">
             <span class="material-symbols-outlined text-base text-slate-400">dashboard_customize</span>
-            <h2 class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">Workspace</h2>
+            <h2 class="truncate text-sm font-semibold text-slate-800 dark:text-slate-100">工作台</h2>
           </div>
           <button
             class="flex h-8 w-8 items-center justify-center rounded-md text-slate-400 hover:bg-slate-100 hover:text-slate-700 dark:hover:bg-slate-800 dark:hover:text-slate-200"
@@ -211,39 +233,16 @@ function formatToolResult(value: unknown): string {
             <span class="material-symbols-outlined text-lg">right_panel_close</span>
           </button>
         </div>
-
-        <div class="mt-3 flex flex-wrap items-center gap-2">
-          <span class="inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-xs font-semibold" :class="statusMeta[status].badge">
-            <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': status === 'running' || status === 'applying' }">
-              {{ statusMeta[status].icon }}
-            </span>
-            {{ statusMeta[status].label }}
-          </span>
-          <span v-if="taskTypeLabel" class="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            {{ taskTypeLabel }}
-          </span>
-          <span v-if="phaseLabel" class="rounded-md bg-slate-100 px-2.5 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-            {{ phaseLabel }}
-          </span>
-        </div>
       </header>
 
-      <div class="flex min-h-0 flex-1 flex-col overflow-hidden">
-        <section class="border-b border-slate-100 bg-white px-4 py-3 dark:border-slate-800 dark:bg-slate-950">
-          <p class="text-sm leading-6 text-slate-500 dark:text-slate-400">{{ summary }}</p>
-          <div v-if="tags.length" class="mt-3 flex flex-wrap gap-2">
-            <span
-              v-for="tag in tags"
-              :key="tag"
-              class="rounded-md bg-white px-2 py-1 text-xs font-medium text-slate-600 ring-1 ring-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:ring-slate-800"
-            >
-              {{ tag }}
-            </span>
-          </div>
+      <main
+        class="min-h-0 flex-1 overflow-y-auto"
+        :class="dashboardIsActive ? 'p-0' : 'px-5 py-5'"
+      >
+        <section v-if="dashboardIsActive" class="h-full min-h-0">
+          <DashboardPage embedded />
         </section>
-
-        <main class="min-h-0 flex-1 overflow-y-auto px-5 py-5">
-          <section class="min-h-full">
+        <section v-else class="min-h-full">
             <ProjectWorkspaceDetail
               v-if="selectedProject"
               :project="selectedProject"
@@ -253,42 +252,42 @@ function formatToolResult(value: unknown): string {
             />
             <CampaignDraftWorkspace v-else-if="workspaceKind === 'campaign'" :artifacts="artifacts" />
             <CreativeWorkspace v-else-if="workspaceKind === 'creative'" :artifacts="artifacts" />
-            <div v-else-if="hasProjectResult" class="space-y-4">
-              <div class="flex items-center justify-between">
-                <div>
-                  <h3 class="text-base font-semibold text-slate-950 dark:text-white">项目管理</h3>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">选择项目后可在画布内继续分析，复杂操作可打开完整页面。</p>
-                </div>
-                <span class="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  {{ projectItems.length }} 个项目
-                </span>
-              </div>
-              <ProjectCollectionView
-                :projects="projectItems"
-                view="detailed"
-                mode="workspace"
-                embedded
-                @view-detail="selectProject"
-              />
-            </div>
             <div v-else-if="hasProjectListResult" class="h-full">
               <ProjectListWorkspace
                 :result="projectListPayload || {}"
                 @action="handleProjectListWorkspaceAction"
               />
             </div>
+            <div v-else-if="hasProjectResult" class="space-y-4">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h3 class="text-base font-semibold text-slate-950 dark:text-white">项目管理</h3>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">复用项目管理模块，选择项目后可继续分析。</p>
+                </div>
+                <span class="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
+                  {{ displayedProjectItems.length }} 个项目
+                </span>
+              </div>
+              <ProjectCollectionView
+                :projects="displayedProjectItems"
+                view="detailed"
+                mode="workspace"
+                embedded
+                @view-detail="selectProject"
+              />
+            </div>
             <div v-else-if="hasCampaignResult" class="space-y-4">
               <div class="flex items-center justify-between">
                 <div>
                   <h3 class="text-base font-semibold text-slate-950 dark:text-white">广告投放</h3>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">与广告投放页使用同一套计划模板。</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">复用广告投放模块展示 Campaign。</p>
                 </div>
                 <span class="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  {{ campaignItems.length }} 个计划
+                  {{ displayedCampaignItems.length }} 个计划
                 </span>
               </div>
               <CampaignCollectionView
-                :campaigns="campaignItems"
+                :campaigns="displayedCampaignItems"
                 embedded
               />
             </div>
@@ -296,16 +295,51 @@ function formatToolResult(value: unknown): string {
               <div class="flex items-center justify-between">
                 <div>
                   <h3 class="text-base font-semibold text-slate-950 dark:text-white">创意素材</h3>
-                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">与创意素材页使用同一套素材模板。</p>
+                  <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">复用创意素材模块展示关联素材。</p>
                 </div>
                 <span class="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600 dark:bg-slate-800 dark:text-slate-300">
-                  {{ materialItems.length }} 个素材
+                  {{ displayedMaterialItems.length }} 个素材
                 </span>
               </div>
-              <MaterialLibraryView
-                :materials="materialItems"
+
+              <MaterialCollectionView
+                :materials="displayedMaterialItems"
                 embedded
               />
+            </div>
+            <div v-else-if="moduleLoading" class="flex min-h-[320px] items-center justify-center gap-2 text-sm text-slate-500">
+              <span class="material-symbols-outlined animate-spin text-base text-primary">progress_activity</span>
+              正在加载工作区模块…
+            </div>
+            <div v-else-if="moduleLoadError" class="rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+              {{ moduleLoadError }}
+            </div>
+            <div v-else-if="moduleHint === 'projects'" class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-base font-semibold text-slate-950 dark:text-white">项目管理</h3>
+                <span class="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">{{ displayedProjectItems.length }} 个项目</span>
+              </div>
+              <ProjectCollectionView
+                :projects="displayedProjectItems"
+                view="detailed"
+                mode="workspace"
+                embedded
+                @view-detail="selectProject"
+              />
+            </div>
+            <div v-else-if="moduleHint === 'campaigns'" class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-base font-semibold text-slate-950 dark:text-white">广告投放</h3>
+                <span class="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">{{ displayedCampaignItems.length }} 个计划</span>
+              </div>
+              <CampaignCollectionView :campaigns="displayedCampaignItems" embedded />
+            </div>
+            <div v-else-if="moduleHint === 'materials'" class="space-y-4">
+              <div class="flex items-center justify-between">
+                <h3 class="text-base font-semibold text-slate-950 dark:text-white">创意素材</h3>
+                <span class="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-600">{{ displayedMaterialItems.length }} 个素材</span>
+              </div>
+              <MaterialCollectionView :materials="displayedMaterialItems" embedded />
             </div>
             <div v-else-if="toolResults.length" class="space-y-4">
               <section
@@ -334,40 +368,8 @@ function formatToolResult(value: unknown): string {
                 <p class="mt-2 text-sm leading-6 text-slate-500 dark:text-slate-400">项目、投放计划、素材或数据结果会在需要时展开。</p>
               </section>
             </div>
-          </section>
-        </main>
-
-        <footer class="border-t border-slate-100 bg-slate-50/70 px-4 py-3 dark:border-slate-800 dark:bg-slate-900/40">
-          <div class="grid gap-3" :class="actions.length ? '2xl:grid-cols-[minmax(0,1fr)_200px]' : ''">
-            <section class="min-w-0">
-              <div class="mb-2 flex items-center justify-between gap-3">
-                <h3 class="text-xs font-medium text-slate-500 dark:text-slate-400">活动</h3>
-                <span v-if="hasStructuredBusinessResult" class="text-xs text-slate-400">业务结果已同步到画布</span>
-              </div>
-              <EmbeddedTaskTimeline :steps="steps" compact />
-            </section>
-            <section v-if="actions.length" class="min-w-0">
-              <h3 class="mb-2 text-xs font-medium text-slate-500 dark:text-slate-400">下一步</h3>
-              <div class="grid gap-2">
-              <button
-                v-for="action in actions"
-                :key="action.key"
-                class="flex h-9 w-full items-center justify-center gap-2 rounded-md border px-3 text-sm font-medium transition-colors"
-                :class="{
-                  'border-slate-900 bg-slate-900 text-white hover:bg-slate-800 dark:border-white dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100': action.tone === 'primary',
-                  'border-red-200 bg-red-50 text-red-600 hover:bg-red-100 dark:border-red-900/50 dark:bg-red-950/30 dark:text-red-300': action.tone === 'danger',
-                  'border-slate-200 bg-white text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800': !action.tone || action.tone === 'neutral'
-                }"
-                @click="emit('action', action.key)"
-              >
-                <span class="material-symbols-outlined text-base">{{ action.icon }}</span>
-                {{ action.label }}
-              </button>
-              </div>
-            </section>
-          </div>
-        </footer>
-      </div>
+        </section>
+      </main>
     </div>
   </aside>
 </template>
