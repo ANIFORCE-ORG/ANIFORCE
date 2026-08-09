@@ -4,8 +4,8 @@
 #  用法:
 #    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80]
 #                       [--frontend-port 3010] [--backend-port 8010] [--agent-port 8020]
-#                       [--only all|agent|backend|frontend|nginx] [--skip-install] [--without-agent]
-#                       [--with-nginx] [--ssl]
+#                       [--only all|agent|backend|frontend|nginx|phoenix] [--skip-install] [--without-agent]
+#                       [--with-nginx] [--with-phoenix] [--ssl]
 # ============================================================
 set -euo pipefail
 
@@ -99,10 +99,12 @@ ONLY=all
 SKIP_INSTALL=0
 WITHOUT_AGENT=0
 WITH_NGINX=0
+WITH_PHOENIX=0
 NGINX_PORT=80
 FRONTEND_PORT=3010
 BACKEND_PORT=8010
 AGENT_PORT=8020
+PHOENIX_PORT=${PHOENIX_PORT:-6006}
 DEMO_MODE=false
 USE_SSL=false
 
@@ -122,6 +124,7 @@ while [[ $# -gt 0 ]]; do
     --skip-install) SKIP_INSTALL=1; shift 1 ;;
     --without-agent) WITHOUT_AGENT=1; shift 1 ;;
     --with-nginx) WITH_NGINX=1; shift 1 ;;
+    --with-phoenix) WITH_PHOENIX=1; shift 1 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
     --ssl) USE_SSL=true; shift 1 ;;
     --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
@@ -134,10 +137,11 @@ while [[ $# -gt 0 ]]; do
       echo "  --frontend-port  前端端口 (默认: 3010)"
       echo "  --backend-port   后端端口 (默认: 8010)"
       echo "  --agent-port     Agent 服务端口 (默认: 8020)"
-      echo "  --only           仅启动: all(默认) / agent / backend / frontend / nginx"
+      echo "  --only           仅启动: all(默认) / agent / backend / frontend / nginx / phoenix"
       echo "  --skip-install   跳过依赖安装"
       echo "  --without-agent  跳过 Agent 服务部署"
       echo "  --with-nginx     启动 Nginx 反向代理；默认不启动"
+      echo "  --with-phoenix   随默认部署启动 Phoenix tracing collector；默认不启动"
       echo "  --demo           启用 Demo 模式"
       echo "  --ssl            启用 HTTPS (需配合 --with-nginx，使用 nginx-https.conf)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
@@ -148,6 +152,12 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "  # 仅启动 Nginx"
       echo "  $0 --with-nginx --only nginx"
+      echo ""
+      echo "  # 仅启动 Phoenix"
+      echo "  $0 --only phoenix"
+      echo ""
+      echo "  # 完整部署并附带 Phoenix"
+      echo "  $0 --mode local --with-phoenix"
       echo ""
       echo "  # 云端生产模式"
       echo "  $0 --mode cloud --skip-install"
@@ -163,8 +173,8 @@ done
 if [ "$MODE" != "local" ] && [ "$MODE" != "cloud" ]; then
   fail "--mode 仅支持 local 或 cloud"
 fi
-if [ "$ONLY" != "all" ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "nginx" ]; then
-  fail "--only 仅支持 all/agent/backend/frontend/nginx"
+if [ "$ONLY" != "all" ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "nginx" ] && [ "$ONLY" != "phoenix" ]; then
+  fail "--only 仅支持 all/agent/backend/frontend/nginx/phoenix"
 fi
 if [ "$WITHOUT_AGENT" -eq 1 ] && [ "$ONLY" = "agent" ]; then
   fail "--without-agent 不能与 --only agent 同时使用"
@@ -176,8 +186,8 @@ if [ "$USE_SSL" = "true" ] && [ "$WITH_NGINX" -ne 1 ]; then
   fail "--ssl 需要同时指定 --with-nginx"
 fi
 
-info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, WITH_NGINX=$WITH_NGINX, USE_SSL=$USE_SSL, WITHOUT_AGENT=$WITHOUT_AGENT"
-info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT"
+info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, WITH_NGINX=$WITH_NGINX, WITH_PHOENIX=$WITH_PHOENIX, USE_SSL=$USE_SSL, WITHOUT_AGENT=$WITHOUT_AGENT"
+info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT, Phoenix=$PHOENIX_PORT"
 
 # ---------- 项目根目录 ----------
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -210,7 +220,7 @@ info "后端应用日志: $BACKEND_APP_LOG"
 info "后端 Uvicorn 日志: $BACKEND_UVICORN_LOG"
 info "Agent Uvicorn 日志: $AGENT_UVICORN_LOG"
 info "前端日志: $FRONTEND_LOG"
-if [ "$WITH_NGINX" -eq 1 ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+if [ "$WITH_NGINX" -eq 1 ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "phoenix" ]; then
   info "Nginx访问日志: $NGINX_ACCESS_LOG"
   info "Nginx错误日志: $NGINX_ERROR_LOG"
 fi
@@ -222,16 +232,18 @@ echo "NGINX_PORT=$NGINX_PORT" >> "$DEPLOY_CONFIG"
 echo "FRONTEND_PORT=$FRONTEND_PORT" >> "$DEPLOY_CONFIG"
 echo "BACKEND_PORT=$BACKEND_PORT" >> "$DEPLOY_CONFIG"
 echo "AGENT_PORT=$AGENT_PORT" >> "$DEPLOY_CONFIG"
+echo "PHOENIX_PORT=$PHOENIX_PORT" >> "$DEPLOY_CONFIG"
 echo "MODE=$MODE" >> "$DEPLOY_CONFIG"
 echo "ONLY=$ONLY" >> "$DEPLOY_CONFIG"
 echo "WITH_NGINX=$WITH_NGINX" >> "$DEPLOY_CONFIG"
+echo "WITH_PHOENIX=$WITH_PHOENIX" >> "$DEPLOY_CONFIG"
 echo "USE_SSL=$USE_SSL" >> "$DEPLOY_CONFIG"
 echo "WITHOUT_AGENT=$WITHOUT_AGENT" >> "$DEPLOY_CONFIG"
 
 # ============================================================
 #  1. 检查 Nginx
 # ============================================================
-if [ "$WITH_NGINX" -eq 1 ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+if [ "$WITH_NGINX" -eq 1 ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "phoenix" ]; then
   info "========== 检查 Nginx =========="
   
   if ! command -v nginx &>/dev/null; then
@@ -259,6 +271,8 @@ fi
 # ============================================================
 if [ "$ONLY" = "nginx" ]; then
   warn "--only=nginx :跳过 Agent 启动"
+elif [ "$ONLY" = "phoenix" ]; then
+  warn "--only=phoenix :跳过 Agent 启动"
 elif [ "$ONLY" = "backend" ]; then
   warn "--only=backend :跳过 Agent 启动"
 elif [ "$ONLY" = "frontend" ]; then
@@ -274,7 +288,7 @@ else
     sleep 1
   fi
 
-  AGENT_ARGS="--mode $MODE --backend-port $BACKEND_PORT --agent-port $AGENT_PORT --only agent --log-dir $LOG_DIR --host 127.0.0.1"
+  AGENT_ARGS="--mode $MODE --backend-port $BACKEND_PORT --agent-port $AGENT_PORT --only agent --log-dir $LOG_DIR --host 127.0.0.1 --without-phoenix"
   if [ "$SKIP_INSTALL" -eq 1 ]; then
     AGENT_ARGS="$AGENT_ARGS --skip-install"
   fi
@@ -288,10 +302,25 @@ else
 fi
 
 # ============================================================
-#  3. 启动后端服务
+#  3. 启动 Phoenix 服务
+# ============================================================
+if [ "$ONLY" = "phoenix" ] || { [ "$WITH_PHOENIX" -eq 1 ] && { [ "$ONLY" = "all" ] || [ "$ONLY" = "agent" ]; }; }; then
+  info "========== 启动 Phoenix tracing collector =========="
+  PHOENIX_HOST=0.0.0.0 PHOENIX_PORT="$PHOENIX_PORT" \
+    "$ROOT_DIR/scripts/ensure-phoenix.sh" "$AGENT_DIR/.env" "$LOG_DIR" "$ROOT_DIR/.deploy_phoenix_pids" \
+    || fail "Phoenix tracing collector 启动失败"
+  ok "Phoenix tracing 可用: http://localhost:$PHOENIX_PORT"
+else
+  warn "未指定 --with-phoenix：跳过 Phoenix 启动"
+fi
+
+# ============================================================
+#  4. 启动后端服务
 # ============================================================
 if [ "$ONLY" = "nginx" ]; then
   warn "--only=nginx :跳过后端启动"
+elif [ "$ONLY" = "phoenix" ]; then
+  warn "--only=phoenix :跳过后端启动"
 elif [ "$ONLY" = "agent" ]; then
   warn "--only=agent :跳过后端启动"
 elif [ "$ONLY" = "frontend" ]; then
@@ -324,10 +353,12 @@ else
 fi
 
 # ============================================================
-#  4. 启动前端服务
+#  5. 启动前端服务
 # ============================================================
 if [ "$ONLY" = "nginx" ]; then
   warn "--only=nginx :跳过前端启动"
+elif [ "$ONLY" = "phoenix" ]; then
+  warn "--only=phoenix :跳过前端启动"
 elif [ "$ONLY" = "agent" ]; then
   warn "--only=agent :跳过前端启动"
 elif [ "$ONLY" = "backend" ]; then
@@ -357,10 +388,12 @@ else
 fi
 
 # ============================================================
-#  5. 配置并启动 Nginx
+#  6. 配置并启动 Nginx
 # ============================================================
 if [ "$WITH_NGINX" -ne 1 ]; then
   warn "未指定 --with-nginx：跳过 Nginx 启动"
+elif [ "$ONLY" = "phoenix" ]; then
+  warn "--only=phoenix :跳过 Nginx 启动"
 elif [ "$ONLY" = "agent" ]; then
   warn "--only=agent :跳过 Nginx 启动"
 elif [ "$ONLY" = "backend" ]; then
@@ -459,7 +492,7 @@ else
 fi
 
 # ============================================================
-#  6. 完成
+#  7. 完成
 # ============================================================
 echo ""
 echo -e "${GREEN}============================================${NC}"
@@ -482,13 +515,16 @@ if [ "$WITH_NGINX" -eq 1 ] && { [ "$ONLY" = "all" ] || [ "$ONLY" = "nginx" ]; };
 fi
 
 if [ "$ONLY" != "nginx" ]; then
-  if [ "$WITHOUT_AGENT" -eq 0 ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+  if [ "$WITHOUT_AGENT" -eq 0 ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "phoenix" ]; then
     echo -e "  Agent 直连:     ${CYAN}http://localhost:$AGENT_PORT${NC}"
   fi
-  if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
+  if [ "$ONLY" = "phoenix" ] || { [ "$WITH_PHOENIX" -eq 1 ] && { [ "$ONLY" = "all" ] || [ "$ONLY" = "agent" ]; }; }; then
+    echo -e "  Phoenix traces: ${CYAN}http://localhost:$PHOENIX_PORT${NC}"
+  fi
+  if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ] && [ "$ONLY" != "phoenix" ]; then
     echo -e "  后端直连:      ${CYAN}http://localhost:$BACKEND_PORT${NC}"
   fi
-  if [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ]; then
+  if [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "phoenix" ]; then
     echo -e "  前端直连:      ${CYAN}http://localhost:$FRONTEND_PORT${NC}"
   fi
   echo ""

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # ============================================================
 #  ANIFORCE 统一停止脚本
-#  用法: ./undeploy_server.sh [--only all|agent|backend|frontend|nginx]
+#  用法: ./undeploy_server.sh [--only all|agent|backend|frontend|nginx|phoenix]
 # ============================================================
 set -euo pipefail
 
@@ -20,9 +20,11 @@ NGINX_PORT=80
 FRONTEND_PORT=3010
 BACKEND_PORT=8010
 AGENT_PORT=8020
+PHOENIX_PORT=6006
 ONLY=all
 USE_SSL=false
 WITH_NGINX=0
+WITH_PHOENIX=0
 WITHOUT_AGENT=0
 HAS_DEPLOY_CONFIG=0
 SHOW_HELP=0
@@ -37,7 +39,7 @@ done
 if [ -f "$DEPLOY_CONFIG" ]; then
   HAS_DEPLOY_CONFIG=1
   source "$DEPLOY_CONFIG"
-  info "从配置文件读取: ONLY=${ONLY}, WITH_NGINX=${WITH_NGINX}, WITHOUT_AGENT=${WITHOUT_AGENT}, USE_SSL=${USE_SSL}"
+  info "从配置文件读取: ONLY=${ONLY}, WITH_NGINX=${WITH_NGINX}, WITH_PHOENIX=${WITH_PHOENIX}, WITHOUT_AGENT=${WITHOUT_AGENT}, USE_SSL=${USE_SSL}"
 elif [ "$SHOW_HELP" -ne 1 ]; then
   warn "未找到部署配置文件: ${DEPLOY_CONFIG}，将仅停止可确认由当前部署启动的服务"
 fi
@@ -54,6 +56,11 @@ if [ "$HAS_DEPLOY_CONFIG" -eq 1 ] && [ "$WITHOUT_AGENT" -ne 1 ] && { [ "$DEPLOYE
   DEPLOYED_WITH_AGENT=1
 fi
 
+DEPLOYED_WITH_PHOENIX=0
+if [ "$HAS_DEPLOY_CONFIG" -eq 1 ] && { [ "$DEPLOYED_ONLY" = "phoenix" ] || { [ "$WITH_PHOENIX" -eq 1 ] && { [ "$DEPLOYED_ONLY" = "all" ] || [ "$DEPLOYED_ONLY" = "agent" ]; }; }; }; then
+  DEPLOYED_WITH_PHOENIX=1
+fi
+
 # 命令行参数可覆盖
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -63,16 +70,18 @@ while [[ $# -gt 0 ]]; do
     --frontend-port) FRONTEND_PORT="$2"; shift 2 ;;
     --backend-port) BACKEND_PORT="$2"; shift 2 ;;
     --agent-port) AGENT_PORT="$2"; shift 2 ;;
+    --phoenix-port) PHOENIX_PORT="$2"; shift 2 ;;
     -h|--help)
       echo "用法: $0 [选项]"
       echo ""
       echo "选项:"
-      echo "  --only           仅停止: all(默认) / agent / backend / frontend / nginx"
+      echo "  --only           仅停止: all(默认) / agent / backend / frontend / nginx / phoenix"
       echo "  --ssl            停止 HTTPS 模式的 Nginx"
       echo "  --nginx-port     Nginx 端口 (默认: 80)"
       echo "  --frontend-port  前端端口 (默认: 3010)"
       echo "  --backend-port   后端端口 (默认: 8010)"
       echo "  --agent-port     Agent 服务端口 (默认: 8020)"
+      echo "  --phoenix-port   Phoenix 端口 (默认: 6006)"
       echo ""
       echo "示例:"
       echo "  # 停止所有服务"
@@ -91,12 +100,12 @@ done
 STOPPED=0
 
 echo ""
-info "========== 停止 ANIFORCE 服务 (ONLY=${ONLY}, DEPLOYED_ONLY=${DEPLOYED_ONLY}, WITH_NGINX=${WITH_NGINX}, WITHOUT_AGENT=${WITHOUT_AGENT}, USE_SSL=${USE_SSL}) =========="
+info "========== 停止 ANIFORCE 服务 (ONLY=${ONLY}, DEPLOYED_ONLY=${DEPLOYED_ONLY}, WITH_NGINX=${WITH_NGINX}, WITH_PHOENIX=${WITH_PHOENIX}, WITHOUT_AGENT=${WITHOUT_AGENT}, USE_SSL=${USE_SSL}) =========="
 
 # ============================================================
 #  1. 停止 Nginx
 # ============================================================
-if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
+if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ] || [ "$ONLY" = "phoenix" ]; then
   warn "--only=$ONLY: 跳过 Nginx 停止"
 elif [ "$DEPLOYED_WITH_NGINX" -ne 1 ]; then
   warn "当前部署未启动 Nginx: 跳过 Nginx 停止，避免误杀端口 ${NGINX_PORT}/80/443 上的其它服务"
@@ -165,7 +174,7 @@ fi
 # ============================================================
 #  2. 停止后端服务
 # ============================================================
-if [ "$ONLY" = "agent" ] || [ "$ONLY" = "nginx" ] || [ "$ONLY" = "frontend" ]; then
+if [ "$ONLY" = "agent" ] || [ "$ONLY" = "nginx" ] || [ "$ONLY" = "frontend" ] || [ "$ONLY" = "phoenix" ]; then
   warn "--only=$ONLY: 跳过后端停止"
 else
   info "========== 停止后端服务 =========="
@@ -198,7 +207,7 @@ fi
 # ============================================================
 #  3. 停止 Agent 服务
 # ============================================================
-if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
+if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ] || [ "$ONLY" = "phoenix" ]; then
   warn "--only=$ONLY: 跳过 Agent 停止"
 elif [ "$DEPLOYED_WITH_AGENT" -ne 1 ]; then
   warn "当前部署未启动 Agent: 跳过 Agent 停止，避免误杀端口 ${AGENT_PORT} 上的其它服务"
@@ -224,9 +233,44 @@ else
 fi
 
 # ============================================================
-#  4. 停止前端服务
+#  4. 停止 Phoenix 服务
 # ============================================================
-if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ]; then
+if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
+  warn "--only=$ONLY: 跳过 Phoenix 停止"
+elif [ "$ONLY" != "phoenix" ] && [ "$DEPLOYED_WITH_PHOENIX" -ne 1 ]; then
+  warn "当前部署未启动 Phoenix: 跳过 Phoenix 停止，避免误杀端口 ${PHOENIX_PORT} 上的其它服务"
+else
+  info "========== 停止 Phoenix 服务 =========="
+
+  PHOENIX_PID_FILE="$ROOT_DIR/.deploy_phoenix_pids"
+  if [ -f "$PHOENIX_PID_FILE" ]; then
+    while IFS= read -r pid; do
+      if [ -n "$pid" ] && kill -0 "$pid" 2>/dev/null; then
+        if kill "$pid" 2>/dev/null; then
+          ok "已停止 Phoenix 进程 PID $pid"
+          STOPPED=$((STOPPED + 1))
+        fi
+      fi
+    done < "$PHOENIX_PID_FILE"
+  fi
+
+  sleep 1
+  PHOENIX_PIDS=$(lsof -ti :$PHOENIX_PORT 2>/dev/null || true)
+  if [ -n "$PHOENIX_PIDS" ]; then
+    info "检测到端口 $PHOENIX_PORT 上的 Phoenix 进程，正在终止..."
+    for pid in $PHOENIX_PIDS; do
+      if kill "$pid" 2>/dev/null; then
+        ok "已停止 Phoenix 进程 PID $pid"
+        STOPPED=$((STOPPED + 1))
+      fi
+    done
+  fi
+fi
+
+# ============================================================
+#  5. 停止前端服务
+# ============================================================
+if [ "$ONLY" = "nginx" ] || [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ] || [ "$ONLY" = "phoenix" ]; then
   warn "--only=$ONLY: 跳过前端停止"
 else
   info "========== 停止前端服务 =========="
@@ -250,10 +294,10 @@ else
 fi
 
 # ============================================================
-#  5. 清理 PID 文件
+#  6. 清理 PID 文件
 # ============================================================
 info "清理临时文件..."
-rm -f "$ROOT_DIR/.server_pids" "$ROOT_DIR/.server_ports"
+rm -f "$ROOT_DIR/.server_pids" "$ROOT_DIR/.server_ports" "$ROOT_DIR/.deploy_phoenix_pids"
 
 # 仅在停止所有服务时清理部署配置
 if [ "$ONLY" = "all" ]; then
@@ -261,7 +305,7 @@ if [ "$ONLY" = "all" ]; then
 fi
 
 # ============================================================
-#  6. 结果
+#  7. 结果
 # ============================================================
 echo ""
 if [ "$STOPPED" -gt 0 ]; then

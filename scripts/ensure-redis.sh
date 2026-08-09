@@ -42,14 +42,62 @@ case "${REDIS_URL}" in
     ;;
 esac
 
-if ! command -v redis-cli >/dev/null 2>&1; then
-  echo "Redis preflight failed: redis-cli is not installed." >&2
+redis_python() {
+  local candidate
+  for candidate in \
+    "${REDIS_PYTHON:-}" \
+    "${ROOT_DIR}/backend/.venv/bin/python" \
+    "${ROOT_DIR}/backend/.venv/Scripts/python.exe" \
+    python3 \
+    python; do
+    [[ -n "${candidate}" ]] || continue
+    if command -v "${candidate}" >/dev/null 2>&1 || [[ -x "${candidate}" ]]; then
+      if "${candidate}" -c 'import redis' >/dev/null 2>&1; then
+        printf '%s' "${candidate}"
+        return 0
+      fi
+    fi
+  done
+  return 1
+}
+
+REDIS_PYTHON_BIN="$(redis_python || true)"
+
+if ! command -v redis-cli >/dev/null 2>&1 && [[ -z "${REDIS_PYTHON_BIN}" ]]; then
+  echo "Redis preflight failed: no Redis client is available." >&2
+  echo "Install backend Python requirements or install redis-cli." >&2
   echo "Ubuntu/Debian: sudo apt-get install redis-server redis-tools" >&2
+  echo "RHEL/CentOS/Fedora: sudo dnf install redis || sudo yum install redis" >&2
+  echo "Alpine: sudo apk add redis" >&2
+  echo "macOS: brew install redis" >&2
   exit 1
 fi
 
 redis_ping() {
-  [[ "$(redis-cli --no-auth-warning -u "${REDIS_URL}" ping 2>/dev/null || true)" == "PONG" ]]
+  if command -v redis-cli >/dev/null 2>&1; then
+    [[ "$(redis-cli --no-auth-warning -u "${REDIS_URL}" ping 2>/dev/null || true)" == "PONG" ]] && return 0
+  fi
+
+  if [[ -n "${REDIS_PYTHON_BIN}" ]]; then
+    REDIS_URL="${REDIS_URL}" "${REDIS_PYTHON_BIN}" - <<'PY' >/dev/null 2>&1 && return 0
+import os
+import sys
+
+import redis
+
+try:
+    client = redis.Redis.from_url(
+        os.environ["REDIS_URL"],
+        socket_connect_timeout=1.0,
+        socket_timeout=1.0,
+    )
+    sys.exit(0 if client.ping() else 1)
+except Exception:
+    sys.exit(1)
+PY
+  fi
+
+  return 1
 }
 
 if redis_ping; then
