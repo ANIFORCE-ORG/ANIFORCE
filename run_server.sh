@@ -112,6 +112,7 @@ HOST=0.0.0.0
 DEMO_MODE=false
 DAEMON=0
 DAEMON_CHILD=0
+WITH_PHOENIX=1
 BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-2}
 AGENT_API_WORKERS=${AGENT_API_WORKERS:-1}
 AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-2}
@@ -144,8 +145,9 @@ while [[ $# -gt 0 ]]; do
     --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
     --daemon) DAEMON=1; shift 1 ;;
     --daemon-child) DAEMON=1; DAEMON_CHILD=1; shift 1 ;;
+    --without-phoenix) WITH_PHOENIX=0; shift 1 ;;
     -h|--help)
-      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--agent-port PORT] [--only all|agent|backend|frontend] [--skip-install] [--host HOST] [--demo] [--log-dir DIR] [--daemon]"
+      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--agent-port PORT] [--only all|agent|backend|frontend] [--skip-install] [--host HOST] [--demo] [--log-dir DIR] [--daemon] [--without-phoenix]"
       echo ""
       echo "参数说明:"
       echo "  --mode           启动模式: local(默认) / cloud"
@@ -158,6 +160,7 @@ while [[ $# -gt 0 ]]; do
       echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
       echo "  --daemon         后台常驻运行，退出终端后服务继续运行"
+      echo "  --without-phoenix 跳过 Phoenix tracing collector 启动"
       echo ""
       echo "环境变量:"
       echo "  CLOUD_DOMAIN         云端模式的域名（默认: https://www.aniforce.cc）"
@@ -569,12 +572,14 @@ fi
 # ============================================================
 #  5. 启动 Agent 服务
 # ============================================================
-if [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+if [ "$WITH_PHOENIX" -eq 1 ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
   info "检查 Phoenix tracing collector..."
   PHOENIX_HOST=0.0.0.0 PHOENIX_PORT="$PHOENIX_PORT" \
     "$ROOT_DIR/scripts/ensure-phoenix.sh" "$AGENT_ENV" "$LOG_DIR" "$PID_FILE" \
     || fail "Phoenix tracing collector 启动失败"
   ok "Phoenix tracing 可用: http://localhost:$PHOENIX_PORT"
+elif [ "$WITH_PHOENIX" -eq 0 ]; then
+  warn "已禁用 Phoenix tracing collector 启动"
 fi
 
 if [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
@@ -782,7 +787,9 @@ fi
 if [ "$ONLY" != "frontend" ] && [ "$ONLY" != "backend" ]; then
   echo -e "  Agent (本地):  ${CYAN}http://localhost:$AGENT_PORT${NC}"
   echo -e "  Agent (网络):  ${CYAN}http://$NETWORK_IP:$AGENT_PORT${NC}"
-  echo -e "  Phoenix traces: ${CYAN}http://localhost:$PHOENIX_PORT${NC}"
+  if [ "$WITH_PHOENIX" -eq 1 ]; then
+    echo -e "  Phoenix traces: ${CYAN}http://localhost:$PHOENIX_PORT${NC}"
+  fi
 fi
 if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
   echo -e "  后端 (本地):   ${CYAN}http://localhost:$BACKEND_PORT${NC}"

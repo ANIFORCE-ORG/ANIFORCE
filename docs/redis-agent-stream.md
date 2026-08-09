@@ -7,15 +7,29 @@ Redis 只承载短期 Agent 增量事件，业务事实仍写入 SQLite/生产�
 `run_server.sh` 和 `scripts/start-dev.sh` 会在启动 Backend 前执行
 `scripts/ensure-redis.sh`。检查逻辑如下：
 
-- Redis 已可用：继续启动。
+- Redis 已可用：继续启动；探活优先使用 `redis-cli`，未安装时回退到后端 Python `redis` 客户端。
 - 本机 Redis 未运行：优先启动 `redis-server.service`，无 systemd 时启动独立 Redis 进程。
 - 远程 Redis 不可达或本机 Redis 无法启动：立即终止，避免实时事件静默丢失。
 
-Ubuntu/Debian 首次安装：
+`backend/requirements.txt` 中的 `redis>=5.0.1` 是应用运行时和 preflight 回退探活所需的 Python 客户端，不包含 `redis-cli` 或 `redis-server`。如需本机自动启动 Redis，需要用系统包管理器安装 Redis：
 
 ```bash
+# Ubuntu/Debian
 sudo apt-get install redis-server redis-tools
 sudo systemctl enable --now redis-server
+
+# RHEL/CentOS/Fedora
+sudo dnf install redis || sudo yum install redis
+sudo systemctl enable --now redis
+
+# Alpine
+sudo apk add redis
+sudo rc-update add redis default
+sudo service redis start
+
+# macOS
+brew install redis
+brew services start redis
 ```
 
 也可以单独执行前置检查：
