@@ -3,6 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import type { AgentMessage } from '@/api/agent'
 import ActivityMessageView from './ActivityMessageView.vue'
+import { getToolIcon } from '@/utils/toolNameMapping'
 
 const props = defineProps<{
   message: AgentMessage
@@ -10,6 +11,10 @@ const props = defineProps<{
   toolResults?: Map<string, AgentMessage>
   modelNames?: Record<string, string>
   prevTimestamp?: number
+}>()
+
+const emit = defineEmits<{
+  approval: [payload: { runId: string; checkpointId: string; decision: 'approve' | 'reject' }]
 }>()
 
 const hovered = ref(false)
@@ -43,7 +48,7 @@ const isUser = computed(() => props.message.role === 'user')
 const isAssistant = computed(() => props.message.role === 'assistant')
 const isActivity = computed(() => props.message.role === 'activity')
 const textContent = computed(() => messageText(props.message))
-const blocks = computed(() => contentBlocks(props.message))
+const blocks = computed(() => contentBlocks(props.message).filter(block => block.type !== 'approval'))
 const userImageBlocks = computed(() => {
   const content = props.message.content
   if (!Array.isArray(content)) return []
@@ -140,7 +145,7 @@ function isLastBlock(index: number): boolean {
   return index === blocks.value.length - 1
 }
 function isThinkingExpanded(index: number): boolean {
-  // 流式中且是当前正在输出的 thinking block：默认展开
+  // 流式中且是当前正在输出的 thinking block：默认展开。
   if (props.isStreaming && isLastBlock(index) && blocks.value[index]?.type === 'thinking') {
     return expandedThinking.value[index] ?? true
   }
@@ -189,11 +194,47 @@ function contentBlocks(message: AgentMessage): Record<string, unknown>[] {
   return text ? [{ type: 'text', text }] : []
 }
 
+function approvalTitle(block: Record<string, unknown>): string {
+  const interruptions = Array.isArray(block.interruptions) ? block.interruptions : []
+  const first = interruptions[0] as Record<string, unknown> | undefined
+  return String(first?.tool_name || 'tool approval')
+}
+
+function approvalArgs(block: Record<string, unknown>): string {
+  const interruptions = Array.isArray(block.interruptions) ? block.interruptions : []
+  const first = interruptions[0] as Record<string, unknown> | undefined
+  const args = first?.arguments
+  if (!args) return '{}'
+  if (typeof args === 'string') return args
+  return formatPayload(args)
+}
+
+function approvalStatus(block: Record<string, unknown>): string {
+  const status = String(block.status || 'pending')
+  if (status === 'approved') return '已批准，正在继续执行'
+  if (status === 'rejected') return '已拒绝'
+  if (status === 'running') return '正在提交审批结果'
+  return '等待人工确认'
+}
+
+function canResolveApproval(block: Record<string, unknown>): boolean {
+  return String(block.status || 'pending') === 'pending' && Boolean(block.runId && block.checkpointId)
+}
+
+function resolveApproval(block: Record<string, unknown>, decision: 'approve' | 'reject'): void {
+  if (!canResolveApproval(block)) return
+  emit('approval', { runId: String(block.runId), checkpointId: String(block.checkpointId), decision })
+}
+
 function toolId(block: Record<string, unknown>): string {
   return String(block.toolCallId || block.id || '')
 }
 function toolName(block: Record<string, unknown>): string {
   return String(block.toolName || block.name || 'tool')
+}
+function toolIconEmoji(block: Record<string, unknown>): string {
+  const rawName = String(block.toolName || block.name || 'tool')
+  return getToolIcon(rawName)
 }
 function toolInput(block: Record<string, unknown>): unknown {
   return block.input || block.arguments || {}
@@ -385,10 +426,22 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
           </template>
         </div>
 
-        <!-- Tool Call Block: 紧凑卡片，运行中带脉冲 -->
+        <!-- Approval Block: SDK HITL / MCP approval -->
+        <div v-else-if="block.type === 'approval'" class="approval-block compact" :class="String(block.status || 'pending')">
+          <div class="approval-head">
+            <span class="material-symbols-outlined approval-icon">verified_user</span>
+            <div class="approval-title-wrap">
+              <div class="approval-title">{{ approvalTitle(block) }}</div>
+              <div class="approval-subtitle">{{ approvalStatus(block) }} · 请在右侧工作台确认</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Tool Call Block: 可展开查看原始参数和结果。 -->
         <div v-else-if="block.type === 'toolCall'" class="tool-call-block" :class="{ error: isToolError(block), 'is-running': isStreaming && !hasToolResult(block) }">
           <button class="tool-header" @click="expandedTools[toolId(block)] = !expandedTools[toolId(block)]">
             <span class="tool-status-dot" :class="hasToolResult(block) ? (isToolError(block) ? 'error' : 'done') : 'running'"></span>
+            <span class="tool-icon">{{ toolIconEmoji(block) }}</span>
             <span class="tool-name">{{ toolName(block) }}</span>
             <span class="tool-preview">{{ toolPreview(block) }}</span>
             <svg class="tool-chevron" :class="{ expanded: expandedTools[toolId(block)] }" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
@@ -853,25 +906,143 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   font-size: 0.9em;
 }
 
-/* Tool Call Block - 紧凑卡片 */
+/* Approval Block - SDK HITL */
+.approval-block {
+  overflow: hidden;
+  border: 1px solid rgba(217, 119, 6, 0.22);
+  border-radius: 8px;
+  background: #fffaf0;
+  color: var(--text, #202124);
+}
+
+.approval-block.compact {
+  padding: 8px;
+}
+
+.approval-block.approved {
+  border-color: rgba(24, 128, 56, 0.22);
+  background: #f3faf5;
+}
+
+.approval-block.rejected {
+  border-color: rgba(217, 48, 37, 0.22);
+  background: #fff5f5;
+}
+
+.approval-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+}
+
+.approval-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 6px;
+  background: rgba(217, 119, 6, 0.12);
+  color: #b45309;
+  font-size: 15px;
+  flex-shrink: 0;
+}
+
+.approval-title-wrap {
+  min-width: 0;
+  flex: 1;
+}
+
+.approval-title {
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.25;
+}
+
+.approval-subtitle {
+  margin-top: 2px;
+  color: var(--text-muted, #5f6368);
+  font-size: 11.5px;
+  line-height: 1.35;
+}
+
+.approval-args {
+  margin: 0;
+  max-height: 180px;
+  overflow: auto;
+  border-top: 1px solid rgba(217, 119, 6, 0.18);
+  padding: 9px 12px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--text-muted, #5f6368);
+  font-family: var(--font-mono, monospace);
+  font-size: 11.5px;
+  line-height: 1.45;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.approval-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  border-top: 1px solid rgba(217, 119, 6, 0.18);
+  padding: 10px 12px;
+}
+
+.approval-button {
+  height: 30px;
+  border-radius: 6px;
+  padding: 0 12px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.12s ease, border-color 0.12s ease;
+}
+
+.approval-button.secondary {
+  border: 1px solid var(--outline-variant, #e8eaed);
+  background: #fff;
+  color: var(--text-muted, #5f6368);
+}
+
+.approval-button.secondary:hover {
+  background: #f8fafc;
+}
+
+.approval-button.primary {
+  border: 1px solid #b45309;
+  background: #b45309;
+  color: #fff;
+}
+
+.approval-button.primary:hover {
+  background: #92400e;
+}
+
+/* Tool Call Block - 紧凑卡片，不可点击 */
 .tool-call-block {
   overflow: hidden;
   border: 1px solid var(--outline-variant, #e8eaed);
   border-radius: 8px;
   background: var(--surface-container, #f8fafd);
   font-size: 12px;
-  transition: border-color 0.2s ease;
+  transition: border-color 0.2s ease, box-shadow 0.3s ease;
 }
 
-/* 运行中：边框高亮 + 轻微脉冲 */
+/* 运行中：边框高亮 + 脉冲发光 */
 .tool-call-block.is-running {
-  border-color: color-mix(in srgb, #f9ab00 40%, var(--outline-variant, #e8eaed));
-  animation: tool-glow 1.8s ease-in-out infinite;
+  border-color: color-mix(in srgb, #3b82f6 40%, var(--outline-variant, #e8eaed));
+  animation: tool-pulse 2s ease-in-out infinite;
 }
 
-@keyframes tool-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(249, 171, 0, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(249, 171, 0, 0.1); }
+@keyframes tool-pulse {
+  0%, 100% {
+    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0), 0 1px 2px rgba(0, 0, 0, 0.05);
+  }
+  50% {
+    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), 0 2px 8px rgba(59, 130, 246, 0.2);
+  }
 }
 
 .tool-call-block.error {
@@ -884,15 +1055,15 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   align-items: center;
   gap: 8px;
   width: 100%;
-  padding: 7px 12px;
+  padding: 8px 12px;
   border: 0;
   background: none;
-  color: var(--text-muted, #5f6368);
+  color: var(--text, #202124);
   cursor: pointer;
   text-align: left;
   font-size: 12px;
-  transition: background 0.12s ease;
   min-width: 0;
+  transition: background 0.12s ease;
 }
 
 .tool-header:hover {
@@ -900,23 +1071,61 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
 }
 
 .tool-status-dot {
-  width: 6px;
-  height: 6px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
 .tool-status-dot.running {
-  background: var(--accent, #1a73e8);
-  animation: thinking-pulse 1.5s ease-in-out infinite;
+  background: #3b82f6;
+  animation: dot-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+}
+
+@keyframes dot-pulse {
+  0%, 100% {
+    opacity: 0.6;
+    transform: scale(0.9);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.2);
+  }
 }
 
 .tool-status-dot.done {
-  background: var(--success, #188038);
+  background: #10b981;
+  animation: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes scale-in {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .tool-status-dot.error {
-  background: var(--error, #d93025);
+  background: #ef4444;
+  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
+}
+
+@keyframes shake {
+  10%, 90% { transform: translateX(-1px); }
+  20%, 80% { transform: translateX(2px); }
+  30%, 50%, 70% { transform: translateX(-2px); }
+  40%, 60% { transform: translateX(2px); }
+}
+
+.tool-icon {
+  font-size: 14px;
+  line-height: 1;
+  flex-shrink: 0;
 }
 
 .tool-name {
@@ -925,6 +1134,7 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   font-family: var(--font-mono, monospace);
   font-weight: 600;
   font-size: 11.5px;
+  line-height: 1.4;
 }
 
 .tool-call-block.error .tool-name {
@@ -961,14 +1171,16 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   padding: 10px 12px;
   background: var(--surface, #fff);
   color: var(--text-muted, #5f6368);
+  font-family: var(--font-mono, monospace);
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-  font-family: var(--font-mono, monospace);
 }
 
-.tool-pre.result { background: var(--bg, #fff); }
+.tool-pre.result {
+  background: var(--bg, #fff);
+}
 
 /* 流式指示器内部元素 */
 .stream-stat { color: var(--text-muted, #5f6368); }

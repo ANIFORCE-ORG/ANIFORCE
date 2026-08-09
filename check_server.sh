@@ -115,6 +115,7 @@ get_configured_ports() {
   FRONTEND_PORT=${FRONTEND_PORT:-3010}
   BACKEND_PORT=${BACKEND_PORT:-8010}
   AGENT_PORT=${AGENT_PORT:-8020}
+  PHOENIX_PORT=${PHOENIX_PORT:-6006}
 }
 
 # ---------- 检查 HTTP 响应 ----------
@@ -146,7 +147,7 @@ main() {
   # 获取配置的端口
   get_configured_ports
   
-  info "配置的端口: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT"
+  info "配置的端口: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT, Phoenix=$PHOENIX_PORT"
   echo ""
   
   # ========================================
@@ -206,7 +207,26 @@ main() {
   echo ""
 
   # ========================================
-  # 3. 检查后端到 Agent 网关
+  # 3. 检查 Phoenix tracing
+  # ========================================
+  title "Phoenix tracing (端口: $PHOENIX_PORT)"
+
+  if check_port_in_use $PHOENIX_PORT; then
+    local phoenix_status=$(check_http_response "http://localhost:$PHOENIX_PORT/healthz")
+    if [ "$phoenix_status" = "200" ]; then
+      ok "Collector 与 UI 健康检查通过 (HTTP $phoenix_status)"
+      info "http://localhost:$PHOENIX_PORT"
+    else
+      warn "Phoenix 端口已监听但健康检查失败 (HTTP $phoenix_status)"
+    fi
+  else
+    warn "Phoenix tracing 未运行"
+  fi
+
+  echo ""
+
+  # ========================================
+  # 4. 检查后端到 Agent 网关
   # ========================================
   title "后端 Agent 网关 (/api/v1/agent/health)"
 
@@ -299,6 +319,7 @@ main() {
   local agent_status="❌ 未运行"
   local frontend_status="❌ 未运行"
   local nginx_status_text="❌ 未运行"
+  local phoenix_status_text="❌ 未运行"
   
   if check_port_in_use $BACKEND_PORT; then
     backend_status="✅ 运行中"
@@ -311,6 +332,10 @@ main() {
   if check_port_in_use $FRONTEND_PORT; then
     frontend_status="✅ 运行中"
   fi
+
+  if [ "$(check_http_response "http://localhost:$PHOENIX_PORT/healthz")" = "200" ]; then
+    phoenix_status_text="✅ 运行中"
+  fi
   
   if [ "$status" = "running" ]; then
     nginx_status_text="✅ 运行中"
@@ -320,6 +345,7 @@ main() {
   printf "  %-20s %s\n" "后端服务:" "$backend_status"
   printf "  %-20s %s\n" "Agent 服务:" "$agent_status"
   printf "  %-20s %s\n" "前端服务:" "$frontend_status"
+  printf "  %-20s %s\n" "Phoenix tracing:" "$phoenix_status_text"
   printf "  %-20s %s\n" "Nginx 服务:" "$nginx_status_text"
   echo ""
   
@@ -335,6 +361,12 @@ main() {
     echo ""
   fi
   
+  if [ "$phoenix_status_text" = "✅ 运行中" ]; then
+    info "Tracing UI:"
+    echo "  → http://localhost:$PHOENIX_PORT"
+    echo ""
+  fi
+
   if [ "$agent_status" = "✅ 运行中" ]; then
     info "直接访问 Agent:"
     echo "  → http://localhost:$AGENT_PORT"

@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, update
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import asyncio
@@ -26,7 +26,7 @@ from facebook_business.exceptions import FacebookRequestError
 from app.adapters import MetaAdsAdapter
 from app.config.settings import get_settings
 from app.config.database import get_db
-from app.models import PlatformConnection
+from app.models import MaterialPlatformAsset, MaterialSyncRun, PlatformConnection
 from app.models.sub_account_binding import SubAccountBinding
 from app.api.deps import get_current_user
 
@@ -534,7 +534,17 @@ async def delete_connection(
         if not connection:
             raise HTTPException(status_code=404, detail="连接不存在")
 
-        # 删除连接
+        # Authorization can be removed without deleting remote asset identities or transfer history.
+        await db.execute(
+            update(MaterialPlatformAsset)
+            .where(MaterialPlatformAsset.connection_id == connection.id)
+            .values(connection_id=None)
+        )
+        await db.execute(
+            update(MaterialSyncRun)
+            .where(MaterialSyncRun.connection_id == connection.id)
+            .values(connection_id=None)
+        )
         await db.delete(connection)
         await db.commit()
         logger.info(f"Deleted connection: {connection_id} for user: {user_id}")
@@ -1674,7 +1684,13 @@ async def get_ad_accounts(
         if not bindings:
             logger.warning(f"No sub-accounts found for user: {user_id}, channel: {channel}. User may need to sync ad accounts first.")
 
-        # 转换为响应格式
+        # 一个广告账户可能因重复同步或多条授权连接出现多个 binding。
+        # 账户选择器按平台账户身份展示一行，保留排序后的第一条有效绑定。
+        unique_bindings: dict[str, SubAccountBinding] = {}
+        for binding in bindings:
+            normalized_account_id = binding.sub_account_id.removeprefix("act_")
+            unique_bindings.setdefault(normalized_account_id, binding)
+
         accounts = [
             AdAccountOption(
                 account_id=binding.sub_account_id,
@@ -1682,10 +1698,13 @@ async def get_ad_accounts(
                 channel=channel,
                 connection_id=binding.parent_connection_id
             )
-            for binding in bindings
+            for binding in unique_bindings.values()
         ]
 
-        logger.info(f"Successfully fetched {len(accounts)} {channel} ad accounts for user: {user_id}")
+        logger.info(
+            f"Successfully fetched {len(accounts)} unique {channel} ad accounts "
+            f"from {len(bindings)} bindings for user: {user_id}"
+        )
         return accounts
 
     except Exception as e:

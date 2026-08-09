@@ -13,6 +13,8 @@ withDefaults(defineProps<{
 const emit = defineEmits<{
   view: [campaignId: string]
   toggleStatus: [campaign: Campaign]
+  select: [campaign: Campaign]
+  mention: [campaign: Campaign]
 }>()
 
 function getStatusText(status: string) {
@@ -40,7 +42,7 @@ function getStatusColor(status: string) {
       <div
         v-for="campaign in campaigns"
         :key="campaign.id"
-        class="rounded border border-slate-200 bg-white p-4 transition-all hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
+        class="group relative rounded border border-slate-200 bg-white p-4 transition-all hover:shadow-md dark:border-slate-700 dark:bg-slate-800"
       >
         <div class="mb-2 flex items-start justify-between gap-3">
           <div class="min-w-0 flex-1">
@@ -76,14 +78,15 @@ function getStatusColor(status: string) {
           </div>
         </div>
 
-        <div v-if="!embedded" class="flex items-center gap-2">
+        <div class="flex items-center gap-2">
           <button
             class="flex-1 rounded bg-slate-100 px-3 py-1.5 text-xs font-medium text-slate-700 transition-colors hover:bg-slate-200 dark:bg-slate-700 dark:text-slate-300 dark:hover:bg-slate-600"
             @click="emit('view', campaign.id)"
           >
-            查看详情
+            {{ embedded ? '打开完整页' : '查看详情' }}
           </button>
           <button
+            v-if="!embedded"
             class="flex items-center gap-1 rounded border px-3 py-1.5 text-xs font-semibold transition-colors"
             :class="[
               campaign.status === 'running'
@@ -98,6 +101,14 @@ function getStatusColor(status: string) {
             {{ campaign.status === 'running' ? '暂停' : '启动' }}
           </button>
         </div>
+        <button
+          v-if="embedded"
+          class="mention-btn absolute top-[12px] right-[12px] z-10 rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-all hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
+          title="引用到对话"
+          @click="emit('mention', campaign)"
+        >
+          @mention
+        </button>
       </div>
     </div>
 
@@ -107,3 +118,21 @@ function getStatusColor(status: string) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.mention-btn {
+  cursor: pointer;
+}
+
+.mention-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  background: white !important;
+  border-color: rgb(var(--color-primary)) !important;
+}
+
+.mention-btn:active {
+  transform: translateY(0) scale(0.95);
+  transition-duration: 0.1s;
+}
+</style>

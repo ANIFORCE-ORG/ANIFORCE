@@ -15,17 +15,23 @@ class SqliteAgentMessageRepository:
         self.session = session
 
     def _to_dict(self, item: AgentMessage) -> dict:
+        content_json = json.loads(item.content_json)
+        content = content_json.get("blocks", []) if isinstance(content_json, dict) else content_json
         return {
             "message_id": item.message_id,
             "id": item.message_id,
             "session_id": item.session_id,
             "user_id": item.user_id,
             "role": item.role,
-            "content_json": json.loads(item.content_json),
-            "content": json.loads(item.content_json),
+            "status": item.status,
+            "content_json": content_json,
+            "content": content,
+            "usage": content_json.get("usage") if isinstance(content_json, dict) else None,
             "run_id": item.run_id,
             "sequence": item.sequence,
+            "error_code": item.error_code,
             "created_at": item.created_at.isoformat(),
+            "completed_at": item.completed_at.isoformat() if item.completed_at else None,
             "timestamp": item.created_at.isoformat() + "Z",
         }
 
@@ -39,6 +45,13 @@ class SqliteAgentMessageRepository:
         current = result.scalar_one_or_none()
         return int(current or 0) + 1
 
+    async def get_by_run_role(self, run_id: str, role: str) -> dict | None:
+        result = await self.session.execute(
+            select(AgentMessage).where(AgentMessage.run_id == run_id, AgentMessage.role == role)
+        )
+        item = result.scalar_one_or_none()
+        return self._to_dict(item) if item else None
+
     async def create(
         self,
         *,
@@ -47,16 +60,25 @@ class SqliteAgentMessageRepository:
         role: str,
         content_json: dict,
         run_id: str | None = None,
+        status: str = "completed",
+        error_code: str | None = None,
     ) -> dict:
+        if run_id:
+            existing = await self.get_by_run_role(run_id, role)
+            if existing:
+                return existing
         item = AgentMessage(
             message_id=f"msg_{uuid4().hex}",
             session_id=session_id,
             user_id=user_id,
             role=role,
+            status=status,
             content_json=json.dumps(content_json, ensure_ascii=False),
+            error_code=error_code,
             run_id=run_id,
             sequence=await self.next_sequence(session_id, user_id),
             created_at=datetime.utcnow(),
+            completed_at=datetime.utcnow() if status in {"completed", "error"} else None,
         )
         self.session.add(item)
         await self.session.flush()

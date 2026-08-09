@@ -1,5 +1,6 @@
 export {
-  useHomeAgentSession as useAgentSession,
+  useAgentSessionController as useAgentSession,
   type AgentPhase,
   type AgentRouteContext,
-} from './useHomeAgentSession'
+  type AgentTimelineBlock,
+} from './useAgentSessionController'

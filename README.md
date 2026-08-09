@@ -197,8 +197,11 @@ ANIMAGUS/
 项目提供了一键部署脚本，自动完成环境检测、依赖安装和服务启动：
 
 ```bash
-# 本地开发模式（默认）
+# 本地开发模式（默认，前台运行）
 ./run_server.sh
+
+# 本地后台常驻模式（退出终端后继续运行）
+./run_server.sh --mode local --daemon
 
 # 云端生产模式
 ./run_server.sh --mode cloud
@@ -265,6 +268,7 @@ CLOUD_IP=your-server-ip ./run_server.sh --mode cloud
 | `--mode local\|cloud` | 启动模式：`local`（本地开发）/ `cloud`（云端部署） | `local` |
 | `--only all\|backend\|frontend` | 仅启动指定服务 | `all` |
 | `--skip-install` | 跳过依赖安装（云端常用） | 否 |
+| `--daemon` | 后台常驻运行，启动输出写入 `logs/YYYYMMDD.MODE.launcher.log` | 否 |
 | `--host HOST` | 监听地址 | `0.0.0.0` |
 | `--demo` | 启用 Demo 模式（设置 `DEMO_MODE=true`） | 否（生产模式） |
 | `--frontend-port PORT` | 前端端口 | `3010` |
@@ -437,11 +441,6 @@ curl http://localhost:8010/health
 curl -X POST http://localhost:8010/api/v1/auth/login \
   -H "Content-Type: application/json" \
   -d '{"email":"demo@example.com","password":"123456"}'
-
-# AI 分析接口
-curl -X POST http://localhost:8010/api/v1/chat/analyze \
-  -H "Content-Type: application/json" \
-  -d '{"game_description":"一款RPG冒险游戏","game_type":"RPG"}'
 ```
 
 ### API 文档

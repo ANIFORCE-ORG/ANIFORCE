@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue'
-import { useRouter } from 'vue-router'
+import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
@@ -13,6 +13,7 @@ import { createCampaign } from '@/api/campaigns'
 import { navItems } from '@/config/navigation'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 
 // Toast 状态
@@ -79,6 +80,7 @@ const loadProjects = async () => {
 // 组件挂载时加载项目
 onMounted(async () => {
   await loadProjects()
+  openProjectEditFromQuery()
 })
 
 // 筛选后的项目列表
@@ -125,6 +127,13 @@ const handleCreateProject = () => {
 const handleEditProject = (project: Project) => {
   editingProject.value = project
   showCreateModal.value = true
+}
+
+const openProjectEditFromQuery = () => {
+  const editProjectId = typeof route.query.editProjectId === 'string' ? route.query.editProjectId : ''
+  if (!editProjectId) return
+  const project = projects.value.find(item => item.id === editProjectId)
+  if (project) handleEditProject(project)
 }
 
 const handleCreateTask = (project: Project) => {

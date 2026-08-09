@@ -1,7 +1,7 @@
 -r requirements.txt
 
-# Test dependencies
-pytest>=8.0.0
+pytest>=8.0.0,<10.0.0
+pytest-asyncio>=0.24.0,<2.0.0
 
 # Optional agent SDK tests under backend/tests/test_skills_*.py
 openai-agents>=0.0.1

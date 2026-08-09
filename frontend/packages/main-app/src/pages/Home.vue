@@ -7,6 +7,7 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDea
 import { useRoute, useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
+import WorkspaceRenderer from '@/components/agent/workspace/WorkspaceRenderer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
@@ -26,6 +27,8 @@ const workspaceDragging = ref(false)
 const renameDialog = ref<{ id: string; name: string } | null>(null)
 const renameValue = ref('')
 const deleteDialog = ref<{ id: string; name: string } | null>(null)
+
+type MentionEntity = { type: 'project' | 'campaign' | 'material'; id: string; name?: string }
 
 const intentModes: Array<{
   key: 'chat' | 'project'
@@ -119,6 +122,16 @@ const taskStatus = computed<TaskPanelStatus>(() => {
   if (visibleMessages.value.length > 0 || hasInteracted.value) return 'created'
   return 'created'
 })
+const taskStatusLabel = computed(() => ({
+  created: '待开始',
+  running: '进行中',
+  waiting_user_input: '等待补充',
+  waiting_approval: '等待确认',
+  applying: '执行中',
+  completed: '已完成',
+  failed: '失败',
+  canceled: '已取消'
+}[taskStatus.value]))
 const taskSummary = computed(() => {
   if (currentTask.value?.summary) return currentTask.value.summary
   if (currentTask.value?.goal) return currentTask.value.goal
@@ -185,6 +198,7 @@ const taskActions = computed<TaskPanelAction[]>(() => {
     })
   }
   if (agent.agentRunning.value) return [{ key: 'abort', label: '停止任务', icon: 'stop', tone: 'danger' }]
+  if (taskStatus.value === 'waiting_user_input') return [{ key: 'focus', label: '补充所需信息', icon: 'edit_note', tone: 'primary' }]
   if (agent.error.value) return [{ key: 'retry', label: '重新发送', icon: 'refresh', tone: 'primary' }]
   if (taskStatus.value === 'completed' && !hasWorkspaceToolResults.value) {
     return [
@@ -198,8 +212,7 @@ const taskActions = computed<TaskPanelAction[]>(() => {
 const taskTags = computed(() => {
   const tags: string[] = []
   if (currentTask.value?.task_definition?.label) tags.push(currentTask.value.task_definition.label)
-  if (currentTask.value?.phase) tags.push(currentTask.value.phase)
-  if (agent.agentPhase.value?.kind === 'running_tools') tags.push(...agent.agentPhase.value.tools.slice(0, 2).map(tool => tool.name))
+  if (taskPhaseLabel.value) tags.push(taskPhaseLabel.value)
   return Array.from(new Set(tags)).slice(0, 4)
 })
 const currentModel = computed(() => {
@@ -222,6 +235,34 @@ const taskPhaseLabel = computed(() => {
   return definition.phases.find(item => item.key === phase)?.label || phase
 })
 const taskArtifacts = computed<TaskPanelArtifact[]>(() => currentTask.value?.artifacts || [])
+const selectedContextEntities = computed(() => agent.workspaceSelectedEntities.value)
+const mentionCandidates = computed<MentionEntity[]>(() => {
+  const projection = agent.workspaceProjection.value
+  if (!projection) return []
+  const payload = projection.payload || {}
+  if (Array.isArray(payload.projects)) {
+    return payload.projects.map((item: any) => ({ type: 'project' as const, id: String(item.id || ''), name: String(item.name || item.id || '') })).filter(item => item.id)
+  }
+  if (Array.isArray(payload.campaigns)) {
+    return payload.campaigns.map((item: any) => ({ type: 'campaign' as const, id: String(item.id || ''), name: String(item.name || item.id || '') })).filter(item => item.id)
+  }
+  if (Array.isArray(payload.materials)) {
+    return payload.materials.map((item: any) => ({ type: 'material' as const, id: String(item.id || ''), name: String(item.name || item.id || '') })).filter(item => item.id)
+  }
+  return []
+})
+const mentionQuery = computed(() => {
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(inputText.value)
+  return match ? match[1].toLowerCase() : null
+})
+const filteredMentionCandidates = computed(() => {
+  if (mentionQuery.value === null) return []
+  const query = mentionQuery.value
+  return mentionCandidates.value
+    .filter(item => !query || (item.name || item.id).toLowerCase().includes(query) || item.id.toLowerCase().includes(query))
+    .slice(0, 6)
+})
+const showMentionPanel = computed(() => mentionQuery.value !== null && filteredMentionCandidates.value.length > 0)
 
 function scrollToBottom() {
   nextTick(() => {
@@ -230,19 +271,16 @@ function scrollToBottom() {
 }
 
 function phaseLabel(phase: AgentPhase): string {
-  if (phase?.kind === 'queued') return '任务已入队，等待 Worker 派发...'
-  if (phase?.kind === 'running_tools') {
-    const names = phase.tools.map(t => t.name)
-    if (!names.length) return 'Agent 正在调用工具...'
-    if (names.length === 1) return `Agent 正在调用 ${names[0]}...`
-    return `Agent 正在调用 ${names.slice(0, 2).join(', ')}${names.length > 2 ? ` 等 ${names.length} 个工具` : ''}...`
-  }
-  if (phase?.kind === 'waiting_model') return 'Agent 正在思考...'
-  return 'Agent 正在处理...'
+  if (phase?.kind === 'queued') return '任务已提交，正在准备处理...'
+  if (phase?.kind === 'running_tools') return '正在查询和核对业务数据...'
+  if (phase?.kind === 'waiting_model') return '正在理解目标并形成判断...'
+  return '正在处理当前任务...'
 }
 
 function normalizeTaskStatus(status: string): TaskPanelStatus {
   if (status === 'waiting_approval') return 'waiting_approval'
+  if (status === 'waiting_user_input') return 'waiting_user_input'
+  if (status === 'applying') return 'applying'
   if (status === 'completed') return 'completed'
   if (status === 'failed') return 'failed'
   if (status === 'canceled') return 'canceled'
@@ -316,6 +354,74 @@ async function analyzeProject(project: { id: string; name: string }) {
 function openProject(project: { id: string }) {
   if (!project?.id) return
   navigateTo(`/projects/${encodeURIComponent(project.id)}`)
+}
+
+function editProject(projectId: string) {
+  if (!projectId) return
+  navigateTo(`/projects?editProjectId=${encodeURIComponent(projectId)}`)
+}
+
+function createProjectTask(projectId: string) {
+  if (!projectId) return
+  navigateTo(`/campaigns/create?projectId=${encodeURIComponent(projectId)}`)
+}
+
+function viewProjectTasks(projectId: string) {
+  if (!projectId) return
+  navigateTo(`/projects/${encodeURIComponent(projectId)}`)
+}
+
+function openCampaign(campaignId: string) {
+  if (!campaignId) return
+  navigateTo(`/campaigns/${encodeURIComponent(campaignId)}`)
+}
+
+function openMaterial(materialId: string) {
+  if (!materialId) return
+  navigateTo(`/material?material_id=${encodeURIComponent(materialId)}`)
+}
+
+function entityTypeLabel(type: MentionEntity['type']): string {
+  if (type === 'project') return '项目'
+  if (type === 'campaign') return '广告计划'
+  return '素材'
+}
+
+function entityTypeIcon(type: MentionEntity['type']): string {
+  if (type === 'project') return 'folder_managed'
+  if (type === 'campaign') return 'campaign'
+  return 'video_library'
+}
+
+function appendMentionToInput(entity: MentionEntity) {
+  agent.selectWorkspaceEntity(entity)
+  const label = entity.name || entity.id
+  const mention = `@${label}`
+  if (inputText.value.match(/(?:^|\s)@[^\s@]*$/)) {
+    inputText.value = inputText.value.replace(/(?:^|\s)@[^\s@]*$/, match => `${match.startsWith(' ') ? ' ' : ''}${mention} `)
+  } else if (!inputText.value.trim()) {
+    inputText.value = `${mention} `
+  } else if (!inputText.value.includes(mention)) {
+    inputText.value = `${inputText.value.trimEnd()} ${mention} `
+  }
+  nextTick(() => {
+    const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
+    input?.focus()
+  })
+}
+
+function selectMentionCandidate(entity: MentionEntity) {
+  appendMentionToInput(entity)
+}
+
+function removeContextEntity(entity: MentionEntity) {
+  agent.unselectWorkspaceEntity(entity)
+  const label = entity.name || entity.id
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  inputText.value = inputText.value
+    .replace(new RegExp(`(^|\\s)@${escaped}(?=\\s|$)`, 'g'), ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trimStart()
 }
 
 function handleTaskAction(action: string) {
@@ -511,6 +617,31 @@ watch(
 
     <!-- Output Content Area (above the input bar, only when has content) -->
     <div v-if="hasContent" class="max-w-[842px] w-full px-[12px] space-y-[19px] mb-[19px]">
+      <!-- Backend 持久任务状态：刷新和断流后仍可恢复。 -->
+      <section v-if="currentTask" class="rounded-2xl border border-slate-200 bg-slate-50/80 p-[15px] dark:border-slate-700 dark:bg-slate-800/50">
+        <div class="flex items-start justify-between gap-[12px]">
+          <div class="min-w-0">
+            <div class="flex items-center gap-[7px]">
+              <span class="material-symbols-outlined text-[17px] text-primary">route</span>
+              <h2 class="truncate text-[14px] font-semibold text-slate-900 dark:text-white">{{ currentTask.title }}</h2>
+            </div>
+            <p class="mt-[6px] text-[12px] leading-5 text-slate-500 dark:text-slate-300">{{ taskSummary }}</p>
+          </div>
+          <span class="shrink-0 rounded-full bg-white px-[9px] py-[4px] text-[11px] font-semibold text-primary shadow-sm dark:bg-slate-900">
+            {{ taskStatusLabel }}
+          </span>
+        </div>
+        <div class="mt-[12px] flex flex-wrap gap-x-[12px] gap-y-[7px]">
+          <div v-for="step in taskSteps" :key="step.key" class="flex items-center gap-[5px] text-[11px]">
+            <span
+              class="h-[7px] w-[7px] rounded-full"
+              :class="step.status === 'done' ? 'bg-emerald-500' : step.status === 'active' ? 'bg-primary animate-pulse' : step.status === 'error' ? 'bg-red-500' : 'bg-slate-300 dark:bg-slate-600'"
+            ></span>
+            <span :class="step.status === 'active' ? 'font-semibold text-slate-800 dark:text-white' : 'text-slate-500 dark:text-slate-400'">{{ step.label }}</span>
+          </div>
+        </div>
+      </section>
+
       <!-- Loading State -->
       <div v-if="agent.loading.value" class="flex items-center justify-center gap-[9px] py-[25px]">
         <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -535,6 +666,7 @@ watch(
             :tool-results="toolResults"
             :model-names="agent.modelNames.value"
             :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
+            @approval="payload => agent.resolveApproval(payload.runId, payload.checkpointId, payload.decision)"
           />
         </template>
 
@@ -544,6 +676,7 @@ watch(
           is-streaming
           :tool-results="toolResults"
           :model-names="agent.modelNames.value"
+          @approval="payload => agent.resolveApproval(payload.runId, payload.checkpointId, payload.decision)"
         />
         
         <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="flex items-center justify-center gap-[9px] py-[19px]">
@@ -556,8 +689,44 @@ watch(
     <!-- Floating Command Bar (always below output content) -->
     <div class="max-w-[671px] w-full px-[12px] mb-[19px]">
       <div class="relative group">
+        <div v-if="selectedContextEntities.length" class="relative z-10 mb-[8px] flex flex-wrap items-center gap-[6px] px-[8px]">
+          <span class="text-[10px] font-medium text-slate-400">上下文</span>
+          <span
+            v-for="entity in selectedContextEntities"
+            :key="`${entity.type}:${entity.id}`"
+            class="inline-flex items-center gap-[4px] rounded-full border border-primary/20 bg-primary/5 pl-[8px] pr-[4px] py-[4px] text-[10px] font-medium text-primary"
+          >
+            <span class="material-symbols-outlined text-[12px]">{{ entityTypeIcon(entity.type) }}</span>
+            <span class="max-w-[140px] truncate">{{ entity.name || entity.id }}</span>
+            <button
+              type="button"
+              class="ml-[2px] flex h-[16px] w-[16px] items-center justify-center rounded-full hover:bg-primary/15"
+              title="移除上下文"
+              @click.stop.prevent="removeContextEntity(entity)"
+            >
+              <span class="material-symbols-outlined text-[12px]">close</span>
+            </button>
+          </span>
+        </div>
+
+        <div v-if="showMentionPanel" class="absolute bottom-[58px] left-[44px] right-[56px] z-20 overflow-hidden rounded-xl border border-slate-200 bg-white shadow-xl dark:border-slate-700 dark:bg-slate-900">
+          <div class="border-b border-slate-100 px-[12px] py-[8px] text-[10px] font-medium text-slate-400 dark:border-slate-800">
+            从当前工作台选择上下文
+          </div>
+          <button
+            v-for="entity in filteredMentionCandidates"
+            :key="`${entity.type}:${entity.id}`"
+            class="flex w-full items-center gap-[8px] px-[12px] py-[9px] text-left hover:bg-slate-50 dark:hover:bg-slate-800"
+            @click="selectMentionCandidate(entity)"
+          >
+            <span class="material-symbols-outlined text-[16px] text-slate-400">{{ entityTypeIcon(entity.type) }}</span>
+            <span class="min-w-0 flex-1 truncate text-[12px] font-medium text-slate-800 dark:text-slate-100">{{ entity.name || entity.id }}</span>
+            <span class="rounded-full bg-slate-100 px-[6px] py-[2px] text-[10px] text-slate-500 dark:bg-slate-800">{{ entityTypeLabel(entity.type) }}</span>
+          </button>
+        </div>
+
         <!-- Glow effect -->
-        <div class="absolute -inset-1 bg-gradient-to-r from-primary/20 to-blue-400/20 rounded-full blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200"></div>
+        <div class="pointer-events-none absolute -inset-1 bg-gradient-to-r from-primary/20 to-blue-400/20 rounded-full blur opacity-25 group-focus-within:opacity-100 transition duration-1000 group-hover:duration-200"></div>
         <!-- Input bar -->
         <div class="relative flex items-center bg-white dark:bg-slate-900 rounded-full border border-slate-200 dark:border-slate-700 shadow-xl shadow-slate-200/50 dark:shadow-none p-[6px] focus-within:border-primary focus-within:ring-2 focus-within:ring-primary/20 transition-all">
           <button class="flex items-center justify-center p-[9px] text-slate-400 hover:text-primary transition-colors">
@@ -567,7 +736,7 @@ watch(
             v-model="inputText"
             data-agent-input="home"
             class="flex-1 bg-transparent border-none focus:ring-0 focus:outline-none text-[15px] text-slate-800 dark:text-slate-200 placeholder:text-slate-400 py-[9px] px-[6px]"
-            placeholder="描述您的投放目标或上传素材..."
+            placeholder="描述目标，或输入 @ 选择工作台上下文..."
             type="text"
             @keydown.enter="handleSubmit"
           />
@@ -576,11 +745,26 @@ watch(
               <span class="material-symbols-outlined text-[19px]">mic</span>
             </button>
             <button
+              v-if="agent.agentRunning.value"
+              data-agent-action="cancel"
+              class="bg-red-600 text-white h-[37px] w-[37px] rounded-full flex items-center justify-center hover:bg-red-700 transition-all shadow-lg shadow-red-500/20"
+              type="button"
+              title="停止任务"
+              aria-label="停止任务"
+              @click="handleTaskAction('abort')"
+            >
+              <span class="material-symbols-outlined text-[19px]">stop</span>
+            </button>
+            <button
+              v-else
+              data-agent-action="send"
               class="bg-primary text-white h-[37px] w-[37px] rounded-full flex items-center justify-center hover:bg-primary/90 transition-all shadow-lg shadow-primary/30 disabled:opacity-50 disabled:cursor-not-allowed"
-              :disabled="agent.loading.value || agent.agentRunning.value || !inputText.trim()"
+              :disabled="agent.loading.value || !inputText.trim()"
+              type="button"
+              aria-label="发送消息"
               @click="handleSubmit"
             >
-              <span v-if="agent.loading.value || agent.agentRunning.value" class="h-[16px] w-[16px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
+              <span v-if="agent.loading.value" class="h-[16px] w-[16px] border-2 border-white border-t-transparent rounded-full animate-spin"></span>
               <span v-else class="material-symbols-outlined text-[19px]">arrow_forward</span>
             </button>
           </div>
@@ -631,6 +815,52 @@ watch(
         </div>
       </div>
     </main>
+
+    <!-- 右侧 Workspace 投影栏 -->
+    <aside
+      class="flex-shrink-0 bg-white dark:bg-slate-900 border-l border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden"
+      :style="workspaceStyle"
+    >
+      <div class="flex items-center justify-between px-[12px] py-[8px] border-b border-slate-200 dark:border-slate-700">
+        <div class="flex items-center gap-[6px]">
+          <span class="material-symbols-outlined text-[16px] text-slate-500">workspaces</span>
+          <span class="text-[11px] font-medium text-slate-700 dark:text-slate-300">工作台</span>
+        </div>
+        <div class="flex items-center gap-[2px]">
+          <button
+            class="p-[4px] rounded hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            @click="toggleWorkspaceCollapsed"
+          >
+            <span class="material-symbols-outlined text-[14px] text-slate-400">{{ workspaceCollapsed ? 'left_panel_open' : 'right_panel_close' }}</span>
+          </button>
+          <div
+            v-if="!workspaceCollapsed"
+            class="w-[4px] h-[24px] cursor-col-resize flex items-center"
+            @pointerdown="startWorkspaceResize"
+          >
+            <div class="w-[1px] h-[16px] bg-slate-300 dark:bg-slate-600"></div>
+          </div>
+        </div>
+      </div>
+      <div v-show="!workspaceCollapsed" class="flex-1 overflow-hidden">
+        <WorkspaceRenderer
+          :projection="agent.workspaceProjection.value"
+          :approval-draft="agent.workspaceApprovalDraft.value"
+          :session-id="agent.activeSession.value?.id || ''"
+          @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: agent.workspaceApprovalDraft.value?.runId || '' })"
+          @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
+          @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
+          @select-entity="entity => agent.selectWorkspaceEntity(entity)"
+          @mention-entity="appendMentionToInput"
+          @view-project="(projectId: string) => openProject({ id: projectId })"
+          @edit-project="editProject"
+          @create-project-task="createProjectTask"
+          @view-project-tasks="viewProjectTasks"
+          @view-campaign="openCampaign"
+          @view-material="openMaterial"
+        />
+      </div>
+    </aside>
   </div>
 
   <Teleport to="body">

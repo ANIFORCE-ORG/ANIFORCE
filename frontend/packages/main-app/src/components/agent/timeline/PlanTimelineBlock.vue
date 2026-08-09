@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue'
-import type { AgentTimelineBlock } from '@/composables/useHomeAgentSession'
+import type { AgentTimelineBlock } from '@/composables/useAgentSession'
 
 type PlanTimelineBlock = Extract<AgentTimelineBlock, { type: 'plan' }>
 

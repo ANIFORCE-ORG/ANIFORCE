@@ -10,6 +10,34 @@ from loguru import logger
 from app.config.settings import settings
 
 
+class BackendClientError(Exception):
+    """Stable error raised when a backend request cannot be completed."""
+
+    def __init__(self, code: str, message: str, *, status: int = 502, retryable: bool = False) -> None:
+        self.code = code
+        self.message = message
+        self.status = status
+        self.retryable = retryable
+        super().__init__(message)
+
+    def to_dict(self) -> dict:
+        return {
+            "error": True,
+            "code": self.code,
+            "message": self.message,
+            "status": self.status,
+            "retryable": self.retryable,
+        }
+
+
+class BackendResponseError(BackendClientError):
+    """Backend returned a non-success response."""
+
+
+class BackendUnavailableError(BackendClientError):
+    """Backend could not be reached."""
+
+
 class BackendClient:
     """Backend REST API 客户端"""
 
@@ -36,22 +64,51 @@ class BackendClient:
 
         logger.debug(f"[BACKEND] {method} {url}")
 
-        async with httpx.AsyncClient(timeout=timeout) as client:
-            resp = await client.request(
-                method=method,
-                url=url,
-                headers=headers,
-                json=json,
-                params=params,
-            )
+        try:
+            async with httpx.AsyncClient(timeout=timeout) as client:
+                resp = await client.request(
+                    method=method,
+                    url=url,
+                    headers=headers,
+                    json=json,
+                    params=params,
+                )
+        except httpx.TimeoutException as exc:
+            logger.warning("[BACKEND] {} {} timed out", method, url)
+            raise BackendUnavailableError(
+                "BACKEND_TIMEOUT",
+                "Backend request timed out",
+                status=504,
+                retryable=True,
+            ) from exc
+        except httpx.HTTPError as exc:
+            logger.warning("[BACKEND] {} {} unavailable: {}", method, url, type(exc).__name__)
+            raise BackendUnavailableError(
+                "BACKEND_UNAVAILABLE",
+                "Backend is temporarily unavailable",
+                retryable=True,
+            ) from exc
 
         if resp.status_code >= 400:
-            logger.warning(f"[BACKEND] {method} {url} → {resp.status_code}: {resp.text[:200]}")
-            return {"error": True, "status": resp.status_code, "message": resp.text[:500]}
+            logger.warning("[BACKEND] {} {} returned status {}", method, url, resp.status_code)
+            code = {
+                401: "BACKEND_UNAUTHORIZED",
+                403: "BACKEND_FORBIDDEN",
+                404: "BACKEND_NOT_FOUND",
+                409: "BACKEND_CONFLICT",
+                422: "BACKEND_VALIDATION_ERROR",
+                429: "BACKEND_RATE_LIMITED",
+            }.get(resp.status_code, "BACKEND_RESPONSE_ERROR")
+            raise BackendResponseError(
+                code,
+                "Backend rejected the tool request",
+                status=resp.status_code,
+                retryable=resp.status_code == 429 or resp.status_code >= 500,
+            )
 
         try:
             return resp.json()
-        except Exception:
+        except ValueError:
             return {"raw": resp.text[:1000]}
 
     # ---- Projects ----
@@ -62,33 +119,100 @@ class BackendClient:
     async def get_project(self, token: str, project_id: str) -> dict:
         return await self._request("GET", f"/api/v1/projects/{project_id}", token=token)
 
+    async def get_project_performance(self, token: str, project_id: str, hours: int = 168) -> dict:
+        return await self._request(
+            "GET",
+            f"/api/v1/projects/{project_id}/performance",
+            token=token,
+            params={"hours": hours},
+        )
+
     async def create_project(self, token: str, data: dict, extra_headers: dict | None = None) -> dict:
         return await self._request("POST", "/api/v1/projects", token=token, json=data, extra_headers=extra_headers)
 
+    async def update_project(self, token: str, project_id: str, data: dict, extra_headers: dict | None = None) -> dict:
+        return await self._request("PUT", f"/api/v1/projects/{project_id}", token=token, json=data, extra_headers=extra_headers)
+
+    async def delete_project(self, token: str, project_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("DELETE", f"/api/v1/projects/{project_id}", token=token, extra_headers=extra_headers)
+
     # ---- Campaigns ----
 
-    async def list_campaigns(self, token: str, project_id: str | None = None, limit: int = 20) -> dict:
+    async def list_campaigns(self, token: str, project_id: str | None = None, status: str | None = None, limit: int = 20) -> dict:
         params = {"limit": limit}
         if project_id:
             params["project_id"] = project_id
+        if status:
+            params["status"] = status
         return await self._request("GET", "/api/v1/campaigns", token=token, params=params)
 
     async def get_campaign(self, token: str, campaign_id: str) -> dict:
         return await self._request("GET", f"/api/v1/campaigns/{campaign_id}", token=token)
 
+    async def get_campaign_performance(self, token: str, campaign_id: str, hours: int = 168) -> dict:
+        return await self._request(
+            "GET",
+            f"/api/v1/campaigns/{campaign_id}/performance",
+            token=token,
+            params={"hours": hours},
+        )
+
     async def create_campaign(self, token: str, data: dict, extra_headers: dict | None = None) -> dict:
         return await self._request("POST", "/api/v1/campaigns", token=token, json=data, extra_headers=extra_headers)
+
+    async def update_campaign(self, token: str, campaign_id: str, data: dict, extra_headers: dict | None = None) -> dict:
+        return await self._request("PUT", f"/api/v1/campaigns/{campaign_id}", token=token, json=data, extra_headers=extra_headers)
 
     async def update_campaign_status(self, token: str, campaign_id: str, status: str, extra_headers: dict | None = None) -> dict:
         return await self._request("PUT", f"/api/v1/campaigns/{campaign_id}/status", token=token, json={"status": status}, extra_headers=extra_headers)
 
+    async def get_campaign_materials(self, token: str, campaign_id: str) -> dict:
+        return await self._request("GET", f"/api/v1/campaigns/{campaign_id}/materials", token=token)
+
+    async def add_material_to_campaign(self, token: str, campaign_id: str, material_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("POST", f"/api/v1/campaigns/{campaign_id}/materials/{material_id}", token=token, extra_headers=extra_headers)
+
+    async def remove_material_from_campaign(self, token: str, campaign_id: str, material_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("DELETE", f"/api/v1/campaigns/{campaign_id}/materials/{material_id}", token=token, extra_headers=extra_headers)
+
+    async def delete_campaign(self, token: str, campaign_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("DELETE", f"/api/v1/campaigns/{campaign_id}", token=token, extra_headers=extra_headers)
+
     # ---- Materials ----
 
-    async def list_materials(self, token: str, limit: int = 20) -> dict:
-        return await self._request("GET", "/api/v1/materials", token=token, params={"limit": limit})
+    async def list_materials(self, token: str, project_id: str | None = None, campaign_id: str | None = None, type: str | None = None, limit: int = 20) -> dict:
+        params = {"limit": limit}
+        if project_id:
+            params["project_id"] = project_id
+        if campaign_id:
+            params["campaign_id"] = campaign_id
+        if type:
+            params["type"] = type
+        return await self._request("GET", "/api/v1/materials", token=token, params=params)
 
     async def get_material(self, token: str, material_id: str) -> dict:
         return await self._request("GET", f"/api/v1/materials/{material_id}", token=token)
+
+    async def update_material(self, token: str, material_id: str, data: dict, extra_headers: dict | None = None) -> dict:
+        return await self._request("PATCH", f"/api/v1/materials/{material_id}", token=token, json=data, extra_headers=extra_headers)
+
+    async def create_material(self, token: str, data: dict, extra_headers: dict | None = None) -> dict:
+        return await self._request("POST", "/api/v1/materials", token=token, json=data, extra_headers=extra_headers)
+
+    async def get_material_image(self, token: str, material_id: str, thumbnail: bool = False) -> dict:
+        return await self._request("GET", f"/api/v1/materials/{material_id}/image", token=token, params={"thumbnail": thumbnail})
+
+    async def list_available_images(self, token: str) -> dict:
+        return await self._request("GET", "/api/v1/materials/images/list", token=token)
+
+    async def add_material_to_project(self, token: str, material_id: str, project_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("POST", f"/api/v1/materials/{material_id}/projects/{project_id}", token=token, extra_headers=extra_headers)
+
+    async def remove_material_from_project(self, token: str, material_id: str, project_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("DELETE", f"/api/v1/materials/{material_id}/projects/{project_id}", token=token, extra_headers=extra_headers)
+
+    async def delete_material(self, token: str, material_id: str, extra_headers: dict | None = None) -> dict:
+        return await self._request("DELETE", f"/api/v1/materials/{material_id}", token=token, extra_headers=extra_headers)
 
 
 # 全局单例

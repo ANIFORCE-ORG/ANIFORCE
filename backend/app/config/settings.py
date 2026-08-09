@@ -24,6 +24,9 @@ class Settings(BaseSettings):
     MONGODB_URL: str = ""
     MONGODB_DB_NAME: str = "animagus"
     REDIS_URL: str = ""
+    AGENT_EVENT_STREAM_PREFIX: str = "aniforce:agent:run"
+    AGENT_EVENT_STREAM_TTL_SECONDS: int = 15 * 60
+    AGENT_EVENT_STREAM_MAX_LENGTH: int = 5000
 
     # 外部服务
     OPENAI_API_KEY: str = ""
@@ -59,7 +62,7 @@ class Settings(BaseSettings):
     GOOGLE_DEVELOPER_TOKEN: str = ""  # Google Ads API Developer Token
 
     # 服务地址配置（根据运行模式自动切换）
-    # Local 模式: http://localhost:3010 / http://localhost:8010
+    # Local/Test 模式: http://localhost:3010 / http://localhost:8010
     # Cloud 模式: http://8.148.151.36:3010 / https://8.148.151.36:8010
     FRONTEND_BASE_URL: str = "http://localhost:3010"
     BACKEND_BASE_URL: str = "http://localhost:8010"
@@ -68,12 +71,17 @@ class Settings(BaseSettings):
     AGENT_SERVICE_URL: str = "http://127.0.0.1:8020"
 
     # OAuth 回调地址配置（用于第三方平台 OAuth 重定向）
-    # 默认使用生产域名，本地开发时可设置为 http://localhost:8010
+    # 默认使用生产域名，本地测试时可设置为 http://localhost:8010
     OAUTH_REDIRECT_BASE_URL: str = "https://www.aniforce.cc"
 
     # 日志配置
     LOG_LEVEL: str = "INFO"
-    LOG_FILE: str = ""  # 日志文件路径，为空则不写入文件
+    LOG_FILE: str = ""
+    LOG_FORMAT: str = "text"
+    LOG_OUTPUT: str = "console"
+    LOG_SERVICE: str = "backend"
+    LOG_ROLE: str = "api"
+    APP_ENV: str = "local"
 
     class Config:
         env_file = ".env"

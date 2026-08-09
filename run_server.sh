@@ -4,6 +4,7 @@
 #  用法:
 #    ./run_server.sh [--mode local|cloud] [--frontend-port 3010] [--backend-port 8010]
 #                   [--only all|backend|frontend] [--skip-install] [--host 0.0.0.0]
+#                   [--daemon]
 # ============================================================
 set -euo pipefail
 
@@ -103,11 +104,19 @@ kill_port_process() {
 }
 
 # ---------- 默认参数 ----------
+ORIGINAL_ARGS=("$@")
 MODE=local
 ONLY=all
 SKIP_INSTALL=0
 HOST=0.0.0.0
 DEMO_MODE=false
+DAEMON=0
+DAEMON_CHILD=0
+WITH_PHOENIX=1
+BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-2}
+AGENT_API_WORKERS=${AGENT_API_WORKERS:-1}
+AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-2}
+PYPI_INDEX_URL=${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}
 
 FRONTEND_PORT_EXPLICIT=0
 BACKEND_PORT_EXPLICIT=0
@@ -117,6 +126,7 @@ AGENT_PORT_EXPLICIT=0
 FRONTEND_PORT=3010
 BACKEND_PORT=8010
 AGENT_PORT=8020
+PHOENIX_PORT=${PHOENIX_PORT:-6006}
 
 # ---------- 日志配置 ----------
 LOG_DIR="./logs"
@@ -133,8 +143,11 @@ while [[ $# -gt 0 ]]; do
     --host) HOST="$2"; shift 2 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
     --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
+    --daemon) DAEMON=1; shift 1 ;;
+    --daemon-child) DAEMON=1; DAEMON_CHILD=1; shift 1 ;;
+    --without-phoenix) WITH_PHOENIX=0; shift 1 ;;
     -h|--help)
-      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--agent-port PORT] [--only all|agent|backend|frontend] [--skip-install] [--host HOST] [--demo] [--log-dir DIR]"
+      echo "用法: $0 [--mode local|cloud] [--frontend-port PORT] [--backend-port PORT] [--agent-port PORT] [--only all|agent|backend|frontend] [--skip-install] [--host HOST] [--demo] [--log-dir DIR] [--daemon] [--without-phoenix]"
       echo ""
       echo "参数说明:"
       echo "  --mode           启动模式: local(默认) / cloud"
@@ -146,10 +159,14 @@ while [[ $# -gt 0 ]]; do
       echo "  --backend-port   后端端口 (默认: 8010)"
       echo "  --agent-port     Agent 服务端口 (默认: 8020)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
+      echo "  --daemon         后台常驻运行，退出终端后服务继续运行"
+      echo "  --without-phoenix 跳过 Phoenix tracing collector 启动"
       echo ""
       echo "环境变量:"
-      echo "  CLOUD_DOMAIN     云端模式的域名（默认: https://www.aniforce.cc）"
-      echo "                   用于自动配置 .env 中的 FRONTEND_BASE_URL、BACKEND_BASE_URL 和 OAUTH_REDIRECT_BASE_URL"
+      echo "  CLOUD_DOMAIN         云端模式的域名（默认: https://www.aniforce.cc）"
+      echo "  BACKEND_API_WORKERS  Backend API 进程数（默认: 2）"
+      echo "  AGENT_API_WORKERS    Agent API 进程数（SQLite 正式版本固定为 1）"
+      echo "  AGENT_RUN_WORKERS    Agent 执行 worker 数（默认: 2）"
       echo ""
       echo "使用场景:"
       echo "  • 本脚本用于开发调试,直接启动前后端服务（无 Nginx）"
@@ -159,6 +176,9 @@ while [[ $# -gt 0 ]]; do
       echo "示例:"
       echo "  # 本地开发模式"
       echo "  $0 --mode local"
+      echo ""
+      echo "  # 本地后台常驻模式"
+      echo "  $0 --mode local --daemon"
       echo ""
       echo "  # 云端生产模式（使用默认域名）"
       echo "  $0 --mode cloud --skip-install"
@@ -176,6 +196,9 @@ fi
 if [ "$ONLY" != "all" ] && [ "$ONLY" != "agent" ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
   fail "--only 仅支持 all/agent/backend/frontend,当前: $ONLY"
 fi
+for worker_count in "$BACKEND_API_WORKERS" "$AGENT_API_WORKERS" "$AGENT_RUN_WORKERS"; do
+  [[ "$worker_count" =~ ^[1-9][0-9]*$ ]] || fail "worker 数必须是正整数"
+done
 
 # cloud 模式下,若设置了 PORT 且用户没显式指定 --frontend-port,则使用 PORT 作为前端端口
 if [ "$MODE" = "cloud" ] && [ -n "${PORT:-}" ]; then
@@ -186,7 +209,9 @@ fi
 
 info "启动模式: MODE=$MODE, ONLY=$ONLY, SKIP_INSTALL=$SKIP_INSTALL, HOST=$HOST"
 info "环境配置: DEMO_MODE=$DEMO_MODE"
-info "端口配置: 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT"
+info "Python 镜像: $PYPI_INDEX_URL"
+info "端口配置: 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT, Phoenix=$PHOENIX_PORT"
+info "Worker 配置: Backend API=$BACKEND_API_WORKERS, Agent API=$AGENT_API_WORKERS, Agent Run=$AGENT_RUN_WORKERS"
 
 # ---------- 项目根目录 ----------
 ROOT_DIR="$(cd "$(dirname "$0")" && pwd)"
@@ -207,29 +232,61 @@ mkdir -p "$LOG_DIR"
 LOG_DATE=$(date +%Y%m%d)
 LOG_ENV="$MODE"
 
-# 日志文件路径
-# 后端应用日志: 使用 loguru 的时间占位符,支持自动按日期轮转
-BACKEND_APP_LOG="$LOG_DIR/{time:YYYYMMDD}.${LOG_ENV}.backend.app.log"
-# 后端 uvicorn 日志: 使用启动时的日期
-BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.uvicorn.log"
-# Agent uvicorn 日志: 使用启动时的日期
-AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.uvicorn.log"
-# 前端日志: 使用启动时的日期（Vite 不支持自动轮转）
-FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
+# 后台模式通过 nohup 重启脚本，使监督进程和所有子进程脱离当前终端。
+if [ "$DAEMON" -eq 1 ] && [ "$DAEMON_CHILD" -eq 0 ]; then
+  DAEMON_ARGS=()
+  for arg in "${ORIGINAL_ARGS[@]}"; do
+    [ "$arg" = "--daemon" ] || DAEMON_ARGS+=("$arg")
+  done
 
-info "日志配置: 目录=$LOG_DIR"
-info "后端应用日志: $BACKEND_APP_LOG"
-info "后端 Uvicorn 日志: $BACKEND_UVICORN_LOG"
-info "Agent Uvicorn 日志: $AGENT_UVICORN_LOG"
-info "前端日志: $FRONTEND_LOG"
+  DAEMON_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.launcher.log"
+  nohup "$ROOT_DIR/run_server.sh" "${DAEMON_ARGS[@]}" --daemon-child \
+    > "$DAEMON_LOG" 2>&1 < /dev/null &
+  DAEMON_PID=$!
+  echo "$DAEMON_PID" > "$ROOT_DIR/.server_supervisor_pid"
+  disown "$DAEMON_PID" 2>/dev/null || true
+
+  ok "后台启动任务已提交 (监督进程 PID: $DAEMON_PID)"
+  info "启动日志: $DAEMON_LOG"
+  info "查看状态: $ROOT_DIR/check_server.sh"
+  info "停止服务: $ROOT_DIR/stop_server.sh"
+  exit 0
+fi
+
+# Local 写项目日志文件；Cloud 输出 JSON 到 stdout/stderr，由运行平台统一采集。
+if [ "$MODE" = "cloud" ]; then
+  SERVICE_LOG_OUTPUT="console"
+  BACKEND_API_LOG=""
+  AGENT_API_LOG=""
+  BACKEND_RECONCILE_LOG=""
+  BACKEND_UVICORN_LOG="/dev/stderr"
+  AGENT_UVICORN_LOG="/dev/stderr"
+  FRONTEND_LOG="/dev/stderr"
+  info "日志配置: stdout JSON（由容器或主机日志平台采集）"
+else
+  SERVICE_LOG_OUTPUT="file"
+  BACKEND_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend-api.jsonl"
+  AGENT_API_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-api.jsonl"
+  BACKEND_RECONCILE_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-reconcile-worker.jsonl"
+  BACKEND_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.backend.bootstrap.log"
+  AGENT_UVICORN_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent.bootstrap.log"
+  FRONTEND_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.frontend.vite.log"
+  info "日志配置: 目录=$LOG_DIR"
+  info "Backend API: $BACKEND_API_LOG"
+  info "Agent API: $AGENT_API_LOG"
+  info "Reconcile Worker: $BACKEND_RECONCILE_LOG"
+  info "前端日志: $FRONTEND_LOG"
+fi
 
 # ---------- PID & 端口信息文件（用于清理） ----------
 PID_FILE="$ROOT_DIR/.server_pids"
 PORT_FILE="$ROOT_DIR/.server_ports"
+SUPERVISOR_PID_FILE="$ROOT_DIR/.server_supervisor_pid"
 : > "$PID_FILE"
 echo "FRONTEND_PORT=$FRONTEND_PORT" > "$PORT_FILE"
 echo "BACKEND_PORT=$BACKEND_PORT" >> "$PORT_FILE"
 echo "AGENT_PORT=$AGENT_PORT" >> "$PORT_FILE"
+echo "PHOENIX_PORT=$PHOENIX_PORT" >> "$PORT_FILE"
 echo "MODE=$MODE" >> "$PORT_FILE"
 echo "ONLY=$ONLY" >> "$PORT_FILE"
 
@@ -241,7 +298,7 @@ cleanup() {
       kill "$pid" 2>/dev/null && ok "已停止进程 $pid" || true
     fi
   done < "$PID_FILE"
-  rm -f "$PID_FILE" "$PORT_FILE"
+  rm -f "$PID_FILE" "$PORT_FILE" "$SUPERVISOR_PID_FILE"
   ok "所有服务已停止,再见！"
   exit 0
 }
@@ -252,21 +309,12 @@ trap cleanup SIGINT SIGTERM
 # ============================================================
 info "========== 环境检测 =========="
 
-# --- Python ---
-if command -v python3 &>/dev/null; then
-  PY="python3"
-elif command -v python &>/dev/null; then
-  PY="python"
-else
-  fail "未检测到 Python,请先安装 Python 3.10+"
-fi
-PY_VER=$($PY --version 2>&1 | awk '{print $2}')
-PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
-PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
-if [ "$PY_MAJOR" -lt 3 ] || { [ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]; }; then
-  fail "Python 版本过低 ($PY_VER),需要 3.10+"
-fi
-ok "Python $PY_VER"
+# --- Python 3.11 runtime ---
+command -v uv &>/dev/null || fail "未检测到 uv,无法准备 Python 3.11 运行环境"
+PY311=$(uv python find 3.11 2>/dev/null || true)
+[ -n "$PY311" ] || fail "未找到 Python 3.11,请执行: uv python install 3.11"
+PY_VER=$($PY311 --version 2>&1 | awk '{print $2}')
+ok "Python $PY_VER (uv managed)"
 
 # --- Node.js ---
 if ! command -v node &>/dev/null; then
@@ -301,17 +349,21 @@ info "========== Agent 依赖 =========="
 
 cd "$AGENT_DIR"
 
+AGENT_VENV_DIR="$AGENT_DIR/.venv"
+AGENT_PY="$AGENT_VENV_DIR/bin/python"
+
 if [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
   warn "--only=$ONLY: 跳过 Agent 依赖安装"
 elif [ "$SKIP_INSTALL" -eq 1 ]; then
   warn "已启用 --skip-install,跳过 Agent 依赖安装"
 else
-  if [ ! -d ".venv" ]; then
+  if [ ! -x "$AGENT_PY" ]; then
     info "创建 Agent Python 虚拟环境..."
-    UV_CACHE_DIR=./uv_cache uv venv --python 3.11
+    UV_CACHE_DIR="$ROOT_DIR/uv_cache" uv venv --python 3.11 "$AGENT_VENV_DIR"
   fi
   info "安装 Agent Python 依赖..."
-  UV_CACHE_DIR=./uv_cache uv pip install -r requirements.txt
+  # Always target the Agent venv explicitly. A user-activated root venv must not capture these packages.
+  VIRTUAL_ENV= UV_CACHE_DIR="$ROOT_DIR/uv_cache" uv pip install --python "$AGENT_PY" --index-url "$PYPI_INDEX_URL" -r requirements.txt
   ok "Agent 依赖安装完成"
 fi
 
@@ -336,19 +388,28 @@ info "========== 后端依赖 =========="
 
 cd "$BACKEND_DIR"
 
-# 虚拟环境
-if [ ! -d "venv/bin" ] && [ ! -d "venv/Scripts" ]; then
-  info "创建 Python 虚拟环境..."
-  $PY -m venv venv
+# 后端使用 Python 3.11+（代码依赖 enum.StrEnum）。
+BACKEND_VENV_DIR="$BACKEND_DIR/.venv"
+if [ ! -f "$BACKEND_VENV_DIR/bin/python" ] && [ ! -f "$BACKEND_VENV_DIR/Scripts/python.exe" ]; then
+  command -v uv &>/dev/null || fail "创建后端 Python 3.11 环境需要 uv"
+  info "创建后端 Python 3.11 虚拟环境..."
+  UV_CACHE_DIR="$ROOT_DIR/uv_cache" uv venv --python 3.11 "$BACKEND_VENV_DIR"
 fi
 
-# 激活虚拟环境
-if [ -f "venv/bin/activate" ]; then
-  source venv/bin/activate
-elif [ -f "venv/Scripts/activate" ]; then
-  source venv/Scripts/activate
+if [ -x "$BACKEND_VENV_DIR/bin/python" ]; then
+  BACKEND_PY="$BACKEND_VENV_DIR/bin/python"
+elif [ -x "$BACKEND_VENV_DIR/Scripts/python.exe" ]; then
+  BACKEND_PY="$BACKEND_VENV_DIR/Scripts/python.exe"
+else
+  fail "后端虚拟环境不可用: $BACKEND_VENV_DIR"
 fi
-ok "虚拟环境已激活"
+BACKEND_PY_VER=$($BACKEND_PY -c 'import sys; print(f"{sys.version_info.major}.{sys.version_info.minor}")')
+BACKEND_PY_MAJOR=${BACKEND_PY_VER%%.*}
+BACKEND_PY_MINOR=${BACKEND_PY_VER#*.}
+if [ "$BACKEND_PY_MAJOR" -lt 3 ] || { [ "$BACKEND_PY_MAJOR" -eq 3 ] && [ "$BACKEND_PY_MINOR" -lt 11 ]; }; then
+  fail "后端虚拟环境 Python 版本过低 ($BACKEND_PY_VER),需要 3.11+"
+fi
+ok "后端 Python 环境可用: $BACKEND_PY (Python $BACKEND_PY_VER)"
 
 # 安装依赖
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "frontend" ]; then
@@ -357,8 +418,7 @@ elif [ "$SKIP_INSTALL" -eq 1 ]; then
   warn "已启用 --skip-install, 跳过后端依赖安装"
 else
   info "安装 Python 依赖..."
-  pip install -q --upgrade pip
-  pip install -q -r requirements.txt
+  UV_CACHE_DIR="$ROOT_DIR/uv_cache" uv pip install --python "$BACKEND_PY" --index-url "$PYPI_INDEX_URL" -r requirements.txt
   ok "后端依赖安装完成"
 fi
 
@@ -450,6 +510,40 @@ else
 fi
 ok "Agent 服务地址: http://localhost:$AGENT_PORT"
 
+# Backend and Agent must use the same non-default JWT secret. In local mode,
+# generate one once and persist it to both service env files.
+BACKEND_ENV="$BACKEND_DIR/.env"
+AGENT_ENV="$AGENT_DIR/.env"
+JWT_SECRET_VALUE=${JWT_SECRET:-$(grep -E '^JWT_SECRET=' "$BACKEND_ENV" 2>/dev/null | tail -1 | cut -d= -f2-)}
+if [ "$JWT_SECRET_VALUE" = "change-me-in-production" ] || [ ${#JWT_SECRET_VALUE} -lt 32 ]; then
+  if [ "$MODE" = "cloud" ]; then
+    fail "JWT_SECRET 必须设置为至少 32 字符的非默认值，并由 Backend 与 Agent 共用"
+  fi
+  JWT_SECRET_VALUE=$(openssl rand -hex 32 2>/dev/null || od -An -N32 -tx1 /dev/urandom | tr -d ' \n')
+  ok "已为 Local 模式生成 Agent/Backend 共用 JWT secret"
+fi
+for env_file in "$BACKEND_ENV" "$AGENT_ENV"; do
+  if grep -q '^JWT_SECRET=' "$env_file"; then
+    sed -i.bak "s|^JWT_SECRET=.*|JWT_SECRET=$JWT_SECRET_VALUE|" "$env_file" && rm -f "$env_file.bak"
+  else
+    echo "JWT_SECRET=$JWT_SECRET_VALUE" >> "$env_file"
+  fi
+done
+ok "Backend 与 Agent JWT 配置已同步"
+
+AGENT_RUNTIME_DB_URL_VALUE=${AGENT_RUNTIME_DB_URL:-$(grep -E '^AGENT_RUNTIME_DB_URL=' "$AGENT_ENV" 2>/dev/null | tail -1 | cut -d= -f2-)}
+AGENT_RUNTIME_DB_URL_VALUE=${AGENT_RUNTIME_DB_URL_VALUE:-sqlite+aiosqlite:///data/agent.db}
+if [[ "$AGENT_RUNTIME_DB_URL_VALUE" == sqlite* ]] && [ "$AGENT_API_WORKERS" -ne 1 ]; then
+  fail "SQLite Agent Runtime 仅支持 AGENT_API_WORKERS=1；多节点部署需先迁移共享数据库"
+fi
+
+if [ "$ONLY" = "all" ] || [ "$ONLY" = "backend" ]; then
+  info "检查 Agent 实时事件 Redis..."
+  "$ROOT_DIR/scripts/ensure-redis.sh" "$BACKEND_ENV" "$LOG_DIR" \
+    || fail "Redis 不可用，Backend 与 Agent Run Worker 未启动"
+  ok "Redis 实时事件通道可用"
+fi
+
 # Avoid leaking backend venv into agent/frontend commands.
 deactivate 2>/dev/null || true
 unset VIRTUAL_ENV
@@ -478,6 +572,16 @@ fi
 # ============================================================
 #  5. 启动 Agent 服务
 # ============================================================
+if [ "$WITH_PHOENIX" -eq 1 ] && [ "$ONLY" != "backend" ] && [ "$ONLY" != "frontend" ]; then
+  info "检查 Phoenix tracing collector..."
+  PHOENIX_HOST=0.0.0.0 PHOENIX_PORT="$PHOENIX_PORT" \
+    "$ROOT_DIR/scripts/ensure-phoenix.sh" "$AGENT_ENV" "$LOG_DIR" "$PID_FILE" \
+    || fail "Phoenix tracing collector 启动失败"
+  ok "Phoenix tracing 可用: http://localhost:$PHOENIX_PORT"
+elif [ "$WITH_PHOENIX" -eq 0 ]; then
+  warn "已禁用 Phoenix tracing collector 启动"
+fi
+
 if [ "$ONLY" = "backend" ] || [ "$ONLY" = "frontend" ]; then
   warn "--only=$ONLY: 跳过 Agent 启动"
 else
@@ -493,16 +597,22 @@ else
 
   info "启动 Agent 服务 (http://localhost:$AGENT_PORT)..."
   AGENT_RELOAD_FLAG="--reload"
+  AGENT_WORKERS_FLAG=""
   if [ "$MODE" = "cloud" ]; then
     AGENT_RELOAD_FLAG=""
+    AGENT_WORKERS_FLAG="--workers $AGENT_API_WORKERS"
   fi
 
-  unset VIRTUAL_ENV
-  UV_CACHE_DIR=./uv_cache \
+  [ -x "$AGENT_PY" ] || fail "Agent Python 环境不可用: $AGENT_PY"
   HOST="$HOST" \
   PORT="$AGENT_PORT" \
+  UVICORN_WORKERS="$AGENT_API_WORKERS" \
   BACKEND_BASE_URL="http://localhost:$BACKEND_PORT" \
-  uv run python -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
+  PHOENIX_COLLECTOR_ENDPOINT="http://127.0.0.1:$PHOENIX_PORT/v1/traces" \
+  JWT_SECRET="$JWT_SECRET_VALUE" \
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$AGENT_API_LOG" \
+  LOG_SERVICE=agent-service LOG_ROLE=api \
+  "$AGENT_PY" -m uvicorn app.main:app --host "$HOST" --port "$AGENT_PORT" --no-access-log $AGENT_WORKERS_FLAG $AGENT_RELOAD_FLAG >> "$AGENT_UVICORN_LOG" 2>&1 &
   AGENT_PID=$!
   echo "$AGENT_PID" >> "$PID_FILE"
   wait_for_port "$AGENT_PORT" "Agent"
@@ -524,14 +634,8 @@ else
 
   cd "$BACKEND_DIR"
 
-  # 确保虚拟环境已激活并更新 Python 路径
-  if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-    PY="venv/bin/python"
-  elif [ -f "venv/Scripts/activate" ]; then
-    source venv/Scripts/activate
-    PY="venv/Scripts/python.exe"
-  fi
+  # 使用上面已验证的 Python 3.11+ 后端虚拟环境。
+  PY="$BACKEND_PY"
 
   # 检查后端端口
 if check_port_in_use $BACKEND_PORT; then
@@ -545,13 +649,15 @@ fi
   UVICORN_WORKERS_FLAG=""
   if [ "$MODE" = "cloud" ]; then
     UVICORN_RELOAD_FLAG=""
-    UVICORN_WORKERS_FLAG="--workers 1"  # TODO: 临时调整为1, Agent部份支持多workers服务后改为多workers
+    UVICORN_WORKERS_FLAG="--workers $BACKEND_API_WORKERS"
   fi
 
   # 启动后端并重定向日志
   # LOG_FILE: 应用日志（loguru 自动轮转）
   # >> redirect: uvicorn 服务器日志（shell 重定向）
-  LOG_FILE="$BACKEND_APP_LOG" AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" $PY -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" $UVICORN_WORKERS_FLAG $UVICORN_RELOAD_FLAG >> "$BACKEND_UVICORN_LOG" 2>&1 &
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$BACKEND_API_LOG" \
+  LOG_SERVICE=backend LOG_ROLE=api AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
+  JWT_SECRET="$JWT_SECRET_VALUE" $PY -m uvicorn app.main:app --host "$HOST" --port "$BACKEND_PORT" --no-access-log $UVICORN_WORKERS_FLAG $UVICORN_RELOAD_FLAG >> "$BACKEND_UVICORN_LOG" 2>&1 &
   BACKEND_PID=$!
   echo "$BACKEND_PID" >> "$PID_FILE"
   wait_for_port "$BACKEND_PORT" "后端"
@@ -560,6 +666,47 @@ fi
     ok "后端已启动 (PID: $BACKEND_PID)"
   else
     fail "后端启动失败,请检查日志"
+  fi
+
+  # Old workers can survive a previous interrupted run and keep polling the
+  # same database with stale configuration. Stop them before starting the
+  # worker set managed by this script.
+  STALE_WORKER_PIDS=$(pgrep -f 'scripts/run_agent_(worker|reconcile_worker)\.py' 2>/dev/null || true)
+  if [ -n "$STALE_WORKER_PIDS" ]; then
+    warn "检测到遗留 Agent Worker，正在清理..."
+    echo "$STALE_WORKER_PIDS" | xargs kill 2>/dev/null || true
+    sleep 1
+  fi
+
+  info "启动 $AGENT_RUN_WORKERS 个 Agent Run Worker..."
+  for ((worker_index=1; worker_index<=AGENT_RUN_WORKERS; worker_index++)); do
+    if [ "$MODE" = "cloud" ]; then
+      RUN_WORKER_LOG=""
+    else
+      RUN_WORKER_LOG="$LOG_DIR/${LOG_DATE}.${LOG_ENV}.agent-run-worker-${worker_index}.jsonl"
+    fi
+    APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$RUN_WORKER_LOG" \
+    LOG_SERVICE=backend LOG_ROLE=agent-run-worker AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
+    JWT_SECRET="$JWT_SECRET_VALUE" $PY scripts/run_agent_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
+    AGENT_RUN_WORKER_PID=$!
+    echo "$AGENT_RUN_WORKER_PID" >> "$PID_FILE"
+    if kill -0 "$AGENT_RUN_WORKER_PID" 2>/dev/null; then
+      ok "Agent Run Worker $worker_index 已启动 (PID: $AGENT_RUN_WORKER_PID)"
+    else
+      fail "Agent Run Worker $worker_index 启动失败,请检查日志"
+    fi
+  done
+
+  info "启动 Agent Reconcile Worker..."
+  APP_ENV="$MODE" LOG_FORMAT=json LOG_OUTPUT="$SERVICE_LOG_OUTPUT" LOG_FILE="$BACKEND_RECONCILE_LOG" \
+  LOG_SERVICE=backend LOG_ROLE=agent-reconcile-worker AGENT_SERVICE_URL="http://localhost:$AGENT_PORT" \
+  JWT_SECRET="$JWT_SECRET_VALUE" $PY scripts/run_agent_reconcile_worker.py >> "$BACKEND_UVICORN_LOG" 2>&1 &
+  AGENT_RECONCILE_WORKER_PID=$!
+  echo "$AGENT_RECONCILE_WORKER_PID" >> "$PID_FILE"
+  if kill -0 "$AGENT_RECONCILE_WORKER_PID" 2>/dev/null; then
+    ok "Agent Reconcile Worker 已启动 (PID: $AGENT_RECONCILE_WORKER_PID)"
+  else
+    fail "Agent Reconcile Worker 启动失败,请检查日志"
   fi
 fi
 
@@ -640,6 +787,9 @@ fi
 if [ "$ONLY" != "frontend" ] && [ "$ONLY" != "backend" ]; then
   echo -e "  Agent (本地):  ${CYAN}http://localhost:$AGENT_PORT${NC}"
   echo -e "  Agent (网络):  ${CYAN}http://$NETWORK_IP:$AGENT_PORT${NC}"
+  if [ "$WITH_PHOENIX" -eq 1 ]; then
+    echo -e "  Phoenix traces: ${CYAN}http://localhost:$PHOENIX_PORT${NC}"
+  fi
 fi
 if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
   echo -e "  后端 (本地):   ${CYAN}http://localhost:$BACKEND_PORT${NC}"
@@ -647,11 +797,15 @@ if [ "$ONLY" != "agent" ] && [ "$ONLY" != "frontend" ]; then
   echo -e "  API 文档:      ${CYAN}http://$NETWORK_IP:$BACKEND_PORT/docs${NC}"
 fi
 echo ""
-echo -e "  按 ${YELLOW}Ctrl+C${NC} 停止所有服务"
+if [ "$DAEMON" -eq 1 ]; then
+  echo -e "  后台运行中，使用 ${YELLOW}./stop_server.sh${NC} 停止所有服务"
+else
+  echo -e "  按 ${YELLOW}Ctrl+C${NC} 停止所有服务"
+fi
 echo ""
 
-# 自动打开浏览器访问前端（cloud 模式默认不打开）
-if [ "$MODE" = "local" ]; then
+# 自动打开浏览器访问前端（cloud 和后台模式默认不打开）
+if [ "$MODE" = "local" ] && [ "$DAEMON" -eq 0 ]; then
   if command -v open &>/dev/null; then
     open "http://localhost:$FRONTEND_PORT"
   elif command -v xdg-open &>/dev/null; then

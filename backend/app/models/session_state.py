@@ -19,6 +19,7 @@ class SessionState(Base):
     pending_actions_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     changelog_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     ui_snapshot_json: Mapped[str | None] = mapped_column(Text, nullable=True)
+    task_state_json: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="active")
     last_error_json: Mapped[str | None] = mapped_column(Text, nullable=True)

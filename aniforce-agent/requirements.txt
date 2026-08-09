@@ -1,8 +1,14 @@
 # OpenAI Agent Service Dependencies
 
-# OpenAI Agents SDK (openai-agents 包在 pip 上，需要从源码安装或用内部包)
-openai>=1.0.0
-openai-agents>=0.0.1
+# OpenAI Agents SDK. Keep these versions aligned: openai 2.45.0 is
+# incompatible with the Usage model expected by openai-agents 0.17.7.
+openai==2.44.0
+openai-agents==0.17.7
+
+# Agents SDK tracing -> OpenInference/OpenTelemetry -> Phoenix
+arize-phoenix==17.30.0
+arize-phoenix-otel==0.16.1
+openinference-instrumentation-openai-agents==1.6.1
 
 # Web Framework
 fastapi>=0.110.0
@@ -14,10 +20,14 @@ pydantic-settings>=2.6.0
 # Auth
 python-jose[cryptography]==3.3.0
 
-# Logging
+# Observability
 loguru>=0.7.0
+prometheus-client>=0.20.0,<1.0.0
 
 # Database
+sqlalchemy>=2.0.0
+aiosqlite>=0.20.0
+greenlet>=3.0.0
 aiosqlite>=0.19.0
 
 # MCP / HTTP client

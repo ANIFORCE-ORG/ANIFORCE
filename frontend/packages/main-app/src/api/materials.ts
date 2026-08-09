@@ -10,8 +10,11 @@ export interface Material {
   project_ids: string[]
   campaign_ids: string[]
   name: string
+  original_filename?: string
   type: string
-  status: string  // running | ready | fatigue
+  status: string // legacy compatibility only
+  lifecycle_status?: 'active' | 'archived'
+  processing_status?: 'processing' | 'ready' | 'failed'
   url: string
   thumbnail_url?: string
   ctr_estimate?: number
@@ -37,8 +40,28 @@ export interface Material {
   score?: number
   fatigue?: number
   last_used_at?: string
-  processing_status?: string
   processing_error?: string
+  platform_assets?: MaterialPlatformAsset[]
+}
+
+export interface MaterialPlatformAsset {
+  id: string
+  material_id?: string
+  connection_id?: string
+  platform: string
+  ad_account_id: string
+  ad_account_name?: string
+  asset_type: 'image' | 'video'
+  external_asset_id: string
+  image_hash?: string
+  remote_name?: string
+  remote_status?: string
+  normalized_status?: 'unknown' | 'processing' | 'ready' | 'failed'
+  remote_url?: string
+  remote_thumbnail_url?: string
+  last_seen_at?: string
+  last_verified_at?: string
+  last_error?: string
 }
 
 export interface UploadMaterialMetadata {
@@ -89,6 +112,38 @@ interface UploadMaterialsResponse {
   materials: Material[]
 }
 
+export interface MetaAdAccountOption {
+  account_id: string
+  account_name: string
+  channel: string
+  connection_id: string
+}
+
+export interface MaterialMetaAssetResult {
+  action: 'created' | 'reused' | 'updated' | 'deleted' | 'skipped'
+  platform_asset: MaterialPlatformAsset
+  run_id?: string
+}
+
+export interface MaterialSyncRun {
+  run_id: string
+  status: 'running' | 'processing' | 'succeeded' | 'partially_succeeded' | 'failed'
+  direction?: 'import' | 'export' | 'delete'
+  platform?: string
+  connection_id?: string
+  ad_account_id: string
+  discovered_count: number
+  created_count: number
+  reused_count: number
+  updated_count: number
+  skipped_count: number
+  processing_count?: number
+  failed_count: number
+  error_summary?: string
+  started_at: string
+  finished_at?: string
+}
+
 /**
  * 获取素材列表
  */
@@ -116,6 +171,20 @@ export async function getMaterials(params?: {
  */
 export async function getMaterialDetail(materialId: string): Promise<Material> {
   return http.get<Material>(`/materials/${materialId}`)
+}
+
+export async function publishMaterialToMeta(
+  materialId: string,
+  data: { platform?: string; connection_id: string; ad_account_id: string; asset_type: 'image' | 'video' },
+): Promise<MaterialMetaAssetResult> {
+  return http.post<MaterialMetaAssetResult>(`/materials/${materialId}/platform-assets/publish`, data)
+}
+
+export async function refreshMaterialPlatformAsset(
+  materialId: string,
+  assetId: string,
+): Promise<MaterialMetaAssetResult> {
+  return http.post<MaterialMetaAssetResult>(`/materials/${materialId}/platform-assets/${assetId}/refresh`, {})
 }
 
 /**
@@ -231,6 +300,31 @@ export async function uploadMaterialWithMetadata(
   }
 
   return response.json() as Promise<Material>
+}
+
+/**
+ * 获取当前用户已绑定的 Meta 广告账户。
+ */
+export async function getMetaAdAccounts(): Promise<MetaAdAccountOption[]> {
+  return http.get<MetaAdAccountOption[]>('/platform-auth/ad-accounts?channel=Meta')
+}
+
+/**
+ * 从单个 Meta 广告账户同步图片和视频到 ANIFORCE 素材库。
+ */
+export async function syncMetaMaterials(data: {
+  connection_id: string
+  ad_account_id: string
+  asset_types: Array<'image' | 'video'>
+}): Promise<MaterialSyncRun> {
+  return http.post<MaterialSyncRun>('/materials/sync/meta', data)
+}
+
+/**
+ * 查询素材同步结果。
+ */
+export async function getMaterialSyncRun(runId: string): Promise<MaterialSyncRun> {
+  return http.get<MaterialSyncRun>(`/materials/sync-runs/${runId}`)
 }
 
 /**

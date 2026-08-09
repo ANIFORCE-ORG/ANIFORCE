@@ -1,4 +1,5 @@
 """数据库配置和连接管理"""
+from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
 from sqlalchemy.orm import DeclarativeBase
 from motor.motor_asyncio import AsyncIOMotorClient
@@ -33,9 +34,18 @@ def get_engine():
         
         _engine = create_async_engine(
             database_url,
-            echo=settings.DEBUG,
+            echo=False,
             connect_args=connect_args,
         )
+        if "sqlite" in database_url:
+            @event.listens_for(_engine.sync_engine, "connect")
+            def configure_sqlite(dbapi_connection, _connection_record):
+                cursor = dbapi_connection.cursor()
+                cursor.execute("PRAGMA journal_mode=WAL")
+                cursor.execute("PRAGMA foreign_keys=ON")
+                cursor.execute("PRAGMA busy_timeout=5000")
+                cursor.execute("PRAGMA synchronous=NORMAL")
+                cursor.close()
     return _engine
 
 

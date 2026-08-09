@@ -20,6 +20,7 @@
 | `--demo` | 启用 Demo 模式 | `false`（生产模式） | `--demo` |
 | `--only` | 仅启动指定服务：`all`、`backend`、`frontend` | `all` | `--only backend` |
 | `--skip-install` | 跳过依赖安装 | 否 | `--skip-install` |
+| `--daemon` | 后台常驻运行，退出终端后服务继续运行 | 否 | `--daemon` |
 
 ### 网络参数
 
@@ -87,6 +88,14 @@
 - ✅ 适合演示环境
 
 ## 🔧 高级用法
+
+### 后台常驻运行
+
+```bash
+./run_server.sh --mode local --daemon
+```
+
+启动过程写入 `logs/YYYYMMDD.local.launcher.log`。可使用 `./check_server.sh` 查看状态，使用 `./stop_server.sh` 停止服务。
 
 ### 仅启动后端
 
@@ -246,7 +255,7 @@ cd ../frontend && pnpm install
 
 ### 问题 3：Python 版本过低
 
-**要求**：Python 3.10+
+**要求**：Python 3.11+（通过 `uv` 管理运行环境）
 
 **解决方案**：升级 Python 版本
 

@@ -8,6 +8,39 @@ export interface AgentSession {
   archived_at?: string | null
 }
 
+export interface AgentSessionTaskState {
+  active_skill?: {
+    name: string
+    version: string
+    status: 'selected' | 'collecting_inputs' | 'ready' | 'executing' | 'completed' | 'cancelled' | 'failed'
+    slots?: Record<string, unknown>
+    missing_slots?: string[]
+    load_reason?: string | null
+    pending_question?: string | null
+  }
+  confirmed_entities?: Record<string, string>
+  constraints?: Record<string, unknown>
+  last_conclusion?: string
+}
+
+export interface AgentSessionState {
+  task_state?: AgentSessionTaskState
+  status?: string
+  version?: number
+}
+
+export interface AgentSessionSnapshot {
+  session: AgentSession
+  state?: AgentSessionState | null
+  messages: AgentMessage[]
+  latest_run: Record<string, any> | null
+  pending_approval: Record<string, any> | null
+  approvals: Array<Record<string, any>>
+  tool_calls: Array<Record<string, any>>
+  artifacts: Array<Record<string, any>>
+  last_persisted_sequence: number
+}
+
 export interface AgentUsage {
   input?: number
   output?: number
@@ -20,7 +53,14 @@ export interface AgentUsage {
 export interface TextContentBlock { type: 'text'; text: string }
 export interface ImageContentBlock { type: 'image'; data?: string; mimeType?: string; source?: Record<string, unknown> }
 export interface ThinkingContentBlock { type: 'thinking'; thinking: string }
-export type AgentContentBlock = TextContentBlock | ImageContentBlock | ThinkingContentBlock | Record<string, unknown>
+export interface ApprovalContentBlock {
+  type: 'approval'
+  runId: string
+  checkpointId: string
+  status?: 'pending' | 'approved' | 'rejected' | 'running'
+  interruptions?: Array<{ tool_name?: string; arguments?: string; call_id?: string; agent_name?: string }>
+}
+export type AgentContentBlock = TextContentBlock | ImageContentBlock | ThinkingContentBlock | ApprovalContentBlock | Record<string, unknown>
 
 export interface AgentMessage {
   id?: string
@@ -53,9 +93,18 @@ export interface AgentModel {
   input?: string[]
 }
 
+export interface AgentSdkStreamEvent {
+  type: string
+  class?: string
+  name?: string
+  data?: Record<string, unknown>
+  item?: Record<string, unknown>
+  new_agent?: Record<string, unknown>
+}
+
 export interface AgentStreamEvent {
   event: string
-  data: Record<string, unknown>
+  data: Record<string, unknown> & { sdk_event?: AgentSdkStreamEvent }
 }
 
 export interface AgentContextSnapshot {
@@ -64,7 +113,16 @@ export interface AgentContextSnapshot {
   activeProjectId?: string | null
   activeCampaignId?: string | null
   selectedEntities?: Array<{ type: 'project' | 'campaign' | 'material'; id: string; name?: string }>
-  draftEdits?: Record<string, unknown>
+  draftEdits?: Array<Record<string, unknown>> | Record<string, unknown>
+  pendingApprovals?: Array<Record<string, unknown>>
+  recentInteractions?: Array<Record<string, unknown>>
+  workspaceProjection?: {
+    surface?: string
+    mode?: string
+    sourceToolName?: string
+    itemCount?: number
+    alreadyVisible?: boolean
+  }
 }
 
 export interface SideEffectEvent {
@@ -187,6 +245,19 @@ export async function getAgentSession(sessionId: string): Promise<{ session: Age
   return { session, messages }
 }
 
+export async function getAgentSessionSnapshot(sessionId: string): Promise<AgentSessionSnapshot> {
+  const snapshot = await agentJson<any>(`/sessions/${encodeURIComponent(sessionId)}/snapshot`)
+  return {
+    ...snapshot,
+    session: normalizeAgentSession(snapshot.session),
+    messages: Array.isArray(snapshot.messages) ? snapshot.messages.map(normalizeAgentMessage) : [],
+    approvals: Array.isArray(snapshot.approvals) ? snapshot.approvals : [],
+    tool_calls: Array.isArray(snapshot.tool_calls) ? snapshot.tool_calls : [],
+    artifacts: Array.isArray(snapshot.artifacts) ? snapshot.artifacts : [],
+    last_persisted_sequence: Number(snapshot.last_persisted_sequence || 0),
+  }
+}
+
 export async function updateAgentSession(sessionId: string, payload: { title: string }): Promise<AgentSession> {
   const session = await agentJson<any>(`/sessions/${encodeURIComponent(sessionId)}`, {
     method: 'PATCH',
@@ -268,6 +339,58 @@ function normalizeAgentMessage(raw: any): AgentMessage {
     id: raw?.id || raw?.message_id,
     content,
     timestamp: raw?.timestamp || raw?.created_at,
+  }
+}
+
+export async function* resolveAgentRunApproval(
+  runId: string,
+  checkpointId: string,
+  decision: 'approve' | 'reject',
+  rejectionMessage?: string,
+  signal?: AbortSignal,
+  editedArguments?: Record<string, unknown>,
+  argumentDiff?: Array<{ field: string; before: unknown; after: unknown }>,
+): AsyncGenerator<AgentStreamEvent, void, unknown> {
+  const token = getValidAgentToken()
+  const response = await fetch(`/api/v1/agent/runs/${encodeURIComponent(runId)}/approvals/${encodeURIComponent(checkpointId)}`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Accept: 'text/event-stream',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({
+      decision,
+      rejection_message: rejectionMessage,
+      edited_arguments: editedArguments,
+      argument_diff: argumentDiff,
+    }),
+    signal,
+  })
+  if (!response.ok) {
+    await throwAgentError(response, `Agent approval failed: ${response.status}`)
+  }
+  const reader = response.body?.getReader()
+  if (!reader) throw new Error('Agent approval response is not readable')
+
+  const decoder = new TextDecoder()
+  let buffer = ''
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      buffer += decoder.decode(value, { stream: true })
+      let boundary = buffer.indexOf('\n\n')
+      while (boundary >= 0) {
+        const raw = buffer.slice(0, boundary)
+        buffer = buffer.slice(boundary + 2)
+        const event = parseSseEvent(raw)
+        if (event) yield event
+        boundary = buffer.indexOf('\n\n')
+      }
+    }
+  } finally {
+    reader.releaseLock()
   }
 }
 

@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed } from 'vue'
 import type { Project } from '@/api/projects'
-import type { AgentTimelineBlock } from '@/composables/useHomeAgentSession'
+import type { AgentTimelineBlock } from '@/composables/useAgentSession'
 
 type ProjectListTimelineBlock = Extract<AgentTimelineBlock, { type: 'project_list' }>
 

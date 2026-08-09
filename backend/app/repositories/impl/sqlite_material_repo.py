@@ -7,6 +7,14 @@ from app.models.material import MaterialStatus, MaterialType
 
 
 MATERIAL_METADATA_COLUMNS = {
+    "original_filename": "VARCHAR(255)",
+    "lifecycle_status": "VARCHAR(20) DEFAULT 'active' NOT NULL",
+    "processing_status": "VARCHAR(20) DEFAULT 'ready' NOT NULL",
+    "archived_at": "DATETIME",
+    "updated_at": "DATETIME",
+    "storage_object_key": "TEXT",
+    "mime_type": "VARCHAR(100)",
+    "checksum_sha256": "VARCHAR(64)",
     "poster_url": "TEXT",
     "preview_url": "TEXT",
     "media_kind": "VARCHAR(20)",
@@ -56,9 +64,16 @@ class SqliteMaterialRepository:
             "project_ids": material.get_project_ids(),
             "campaign_ids": material.get_campaign_ids(),
             "name": material.name,
+            "original_filename": material.original_filename,
             "type": material.type.value,
             "status": material.status.value,
+            "lifecycle_status": material.lifecycle_status,
+            "processing_status": material.processing_status,
+            "archived_at": material.archived_at.isoformat() if material.archived_at else None,
             "url": material.url,
+            "storage_object_key": material.storage_object_key,
+            "mime_type": material.mime_type,
+            "checksum_sha256": material.checksum_sha256,
             "thumbnail_url": material.thumbnail_url,
             "poster_url": material.poster_url,
             "preview_url": material.preview_url,
@@ -81,6 +96,7 @@ class SqliteMaterialRepository:
             "duration": material.duration,
             "file_size": material.file_size,
             "created_at": material.created_at.isoformat(),
+            "updated_at": material.updated_at.isoformat() if material.updated_at else None,
         }
     
     async def create(
@@ -141,7 +157,7 @@ class SqliteMaterialRepository:
         """查询用户的素材列表"""
         await self._ensure_schema()
         query = select(Material).where(Material.user_id == user_id)
-        
+
         if type:
             query = query.where(Material.type == MaterialType(type))
         
@@ -197,6 +213,9 @@ class SqliteMaterialRepository:
         allowed_fields = {
             "name",
             "status",
+            "lifecycle_status",
+            "processing_status",
+            "archived_at",
             "thumbnail_url",
             "poster_url",
             "preview_url",
@@ -220,7 +239,9 @@ class SqliteMaterialRepository:
             "file_size",
         }
         for key, value in kwargs.items():
-            if key not in allowed_fields or value is None:
+            if key not in allowed_fields:
+                continue
+            if value is None:
                 continue
             if key == "status":
                 setattr(material, key, MaterialStatus(value))

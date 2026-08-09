@@ -20,6 +20,7 @@ const emit = defineEmits<{
   viewTasks: [project: Project]
   createTask: [project: Project]
   select: [project: Project, selected: boolean]
+  mention: [project: Project]
 }>()
 
 function handleSelect(project: Project, selected: boolean) {
@@ -30,15 +31,24 @@ function handleSelect(project: Project, selected: boolean) {
 <template>
   <div>
     <div v-if="projects.length && view === 'compact'" class="grid gap-4" :class="embedded ? 'grid-cols-1' : 'md:grid-cols-2 lg:grid-cols-3'">
-      <ProjectCardCompact
-        v-for="project in projects"
-        :key="project.id"
-        :project="project"
-        @edit="emit('edit', $event)"
-        @view-tasks="emit('viewTasks', $event)"
-        @create-task="emit('createTask', $event)"
-        @select="handleSelect"
-      />
+      <div v-for="project in projects" :key="project.id" class="group relative">
+        <ProjectCardCompact
+          :project="project"
+          @edit="emit('edit', $event)"
+          @view-detail="emit('viewDetail', $event)"
+          @view-tasks="emit('viewTasks', $event)"
+          @create-task="emit('createTask', $event)"
+          @select="handleSelect"
+        />
+        <button
+          v-if="embedded"
+          class="mention-btn absolute top-[12px] right-[12px] z-10 rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-all hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
+          title="引用到对话"
+          @click="emit('mention', project)"
+        >
+          @mention
+        </button>
+      </div>
     </div>
 
     <div v-else-if="projects.length" class="grid gap-4">
@@ -57,3 +67,21 @@ function handleSelect(project: Project, selected: boolean) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.mention-btn {
+  cursor: pointer;
+}
+
+.mention-btn:hover {
+  transform: translateY(-2px) scale(1.05);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
+  background: white !important;
+  border-color: rgb(var(--color-primary)) !important;
+}
+
+.mention-btn:active {
+  transform: translateY(0) scale(0.95);
+  transition-duration: 0.1s;
+}
+</style>

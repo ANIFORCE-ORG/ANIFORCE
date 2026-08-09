@@ -19,6 +19,8 @@ HOST="${HOST:-127.0.0.1}"
 BACKEND_PORT="${BACKEND_PORT:-8010}"
 AGENT_PORT="${AGENT_PORT:-8020}"
 FRONTEND_PORT="${FRONTEND_PORT:-3010}"
+PHOENIX_PORT="${PHOENIX_PORT:-6006}"
+PYPI_INDEX_URL="${PYPI_INDEX_URL:-https://pypi.tuna.tsinghua.edu.cn/simple}"
 LOCAL_NO_PROXY="localhost,127.0.0.1,0.0.0.0,::1,${HOST}"
 BACKEND_RELOAD=0
 SKIP_INSTALL=0
@@ -164,12 +166,14 @@ check_port_free() {
 }
 
 cleanup() {
-  for pid in "${AGENT_PID}" "${BACKEND_PID}" "${FRONTEND_PID}"; do
-    if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
-      pkill -TERM -P "${pid}" >/dev/null 2>&1 || true
-      kill -TERM "${pid}" >/dev/null 2>&1 || true
-    fi
-  done
+  if [[ -f "${PID_FILE}" ]]; then
+    while read -r pid; do
+      if [[ -n "${pid}" ]] && kill -0 "${pid}" >/dev/null 2>&1; then
+        pkill -TERM -P "${pid}" >/dev/null 2>&1 || true
+        kill -TERM "${pid}" >/dev/null 2>&1 || true
+      fi
+    done < "${PID_FILE}"
+  fi
 }
 trap cleanup EXIT INT TERM
 
@@ -228,17 +232,24 @@ if [[ "${SKIP_INSTALL}" -eq 0 ]]; then
   echo "Preparing backend uv environment..."
   cd "${BACKEND_DIR}"
   ensure_uv_venv "backend"
-  UV_CACHE_DIR=./uv_cache uv pip install -r requirements.txt
+  UV_CACHE_DIR="${ROOT_DIR}/uv_cache" uv pip install --index-url "${PYPI_INDEX_URL}" -r requirements.txt
 
   echo "Preparing agent uv environment..."
   cd "${AGENT_DIR}"
   ensure_uv_venv "agent"
-  UV_CACHE_DIR=./uv_cache uv pip install -r requirements.txt
+  UV_CACHE_DIR="${ROOT_DIR}/uv_cache" uv pip install --index-url "${PYPI_INDEX_URL}" -r requirements.txt
 
   echo "Preparing frontend pnpm environment..."
   cd "${FRONTEND_DIR}"
   npm_config_cache="${ROOT_DIR}/npm_cache" npx pnpm install
 fi
+
+echo "Checking Redis Agent event stream..."
+"${ROOT_DIR}/scripts/ensure-redis.sh" "${BACKEND_DIR}/.env" "${LOG_DIR}"
+
+echo "Checking Phoenix tracing collector..."
+PHOENIX_PORT="${PHOENIX_PORT}" \
+  "${ROOT_DIR}/scripts/ensure-phoenix.sh" "${AGENT_DIR}/.env" "${LOG_DIR}" "${PID_FILE}"
 
 echo "Migrating backend database..."
 cd "${BACKEND_DIR}"
@@ -255,6 +266,7 @@ UV_CACHE_DIR=./uv_cache \
 HOST="${HOST}" \
 PORT="${AGENT_PORT}" \
 BACKEND_BASE_URL="http://${HOST}:${BACKEND_PORT}" \
+PHOENIX_COLLECTOR_ENDPOINT="http://127.0.0.1:${PHOENIX_PORT}/v1/traces" \
 uv run python -m uvicorn app.main:app \
   --host "${HOST}" \
   --port "${AGENT_PORT}" \
@@ -317,6 +329,7 @@ Backend health: http://${DISPLAY_HOST}:${BACKEND_PORT}/health
 Agent health:   http://${DISPLAY_HOST}:${AGENT_PORT}/health
 Agent runs API: http://${DISPLAY_HOST}:${AGENT_PORT}/api/agent/runs
 API docs:       http://${DISPLAY_HOST}:${BACKEND_PORT}/docs
+Phoenix traces: http://${DISPLAY_HOST}:${PHOENIX_PORT}
 
 Bind host:      ${HOST}
 If you open from another machine/browser environment, use the Network URL above.

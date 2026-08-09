@@ -1,6 +1,9 @@
 """应用配置管理"""
-from pydantic_settings import BaseSettings
+import os
 from functools import lru_cache
+from urllib.parse import urlparse
+
+from pydantic_settings import BaseSettings
 
 
 class Settings(BaseSettings):
@@ -9,6 +12,12 @@ class Settings(BaseSettings):
     # 基础配置
     DEBUG: bool = False
     LOG_LEVEL: str = "INFO"
+    LOG_FILE: str = ""
+    LOG_FORMAT: str = "text"
+    LOG_OUTPUT: str = "console"
+    LOG_SERVICE: str = "agent-service"
+    LOG_ROLE: str = "api"
+    APP_ENV: str = "local"
     HOST: str = "0.0.0.0"
     PORT: int = 8020
 
@@ -23,23 +32,44 @@ class Settings(BaseSettings):
     # OpenAI Agents SDK
     OPENAI_API_KEY: str = ""
     OPENAI_BASE_URL: str = ""
-    OPENAI_AGENTS_MODEL: str = "deepseek/deepseek-v4-pro"
+    OPENAI_AGENTS_MODEL: str = "gpt-5.6-luna"
     OPENAI_AGENTS_API: str = "responses"
 
-    # 数据库路径
-    AGENT_TASK_DB: str = "runtime/agent/tasks.db"
-    AGENT_SESSION_DB: str = "runtime/agent/sessions.db"
-
-    # Runtime 配置
-    RUNTIME_DIR: str = "runtime/sessions"
-    SKILLS_DIR: str = "runtime/skills"
-    SANDBOX_DIR: str = "runtime/agent/sandbox"
+    # Agents SDK runtime database（调试 SQLite，生产换 PostgreSQL）
+    AGENT_RUNTIME_DB_URL: str = "sqlite+aiosqlite:///data/agent.db"
     AGENT_TRACING_ENABLED: bool = True
+    AGENT_TRACING_PROVIDER: str = "disabled"
+    AGENT_TRACE_INCLUDE_SENSITIVE_DATA: bool = False
+    ENABLE_BUSINESS_SKILLS: bool = True
+    PHOENIX_COLLECTOR_ENDPOINT: str = "http://127.0.0.1:6006/v1/traces"
+    PHOENIX_PROJECT_NAME: str = "aniforce"
 
     # CORS
-    CORS_ALLOW_ORIGINS: str = "http://localhost:5173,http://localhost:3010,http://127.0.0.1:5173"
+    CORS_ALLOW_ORIGINS: str = "http://localhost:5173,http://localhost:3010,http://127.0.0.1:5173,http://127.0.0.1:3010"
 
     model_config = {"env_file": ".env", "extra": "ignore"}
+
+    def validate_for_startup(self) -> None:
+        """Reject unsafe or incomplete production configuration."""
+        errors: list[str] = []
+        parsed_backend = urlparse(self.BACKEND_BASE_URL)
+        if parsed_backend.scheme not in {"http", "https"} or not parsed_backend.netloc:
+            errors.append("BACKEND_BASE_URL must be an absolute HTTP(S) URL")
+
+        workers = int(os.getenv("WEB_CONCURRENCY") or os.getenv("UVICORN_WORKERS") or "1")
+        if workers > 1 and self.AGENT_RUNTIME_DB_URL.startswith("sqlite"):
+            errors.append("SQLite runtime storage does not support multiple workers")
+
+        if not self.DEBUG:
+            if self.JWT_SECRET == "change-me-in-production" or len(self.JWT_SECRET) < 32:
+                errors.append("JWT_SECRET must be a non-default value of at least 32 characters")
+            if not self.OPENAI_API_KEY:
+                errors.append("OPENAI_API_KEY is required")
+            if not self.OPENAI_AGENTS_MODEL.strip():
+                errors.append("OPENAI_AGENTS_MODEL is required")
+
+        if errors:
+            raise ValueError("Invalid Agent service configuration: " + "; ".join(errors))
 
 
 @lru_cache()

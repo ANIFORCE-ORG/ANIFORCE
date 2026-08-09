@@ -9,6 +9,7 @@ interface Props {
 const props = defineProps<Props>()
 const emit = defineEmits<{
   edit: [project: Project]
+  viewDetail: [project: Project]
   viewTasks: [project: Project]
   createTask: [project: Project]
   select: [project: Project, selected: boolean]
@@ -105,6 +106,7 @@ const handleViewDetail = () => {
 <style scoped>
 /* Project Card */
 .project-card {
+  position: relative;
   min-height: 228px;
   display: flex;
   flex-direction: column;

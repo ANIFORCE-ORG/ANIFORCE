@@ -1,124 +1,112 @@
 <script setup lang="ts">
-import { computed } from 'vue'
-
-interface AdUnit {
-  id: string
-  name: string
-  status: string
-  budget?: number
-  spent?: number
-  conversion_location?: string
-  performance_goal?: string
-  placements?: string
-  start_date?: string
-  end_date?: string
-}
+import type { AdSetPerformance } from '@/api/campaigns'
 
 interface Props {
-  adUnit: AdUnit
+  adUnit: AdSetPerformance
 }
 
 interface Emits {
   (e: 'view', id: string): void
-  (e: 'edit', adUnit: AdUnit): void
+  (e: 'edit', adUnit: AdSetPerformance): void
 }
 
 const props = defineProps<Props>()
 const emit = defineEmits<Emits>()
 
-// 获取状态 chip 样式类
 const getStatusChipClass = (status: string) => {
   const classes: Record<string, string> = {
-    'draft': 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600',
-    'learning': 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
-    'active': 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
-    'paused': 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
-    'review': 'text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800'
+    draft: 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600',
+    learning: 'text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800',
+    running: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
+    active: 'text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-900/20 border-emerald-200 dark:border-emerald-800',
+    paused: 'text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-900/20 border-amber-200 dark:border-amber-800',
+    completed: 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600',
+    review: 'text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border-purple-200 dark:border-purple-800',
   }
-  return classes[status.toLowerCase()] || 'text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 border-slate-200 dark:border-slate-600'
+  return classes[status.toLowerCase()] || classes.draft
 }
 
-// 获取状态显示文本
 const getStatusText = (status: string) => {
   const texts: Record<string, string> = {
-    'draft': '草稿',
-    'learning': '学习中',
-    'active': '运行中',
-    'paused': '已暂停',
-    'review': '审核中'
+    draft: '草稿',
+    learning: '学习中',
+    running: '运行中',
+    active: '运行中',
+    paused: '已暂停',
+    completed: '已结束',
+    review: '审核中',
   }
   return texts[status.toLowerCase()] || status
 }
 
-// 格式化日期
-const formatDate = (dateStr?: string) => {
-  if (!dateStr) return '-'
-  try {
-    const date = new Date(dateStr)
-    return date.toLocaleDateString('zh-CN', {
-      year: 'numeric',
-      month: '2-digit',
-      day: '2-digit'
-    })
-  } catch {
-    return dateStr
-  }
-}
+const formatMoney = (value?: number | null) =>
+  typeof value === 'number'
+    ? value.toLocaleString('zh-CN', { minimumFractionDigits: 0, maximumFractionDigits: 2 })
+    : '-'
 
-const handleView = () => {
-  emit('view', props.adUnit.id)
-}
+const formatPercent = (value?: number | null) =>
+  typeof value === 'number' ? `${(value * 100).toFixed(1)}%` : '-'
 
-const handleEdit = () => {
-  emit('edit', props.adUnit)
+const roiClass = (value?: number | null) => {
+  if (typeof value !== 'number') return 'text-slate-500 dark:text-slate-400'
+  return value >= 0 ? 'text-emerald-700 dark:text-emerald-400' : 'text-red-700 dark:text-red-400'
 }
 </script>
 
 <template>
-  <article class="border border-slate-200 dark:border-slate-700 rounded-md p-[14px] bg-white dark:bg-slate-800/50 hover:border-primary/50 hover:shadow-lg transition-all duration-150">
-    <!-- Ad Unit Header -->
-    <div class="flex items-start justify-between gap-[12px] mb-[10px]">
-      <div class="flex-1 min-w-0">
-        <h3 class="text-[14px] font-semibold text-slate-900 dark:text-white mb-[8px] truncate">
-          {{ adUnit.name }}
-          <span class="inline-flex items-center gap-[6px] px-[8px] py-[4px] rounded-lg text-[10px] font-medium border" :class="getStatusChipClass(adUnit.status)">
-            Status: {{ getStatusText(adUnit.status) }}
+  <article class="border border-slate-200 dark:border-slate-700 rounded-md bg-white dark:bg-slate-800/50 hover:border-primary/50 hover:shadow-sm transition-all duration-150">
+    <div class="flex items-start justify-between gap-[12px] px-[14px] py-[12px] border-b border-slate-100 dark:border-slate-700">
+      <div class="min-w-0">
+        <div class="flex flex-wrap items-center gap-[8px]">
+          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ adUnit.name }}</h3>
+          <span class="inline-flex px-[7px] py-[3px] rounded text-[9px] font-medium border" :class="getStatusChipClass(adUnit.status)">
+            {{ getStatusText(adUnit.status) }}
           </span>
-        </h3>
-        <p class="text-[11px] text-slate-600 dark:text-slate-400 leading-relaxed">
-          预算 ${{ adUnit.budget?.toLocaleString() || 0 }} · 已消耗 ${{ adUnit.spent?.toLocaleString() || 0 }}
+        </div>
+        <p class="mt-[5px] text-[10px] text-slate-500 dark:text-slate-400">
+          {{ adUnit.audience || '未配置受众' }}
         </p>
       </div>
-      <div class="shrink-0 flex flex-col gap-[6px]">
-        <button
-          class="px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-primary hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-          @click="handleView"
-        >
-          查看详情
-        </button>
-        <button
-          class="px-[9px] py-[6px] rounded-md border border-slate-200 dark:border-slate-600 bg-white dark:bg-slate-700 text-[11px] font-medium text-slate-700 dark:text-slate-300 hover:border-primary hover:text-primary hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"
-          @click="handleEdit"
-        >
-          编辑
-        </button>
+      <button
+        class="shrink-0 p-[6px] rounded-md text-slate-500 hover:text-primary hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors"
+        title="编辑广告单元"
+        @click="emit('edit', adUnit)"
+      >
+        <span class="material-symbols-outlined text-[16px]">edit</span>
+      </button>
+    </div>
+
+    <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-px bg-slate-100 dark:bg-slate-700">
+      <div class="bg-white dark:bg-slate-800 px-[12px] py-[10px]">
+        <span class="block text-[9px] text-slate-500 dark:text-slate-400">每日预算</span>
+        <strong class="block mt-[3px] text-[11px] text-slate-900 dark:text-white">${{ formatMoney(adUnit.daily_budget) }}</strong>
+      </div>
+      <div class="bg-white dark:bg-slate-800 px-[12px] py-[10px]">
+        <span class="block text-[9px] text-slate-500 dark:text-slate-400">累计消耗</span>
+        <strong class="block mt-[3px] text-[11px] text-slate-900 dark:text-white">${{ formatMoney(adUnit.spent) }}</strong>
+      </div>
+      <div class="bg-white dark:bg-slate-800 px-[12px] py-[10px]">
+        <span class="block text-[9px] text-slate-500 dark:text-slate-400">最新 ROI</span>
+        <strong class="block mt-[3px] text-[11px]" :class="roiClass(adUnit.latest?.roi)">{{ formatPercent(adUnit.latest?.roi) }}</strong>
+      </div>
+      <div class="bg-white dark:bg-slate-800 px-[12px] py-[10px]">
+        <span class="block text-[9px] text-slate-500 dark:text-slate-400">最新 CPI</span>
+        <strong class="block mt-[3px] text-[11px] text-slate-900 dark:text-white">${{ formatMoney(adUnit.latest?.cpi) }}</strong>
+      </div>
+      <div class="bg-white dark:bg-slate-800 px-[12px] py-[10px]">
+        <span class="block text-[9px] text-slate-500 dark:text-slate-400">安装</span>
+        <strong class="block mt-[3px] text-[11px] text-slate-900 dark:text-white">{{ adUnit.latest?.installs ?? '-' }}</strong>
+      </div>
+      <div class="bg-white dark:bg-slate-800 px-[12px] py-[10px]">
+        <span class="block text-[9px] text-slate-500 dark:text-slate-400">样本天数</span>
+        <strong class="block mt-[3px] text-[11px] text-slate-900 dark:text-white">{{ adUnit.data_available ? adUnit.sample_count : '暂无数据' }}</strong>
       </div>
     </div>
 
-    <!-- Ad Unit Meta -->
-    <div class="flex flex-wrap gap-[8px]">
-      <span v-if="adUnit.conversion_location" class="inline-flex items-center gap-[6px] px-[8px] py-[4px] rounded-lg text-[10px] font-medium text-blue-700 dark:text-blue-400 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
-        转化位置: {{ adUnit.conversion_location }}
-      </span>
-      <span v-if="adUnit.performance_goal" class="inline-flex items-center gap-[6px] px-[8px] py-[4px] rounded-lg text-[10px] font-medium text-purple-700 dark:text-purple-400 bg-purple-50 dark:bg-purple-900/20 border border-purple-200 dark:border-purple-800">
-        目标: {{ adUnit.performance_goal }}
-      </span>
-      <span v-if="adUnit.placements" class="inline-flex items-center gap-[6px] px-[8px] py-[4px] rounded-lg text-[10px] font-medium text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-        版位: {{ adUnit.placements }}
-      </span>
-      <span class="inline-flex items-center gap-[6px] px-[8px] py-[4px] rounded-lg text-[10px] font-medium text-slate-700 dark:text-slate-300 bg-slate-50 dark:bg-slate-700/50 border border-slate-200 dark:border-slate-600">
-        生效日期: {{ formatDate(adUnit.start_date) }} - {{ formatDate(adUnit.end_date) }}
-      </span>
+    <div class="flex flex-wrap gap-x-[18px] gap-y-[5px] px-[14px] py-[9px] text-[10px] text-slate-600 dark:text-slate-400">
+      <span>版位：{{ adUnit.placements || '-' }}</span>
+      <span>优化目标：{{ adUnit.optimization_goal || '-' }}</span>
+      <span>出价：{{ adUnit.bid_strategy || '-' }}</span>
     </div>
   </article>
 </template>
