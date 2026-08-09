@@ -23,31 +23,31 @@ Do not duplicate complete prompts, model responses, tool arguments, or tool resu
 
 ### Local development
 
-`./run_server.sh --mode local` writes role-specific JSON Lines files under the project `logs/` directory:
+`./run_server.sh --mode local` writes role-specific JSON Lines files under `logs/local/`:
 
 ```text
-logs/YYYYMMDD.local.backend-api.jsonl
-logs/YYYYMMDD.local.agent-api.jsonl
-logs/YYYYMMDD.local.agent-run-worker-1.jsonl
-logs/YYYYMMDD.local.agent-reconcile-worker.jsonl
+logs/local/YYYYMMDD.local.backend-api.jsonl
+logs/local/YYYYMMDD.local.agent-api.jsonl
+logs/local/YYYYMMDD.local.agent-run-worker-1.jsonl
+logs/local/YYYYMMDD.local.agent-reconcile-worker.jsonl
 ```
 
 Application files rotate at 100 MB, retain 14 days, and compress rotated files. Bootstrap and frontend files are shell output and are only intended for local startup diagnosis.
 
 ### Production
 
-`./run_server.sh --mode cloud` writes application JSON to stdout/stderr. `LOG_FILE` is empty. The deployment platform must collect stdout and provide retention, indexing, access control, and alerting.
+`./run_server.sh --mode cloud` writes application logs under `logs/cloud/` by default. Each process gets its own JSON Lines file via `LOG_FILE`, and uvicorn bootstrap output also lands in the same directory.
 
 Recommended flow:
 
 ```text
-Application stdout JSON
-  -> container runtime or systemd journal
-  -> Fluent Bit / Vector / Promtail / company collector
+Application JSONL files
+  -> logs/cloud/
+  -> grep / jq / company log shipper
   -> Loki / Elasticsearch / company logging platform
 ```
 
-The application must not write shared production logs to a container filesystem or network volume. Multi-process file rotation is not a reliable centralized logging design.
+The application writes process-scoped files in a dedicated directory so local inspection is straightforward.
 
 ## Environment contract
 
@@ -55,11 +55,11 @@ The application must not write shared production logs to a container filesystem 
 |---|---|---|
 | `LOG_LEVEL` | `INFO` | Minimum application level |
 | `LOG_FORMAT` | `json` | Machine-readable Loguru JSON |
-| `LOG_OUTPUT` | `console` | stdout/stderr collection |
-| `LOG_FILE` | empty | No application-owned production file |
+| `LOG_OUTPUT` | `file` | File sink only |
+| `LOG_FILE` | path under `logs/cloud/` | Application-owned production file |
 | `LOG_SERVICE` | `backend` or `agent-service` | Stable service identity |
 | `LOG_ROLE` | `api`, `agent-run-worker`, or `agent-reconcile-worker` | Process role |
-| `APP_ENV` | `production` | Deployment environment |
+| `APP_ENV` | `cloud` | Deployment environment |
 
 The structured record includes stable correlation fields:
 
@@ -82,9 +82,9 @@ Absent fields remain `null` so collectors receive a stable schema.
 Useful local queries:
 
 ```bash
-jq -c 'select(.record.extra.event == "agent.run.failed")' logs/*.jsonl
-jq -c 'select(.record.extra.run_id == "run_xxx")' logs/*.jsonl
-jq -c 'select(.record.extra.request_id == "req_xxx")' logs/*.jsonl
+jq -c 'select(.record.extra.event == "agent.run.failed")' logs/cloud/*.jsonl
+jq -c 'select(.record.extra.run_id == "run_xxx")' logs/cloud/*.jsonl
+jq -c 'select(.record.extra.request_id == "req_xxx")' logs/cloud/*.jsonl
 ```
 
 ## Security
@@ -165,10 +165,10 @@ Recommended retention:
 
 Before deployment, verify:
 
-1. Each service emits valid JSON to stdout with `LOG_FORMAT=json`.
-2. No application log file is created when `LOG_OUTPUT=console` and `LOG_FILE` is empty.
+1. Each service emits valid JSON Lines files under `logs/cloud/` with `LOG_FORMAT=json`.
+2. `LOG_OUTPUT=file` and `LOG_FILE` is set for each application process.
 3. API responses contain `X-Request-ID`.
-4. Agent terminal logs contain `run_id`, `session_id`, duration, and token usage.
+4. Agent application logs contain `run_id`, `session_id`, duration, and token usage.
 5. SQL polling and raw SDK stream events do not appear at INFO.
 6. Collector search works by `request_id` and `run_id`.
 7. Phoenix failure does not block Agent execution.

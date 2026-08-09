@@ -13,18 +13,18 @@ docs/loggings/PRODUCTION_LOGGING.md
 `./run_server.sh --mode local` writes role-specific JSON Lines files:
 
 ```text
-logs/YYYYMMDD.local.backend-api.jsonl
-logs/YYYYMMDD.local.agent-api.jsonl
-logs/YYYYMMDD.local.agent-run-worker-1.jsonl
-logs/YYYYMMDD.local.agent-reconcile-worker.jsonl
+logs/local/YYYYMMDD.local.backend-api.jsonl
+logs/local/YYYYMMDD.local.agent-api.jsonl
+logs/local/YYYYMMDD.local.agent-run-worker-1.jsonl
+logs/local/YYYYMMDD.local.agent-reconcile-worker.jsonl
 ```
 
 Bootstrap and frontend output use:
 
 ```text
-logs/YYYYMMDD.local.backend.bootstrap.log
-logs/YYYYMMDD.local.agent.bootstrap.log
-logs/YYYYMMDD.local.frontend.vite.log
+logs/local/YYYYMMDD.local.backend.bootstrap.log
+logs/local/YYYYMMDD.local.agent.bootstrap.log
+logs/local/YYYYMMDD.local.frontend.vite.log
 ```
 
 Rules:
@@ -33,7 +33,7 @@ Rules:
 - Bootstrap logs are only for process startup failures.
 - PID files are runtime control files, not application logs.
 - Existing historical files are not renamed or deleted automatically.
-- Cloud mode emits JSON to stdout and does not use project log files as centralized storage.
+- Cloud mode writes JSON Lines files under `logs/cloud/`.
 
 ## Agent runtime layout
 
@@ -79,9 +79,9 @@ An empty sandbox directory is expected for API-only business tasks. MCP tools su
 Inspect local application logs:
 
 ```bash
-ls -lh logs/*.jsonl
-jq -c 'select(.record.extra.event == "agent.run.failed")' logs/*.jsonl
-jq -c 'select(.record.extra.run_id == "run_xxx")' logs/*.jsonl
+ls -lh logs/local/*.jsonl
+jq -c 'select(.record.extra.event == "agent.run.failed")' logs/local/*.jsonl
+jq -c 'select(.record.extra.run_id == "run_xxx")' logs/local/*.jsonl
 ```
 
 Inspect runtime databases and sandbox files:

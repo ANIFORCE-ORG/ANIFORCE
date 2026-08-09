@@ -268,7 +268,7 @@ CLOUD_IP=your-server-ip ./run_server.sh --mode cloud
 | `--mode local\|cloud` | 启动模式：`local`（本地开发）/ `cloud`（云端部署） | `local` |
 | `--only all\|backend\|frontend` | 仅启动指定服务 | `all` |
 | `--skip-install` | 跳过依赖安装（云端常用） | 否 |
-| `--daemon` | 后台常驻运行，启动输出写入 `logs/YYYYMMDD.MODE.launcher.log` | 否 |
+| `--daemon` | 后台常驻运行，启动输出写入 `<log-dir>/local/YYYYMMDD.local.launcher.log`（cloud 为 `<log-dir>/cloud/YYYYMMDD.cloud.launcher.log`） | 否 |
 | `--host HOST` | 监听地址 | `0.0.0.0` |
 | `--demo` | 启用 Demo 模式（设置 `DEMO_MODE=true`） | 否（生产模式） |
 | `--frontend-port PORT` | 前端端口 | `3010` |
