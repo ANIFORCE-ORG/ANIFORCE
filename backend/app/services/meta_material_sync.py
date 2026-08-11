@@ -259,40 +259,46 @@ class MetaMaterialSyncService:
         errors: list[str] = []
         for asset in assets:
             try:
-                action, material_id, platform_asset_id = await self._upsert_asset(
-                    user_id=user_id,
-                    connection_id=connection_id,
-                    ad_account_id=ad_account_id,
-                    ad_account_name=ad_account_name,
-                    asset=asset,
-                )
-                if action == "created":
-                    run.created_count += 1
-                elif action == "reused":
-                    run.reused_count += 1
-                elif action == "updated":
-                    run.updated_count += 1
-                else:
-                    run.skipped_count += 1
-                self._add_run_item(
-                    run=run,
-                    asset=asset,
-                    action=action,
-                    material_id=material_id,
-                    platform_asset_id=platform_asset_id,
-                )
+                async with self.session.begin_nested():
+                    action, material_id, platform_asset_id = await self._upsert_asset(
+                        user_id=user_id,
+                        connection_id=connection_id,
+                        ad_account_id=ad_account_id,
+                        ad_account_name=ad_account_name,
+                        asset=asset,
+                    )
+                    self._add_run_item(
+                        run=run,
+                        asset=asset,
+                        action=action,
+                        material_id=material_id,
+                        platform_asset_id=platform_asset_id,
+                    )
+                    await self.session.flush()
             except Exception as exc:
                 run.failed_count += 1
                 error_message = _sanitize_error_message(exc)[:2000]
                 errors.append(
                     f"{asset.asset_type}:{asset.external_asset_id}: {error_message}"
                 )
-                self._add_run_item(
-                    run=run,
-                    asset=asset,
-                    action="failed",
-                    error_message=error_message,
-                )
+                async with self.session.begin_nested():
+                    self._add_run_item(
+                        run=run,
+                        asset=asset,
+                        action="failed",
+                        error_message=error_message,
+                    )
+                    await self.session.flush()
+                continue
+
+            if action == "created":
+                run.created_count += 1
+            elif action == "reused":
+                run.reused_count += 1
+            elif action == "updated":
+                run.updated_count += 1
+            else:
+                run.skipped_count += 1
 
         if run.failed_count == 0:
             run.status = "succeeded"
@@ -314,17 +320,31 @@ class MetaMaterialSyncService:
         ad_account_name: str | None,
         asset: MetaMaterialAsset,
     ) -> tuple[str, str, str]:
+        identity_filters = [
+            MaterialPlatformAsset.user_id == user_id,
+            MaterialPlatformAsset.platform == "Meta",
+            MaterialPlatformAsset.ad_account_id == ad_account_id,
+            MaterialPlatformAsset.asset_type == asset.asset_type,
+        ]
         existing = await self.session.scalar(
             select(MaterialPlatformAsset).where(
-                MaterialPlatformAsset.user_id == user_id,
-                MaterialPlatformAsset.platform == "Meta",
-                MaterialPlatformAsset.ad_account_id == ad_account_id,
-                MaterialPlatformAsset.asset_type == asset.asset_type,
+                *identity_filters,
                 MaterialPlatformAsset.external_asset_id == asset.external_asset_id,
             )
         )
+        if not existing and asset.asset_type == "image" and asset.image_hash:
+            existing = await self.session.scalar(
+                select(MaterialPlatformAsset).where(
+                    *identity_filters,
+                    MaterialPlatformAsset.image_hash == asset.image_hash,
+                )
+            )
+
         if existing:
             changed = _update_platform_asset(existing, asset)
+            if existing.external_asset_id != asset.external_asset_id:
+                existing.external_asset_id = asset.external_asset_id
+                changed = True
             existing.connection_id = connection_id
             existing.ad_account_name = ad_account_name or existing.ad_account_name
             material = (

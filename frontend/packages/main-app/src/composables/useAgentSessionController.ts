@@ -21,6 +21,7 @@ import {
   type AgentSessionTaskState,
 } from '@/api/agent'
 import { useAgentStore } from '@/store/agent'
+import { setCompatibleCommandStatus, setCompatibleCurrentTask, setCompatibleError } from '@/store/agentStoreCompatibility'
 import { useWorkspaceStore, workspaceResultProjectionRegistry, type WorkspaceSurface } from '@/store/workspace'
 import { parseAgentSdkEvent } from '@/agent/protocol/parser'
 import { buildAgentTaskPresentation } from '@/agent/taskPresentation'
@@ -142,25 +143,48 @@ export function useAgentSessionController() {
   const error = computed(() => store.error)
   const showingActiveRun = computed(() => Boolean(store.agentRunning && activeSession.value?.id === store.activeRunSessionId))
   const agentRunning = computed(() => showingActiveRun.value)
+  const hasAnyRunningRun = computed(() => store.agentRunning)
+  const activeRunSessionId = computed(() => store.activeRunSessionId)
+  const runningInAnotherSession = computed(() => Boolean(store.agentRunning && activeSession.value?.id !== store.activeRunSessionId))
   const agentPhase = computed(() => showingActiveRun.value ? store.agentPhase : null)
   const streamingMessage = computed(() => showingActiveRun.value ? store.streamingMessage : null)
   
-  // 本地临时状态（不需要跨页面持久化）
+  // 持久运行相关展示状态由 store 按 session 保存；fallback 只服务于 HMR 旧实例兼容。
   const executionPlan = ref<{ id: string; todos: AgentExecutionTodo[] } | null>(null)
   const executionTools = ref<AgentExecutionTool[]>([])
   const retryInfo = ref<null>(null)
-  const commandStatus = ref<string | null>(null)
+  const fallbackCommandStatusBySession = new Map<string, string | null>()
+  const fallbackCurrentTaskBySession = new Map<string, AgentCurrentTask | null>()
+  const compatibilityStore = store as unknown as Record<string, any>
+  const commandStatus = computed(() => {
+    if (compatibilityStore.commandStatus !== undefined) return compatibilityStore.commandStatus as string | null
+    const sessionId = activeSession.value?.id
+    return sessionId ? fallbackCommandStatusBySession.get(sessionId) || null : null
+  })
+  const currentTask = computed(() => {
+    if (compatibilityStore.currentTask !== undefined) return compatibilityStore.currentTask as AgentCurrentTask | null
+    const sessionId = activeSession.value?.id
+    return sessionId ? fallbackCurrentTaskBySession.get(sessionId) || null : null
+  })
   const contextUsage = ref<ContextUsage | null>(null)
-  const currentTask = ref<AgentCurrentTask | null>(null)
   const pendingWorkspaceProjectionRequests = ref<Array<{ runId?: string; surface: WorkspaceSurface; reason?: string }>>([])
   const recentWorkspaceToolOutputs = ref<Array<{ id: string; runId?: string; toolName: string; surface: WorkspaceSurface; payload: Record<string, unknown>; mode: 'readonly' }>>([])
   const explicitlyCancelledRuns = new Set<string>()
 
-  function applyPersistedTaskState(taskState?: AgentSessionTaskState | null, pendingApproval?: unknown): void {
-    currentTask.value = buildAgentTaskPresentation(
-      taskState,
-      pendingApproval,
-      activeSession.value?.id || '',
+  function setSessionError(sessionId: string | null, message: string | null): void {
+    setCompatibleError(compatibilityStore, sessionId, message)
+  }
+
+  function setSessionCommandStatus(sessionId: string, status: string | null): void {
+    setCompatibleCommandStatus(compatibilityStore, fallbackCommandStatusBySession, sessionId, status)
+  }
+
+  function applyPersistedTaskState(sessionId: string, taskState?: AgentSessionTaskState | null, pendingApproval?: unknown): void {
+    setCompatibleCurrentTask(
+      compatibilityStore,
+      fallbackCurrentTaskBySession,
+      sessionId,
+      buildAgentTaskPresentation(taskState, pendingApproval, sessionId),
     )
   }
 
@@ -242,32 +266,33 @@ export function useAgentSessionController() {
 
   async function createSession(route?: AgentRouteContext | Event): Promise<void> {
     store.loading = true
-    store.error = null
+    setSessionError(null, null)
     try {
       const normalizedRoute = route instanceof Event ? undefined : route
       const session = await createAgentSession({ title: normalizedRoute?.title || '新对话' })
       store.sessions = [session, ...sessions.value.filter(item => item.id !== session.id)]
       store.setMessages(session.id, [])
       await selectSession(session)
+    } catch (err: any) {
+      setSessionError(null, err?.message || '创建 Agent 会话失败')
     } finally {
       store.loading = false
     }
   }
 
-  function beginNewSession(): void {
-    if (store.agentRunning) return
+  function beginNewSession(): boolean {
+    if (store.agentRunning) return false
     store.activeSessionId = null
     localStorage.removeItem('aniforce.activeSessionId')
     store.loading = false
-    store.error = null
+    setSessionError(null, null)
     store.streamingMessage = null
     store.agentPhase = null
     executionPlan.value = null
     executionTools.value = []
-    commandStatus.value = null
     contextUsage.value = null
-    currentTask.value = null
     store.clearStreamRuntime()
+    return true
   }
 
   async function selectSession(session: AgentSession): Promise<void> {
@@ -275,7 +300,7 @@ export function useAgentSessionController() {
     store.activeSessionId = session.id
     localStorage.setItem('aniforce.activeSessionId', session.id)
     store.loading = true
-    store.error = null
+    setSessionError(session.id, null)
     if (!selectingActiveRun && !store.agentRunning) {
       store.streamingMessage = null
       store.agentRunning = false
@@ -287,44 +312,45 @@ export function useAgentSessionController() {
       recentWorkspaceToolOutputs.value = []
     }
     try {
-      if (!selectingActiveRun) {
-        const snapshot = await getAgentSessionSnapshot(session.id)
-        store.setMessages(session.id, snapshot.messages)
-        applyPersistedTaskState(snapshot.state?.task_state, snapshot.pending_approval)
-        restoreTimelineFromCache()
-        restoreWorkspaceFromCache()
-        hydrateWorkspaceSnapshot(workspace, session.id, snapshot)
-        if (snapshot.latest_run && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(String(snapshot.latest_run.status))) {
-          const runId = String(snapshot.latest_run.run_id)
-          commandStatus.value = '任务正在后台执行'
-          store.agentRunning = true
-          store.agentPhase = { kind: 'waiting_model' }
-          store.resetStreamRuntime(session.id, runId)
-          store.currentRunLastSequence = snapshot.last_persisted_sequence
-          const controller = new AbortController()
-          store.setAbortController(controller)
-          void connectPersistedRun(
-            runId,
-            snapshot.last_persisted_sequence,
-            controller.signal,
-          ).then(async result => {
-            store.currentRunLastSequence = result.lastSequence
-            const refreshed = await getAgentSessionSnapshot(session.id)
-            store.setMessages(session.id, refreshed.messages)
-            applyPersistedTaskState(refreshed.state?.task_state, refreshed.pending_approval)
-            hydrateWorkspaceSnapshot(workspace, session.id, refreshed)
-            store.agentRunning = false
-            store.agentPhase = null
-            store.streamingMessage = null
-            store.clearStreamRuntime()
-            commandStatus.value = null
-          }).catch(err => {
-            if (err?.name !== 'AbortError') store.error = err?.message || '恢复 Agent 任务连接失败'
-          })
-        }
+      const snapshot = await getAgentSessionSnapshot(session.id)
+      store.setMessages(session.id, snapshot.messages)
+      applyPersistedTaskState(session.id, snapshot.state?.task_state, snapshot.pending_approval)
+      restoreTimelineFromCache()
+      restoreWorkspaceFromCache()
+      hydrateWorkspaceSnapshot(workspace, session.id, snapshot)
+      const hasPersistedRun = snapshot.latest_run
+        && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(String(snapshot.latest_run.status))
+      if (hasPersistedRun) setSessionCommandStatus(session.id, '任务正在后台执行')
+      if (hasPersistedRun && !selectingActiveRun && !store.agentRunning) {
+        const runId = String(snapshot.latest_run?.run_id || '')
+        store.agentRunning = true
+        store.agentPhase = { kind: 'waiting_model' }
+        store.resetStreamRuntime(session.id, runId)
+        store.currentRunLastSequence = snapshot.last_persisted_sequence
+        const controller = new AbortController()
+        store.setAbortController(controller)
+        void connectPersistedRun(
+          runId,
+          snapshot.last_persisted_sequence,
+          controller.signal,
+        ).then(async result => {
+          store.currentRunLastSequence = result.lastSequence
+          const refreshed = await getAgentSessionSnapshot(session.id)
+          store.setMessages(session.id, refreshed.messages)
+          applyPersistedTaskState(session.id, refreshed.state?.task_state, refreshed.pending_approval)
+          hydrateWorkspaceSnapshot(workspace, session.id, refreshed)
+        }).catch(err => {
+          if (err?.name !== 'AbortError') setSessionError(session.id, err?.message || '恢复 Agent 任务连接失败')
+        }).finally(() => {
+          store.agentRunning = false
+          store.agentPhase = null
+          store.streamingMessage = null
+          store.clearStreamRuntime()
+          setSessionCommandStatus(session.id, null)
+        })
       }
     } catch (err: any) {
-      store.error = err?.message || '加载 Agent 会话失败'
+      setSessionError(session.id, err?.message || '加载 Agent 会话失败')
     } finally {
       store.loading = false
     }
@@ -343,7 +369,7 @@ export function useAgentSessionController() {
     store.removeSessionCache(sessionId)
     if (store.activeSessionId === sessionId) {
       store.activeSessionId = null
-      const nextSession = store.sessions[0]
+      const nextSession = store.sessions.find(session => session.id === store.activeRunSessionId) || store.sessions[0]
       if (nextSession) await selectSession(nextSession)
       else beginNewSession()
     }
@@ -371,7 +397,7 @@ export function useAgentSessionController() {
         console.warn('[agent] failed to auto-title session', err)
       })
     }
-    store.error = null
+    setSessionError(sessionId, null)
     store.agentRunning = true
     store.agentPhase = { kind: 'waiting_model' }
     executionPlan.value = null
@@ -473,7 +499,7 @@ export function useAgentSessionController() {
         }
 
         if (event.event === 'runtime.completed') {
-          applyPersistedTaskState(event.data.task_state as AgentSessionTaskState | undefined)
+          applyPersistedTaskState(sessionId, event.data.task_state as AgentSessionTaskState | undefined)
           const finalOutput = event.data.final_output
           if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
           const usage = event.data.usage
@@ -482,14 +508,13 @@ export function useAgentSessionController() {
         }
 
         if (event.event === 'runtime.requires_action') {
-          applyPersistedTaskState(event.data.task_state as AgentSessionTaskState | undefined, event.data)
+          applyPersistedTaskState(sessionId, event.data.task_state as AgentSessionTaskState | undefined, event.data)
           drainTypewriter(false)
           ensureAssistantMessage(assistant)
           const checkpointId = String(event.data.checkpoint_id || '')
           const runIdStr = String(event.data.run_id || run.run_id)
           const interruptions = Array.isArray(event.data.interruptions) ? event.data.interruptions as any : []
           // Workspace 投影：高风险工具产生可编辑审批草稿 + review projection
-          const sessionId = activeSession.value?.id
           if (sessionId) {
             for (const interruption of interruptions) {
               const toolName = String(interruption?.tool_name || '')
@@ -539,10 +564,10 @@ export function useAgentSessionController() {
           const snapshot = await getAgentSessionSnapshot(sessionId)
           const status = String(snapshot.latest_run?.status || '')
           const snapshotRunId = String(snapshot.latest_run?.run_id || '')
-          applyPersistedTaskState(snapshot.state?.task_state, snapshot.pending_approval)
+          applyPersistedTaskState(sessionId, snapshot.state?.task_state, snapshot.pending_approval)
           if (snapshotRunId === runId && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(status)) {
             backgroundRecoveryStarted = true
-            commandStatus.value = '连接已中断，任务仍在后台执行'
+            setSessionCommandStatus(sessionId, '连接已中断，任务仍在后台执行')
             store.agentRunning = true
             store.agentPhase = { kind: 'waiting_model' }
             const recoveryController = new AbortController()
@@ -552,15 +577,18 @@ export function useAgentSessionController() {
                 store.currentRunLastSequence = result.lastSequence
                 const refreshed = await getAgentSessionSnapshot(sessionId)
                 store.setMessages(sessionId, refreshed.messages)
-                applyPersistedTaskState(refreshed.state?.task_state, refreshed.pending_approval)
+                applyPersistedTaskState(sessionId, refreshed.state?.task_state, refreshed.pending_approval)
                 hydrateWorkspaceSnapshot(workspace, sessionId, refreshed)
-                store.error = String(refreshed.latest_run?.status || '') === 'error'
-                  ? String(refreshed.latest_run?.error?.message || 'Agent 任务执行失败')
-                  : null
+                setSessionError(
+                  sessionId,
+                  String(refreshed.latest_run?.status || '') === 'error'
+                    ? String(refreshed.latest_run?.error?.message || 'Agent 任务执行失败')
+                    : null,
+                )
               })
               .catch(recoveryError => {
                 if (recoveryError?.name !== 'AbortError') {
-                  store.error = recoveryError?.message || '恢复 Agent 任务连接失败'
+                  setSessionError(sessionId, recoveryError?.message || '恢复 Agent 任务连接失败')
                 }
               })
               .finally(() => {
@@ -568,20 +596,23 @@ export function useAgentSessionController() {
                 store.agentPhase = null
                 store.streamingMessage = null
                 store.clearStreamRuntime()
-                commandStatus.value = null
+                setSessionCommandStatus(sessionId, null)
               })
           } else {
             store.setMessages(sessionId, snapshot.messages)
             hydrateWorkspaceSnapshot(workspace, sessionId, snapshot)
-            store.error = status === 'error'
-              ? String(snapshot.latest_run?.error?.message || 'Agent 任务执行失败')
-              : null
+            setSessionError(
+              sessionId,
+              status === 'error'
+                ? String(snapshot.latest_run?.error?.message || 'Agent 任务执行失败')
+                : null,
+            )
           }
         } catch (snapshotError: any) {
-          store.error = snapshotError?.message || err?.message || 'Agent 流式响应失败'
+          setSessionError(sessionId, snapshotError?.message || err?.message || 'Agent 流式响应失败')
         }
       } else {
-        store.error = err?.message || 'Agent 流式响应失败'
+        setSessionError(sessionId, err?.message || 'Agent 流式响应失败')
       }
     } finally {
       const finishSuccess = () => {
@@ -663,10 +694,8 @@ export function useAgentSessionController() {
   function handleSideEffect(event: SideEffectEvent, targetSessionId = activeSession.value?.id): void {
     if (!targetSessionId) return
     store.recordSideEffect(targetSessionId, event)
-    if (activeSession.value?.id === targetSessionId) {
-      const panels = event.refresh_panels?.length ? event.refresh_panels.join(', ') : 'workspace'
-      commandStatus.value = event.message || `业务数据已更新，待刷新：${panels}`
-    }
+    const panels = event.refresh_panels?.length ? event.refresh_panels.join(', ') : 'workspace'
+    setSessionCommandStatus(targetSessionId, event.message || `业务数据已更新，待刷新：${panels}`)
   }
 
   function isAgentPanel(value: unknown): value is AgentContextSnapshot['activePanel'] {
@@ -699,7 +728,7 @@ export function useAgentSessionController() {
     }
     store.agentRunning = false
     store.agentPhase = null
-    store.error = null
+    setSessionError(sessionId || null, null)
     store.clearStreamRuntime()
   }
 
@@ -1239,7 +1268,7 @@ export function useAgentSessionController() {
           })
         }
         if (eventType === 'runtime.completed') {
-          applyPersistedTaskState(event.data.task_state as AgentSessionTaskState | undefined)
+          applyPersistedTaskState(sessionId, event.data.task_state as AgentSessionTaskState | undefined)
           const finalOutput = event.data.final_output
           if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
           const usage = event.data.usage
@@ -1249,7 +1278,7 @@ export function useAgentSessionController() {
           workspace.setApprovalDraftStatus(checkpointId, 'completed')
         }
         if (event.event === 'runtime.requires_action') {
-          applyPersistedTaskState(event.data.task_state as AgentSessionTaskState | undefined, event.data)
+          applyPersistedTaskState(sessionId, event.data.task_state as AgentSessionTaskState | undefined, event.data)
           drainTypewriter(false)
           ensureAssistantMessage(assistant)
         }
@@ -1267,7 +1296,7 @@ export function useAgentSessionController() {
       }
       workspace.setApprovalDraftStatus(checkpointId, decision === 'approve' ? 'completed' : 'rejected')
     } catch (err: any) {
-      store.error = err?.message || '审批恢复失败'
+      setSessionError(sessionId, err?.message || '审批恢复失败')
       store.updateApprovalStatus(checkpointId, 'pending')
       workspace.setApprovalDraftStatus(checkpointId, decision === 'approve' ? 'pending' : 'rejected')
     } finally {
@@ -1293,13 +1322,8 @@ export function useAgentSessionController() {
 
   const workspaceApprovalDraft = computed(() => {
     const projection = workspaceProjection.value
-    if (projection?.approval) {
-      return workspace.getApprovalDraft(projection.approval.checkpointId) || null
-    }
-    const drafts = Array.from(workspace.approvalDrafts.values())
-    return drafts.find(draft => draft.status === 'pending' || draft.status === 'executing')
-      || drafts.find(draft => draft.status === 'completed')
-      || null
+    if (!projection?.approval) return null
+    return workspace.getApprovalDraft(projection.approval.checkpointId) || null
   })
 
   function updateApprovalDraftForm(checkpointId: string, formModel: import('@/components/projects/projectFormModel').ProjectFormModel): void {
@@ -1337,6 +1361,9 @@ export function useAgentSessionController() {
     messages,
     streamingMessage,
     agentRunning,
+    hasAnyRunningRun,
+    activeRunSessionId,
+    runningInAnotherSession,
     agentPhase,
     loading,
     error,
