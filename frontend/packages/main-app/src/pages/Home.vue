@@ -9,7 +9,9 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import MessageView from '@/components/agent/MessageView.vue'
 import LiveWorkspaceShell from '@/components/agent/workspace/LiveWorkspaceShell.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
-import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
+import type { TaskPanelAction, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
+import { resolveHomeSessionState, shouldApplyHomeSessionState } from '@/agent/homeSessionState'
+import { normalizeTaskPanelStatus, taskStatusPresentation } from '@/agent/taskPresentation'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
 import { navItems } from '@/config/navigation'
@@ -27,6 +29,10 @@ const workspaceDragging = ref(false)
 const renameDialog = ref<{ id: string; name: string } | null>(null)
 const renameValue = ref('')
 const deleteDialog = ref<{ id: string; name: string } | null>(null)
+const sessionsReady = ref(false)
+let skippedRouteSessionId: string | null = null
+
+type MentionEntity = { type: 'project' | 'campaign' | 'material'; id: string; name?: string }
 
 const intentModes: Array<{
   key: 'chat' | 'project'
@@ -93,48 +99,32 @@ const starterActions = [
 ]
 
 const visibleMessages = computed(() => agent.visibleMessages.value)
-const hasContent = computed(() => agent.loading.value || agent.agentRunning.value || visibleMessages.value.length > 0 || Boolean(agent.streamingMessage.value) || Boolean(agent.error.value))
+const hasContent = computed(() => agent.loading.value || agent.hasAnyRunningRun.value || visibleMessages.value.length > 0 || Boolean(agent.streamingMessage.value) || Boolean(agent.error.value))
 const sidebarSessions = computed(() => agent.sessions.value.map(session => ({
   id: session.id,
   name: session.title || session.id,
   active: agent.activeSession.value?.id === session.id
 })))
 const sidebarActivePanel = computed(() => agent.activeSession.value ? '__session__' : 'new-task')
-const currentSessionTitle = computed(() => agent.activeSession.value?.title || '新 Agent 任务')
 const activeMode = computed(() => intentModes.find(item => item.key === activeIntentMode.value) || intentModes[0])
 const activeRoute = computed(() => {
   const { titlePrefix: _titlePrefix, ...route } = activeMode.value.route
   return route
 })
+const activeSessionId = computed(() => agent.activeSession.value?.id || '')
 const currentTask = computed(() => agent.currentTask.value)
-const workspaceModuleHint = computed<'auto' | 'dashboard' | 'projects' | 'campaigns' | 'materials'>(() => {
-  const taskType = currentTask.value?.task_type || ''
-  if (/project|task/i.test(taskType)) return 'projects'
-  if (/campaign|ad_management/i.test(taskType)) return 'campaigns'
-  if (/creative|material/i.test(taskType)) return 'materials'
-  if (/data|analysis|report|monitor/i.test(taskType)) return 'dashboard'
-
-  const conversationText = [
-    currentSessionTitle.value,
-    ...visibleMessages.value
-      .filter(message => message.role === 'user')
-      .map(message => typeof message.content === 'string' ? message.content : ''),
-  ].join(' ')
-
-  if (/(数据|复盘|表现|诊断|分析|点击|转化|ROAS|CTR)/i.test(conversationText)) return 'dashboard'
-  if (/(Campaign|投放计划|广告计划)/i.test(conversationText)) return 'campaigns'
-  if (/(素材|创意)/i.test(conversationText)) return 'materials'
-  if (/(项目|任务)/i.test(conversationText)) return 'projects'
-  return 'auto'
-})
 const hasBusinessTask = computed(() => Boolean(currentTask.value?.task_type && currentTask.value.task_type !== 'conversation' && currentTask.value.task_type !== 'data_query'))
-const hasWorkspaceToolResults = computed(() => agent.workspaceToolResults.value.length > 0)
+const hasWorkspaceToolResults = computed(() => Boolean(agent.workspaceProjection.value) || agent.workspaceToolResults.value.length > 0)
 const taskPanelVisible = computed(() => true)
+const taskStateVisible = computed(() => Boolean(currentTask.value || agent.commandStatus.value))
+const taskStatusMeta = computed(() => taskStatusPresentation[taskStatus.value])
+const taskStatusLabel = computed(() => taskStatusMeta.value.label)
+const runningSession = computed(() => agent.sessions.value.find(session => session.id === agent.activeRunSessionId.value) || null)
 const workspaceStyle = computed(() => ({
   width: workspaceCollapsed.value ? '56px' : `${workspaceWidth.value}px`
 }))
 const taskStatus = computed<TaskPanelStatus>(() => {
-  if (currentTask.value?.status) return normalizeTaskStatus(currentTask.value.status)
+  if (currentTask.value?.status) return normalizeTaskPanelStatus(currentTask.value.status)
   if (agent.error.value) return 'failed'
   if (agent.agentRunning.value) return agent.agentPhase.value?.kind === 'running_tools' ? 'running' : 'running'
   if (visibleMessages.value.length > 1) return 'completed'
@@ -208,6 +198,9 @@ const taskActions = computed<TaskPanelAction[]>(() => {
     })
   }
   if (agent.agentRunning.value) return [{ key: 'abort', label: '停止任务', icon: 'stop', tone: 'danger' }]
+  if (taskStatus.value === 'waiting_user_input') return [{ key: 'focus', label: '补充所需信息', icon: 'edit_note', tone: 'primary' }]
+  if (taskStatus.value === 'waiting_approval') return [{ key: 'open_approval', label: '查看并确认', icon: 'approval_delegation', tone: 'primary' }]
+  if (taskStatus.value === 'applying' || taskStatus.value === 'canceled') return []
   if (agent.error.value) return [{ key: 'retry', label: '重新发送', icon: 'refresh', tone: 'primary' }]
   if (taskStatus.value === 'completed' && !hasWorkspaceToolResults.value) {
     return [
@@ -221,8 +214,7 @@ const taskActions = computed<TaskPanelAction[]>(() => {
 const taskTags = computed(() => {
   const tags: string[] = []
   if (currentTask.value?.task_definition?.label) tags.push(currentTask.value.task_definition.label)
-  if (currentTask.value?.phase) tags.push(currentTask.value.phase)
-  if (agent.agentPhase.value?.kind === 'running_tools') tags.push(...agent.agentPhase.value.tools.slice(0, 2).map(tool => tool.name))
+  if (taskPhaseLabel.value) tags.push(taskPhaseLabel.value)
   return Array.from(new Set(tags)).slice(0, 4)
 })
 const currentModel = computed(() => {
@@ -244,7 +236,33 @@ const taskPhaseLabel = computed(() => {
   if (!phase || !definition?.phases) return phase || undefined
   return definition.phases.find(item => item.key === phase)?.label || phase
 })
-const taskArtifacts = computed<TaskPanelArtifact[]>(() => currentTask.value?.artifacts || [])
+const selectedContextEntities = computed(() => agent.workspaceSelectedEntities.value)
+const projectionContextEntities = computed<MentionEntity[]>(() => {
+  const payload = agent.workspaceProjection.value?.payload || {}
+  const collections: Array<{ type: MentionEntity['type']; items: unknown }> = [
+    { type: 'project', items: payload.projects },
+    { type: 'campaign', items: payload.campaigns },
+    { type: 'material', items: payload.materials },
+  ]
+  return collections.flatMap(({ type, items }) => Array.isArray(items)
+    ? items.flatMap((item: any) => item?.id
+      ? [{ type, id: String(item.id), name: String(item.name || item.id) }]
+      : [])
+    : [])
+})
+const mentionCandidates = computed<MentionEntity[]>(() => projectionContextEntities.value)
+const mentionQuery = computed(() => {
+  const match = /(?:^|\s)@([^\s@]*)$/.exec(inputText.value)
+  return match ? match[1].toLowerCase() : null
+})
+const filteredMentionCandidates = computed(() => {
+  if (mentionQuery.value === null) return []
+  const query = mentionQuery.value
+  return mentionCandidates.value
+    .filter(item => !query || (item.name || item.id).toLowerCase().includes(query) || item.id.toLowerCase().includes(query))
+    .slice(0, 6)
+})
+const showMentionPanel = computed(() => mentionQuery.value !== null && filteredMentionCandidates.value.length > 0)
 
 function scrollToBottom() {
   nextTick(() => {
@@ -262,15 +280,6 @@ function phaseLabel(phase: AgentPhase): string {
   }
   if (phase?.kind === 'waiting_model') return 'Agent 正在思考...'
   return 'Agent 正在处理...'
-}
-
-function normalizeTaskStatus(status: string): TaskPanelStatus {
-  if (status === 'waiting_approval') return 'waiting_approval'
-  if (status === 'completed') return 'completed'
-  if (status === 'failed') return 'failed'
-  if (status === 'canceled') return 'canceled'
-  if (status === 'created') return 'created'
-  return 'running'
 }
 
 function clampWorkspaceWidth(value: number): number {
@@ -310,7 +319,14 @@ function startWorkspaceResize(event: PointerEvent) {
 
 async function handleSubmit() {
   const message = inputText.value.trim()
-  if (!message || agent.loading.value || agent.agentRunning.value) return
+  if (!message || agent.loading.value || agent.hasAnyRunningRun.value) return
+  if (!agent.activeSession.value) {
+    await agent.createSession(activeRoute.value)
+    const sessionId = activeSessionId.value
+    if (!sessionId) return
+    skippedRouteSessionId = sessionId
+    await router.replace({ path: '/home', query: { session_id: sessionId } })
+  }
   hasInteracted.value = true
   inputText.value = ''
   scrollToBottom()
@@ -341,6 +357,70 @@ function openProject(project: { id: string }) {
   navigateTo(`/projects/${encodeURIComponent(project.id)}`)
 }
 
+function openMaterial(materialId: string): void {
+  if (!materialId) return
+  navigateTo(`/material?material_id=${encodeURIComponent(materialId)}`)
+}
+
+function editProject(projectId: string): void {
+  if (!projectId) return
+  navigateTo(`/projects?editProjectId=${encodeURIComponent(projectId)}`)
+}
+
+function createProjectTask(projectId: string): void {
+  if (!projectId) return
+  navigateTo(`/campaigns/create?projectId=${encodeURIComponent(projectId)}`)
+}
+
+function viewProjectTasks(projectId: string): void {
+  if (!projectId) return
+  navigateTo(`/projects/${encodeURIComponent(projectId)}`)
+}
+
+function openCampaign(campaignId: string): void {
+  if (!campaignId) return
+  navigateTo(`/campaigns/${encodeURIComponent(campaignId)}`)
+}
+
+function entityTypeLabel(type: MentionEntity['type']): string {
+  if (type === 'project') return '项目'
+  if (type === 'campaign') return '广告计划'
+  return '素材'
+}
+
+function entityTypeIcon(type: MentionEntity['type']): string {
+  if (type === 'project') return 'folder_managed'
+  if (type === 'campaign') return 'campaign'
+  return 'video_library'
+}
+
+function appendMentionToInput(entity: MentionEntity): void {
+  agent.selectWorkspaceEntity(entity)
+  const label = entity.name || entity.id
+  const mention = `@${label}`
+  if (inputText.value.match(/(?:^|\s)@[^\s@]*$/)) {
+    inputText.value = inputText.value.replace(
+      /(?:^|\s)@[^\s@]*$/,
+      match => `${match.startsWith(' ') ? ' ' : ''}${mention} `,
+    )
+  } else if (!inputText.value.trim()) {
+    inputText.value = `${mention} `
+  } else if (!inputText.value.includes(mention)) {
+    inputText.value = `${inputText.value.trimEnd()} ${mention} `
+  }
+  nextTick(() => document.querySelector<HTMLInputElement>('[data-agent-input="home"]')?.focus())
+}
+
+function removeContextEntity(entity: MentionEntity): void {
+  agent.unselectWorkspaceEntity(entity)
+  const label = entity.name || entity.id
+  const escaped = label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  inputText.value = inputText.value
+    .replace(new RegExp(`(^|\\s)@${escaped}(?=\\s|$)`, 'g'), ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trimStart()
+}
+
 function handleTaskAction(action: string) {
   if (action.includes(':')) {
     window.requestAnimationFrame(() => {
@@ -351,6 +431,11 @@ function handleTaskAction(action: string) {
   }
   if (action === 'abort') {
     void agent.abort()
+    return
+  }
+  if (action === 'open_approval') {
+    workspaceCollapsed.value = false
+    persistWorkspaceState()
     return
   }
   if (action === 'material' || action === 'open_material') {
@@ -374,8 +459,6 @@ function handleTaskAction(action: string) {
 const switchPanel = (item: any) => {
   if (item.id === 'new-task') {
     void createChatSession()
-    hasInteracted.value = false
-    inputText.value = ''
     return
   }
   if (item.path) {
@@ -384,22 +467,18 @@ const switchPanel = (item: any) => {
 }
 
 async function createSessionForActiveMode() {
-  if (route.path === '/home' && route.query.session_id) {
-    void router.push('/home')
+  if (!agent.beginNewSession()) {
+    await openRunningSession()
+    return
   }
-  agent.beginNewSession()
   hasInteracted.value = false
   inputText.value = ''
+  if (route.path !== '/home' || route.query.session_id) await router.push('/home')
 }
 
 async function createChatSession() {
-  if (route.path === '/home' && route.query.session_id) {
-    void router.push('/home')
-  }
   activeIntentMode.value = 'chat'
-  agent.beginNewSession()
-  hasInteracted.value = false
-  inputText.value = ''
+  await createSessionForActiveMode()
 }
 
 const switchSession = (session: any) => {
@@ -418,19 +497,44 @@ async function selectSessionTarget(target: typeof agent.sessions.value[number]):
   await agent.selectSession(target)
 }
 
-async function selectSessionFromRoute(): Promise<boolean> {
+async function applyHomeSessionState(): Promise<void> {
+  if (!sessionsReady.value || !shouldApplyHomeSessionState(route.path)) return
   const querySessionId = typeof route.query.session_id === 'string' ? route.query.session_id : ''
-  if (!querySessionId) return false
-  const target = agent.sessions.value.find(session => session.id === querySessionId)
-  if (!target) return false
+  const savedSessionId = localStorage.getItem('aniforce.activeSessionId')
+  const decision = resolveHomeSessionState(
+    querySessionId,
+    agent.sessions.value.map(session => session.id),
+    savedSessionId,
+  )
+  if (decision.kind === 'draft') {
+    const openedDraft = showNewConversationHome()
+    if (openedDraft && decision.clearRoute) await router.replace('/home')
+    return
+  }
+  const target = agent.sessions.value.find(session => session.id === decision.sessionId)
+  if (!target) return
+  if (decision.syncRoute) {
+    skippedRouteSessionId = decision.sessionId
+    await router.replace({ path: '/home', query: { session_id: decision.sessionId } })
+  }
   await selectSessionTarget(target)
+}
+
+function showNewConversationHome(): boolean {
+  if (!agent.beginNewSession()) {
+    void openRunningSession()
+    return false
+  }
+  hasInteracted.value = false
+  inputText.value = ''
   return true
 }
 
-function showNewConversationHome(): void {
-  agent.beginNewSession()
-  hasInteracted.value = false
-  inputText.value = ''
+async function openRunningSession(): Promise<void> {
+  const sessionId = agent.activeRunSessionId.value
+  if (!sessionId) return
+  if (route.path === '/home' && route.query.session_id === sessionId) return
+  await router.push({ path: '/home', query: { session_id: sessionId } })
 }
 
 function openRenameSession(session: { id: string; name: string }) {
@@ -457,8 +561,20 @@ function openDeleteSession(session: { id: string; name: string }) {
 async function confirmDeleteSession() {
   const session = deleteDialog.value
   if (!session) return
+  if (session.id === agent.activeRunSessionId.value) {
+    deleteDialog.value = null
+    await openRunningSession()
+    return
+  }
   await agent.deleteSession(session.id)
   deleteDialog.value = null
+  const activeSessionId = agent.activeSession.value?.id
+  if (activeSessionId) {
+    skippedRouteSessionId = activeSessionId
+    await router.replace({ path: '/home', query: { session_id: activeSessionId } })
+  } else {
+    await router.replace('/home')
+  }
 }
 
 function selectModel(model: { provider: string; id: string }) {
@@ -477,8 +593,8 @@ onMounted(async () => {
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   await Promise.all([agent.refreshModels(), agent.refreshSessions()])
-  if (await selectSessionFromRoute()) return
-  showNewConversationHome()
+  sessionsReady.value = true
+  await applyHomeSessionState()
 })
 
 onActivated(() => {
@@ -487,8 +603,7 @@ onActivated(() => {
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   agent.resumeTypewriter?.()
-  if (route.query.session_id) void selectSessionFromRoute()
-  else showNewConversationHome()
+  if (sessionsReady.value) void applyHomeSessionState()
 })
 
 onBeforeUnmount(() => {
@@ -507,9 +622,23 @@ onDeactivated(() => {
 watch(
   () => route.query.session_id,
   sessionId => {
-    if (sessionId) void selectSessionFromRoute()
-    else showNewConversationHome()
+    if (!sessionsReady.value || !shouldApplyHomeSessionState(route.path)) return
+    if (typeof sessionId === 'string' && sessionId === skippedRouteSessionId) {
+      skippedRouteSessionId = null
+      return
+    }
+    void applyHomeSessionState()
   }
+)
+
+watch(
+  () => taskStatus.value === 'waiting_approval' || agent.workspaceApprovalDraft.value?.status === 'pending',
+  needsApproval => {
+    if (!needsApproval || !workspaceCollapsed.value) return
+    workspaceCollapsed.value = false
+    persistWorkspaceState()
+  },
+  { immediate: true },
 )
 </script>
 
@@ -584,6 +713,47 @@ watch(
 
         <section v-else class="conversation-document">
           <div class="conversation-thread">
+            <section v-if="agent.runningInAnotherSession.value" class="cross-session-run" aria-live="polite">
+              <span class="material-symbols-outlined">sync</span>
+              <div>
+                <strong>另一个对话正在运行</strong>
+                <p>{{ runningSession?.title || 'Agent 任务' }}仍在后台执行，完成或停止后才能发起新任务。</p>
+              </div>
+              <button type="button" @click="openRunningSession">查看任务</button>
+            </section>
+
+            <section v-if="taskStateVisible" class="task-state" :data-status="taskStatus">
+              <div class="task-state__header">
+                <span class="task-state__status">
+                  <span class="material-symbols-outlined" :class="{ spinning: taskStatus === 'running' || taskStatus === 'applying' }">{{ taskStatusMeta.icon }}</span>
+                  {{ taskStatusLabel }}
+                </span>
+                <span v-if="taskPhaseLabel" class="task-state__phase">{{ taskPhaseLabel }}</span>
+              </div>
+              <h2 v-if="currentTask">{{ currentTask.title }}</h2>
+              <p>{{ agent.commandStatus.value || taskSummary }}</p>
+              <div v-if="taskTags.length" class="task-state__tags">
+                <span v-for="tag in taskTags" :key="tag">{{ tag }}</span>
+              </div>
+              <div v-if="currentTask && taskSteps.length" class="task-state__steps" aria-label="任务进度">
+                <span v-for="step in taskSteps" :key="step.key" :data-step-status="step.status">
+                  <i></i>{{ step.label }}
+                </span>
+              </div>
+              <div v-if="taskActions.length" class="task-state__actions">
+                <button
+                  v-for="action in taskActions"
+                  :key="action.key"
+                  type="button"
+                  :data-tone="action.tone || 'neutral'"
+                  @click="handleTaskAction(action.key)"
+                >
+                  <span class="material-symbols-outlined">{{ action.icon }}</span>
+                  {{ action.label }}
+                </button>
+              </div>
+            </section>
+
             <div class="message-stream">
               <div v-if="agent.loading.value" class="conversation-loading">
                 <span class="conversation-loading__spinner"></span>
@@ -624,30 +794,75 @@ watch(
       </div>
 
       <div v-if="hasContent" class="conversation-input-dock">
-        <div class="composer conversation-composer" role="search">
-          <button class="composer__icon" type="button" aria-label="添加附件">
-            <span class="material-symbols-outlined">attach_file</span>
-          </button>
-          <input
-            v-model="inputText"
-            data-agent-input="home"
-            placeholder="继续输入任务或补充信息..."
-            type="text"
-            @keydown.enter="handleSubmit"
-          />
-          <button class="composer__icon" type="button" aria-label="语音输入">
-            <span class="material-symbols-outlined">mic</span>
-          </button>
-          <button
-            class="composer__send"
-            type="button"
-            :disabled="agent.loading.value || agent.agentRunning.value || !inputText.trim()"
-            aria-label="发送"
-            @click="handleSubmit"
-          >
-            <span v-if="agent.loading.value || agent.agentRunning.value" class="composer__spinner"></span>
-            <span v-else class="material-symbols-outlined">arrow_forward</span>
-          </button>
+        <div class="composer-context">
+          <div v-if="selectedContextEntities.length" class="context-entities">
+            <span class="context-entities__label">上下文</span>
+            <span
+              v-for="entity in selectedContextEntities"
+              :key="`${entity.type}:${entity.id}`"
+              class="context-entity"
+            >
+              <span class="material-symbols-outlined">{{ entityTypeIcon(entity.type) }}</span>
+              <span class="context-entity__name">{{ entity.name || entity.id }}</span>
+              <button type="button" title="移除上下文" @click.stop.prevent="removeContextEntity(entity)">
+                <span class="material-symbols-outlined">close</span>
+              </button>
+            </span>
+          </div>
+
+          <div v-if="showMentionPanel" class="mention-panel">
+            <div class="mention-panel__title">从当前工作台选择上下文</div>
+            <button
+              v-for="entity in filteredMentionCandidates"
+              :key="`${entity.type}:${entity.id}`"
+              type="button"
+              class="mention-panel__item"
+              @click="appendMentionToInput(entity)"
+            >
+              <span class="material-symbols-outlined">{{ entityTypeIcon(entity.type) }}</span>
+              <span class="mention-panel__name">{{ entity.name || entity.id }}</span>
+              <span class="mention-panel__type">{{ entityTypeLabel(entity.type) }}</span>
+            </button>
+          </div>
+
+          <div class="composer conversation-composer" role="search">
+            <button class="composer__icon" type="button" aria-label="添加附件">
+              <span class="material-symbols-outlined">attach_file</span>
+            </button>
+            <input
+              v-model="inputText"
+              data-agent-input="home"
+              placeholder="继续输入任务，或输入 @ 选择工作台上下文..."
+              type="text"
+              @keydown.enter="handleSubmit"
+            />
+            <button class="composer__icon" type="button" aria-label="语音输入">
+              <span class="material-symbols-outlined">mic</span>
+            </button>
+            <button
+              v-if="agent.agentRunning.value"
+              data-agent-action="cancel"
+              class="composer__stop"
+              type="button"
+              title="停止任务"
+              aria-label="停止任务"
+              @click="handleTaskAction('abort')"
+            >
+              <span class="material-symbols-outlined">stop</span>
+            </button>
+            <button
+              v-else
+              data-agent-action="send"
+              class="composer__send"
+              type="button"
+              :disabled="agent.loading.value || agent.hasAnyRunningRun.value || !inputText.trim()"
+              aria-label="发送"
+              @click="handleSubmit"
+            >
+              <span v-if="agent.loading.value" class="composer__spinner"></span>
+              <span v-else class="material-symbols-outlined">arrow_forward</span>
+            </button>
+          </div>
         </div>
       </div>
     </main>
@@ -670,12 +885,20 @@ watch(
         :visible="hasContent"
         :collapsed="workspaceCollapsed"
         :session-id="agent.activeSession.value?.id"
-        :module-hint="workspaceModuleHint"
-        :artifacts="taskArtifacts"
-        :tool-results="agent.workspaceToolResults.value"
+        :projection="agent.workspaceProjection.value"
+        :approval-draft="agent.workspaceApprovalDraft.value"
         @toggle-collapse="toggleWorkspaceCollapsed"
-        @analyze-project="analyzeProject"
-        @open-project="openProject"
+        @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: agent.workspaceApprovalDraft.value?.runId || '' })"
+        @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
+        @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
+        @select-entity="agent.selectWorkspaceEntity"
+        @mention-entity="appendMentionToInput"
+        @view-project="projectId => openProject({ id: projectId })"
+        @edit-project="editProject"
+        @create-project-task="createProjectTask"
+        @view-project-tasks="viewProjectTasks"
+        @view-campaign="openCampaign"
+        @view-material="openMaterial"
       />
     </div>
   </div>
@@ -835,7 +1058,8 @@ watch(
 }
 
 .composer__icon,
-.composer__send {
+.composer__send,
+.composer__stop {
   display: grid;
   place-items: center;
   border: 0;
@@ -869,15 +1093,28 @@ watch(
   font-size: 19px;
 }
 
-.composer__send {
+.composer__send,
+.composer__stop {
   width: 36px;
   height: 36px;
   grid-row: 1;
   grid-column: 4;
   border-radius: 50%;
-  background: var(--notion-blue);
   color: #ffffff;
   transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.composer__send {
+  background: var(--notion-blue);
+}
+
+.composer__stop {
+  background: #dc2626;
+}
+
+.composer__stop:hover {
+  background: #b91c1c;
+  transform: translateY(-1px);
 }
 
 .composer__send:hover:not(:disabled) {
@@ -891,7 +1128,8 @@ watch(
   opacity: 1;
 }
 
-.composer__send .material-symbols-outlined {
+.composer__send .material-symbols-outlined,
+.composer__stop .material-symbols-outlined {
   font-size: 19px;
 }
 
@@ -1003,6 +1241,205 @@ watch(
   margin: 0 auto;
 }
 
+.cross-session-run,
+.task-state {
+  margin-bottom: 22px;
+  border: 1px solid var(--notion-line);
+  border-radius: 8px;
+  background: var(--notion-surface-soft);
+}
+
+.cross-session-run {
+  display: grid;
+  grid-template-columns: 24px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 14px;
+  color: var(--notion-charcoal);
+}
+
+.cross-session-run > .material-symbols-outlined {
+  color: var(--notion-blue);
+  font-size: 19px;
+  animation: home-spin 1.2s linear infinite;
+}
+
+.cross-session-run strong,
+.cross-session-run p {
+  display: block;
+  margin: 0;
+}
+
+.cross-session-run strong {
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.cross-session-run p {
+  margin-top: 2px;
+  color: var(--notion-steel);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.cross-session-run button,
+.task-state__actions button {
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--notion-charcoal);
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.cross-session-run button {
+  padding: 6px 10px;
+}
+
+.task-state {
+  padding: 14px 16px;
+}
+
+.task-state__header,
+.task-state__status,
+.task-state__steps,
+.task-state__actions {
+  display: flex;
+  align-items: center;
+}
+
+.task-state__header {
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.task-state__status {
+  gap: 5px;
+  color: var(--notion-blue);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.task-state__status .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.task-state__status .spinning {
+  animation: home-spin 1s linear infinite;
+}
+
+.task-state[data-status="waiting_approval"] .task-state__status {
+  color: #a16207;
+}
+
+.task-state[data-status="waiting_user_input"] .task-state__status {
+  color: #6d28d9;
+}
+
+.task-state[data-status="applying"] .task-state__status,
+.task-state[data-status="completed"] .task-state__status {
+  color: var(--notion-green);
+}
+
+.task-state[data-status="failed"] .task-state__status {
+  color: #b42318;
+}
+
+.task-state__phase {
+  color: var(--notion-stone);
+  font-size: 10px;
+}
+
+.task-state h2 {
+  margin: 8px 0 0;
+  color: var(--notion-ink);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+.task-state > p {
+  margin: 5px 0 0;
+  color: var(--notion-slate);
+  font-size: 12px;
+  line-height: 1.55;
+}
+
+.task-state__tags,
+.task-state__steps,
+.task-state__actions {
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.task-state__tags span {
+  padding: 3px 6px;
+  border-radius: 4px;
+  background: rgba(55, 53, 47, 0.06);
+  color: var(--notion-steel);
+  font-size: 10px;
+}
+
+.task-state__steps {
+  gap: 8px 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--notion-line);
+}
+
+.task-state__steps span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--notion-stone);
+  font-size: 10px;
+}
+
+.task-state__steps i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #d4d1cb;
+}
+
+.task-state__steps span[data-step-status="done"] i,
+.task-state__steps span[data-step-status="active"] i {
+  background: var(--notion-blue);
+}
+
+.task-state__steps span[data-step-status="active"] {
+  color: var(--notion-charcoal);
+  font-weight: 600;
+}
+
+.task-state__steps span[data-step-status="error"] i {
+  background: #dc2626;
+}
+
+.task-state__actions button {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 30px;
+  padding: 5px 9px;
+}
+
+.task-state__actions button[data-tone="primary"] {
+  border-color: var(--notion-blue);
+  background: var(--notion-blue);
+  color: #ffffff;
+}
+
+.task-state__actions button[data-tone="danger"] {
+  border-color: #fecaca;
+  color: #b42318;
+}
+
+.task-state__actions .material-symbols-outlined {
+  font-size: 14px;
+}
+
 .message-stream {
   margin-top: 0;
 }
@@ -1048,10 +1485,133 @@ watch(
   background: var(--notion-canvas);
 }
 
-.conversation-composer {
+.composer-context {
+  position: relative;
   width: min(100%, 720px);
   margin: 0 auto;
+}
+
+.conversation-composer {
+  width: 100%;
   background: #ffffff;
+}
+
+.context-entities {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+  padding: 0 8px;
+}
+
+.context-entities__label {
+  color: var(--notion-stone);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.context-entity {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 4px 4px 8px;
+  border: 1px solid rgba(35, 131, 226, 0.22);
+  border-radius: 999px;
+  background: var(--notion-blue-soft);
+  color: var(--notion-blue);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.context-entity > .material-symbols-outlined,
+.context-entity button .material-symbols-outlined {
+  font-size: 13px;
+}
+
+.context-entity__name {
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.context-entity button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+}
+
+.context-entity button:hover {
+  background: rgba(35, 131, 226, 0.12);
+}
+
+.mention-panel {
+  position: absolute;
+  right: 42px;
+  bottom: calc(100% + 8px);
+  left: 42px;
+  z-index: 20;
+  overflow: hidden;
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 8px;
+  background: var(--notion-canvas);
+  box-shadow: rgba(15, 15, 15, 0.14) 0 12px 30px;
+}
+
+.mention-panel__title {
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--notion-line);
+  color: var(--notion-stone);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.mention-panel__item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 8px;
+  padding: 9px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--notion-charcoal);
+  text-align: left;
+  cursor: pointer;
+}
+
+.mention-panel__item:hover {
+  background: var(--notion-surface);
+}
+
+.mention-panel__item > .material-symbols-outlined {
+  color: var(--notion-steel);
+  font-size: 16px;
+}
+
+.mention-panel__name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mention-panel__type {
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--notion-surface);
+  color: var(--notion-steel);
+  font-size: 10px;
 }
 
 .conversation-thread :deep(.user-message) {

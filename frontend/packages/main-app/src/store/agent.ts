@@ -1,7 +1,7 @@
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type { AgentSession, AgentMessage, AgentModel, AgentContentBlock, SideEffectEvent } from '@/api/agent'
-import type { AgentTimelineBlock, AgentPhase } from '@/composables/useAgentSession'
+import type { AgentCurrentTask, AgentTimelineBlock, AgentPhase } from '@/composables/useAgentSessionController'
 
 export const useAgentStore = defineStore('agent', () => {
   // 核心状态 - 使用 ref 而不是 reactive，确保可以直接赋值
@@ -17,7 +17,19 @@ export const useAgentStore = defineStore('agent', () => {
   const models = ref<AgentModel[]>([])
   const selectedModel = ref<{ provider: string; modelId: string } | null>(null)
   const loading = ref(false)
-  const error = ref<string | null>(null)
+  const errorsBySession = ref<Map<string, string | null>>(new Map())
+  const commandStatusBySession = ref<Map<string, string | null>>(new Map())
+  const currentTaskBySession = ref<Map<string, AgentCurrentTask | null>>(new Map())
+  const unscopedError = ref<string | null>(null)
+  const error = computed(() => activeSessionId.value
+    ? errorsBySession.value.get(activeSessionId.value) || null
+    : unscopedError.value)
+  const commandStatus = computed(() => activeSessionId.value
+    ? commandStatusBySession.value.get(activeSessionId.value) || null
+    : null)
+  const currentTask = computed(() => activeSessionId.value
+    ? currentTaskBySession.value.get(activeSessionId.value) || null
+    : null)
   const agentRunning = ref(false)
   const agentPhase = ref<AgentPhase>(null)
   const streamingMessage = ref<AgentMessage | null>(null)
@@ -108,11 +120,27 @@ export const useAgentStore = defineStore('agent', () => {
     workspaceBySession.value.delete(sessionId)
     sideEffectsBySession.value.delete(sessionId)
     stalePanelsBySession.value.delete(sessionId)
+    errorsBySession.value.delete(sessionId)
+    commandStatusBySession.value.delete(sessionId)
+    currentTaskBySession.value.delete(sessionId)
     localStorage.removeItem(`aniforce_timeline_${sessionId}`)
     localStorage.removeItem(`aniforce_workspace_${sessionId}`)
   }
   
   // Actions
+  function setError(sessionId: string | null, message: string | null): void {
+    if (sessionId) errorsBySession.value.set(sessionId, message)
+    else unscopedError.value = message
+  }
+
+  function setCommandStatus(sessionId: string, status: string | null): void {
+    commandStatusBySession.value.set(sessionId, status)
+  }
+
+  function setCurrentTask(sessionId: string, task: AgentCurrentTask | null): void {
+    currentTaskBySession.value.set(sessionId, task)
+  }
+
   function setMessages(sessionId: string, msgs: AgentMessage[]): void {
     messagesBySession.value.set(sessionId, msgs)
   }
@@ -378,7 +406,12 @@ export const useAgentStore = defineStore('agent', () => {
     models,
     selectedModel,
     loading,
+    errorsBySession,
+    commandStatusBySession,
+    currentTaskBySession,
     error,
+    commandStatus,
+    currentTask,
     agentRunning,
     agentPhase,
     streamingMessage,
@@ -400,6 +433,9 @@ export const useAgentStore = defineStore('agent', () => {
     restoreFromLocalStorage,
     persistToLocalStorage,
     removeSessionCache,
+    setError,
+    setCommandStatus,
+    setCurrentTask,
     setMessages,
     appendMessage,
     upsertActivityMessage,  // AG-UI: activity 消息插入/更新
@@ -430,3 +466,7 @@ export const useAgentStore = defineStore('agent', () => {
     updateToolCallResultInStreaming,
   }
 })
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useAgentStore, import.meta.hot))
+}

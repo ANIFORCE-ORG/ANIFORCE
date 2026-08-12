@@ -14,6 +14,24 @@ export interface AgentTaskPresentation {
   }
 }
 
+export type TaskPresentationStatus = 'created' | 'running' | 'waiting_user_input' | 'waiting_approval' | 'applying' | 'completed' | 'failed' | 'canceled'
+
+export const taskStatusPresentation: Record<TaskPresentationStatus, { label: string; icon: string }> = {
+  created: { label: '已创建', icon: 'radio_button_unchecked' },
+  running: { label: '进行中', icon: 'progress_activity' },
+  waiting_user_input: { label: '等待补充', icon: 'edit_note' },
+  waiting_approval: { label: '等待确认', icon: 'approval_delegation' },
+  applying: { label: '执行中', icon: 'bolt' },
+  completed: { label: '已完成', icon: 'check_circle' },
+  failed: { label: '失败', icon: 'error' },
+  canceled: { label: '已取消', icon: 'do_not_disturb_on' },
+}
+
+export function normalizeTaskPanelStatus(status: string): TaskPresentationStatus {
+  if (status in taskStatusPresentation) return status as TaskPresentationStatus
+  return 'running'
+}
+
 const skillLabels: Record<string, string> = {
   campaign_diagnosis: '广告计划诊断',
   project_review: '项目效果复盘',

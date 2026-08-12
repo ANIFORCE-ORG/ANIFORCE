@@ -4,7 +4,7 @@
  * 职责：管理 Agent run 对业务页面的投影、可编辑审批草稿、用户交互记录。
  * 不重新实现业务组件，只做投影容器和事件桥。
  */
-import { defineStore } from 'pinia'
+import { acceptHMRUpdate, defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 import type {
   ProjectFormModel,
@@ -58,6 +58,7 @@ export type WorkspaceProjectionMode =
 
 export interface WorkspaceApprovalDraft {
   id: string               // = checkpointId
+  sessionId: string
   runId: string
   checkpointId: string
   toolName: string
@@ -170,6 +171,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   // ==================== Approval Draft 操作 ====================
 
   function createApprovalDraft(
+    sessionId: string,
     checkpointId: string,
     runId: string,
     toolName: string,
@@ -186,6 +188,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
 
     const draft: WorkspaceApprovalDraft = {
       id: checkpointId,
+      sessionId,
       runId,
       checkpointId,
       toolName,
@@ -292,7 +295,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function getDraftSummaries(sessionId: string): Array<Record<string, unknown>> {
     const summaries: Array<Record<string, unknown>> = []
     for (const draft of approvalDrafts.value.values()) {
-      if (draft.status !== 'pending') continue
+      if (draft.sessionId !== sessionId || draft.status !== 'pending') continue
       summaries.push({
         checkpointId: draft.checkpointId,
         surface: draft.surface,
@@ -311,7 +314,7 @@ export const useWorkspaceStore = defineStore('workspace', () => {
   function getPendingApprovalSummaries(sessionId: string): Array<Record<string, unknown>> {
     const summaries: Array<Record<string, unknown>> = []
     for (const draft of approvalDrafts.value.values()) {
-      if (draft.status !== 'pending') continue
+      if (draft.sessionId !== sessionId || draft.status !== 'pending') continue
       summaries.push({
         runId: draft.runId,
         checkpointId: draft.checkpointId,
@@ -326,6 +329,9 @@ export const useWorkspaceStore = defineStore('workspace', () => {
     projectionsBySession.value.delete(sessionId)
     selectedEntitiesBySession.value.delete(sessionId)
     interactionsBySession.value.delete(sessionId)
+    for (const [checkpointId, draft] of approvalDrafts.value) {
+      if (draft.sessionId === sessionId) approvalDrafts.value.delete(checkpointId)
+    }
   }
 
   return {
@@ -366,6 +372,10 @@ export interface WorkspaceResultProjectionConfig {
   surface: Exclude<WorkspaceSurface, 'approval.review'>
   mode: Extract<WorkspaceProjectionMode, 'readonly'>
   resultToPayload: (result: unknown) => Record<string, unknown>
+}
+
+if (import.meta.hot) {
+  import.meta.hot.accept(acceptHMRUpdate(useWorkspaceStore, import.meta.hot))
 }
 
 export const workspaceResultProjectionRegistry: Record<string, WorkspaceResultProjectionConfig> = {
