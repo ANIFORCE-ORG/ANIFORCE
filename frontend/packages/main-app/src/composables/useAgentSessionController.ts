@@ -312,42 +312,44 @@ export function useAgentSessionController() {
       recentWorkspaceToolOutputs.value = []
     }
     try {
-      const snapshot = await getAgentSessionSnapshot(session.id)
-      store.setMessages(session.id, snapshot.messages)
-      applyPersistedTaskState(session.id, snapshot.state?.task_state, snapshot.pending_approval)
-      restoreTimelineFromCache()
-      restoreWorkspaceFromCache()
-      hydrateWorkspaceSnapshot(workspace, session.id, snapshot)
-      const hasPersistedRun = snapshot.latest_run
-        && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(String(snapshot.latest_run.status))
-      if (hasPersistedRun) setSessionCommandStatus(session.id, '任务正在后台执行')
-      if (hasPersistedRun && !selectingActiveRun && !store.agentRunning) {
-        const runId = String(snapshot.latest_run?.run_id || '')
-        store.agentRunning = true
-        store.agentPhase = { kind: 'waiting_model' }
-        store.resetStreamRuntime(session.id, runId)
-        store.currentRunLastSequence = snapshot.last_persisted_sequence
-        const controller = new AbortController()
-        store.setAbortController(controller)
-        void connectPersistedRun(
-          runId,
-          snapshot.last_persisted_sequence,
-          controller.signal,
-        ).then(async result => {
-          store.currentRunLastSequence = result.lastSequence
-          const refreshed = await getAgentSessionSnapshot(session.id)
-          store.setMessages(session.id, refreshed.messages)
-          applyPersistedTaskState(session.id, refreshed.state?.task_state, refreshed.pending_approval)
-          hydrateWorkspaceSnapshot(workspace, session.id, refreshed)
-        }).catch(err => {
-          if (err?.name !== 'AbortError') setSessionError(session.id, err?.message || '恢复 Agent 任务连接失败')
-        }).finally(() => {
-          store.agentRunning = false
-          store.agentPhase = null
-          store.streamingMessage = null
-          store.clearStreamRuntime()
-          setSessionCommandStatus(session.id, null)
-        })
+      if (!selectingActiveRun) {
+        const snapshot = await getAgentSessionSnapshot(session.id)
+        store.setMessages(session.id, snapshot.messages)
+        applyPersistedTaskState(session.id, snapshot.state?.task_state, snapshot.pending_approval)
+        restoreTimelineFromCache()
+        restoreWorkspaceFromCache()
+        hydrateWorkspaceSnapshot(workspace, session.id, snapshot)
+        const hasPersistedRun = snapshot.latest_run
+          && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(String(snapshot.latest_run.status))
+        if (hasPersistedRun) setSessionCommandStatus(session.id, '任务正在后台执行')
+        if (hasPersistedRun && !store.agentRunning) {
+          const runId = String(snapshot.latest_run?.run_id || '')
+          store.agentRunning = true
+          store.agentPhase = { kind: 'waiting_model' }
+          store.resetStreamRuntime(session.id, runId)
+          store.currentRunLastSequence = snapshot.last_persisted_sequence
+          const controller = new AbortController()
+          store.setAbortController(controller)
+          void connectPersistedRun(
+            runId,
+            snapshot.last_persisted_sequence,
+            controller.signal,
+          ).then(async result => {
+            store.currentRunLastSequence = result.lastSequence
+            const refreshed = await getAgentSessionSnapshot(session.id)
+            store.setMessages(session.id, refreshed.messages)
+            applyPersistedTaskState(session.id, refreshed.state?.task_state, refreshed.pending_approval)
+            hydrateWorkspaceSnapshot(workspace, session.id, refreshed)
+          }).catch(err => {
+            if (err?.name !== 'AbortError') setSessionError(session.id, err?.message || '恢复 Agent 任务连接失败')
+          }).finally(() => {
+            store.agentRunning = false
+            store.agentPhase = null
+            store.streamingMessage = null
+            store.clearStreamRuntime()
+            setSessionCommandStatus(session.id, null)
+          })
+        }
       }
     } catch (err: any) {
       setSessionError(session.id, err?.message || '加载 Agent 会话失败')
@@ -504,13 +506,13 @@ export function useAgentSessionController() {
           if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
           const usage = event.data.usage
           if (usage && typeof usage === 'object') assistant.usage = usage as any
-          markRunningToolsCompleted()
+          markRunningToolsCompleted(sessionId)
         }
 
         if (event.event === 'runtime.requires_action') {
           applyPersistedTaskState(sessionId, event.data.task_state as AgentSessionTaskState | undefined, event.data)
           drainTypewriter(false)
-          ensureAssistantMessage(assistant)
+          ensureAssistantMessage(assistant, sessionId)
           const checkpointId = String(event.data.checkpoint_id || '')
           const runIdStr = String(event.data.run_id || run.run_id)
           const interruptions = Array.isArray(event.data.interruptions) ? event.data.interruptions as any : []
@@ -525,7 +527,7 @@ export function useAgentSessionController() {
               } else if (rawArgs && typeof rawArgs === 'object') {
                 originalArgs = rawArgs as Record<string, unknown>
               }
-              workspace.createApprovalDraft(checkpointId, runIdStr, toolName, 'approval.review', originalArgs)
+              workspace.createApprovalDraft(sessionId, checkpointId, runIdStr, toolName, 'approval.review', originalArgs)
               workspace.upsertProjection(sessionId, {
                 id: `proj_approval_${checkpointId}`,
                 sessionId,
@@ -638,7 +640,7 @@ export function useAgentSessionController() {
         store.agentRunning = false
         store.agentPhase = null
         store.clearStreamRuntime()
-        markRunningToolsCompleted()
+        markRunningToolsCompleted(sessionId)
       }
       if (backgroundRecoveryStarted) return
       if (store.isTypewriterPaused() && store.streamingMessage) {
@@ -763,7 +765,7 @@ export function useAgentSessionController() {
     })
   }
 
-  function upsertTimelineTool(input: {
+  function upsertTimelineTool(sessionId: string, input: {
     id: string
     toolName: string
     status: 'running' | 'completed' | 'error'
@@ -772,7 +774,7 @@ export function useAgentSessionController() {
   }): void {
     if (isInvisibleTool(input.toolName, input.arguments)) return
     const presentation = toolPresentation(input.toolName, input.arguments, input.result, input.status)
-    const existing = timelineBlocks.value.find(item => item.type === 'tool_activity' && item.toolCallId === input.id)
+    const existing = (store.timelineBySession.get(sessionId) || []).find(item => item.type === 'tool_activity' && item.toolCallId === input.id)
     const now = Date.now()
     const block: AgentTimelineBlock = {
       ...timelineMeta({ id: `activity_tool_${input.id}`, existing, toolCallId: input.id, activityType: 'TOOL_CALL', now }),
@@ -786,8 +788,7 @@ export function useAgentSessionController() {
       arguments: input.arguments || (existing?.type === 'tool_activity' ? existing.arguments : undefined),
       result: input.result,
     }
-    if (!activeSession.value) return
-    store.upsertTimelineBlock(activeSession.value.id, block)
+    store.upsertTimelineBlock(sessionId, block)
   }
 
   function isInvisibleTool(toolName: string, args?: Record<string, unknown>): boolean {
@@ -827,12 +828,12 @@ export function useAgentSessionController() {
     }
   }
 
-  function appendBusinessResultBlock(toolCallId: string, toolName: string, result: unknown): void {
+  function appendBusinessResultBlock(sessionId: string, toolCallId: string, toolName: string, result: unknown): void {
     if (toolName !== 'list_projects') return
     const projects = extractProjects(result)
     if (!projects) return
     const blockId = `surface_project_list_${toolCallId}`
-    const existing = timelineBlocks.value.find(item => item.id === blockId)
+    const existing = (store.timelineBySession.get(sessionId) || []).find(item => item.id === blockId)
     const now = Date.now()
     const block: AgentTimelineBlock = {
       ...timelineMeta({ id: blockId, existing, toolCallId, activityType: 'BUSINESS_RESULT', now }),
@@ -843,8 +844,7 @@ export function useAgentSessionController() {
       sourceToolCallId: toolCallId,
       surfaceId: `project-list-${toolCallId}`,
     }
-    if (!activeSession.value) return
-    store.upsertTimelineBlock(activeSession.value.id, block)
+    store.upsertTimelineBlock(sessionId, block)
   }
 
   function summarizeProjectResult(result: unknown): string {
@@ -911,10 +911,8 @@ export function useAgentSessionController() {
     }
   }
 
-  function attachCurrentRunTimelineBlocks(parentMessageId: string | undefined): void {
+  function attachCurrentRunTimelineBlocks(parentMessageId: string | undefined, sessionId: string): void {
     if (!parentMessageId || !store.currentRunId) return
-    if (!activeSession.value) return
-    const sessionId = activeSession.value.id
     let changed = false
     const current = store.timelineBySession.get(sessionId) || []
     const updated = current.map(block => {
@@ -969,7 +967,7 @@ export function useAgentSessionController() {
   }): void {
     const parsed = parseAgentSdkEvent(event)
     if (parsed.kind === 'text') {
-      ensureAssistantMessage(options.assistant)
+      ensureAssistantMessage(options.assistant, sessionId)
       options.markFirstMessageDelta(parsed.delta.length)
       store.appendDeltaToStreaming('text', 'text', parsed.delta)
       return
@@ -977,7 +975,7 @@ export function useAgentSessionController() {
     if (parsed.kind === 'reasoning') {
       drainTypewriter(false)
       if (!streamingMessage.value) return
-      ensureAssistantMessage(streamingMessage.value)
+      ensureAssistantMessage(streamingMessage.value, sessionId)
       options.markFirstThinkingDelta(parsed.delta.length)
       store.appendDeltaToStreaming('thinking', 'thinking', parsed.delta)
       return
@@ -993,7 +991,7 @@ export function useAgentSessionController() {
       }
       executionTools.value = [...executionTools.value, tool].slice(-8)
       store.appendToolCallToStreaming({ id, name, arguments: args })
-      upsertTimelineTool({ id, toolName: name, status: 'running', arguments: args })
+      upsertTimelineTool(sessionId, { id, toolName: name, status: 'running', arguments: args })
       store.agentPhase = {
         kind: 'running_tools',
         tools: executionTools.value
@@ -1015,12 +1013,9 @@ export function useAgentSessionController() {
       }
       if (toolName) {
         if (id) store.updateToolCallResultInStreaming(id, result)
-        upsertTimelineTool({ id: id || `${toolName}_${Date.now()}`, toolName, status: 'completed', result })
-        appendBusinessResultBlock(id, toolName, result)
-        const sessionId = activeSession.value?.id
-        if (sessionId) {
-          handleWorkspaceProjectionToolOutput(sessionId, id, toolName, result)
-        }
+        upsertTimelineTool(sessionId, { id: id || `${toolName}_${Date.now()}`, toolName, status: 'completed', result })
+        appendBusinessResultBlock(sessionId, id, toolName, result)
+        handleWorkspaceProjectionToolOutput(sessionId, id, toolName, result)
       }
       const running = executionTools.value.filter(item => item.status === 'running')
       store.agentPhase = running.length
@@ -1029,11 +1024,11 @@ export function useAgentSessionController() {
     }
   }
 
-  function ensureAssistantMessage(message: AgentMessage): void {
+  function ensureAssistantMessage(message: AgentMessage, sessionId: string): void {
     if (store.currentAssistantMessageId) return
     message.id = `msg_${Date.now()}`
     store.currentAssistantMessageId = message.id
-    attachCurrentRunTimelineBlocks(message.id)
+    attachCurrentRunTimelineBlocks(message.id, sessionId)
   }
 
   function handleWorkspaceProjectionToolOutput(sessionId: string, toolCallId: string, toolName: string, result: unknown): void {
@@ -1113,7 +1108,7 @@ export function useAgentSessionController() {
     pendingWorkspaceProjectionRequests.value = pendingWorkspaceProjectionRequests.value.filter((_, index) => index !== actualIndex)
   }
 
-  function markRunningToolsCompleted(): void {
+  function markRunningToolsCompleted(sessionId: string): void {
     let changed = false
     executionTools.value = executionTools.value.map(tool => {
       if (tool.status !== 'running') return tool
@@ -1121,9 +1116,7 @@ export function useAgentSessionController() {
       return { ...tool, status: 'completed' }
     })
     if (changed) executionTools.value = [...executionTools.value]
-    
-    if (!activeSession.value) return
-    const sessionId = activeSession.value.id
+
     const current = store.timelineBySession.get(sessionId) || []
     const updated = current.map(block => {
       if (block.type !== 'tool_activity' || block.status !== 'running') return block
@@ -1273,14 +1266,14 @@ export function useAgentSessionController() {
           if (typeof finalOutput === 'string') completedAssistantContent = finalOutput
           const usage = event.data.usage
           if (usage && typeof usage === 'object') assistant.usage = usage as any
-          markRunningToolsCompleted()
+          markRunningToolsCompleted(sessionId)
           // 标记当前 approval draft 为 completed
           workspace.setApprovalDraftStatus(checkpointId, 'completed')
         }
         if (event.event === 'runtime.requires_action') {
           applyPersistedTaskState(sessionId, event.data.task_state as AgentSessionTaskState | undefined, event.data)
           drainTypewriter(false)
-          ensureAssistantMessage(assistant)
+          ensureAssistantMessage(assistant, sessionId)
         }
         if (event.event === 'runtime.error' || event.event === 'error') {
           throw new Error(String(event.data.message || '审批恢复失败'))
@@ -1303,7 +1296,7 @@ export function useAgentSessionController() {
       store.agentRunning = false
       store.agentPhase = null
       store.clearStreamRuntime()
-      markRunningToolsCompleted()
+      markRunningToolsCompleted(sessionId)
     }
   }
 
