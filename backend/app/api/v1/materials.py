@@ -316,8 +316,10 @@ async def sync_meta_materials(
                 access_token=connection.access_token,
                 app_id=app_id,
                 app_secret=app_secret,
+                request_timeout_seconds=settings.META_REQUEST_TIMEOUT_SECONDS,
             ),
             media_importer=OssMaterialMediaImporter(),
+            source_timeout_seconds=settings.META_MATERIAL_LIST_TIMEOUT_SECONDS,
         )
         result = await service.sync_account(
             user_id=current_user["id"],

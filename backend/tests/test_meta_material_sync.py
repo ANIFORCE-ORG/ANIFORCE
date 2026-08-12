@@ -14,6 +14,7 @@ from app.config.database import Base
 from app.models import (
     Material,
     MaterialPlatformAsset,
+    MaterialSyncRun,
     MaterialSyncRunItem,
     PlatformConnection,
     User,
@@ -114,6 +115,80 @@ def test_sync_reconciles_same_account_image_when_external_id_changes() -> None:
             assert platform_asset is not None
             assert platform_asset.external_asset_id == "123:shared-hash"
             assert platform_asset.remote_name == "Current Meta image"
+
+        await engine.dispose()
+
+    asyncio.run(scenario())
+
+
+def test_meta_source_timeout_does_not_hold_sqlite_writer_lock(tmp_path: Path) -> None:
+    class HangingSource:
+        def __init__(self) -> None:
+            self.started = asyncio.Event()
+
+        async def list_assets(self, ad_account_id: str, asset_types: set[str]):
+            self.started.set()
+            await asyncio.sleep(10)
+            return []
+
+    async def scenario() -> None:
+        database_path = tmp_path / "meta-timeout.db"
+        engine = create_async_engine(f"sqlite+aiosqlite:///{database_path}")
+        async with engine.begin() as connection:
+            await connection.run_sync(Base.metadata.create_all)
+        maker = async_sessionmaker(engine, expire_on_commit=False)
+
+        async with maker() as setup_session:
+            setup_session.add(User(id="user-1", email="u@example.com", password_hash="hash"))
+            setup_session.add(
+                PlatformConnection(
+                    id="connection-1",
+                    user_id="user-1",
+                    platform="Meta",
+                    account_id="meta-user-1",
+                    access_token="token",
+                    status="active",
+                )
+            )
+            await setup_session.commit()
+
+        source = HangingSource()
+        async with maker() as sync_session:
+            service = MetaMaterialSyncService(
+                session=sync_session,
+                source=source,
+                media_importer=UnexpectedImporter(),
+                source_timeout_seconds=0.1,
+            )
+            sync_task = asyncio.create_task(
+                service.sync_account(
+                    user_id="user-1",
+                    connection_id="connection-1",
+                    ad_account_id="act_123",
+                    asset_types={"image"},
+                )
+            )
+            await source.started.wait()
+
+            async with maker() as unrelated_session:
+                unrelated_session.add(
+                    User(id="user-2", email="other@example.com", password_hash="hash")
+                )
+                await asyncio.wait_for(unrelated_session.commit(), timeout=0.5)
+
+            result = await sync_task
+            await sync_session.commit()
+            assert result["status"] == "failed"
+            assert result["failed_count"] == 1
+            assert "timed out after 0.1 seconds" in result["error_summary"]
+
+        async with maker() as verification_session:
+            assert await verification_session.scalar(
+                select(func.count()).select_from(MaterialSyncRun)
+            ) == 1
+            assert await verification_session.scalar(
+                select(func.count()).select_from(User)
+            ) == 2
 
         await engine.dispose()
 

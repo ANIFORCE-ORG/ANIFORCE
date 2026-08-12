@@ -68,10 +68,17 @@ class MaterialMediaImporter(Protocol):
 class MetaSdkMaterialSource:
     """Read image and video assets through the Facebook Business SDK."""
 
-    def __init__(self, access_token: str, app_id: str, app_secret: str) -> None:
+    def __init__(
+        self,
+        access_token: str,
+        app_id: str,
+        app_secret: str,
+        request_timeout_seconds: float = 10.0,
+    ) -> None:
         self.access_token = access_token
         self.app_id = app_id
         self.app_secret = app_secret
+        self.request_timeout_seconds = request_timeout_seconds
 
     async def list_assets(
         self, ad_account_id: str, asset_types: set[str]
@@ -88,7 +95,12 @@ class MetaSdkMaterialSource:
         from facebook_business.adobjects.advideo import AdVideo
 
         api = FacebookAdsApi(
-            FacebookSession(self.app_id, self.app_secret, self.access_token)
+            FacebookSession(
+                self.app_id,
+                self.app_secret,
+                self.access_token,
+                timeout=self.request_timeout_seconds,
+            )
         )
         normalized_account_id = (
             ad_account_id if ad_account_id.startswith("act_") else f"act_{ad_account_id}"
@@ -213,10 +225,12 @@ class MetaMaterialSyncService:
         session: AsyncSession,
         source: MetaMaterialSource,
         media_importer: MaterialMediaImporter,
+        source_timeout_seconds: float = 30.0,
     ) -> None:
         self.session = session
         self.source = source
         self.media_importer = media_importer
+        self.source_timeout_seconds = source_timeout_seconds
 
     async def sync_account(
         self,
@@ -232,6 +246,23 @@ class MetaMaterialSyncService:
         if not asset_types or invalid_types:
             raise ValueError("asset_types must contain image and/or video")
 
+        # Do not acquire SQLite's single writer lock before remote I/O. A slow or
+        # unreachable Meta endpoint must not block unrelated requests such as chat.
+        source_error: Exception | None = None
+        try:
+            assets = await asyncio.wait_for(
+                self.source.list_assets(ad_account_id, asset_types),
+                timeout=self.source_timeout_seconds,
+            )
+        except TimeoutError:
+            assets = []
+            source_error = TimeoutError(
+                f"Meta asset listing timed out after {self.source_timeout_seconds:g} seconds"
+            )
+        except Exception as exc:
+            assets = []
+            source_error = exc
+
         run = MaterialSyncRun(
             user_id=user_id,
             connection_id=connection_id,
@@ -243,14 +274,10 @@ class MetaMaterialSyncService:
             status="running",
         )
         self.session.add(run)
-        await self.session.flush()
-
-        try:
-            assets = await self.source.list_assets(ad_account_id, asset_types)
-        except Exception as exc:
+        if source_error is not None:
             run.status = "failed"
             run.failed_count = 1
-            run.error_summary = _sanitize_error_message(exc)[:2000]
+            run.error_summary = _sanitize_error_message(source_error)[:2000]
             run.finished_at = datetime.utcnow()
             await self.session.flush()
             return _run_result(run)

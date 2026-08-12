@@ -54,6 +54,8 @@ class Settings(BaseSettings):
     META_APP_ID: str = ""
     META_APP_SECRET: str = ""
     META_SCOPES: str = ""
+    META_REQUEST_TIMEOUT_SECONDS: float = 10.0
+    META_MATERIAL_LIST_TIMEOUT_SECONDS: float = 30.0
 
     # Google OAuth 配置
     GOOGLE_CLIENT_ID: str = ""
