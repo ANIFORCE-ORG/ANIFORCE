@@ -770,7 +770,7 @@ watch(
   width: min(100%, 860px);
   min-height: 100%;
   margin: 0 auto;
-  padding: clamp(54px, 7vh, 82px) 24px 22px;
+  padding: clamp(104px, 14vh, 132px) 24px 22px;
   box-sizing: border-box;
   flex-direction: column;
 }
