@@ -471,11 +471,6 @@ Expected: `frontend/packages/main-app/src/components/layout/AppHeader.spec.ts` i
 }
 
 @media (max-width: 520px) {
-  .app-header {
-    padding-right: 12px;
-    padding-left: 12px;
-  }
-
   .header-actions {
     gap: 3px;
   }
