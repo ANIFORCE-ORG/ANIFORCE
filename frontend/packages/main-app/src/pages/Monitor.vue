@@ -41,7 +41,7 @@ const switchSession = (session: any) => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <SidebarNav :nav-items="navItems" :sessions="sessions" @switch-panel="switchPanel" @switch-session="switchSession" />
     <main class="flex flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
       <div class="flex h-[58px] items-center justify-between border-b border-slate-200 bg-white px-6 dark:border-slate-800 dark:bg-slate-900">

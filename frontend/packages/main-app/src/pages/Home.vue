@@ -13,6 +13,7 @@ import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
 import { navItems } from '@/config/navigation'
+import aniforceWorkflowHero from '@/assets/aniforce-workflow-hero.png'
 
 const router = useRouter()
 const route = useRoute()
@@ -63,28 +64,28 @@ const intentModes: Array<{
 
 const starterActions = [
   {
-    icon: 'folder_open',
+    icon: 'folder_copy',
     label: '查看现有项目',
     description: '拉取当前账号下的项目，并在右侧工作台打开项目列表。',
     prompt: '现在有哪些项目？',
     mode: 'chat' as const
   },
   {
-    icon: 'add_task',
+    icon: 'add_chart',
     label: '创建投放项目',
     description: '进入项目管理模式，先沉淀草稿再确认落库。',
     prompt: '帮我创建一个新的投放项目，需要先整理项目草稿。',
     mode: 'project' as const
   },
   {
-    icon: 'monitoring',
+    icon: 'query_stats',
     label: '分析投放表现',
     description: '结合项目、计划、素材和消耗数据做诊断。',
     prompt: '帮我分析当前投放项目和计划的表现。',
     mode: 'chat' as const
   },
   {
-    icon: 'auto_awesome',
+    icon: 'design_services',
     label: '生成素材 Brief',
     description: '基于投放目标生成可交给素材流程的 Brief。',
     prompt: '帮我为一个投放项目生成素材 Brief。',
@@ -531,13 +532,13 @@ watch(
     <main class="home-main">
       <div class="home-main__scroll">
         <section v-if="!hasContent" class="landing-document">
+          <img class="landing-visual" :src="aniforceWorkflowHero" alt="" aria-hidden="true" />
           <header class="landing-hero">
             <h1>又见面啦！有新的投放计划吗？</h1>
             <p>利用 AI 驱动的见解和素材生成，快速启动您的下一个全球营销活动。</p>
           </header>
 
-          <section v-if="!hasInteracted" class="quick-start" aria-labelledby="quick-start-title">
-            <h2 id="quick-start-title">快速开始</h2>
+          <section v-if="!hasInteracted" class="quick-start" aria-label="快捷入口">
             <div class="quick-grid">
               <button
                 v-for="action in starterActions"
@@ -741,7 +742,7 @@ watch(
   --notion-green: #0f9d73;
   display: flex;
   width: 100%;
-  height: calc(100vh - 101px);
+  height: 100vh;
   min-height: 620px;
   overflow: hidden;
   background: var(--notion-canvas);
@@ -767,32 +768,49 @@ watch(
 
 .landing-document {
   display: flex;
-  width: min(100%, 860px);
+  width: min(100%, 1080px);
   min-height: 100%;
   margin: 0 auto;
-  padding: clamp(154px, calc(14vh + 50px), 182px) 24px 22px;
+  padding: clamp(260px, 38vh, 720px) 36px 48px;
   box-sizing: border-box;
+  align-items: center;
   flex-direction: column;
 }
 
 .landing-hero {
-  text-align: left;
+  max-width: 820px;
+  text-align: center;
 }
 
 .landing-hero h1 {
   margin: 0;
   color: var(--notion-ink);
-  font-size: clamp(34px, 3vw, 44px);
+  font-size: clamp(34px, 3.2vw, 46px);
   font-weight: 600;
   line-height: 1.14;
   letter-spacing: -1px;
 }
 
 .landing-hero p {
-  margin: 13px 0 30px;
+  margin: 14px 0 0;
   color: var(--notion-steel);
   font-size: 15px;
   line-height: 1.6;
+}
+
+.home-shell.is-landing,
+.home-shell.is-landing .home-main,
+.home-shell.is-landing .home-main__scroll {
+  background: var(--notion-canvas);
+}
+
+.landing-visual {
+  display: block;
+  width: 260px;
+  height: auto;
+  flex: 0 0 auto;
+  margin-bottom: 28px;
+  object-fit: contain;
 }
 
 .composer {
@@ -804,7 +822,7 @@ watch(
   align-items: center;
   padding: 8px 10px;
   border: 1px solid var(--notion-line-strong);
-  border-radius: 20px;
+  border-radius: 12px;
   background: var(--notion-canvas);
   box-shadow: rgba(15, 15, 15, 0.06) 0 8px 24px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -906,20 +924,14 @@ watch(
 }
 
 .landing-input-dock {
-  width: 100%;
+  width: min(100%, 860px);
   margin: auto auto 0;
   padding-top: 32px;
 }
 
 .quick-start {
-  margin-top: 38px;
-}
-
-.quick-start h2 {
-  margin: 0 0 16px;
-  color: var(--notion-ink);
-  font-size: 18px;
-  font-weight: 600;
+  width: min(100%, 860px);
+  margin: 60px auto 0;
 }
 
 .quick-grid {
@@ -953,29 +965,26 @@ watch(
 
 .quick-card__icon {
   display: grid;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   place-items: center;
-  margin-bottom: 17px;
-  border-radius: 8px;
-  background: var(--notion-surface);
+  margin-bottom: 20px;
+  background: transparent;
   color: var(--notion-charcoal);
-  font-size: 19px;
+  font-size: 30px;
+  font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 32;
   box-shadow: none;
 }
 
 .quick-card:nth-child(2) .quick-card__icon {
-  background: #f3f0ff;
   color: #5645d4;
 }
 
 .quick-card:nth-child(3) .quick-card__icon {
-  background: #eef7f3;
   color: #0f7b5f;
 }
 
 .quick-card:nth-child(4) .quick-card__icon {
-  background: #eef6ff;
   color: var(--notion-blue);
 }
 
@@ -1211,7 +1220,7 @@ watch(
 @media (max-width: 720px) {
   .home-shell {
     height: auto;
-    min-height: calc(100vh - 101px);
+    min-height: 100vh;
   }
 
   .landing-document {

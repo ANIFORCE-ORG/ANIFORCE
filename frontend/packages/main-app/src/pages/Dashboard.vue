@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import { navItems } from '@/config/navigation'
@@ -54,6 +54,28 @@ const segments = [
   { name: 'US / PMax / Creative', detail: '降预算 · CPI $8.97 · ROAS 1.86x' },
   { name: 'CA / Drama Fans', detail: '继续测 · CPI $6.31 · ROAS 2.06x' },
 ]
+
+const trendPoints = [
+  { date: '05-21', spend: '$3,536', conversions: '583', roas: '2.34x', x: 91, spendY: 106, roasY: 138, barY: 116, barHeight: 39, tooltipLeft: 10 },
+  { date: '05-22', spend: '$3,647', conversions: '605', roas: '2.38x', x: 219, spendY: 98, roasY: 121, barY: 106, barHeight: 49, tooltipLeft: 19.2 },
+  { date: '05-23', spend: '$3,760', conversions: '626', roas: '2.42x', x: 347, spendY: 90, roasY: 104, barY: 99, barHeight: 56, tooltipLeft: 34.6 },
+  { date: '05-24', spend: '$4,071', conversions: '678', roas: '2.47x', x: 475, spendY: 82, roasY: 116, barY: 91, barHeight: 64, tooltipLeft: 50 },
+  { date: '05-25', spend: '$4,097', conversions: '695', roas: '2.52x', x: 603, spendY: 73, roasY: 83, barY: 78, barHeight: 77, tooltipLeft: 65.4 },
+  { date: '05-26', spend: '$4,519', conversions: '775', roas: '2.59x', x: 731, spendY: 57, roasY: 66, barY: 64, barHeight: 91, tooltipLeft: 80.8 },
+  { date: '05-27', spend: '$4,830', conversions: '870', roas: '2.66x', x: 859, spendY: 48, roasY: 57, barY: 50, barHeight: 105, tooltipLeft: 90 },
+]
+
+const hoveredTrendIndex = ref<number | null>(null)
+const selectedTrendIndex = ref<number | null>(null)
+const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
+const activeTrendPoint = computed(() => {
+  const index = activeTrendIndex.value
+  return index === null ? null : { ...trendPoints[index], index }
+})
+
+const toggleTrendSelection = (index: number) => {
+  selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index
+}
 
 const platforms = [
   {
@@ -195,15 +217,65 @@ onBeforeUnmount(() => {
           <div class="trend-grid">
             <div class="chart-panel">
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>消耗</span><span class="legend-item"><i class="legend-dot conversions"></i>转化</span><span class="legend-item"><i class="legend-dot roas"></i>ROAS</span></div>
-              <svg viewBox="60 24 830 162" preserveAspectRatio="none" role="img" aria-label="近七天消耗、转化和 ROAS 趋势图">
+              <svg viewBox="60 24 830 138" preserveAspectRatio="none" role="img" aria-label="近七天消耗、转化和 ROAS 趋势图">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
                 <g fill="#20a464" opacity=".8"><rect x="80" y="116" width="22" height="39" rx="3" /><rect x="208" y="106" width="22" height="49" rx="3" /><rect x="336" y="99" width="22" height="56" rx="3" /><rect x="464" y="91" width="22" height="64" rx="3" /><rect x="592" y="78" width="22" height="77" rx="3" /><rect x="720" y="64" width="22" height="91" rx="3" /><rect x="848" y="50" width="22" height="105" rx="3" /></g>
                 <path d="M91 106L219 98L347 90L475 82L603 73L731 57L859 48" fill="none" stroke="#4f8fe8" stroke-width="2.2" />
                 <path d="M91 138L219 121L347 104L475 116L603 83L731 66L859 57" fill="none" stroke="#dd7d00" stroke-width="2" />
                 <g fill="#4f8fe8" stroke="#fff" stroke-width="1.5"><circle cx="91" cy="106" r="3" /><circle cx="219" cy="98" r="3" /><circle cx="347" cy="90" r="3" /><circle cx="475" cy="82" r="3" /><circle cx="603" cy="73" r="3" /><circle cx="731" cy="57" r="3" /><circle cx="859" cy="48" r="3" /></g>
                 <g fill="#dd7d00" stroke="#fff" stroke-width="1.5"><circle cx="91" cy="138" r="3" /><circle cx="219" cy="121" r="3" /><circle cx="347" cy="104" r="3" /><circle cx="475" cy="116" r="3" /><circle cx="603" cy="83" r="3" /><circle cx="731" cy="66" r="3" /><circle cx="859" cy="57" r="3" /></g>
-                <g fill="#a4a097" font-size="8" text-anchor="middle"><text x="91" y="177">05-21</text><text x="219" y="177">05-22</text><text x="347" y="177">05-23</text><text x="475" y="177">05-24</text><text x="603" y="177">05-25</text><text x="731" y="177">05-26</text><text x="859" y="177">05-27</text></g>
+                <g v-if="activeTrendPoint" class="chart-active-markers" aria-hidden="true">
+                  <line :x1="activeTrendPoint.x" :x2="activeTrendPoint.x" y1="24" y2="155" />
+                  <rect :x="activeTrendPoint.x - 13" :y="activeTrendPoint.barY" width="26" :height="activeTrendPoint.barHeight" rx="4" />
+                  <circle class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="5" />
+                  <circle class="roas" :cx="activeTrendPoint.x" :cy="activeTrendPoint.roasY" r="5" />
+                </g>
+                <rect
+                  v-for="(point, index) in trendPoints"
+                  :key="`hit-${point.date}`"
+                  class="chart-hit-area"
+                  :class="{ selected: selectedTrendIndex === index }"
+                  :x="point.x - 64"
+                  y="24"
+                  width="128"
+                  height="138"
+                  role="button"
+                  tabindex="0"
+                  :aria-label="`${point.date}，消耗 ${point.spend}，转化 ${point.conversions}，ROAS ${point.roas}`"
+                  @mouseenter="hoveredTrendIndex = index"
+                  @mouseleave="hoveredTrendIndex = null"
+                  @focus="hoveredTrendIndex = index"
+                  @blur="hoveredTrendIndex = null"
+                  @click="toggleTrendSelection(index)"
+                  @keydown.enter.prevent="toggleTrendSelection(index)"
+                  @keydown.space.prevent="toggleTrendSelection(index)"
+                />
               </svg>
+              <div
+                v-if="activeTrendPoint"
+                class="chart-tooltip"
+                :style="{ left: `${activeTrendPoint.tooltipLeft}%` }"
+                role="status"
+                aria-live="polite"
+              >
+                <strong>{{ activeTrendPoint.date }}</strong>
+                <div><span><i class="legend-dot spend"></i>消耗</span><b>{{ activeTrendPoint.spend }}</b></div>
+                <div><span><i class="legend-dot conversions"></i>转化</span><b>{{ activeTrendPoint.conversions }}</b></div>
+                <div><span><i class="legend-dot roas"></i>ROAS</span><b>{{ activeTrendPoint.roas }}</b></div>
+              </div>
+              <div class="chart-axis-labels" aria-hidden="true">
+                <button
+                  v-for="(point, index) in trendPoints"
+                  :key="point.date"
+                  type="button"
+                  :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }"
+                  @mouseenter="hoveredTrendIndex = index"
+                  @mouseleave="hoveredTrendIndex = null"
+                  @focus="hoveredTrendIndex = index"
+                  @blur="hoveredTrendIndex = null"
+                  @click="toggleTrendSelection(index)"
+                >{{ point.date }}</button>
+              </div>
             </div>
             <aside class="chart-summary">
               <div class="summary-box"><span>筛选消耗</span><strong>$24,220</strong><small>来自当前 Campaign 筛选集合</small></div>
@@ -259,7 +331,7 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .dashboard-shell {
-  height: calc(100vh - 100px);
+  height: 100vh;
   width: 100%;
   display: flex;
   overflow: hidden;
@@ -417,21 +489,38 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .soft-chip { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border-radius: 5px; background: var(--surface); color: var(--slate); font-size: 8px; font-weight: 600; }
 
 .trend-grid { display: grid; grid-template-columns: minmax(0,1fr) 180px; align-items: start; gap: 8px; padding: 8px; }
-.chart-panel { min-width: 0; height: 212px; min-height: 0; padding: 7px 2px 0; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fcfcfb; }
+.chart-panel { position: relative; min-width: 0; height: 252px; min-height: 0; padding: 7px 2px 0; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fcfcfb; }
 .chart-legend { display: flex; align-items: center; gap: 12px; padding-left: 6px; color: var(--steel); font-size: 8px; }
 .legend-item { display: inline-flex; align-items: center; gap: 4px; }
 .legend-dot { width: 6px; height: 6px; border-radius: 50%; }
 .legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }.legend-dot.roas { background: #dd7d00; }
-.chart-panel svg { display: block; width: 100%; height: 180px; margin-top: -2px; overflow: visible; }
-.chart-summary { height: 212px; display: grid; grid-template-rows: repeat(3,1fr); gap: 0; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; background: #fff; }
-.summary-box { min-height: 0; padding: 10px 12px; border-bottom: 1px solid #f0efed; }
+.chart-panel svg { display: block; width: 100%; height: 202px; margin-top: -2px; overflow: visible; }
+.chart-axis-labels { display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 3.7%; color: var(--stone); font-size: 8px; line-height: 1; }
+.chart-axis-labels button { padding: 3px 2px; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; line-height: inherit; }
+.chart-axis-labels button.active { color: var(--charcoal); font-weight: 600; }
+.chart-axis-labels button.selected { color: #3276cc; }
+.chart-hit-area { fill: transparent; cursor: pointer; outline: none; }
+.chart-hit-area:focus { fill: rgb(79 143 232 / 4%); }
+.chart-active-markers { pointer-events: none; }
+.chart-active-markers line { stroke: rgb(100 116 139 / 28%); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart-active-markers rect { fill: none; stroke: #20a464; stroke-width: 2; }
+.chart-active-markers circle { fill: #ffffff; stroke-width: 2.5; }
+.chart-active-markers circle.spend { stroke: #4f8fe8; }
+.chart-active-markers circle.roas { stroke: #dd7d00; }
+.chart-tooltip { position: absolute; z-index: 4; top: 28px; width: 146px; padding: 8px 9px; border: 1px solid var(--hairline); border-radius: 7px; background: rgb(255 255 255 / 96%); box-shadow: rgba(15,15,15,.12) 0 8px 24px; color: var(--charcoal); pointer-events: none; transform: translateX(-50%); }
+.chart-tooltip > strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 9px; }
+.chart-tooltip > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 17px; color: var(--steel); font-size: 8px; }
+.chart-tooltip span { display: inline-flex; align-items: center; gap: 4px; }
+.chart-tooltip b { color: var(--charcoal); font-size: 9px; font-weight: 600; }
+.chart-summary { height: 252px; display: grid; grid-template-rows: repeat(3,1fr); gap: 0; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; background: #fff; }
+.summary-box { min-height: 0; display: flex; flex-direction: column; justify-content: center; padding: 10px 12px; border-bottom: 1px solid #f0efed; }
 .summary-box:last-child { border-bottom: 0; }
 .summary-box span { color: var(--steel); font-size: 8px; }
 .summary-box strong { display: block; margin: 3px 0 1px; color: var(--ink); font-size: 15px; line-height: 1.1; }
 .summary-box small { color: var(--steel); font-size: 8px; }
 
-.replay-split { display: grid; grid-template-columns: .86fr 1.14fr; align-items: start; gap: 12px; }
-.replay-split > .replay-card { align-self: start; }
+.replay-split { display: grid; grid-template-columns: .86fr 1.14fr; align-items: stretch; gap: 12px; }
+.replay-split > .replay-card { align-self: stretch; }
 .compact-body { padding: 10px 12px 12px; }
 .funnel-list { display: grid; gap: 11px; }
 .funnel-row { display: grid; grid-template-columns: 42px minmax(0,1fr) 58px 38px; align-items: center; gap: 8px; font-size: 9px; }

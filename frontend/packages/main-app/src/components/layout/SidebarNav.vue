@@ -65,6 +65,37 @@ const agentSessions = computed(() =>
 )
 
 const displaySessions = computed(() => agentSessions.value)
+const openSessionMenuId = ref<string | null>(null)
+
+const SESSION_NAME_MAX_LENGTH = 12
+const truncateSessionName = (name: string) => {
+  const characters = Array.from(name)
+  return characters.length > SESSION_NAME_MAX_LENGTH
+    ? `${characters.slice(0, SESSION_NAME_MAX_LENGTH).join('')}...`
+    : name
+}
+
+const closeSessionMenu = () => {
+  openSessionMenuId.value = null
+}
+
+const toggleSessionMenu = (sessionId: string) => {
+  openSessionMenuId.value = openSessionMenuId.value === sessionId ? null : sessionId
+}
+
+const handleRenameSession = (session: Session) => {
+  closeSessionMenu()
+  emit('rename-session', session)
+}
+
+const handleDeleteSession = (session: Session) => {
+  closeSessionMenu()
+  emit('delete-session', session)
+}
+
+const handleDocumentClick = () => {
+  closeSessionMenu()
+}
 
 const SIDEBAR_COLLAPSED_KEY = 'animagus_sidebar_collapsed'
 const isCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
@@ -79,6 +110,7 @@ watch(sidebarWidth, syncSidebarWidth)
 
 onBeforeUnmount(() => {
   document.documentElement.style.removeProperty('--workspace-sidebar-width')
+  document.removeEventListener('click', handleDocumentClick)
 })
 
 const toggleCollapse = () => {
@@ -107,6 +139,7 @@ const handleLogoClick = () => {
 }
 
 const handleSessionClick = (session: Session) => {
+  closeSessionMenu()
   if (route.path !== '/home') {
     router.push({ path: '/home', query: { session_id: session.id } })
     return
@@ -123,6 +156,7 @@ const handleCreateSession = () => {
 }
 
 onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
   void agent.refreshSessions()
 })
 </script>
@@ -229,19 +263,33 @@ onMounted(() => {
             v-for="session in displaySessions"
             :key="session.id"
             class="sidebar-session-item group flex items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
-            :class="session.active
-              ? 'sidebar-item-active'
-              : 'sidebar-item-idle'"
+            :class="[
+              session.active ? 'sidebar-item-active' : 'sidebar-item-idle',
+              { 'is-menu-open': openSessionMenuId === session.id }
+            ]"
             @click="handleSessionClick(session)"
           >
             <span class="material-symbols-outlined text-[11px]">chat</span>
-            <span class="text-[11px] flex-1 truncate">{{ session.name }}</span>
-            <div v-if="sessionActions" class="opacity-0 group-hover:opacity-100 flex items-center gap-[4px]">
-              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" title="重命名" @click.stop="emit('rename-session', session)">
+            <span class="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-[11px]" :title="session.name">{{ truncateSessionName(session.name) }}</span>
+            <div v-if="sessionActions" class="flex flex-none items-center gap-[4px] opacity-0 group-hover:opacity-100">
+              <button
+                class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+                type="button"
+                title="会话操作"
+                :aria-expanded="openSessionMenuId === session.id"
+                @click.stop="toggleSessionMenu(session.id)"
+              >
                 <span class="material-symbols-outlined text-[10px]">edit</span>
               </button>
-              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" title="删除" @click.stop="emit('delete-session', session)">
-                <span class="material-symbols-outlined text-[10px]">delete</span>
+            </div>
+            <div v-if="openSessionMenuId === session.id" class="session-action-menu" role="menu" @click.stop>
+              <button type="button" role="menuitem" @click.stop="handleRenameSession(session)">
+                <span class="material-symbols-outlined">edit</span>
+                <span>重命名</span>
+              </button>
+              <button class="session-action-menu__danger" type="button" role="menuitem" @click.stop="handleDeleteSession(session)">
+                <span class="material-symbols-outlined">delete</span>
+                <span>删除</span>
               </button>
             </div>
           </li>
@@ -271,7 +319,7 @@ onMounted(() => {
 
 .sidebar-notion::after {
   position: absolute;
-  z-index: 2;
+  z-index: 5;
   top: 0;
   right: 0;
   bottom: 0;
@@ -418,7 +466,73 @@ onMounted(() => {
 }
 
 .sidebar-session-item {
+  position: relative;
   gap: 7px !important;
+}
+
+.sidebar-session-item.is-menu-open {
+  z-index: 8;
+}
+
+.session-action-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 5px);
+  right: 5px;
+  width: 150px;
+  padding: 5px;
+  border: 1px solid #deddd9;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgb(15 15 15 / 14%), 0 1px 3px rgb(15 15 15 / 8%);
+}
+
+.session-action-menu > button {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 5px !important;
+  background: transparent;
+  color: var(--sidebar-charcoal) !important;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.session-action-menu > button:hover {
+  background: #f1f1ef !important;
+}
+
+.session-action-menu .material-symbols-outlined {
+  width: 16px;
+  flex: 0 0 16px;
+  font-size: 16px !important;
+}
+
+.session-action-menu > .session-action-menu__danger {
+  color: #d14343 !important;
+}
+
+.session-action-menu > .session-action-menu__danger:hover {
+  background: rgb(209 67 67 / 8%) !important;
+}
+
+:global(.dark) .session-action-menu {
+  border-color: #373737;
+  background: #202020;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 38%);
+}
+
+:global(.dark) .session-action-menu > button {
+  color: #e6e6e5 !important;
+}
+
+:global(.dark) .session-action-menu > button:hover {
+  background: #2a2a2a !important;
 }
 
 .sidebar-session-item > .material-symbols-outlined {

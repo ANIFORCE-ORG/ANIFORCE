@@ -370,7 +370,7 @@ const handleCloseToast = () => {
   --detail-stone: #a4a097;
   display: flex;
   width: 100%;
-  height: calc(100vh - 100px);
+  height: 100vh;
   overflow: hidden;
   background: #fff;
   color: var(--detail-charcoal);

@@ -185,7 +185,7 @@ const getStatusColor = (status: string) => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <!-- 左侧导航栏 -->
     <SidebarNav
       :nav-items="navItems"

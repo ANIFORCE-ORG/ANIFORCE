@@ -505,9 +505,15 @@ onBeforeUnmount(() => {
 
 .account-controls--sidebar {
   z-index: 4;
+  box-sizing: border-box;
+  width: 100%;
+  height: 57px;
+  min-height: 57px;
   flex: none;
+  display: flex;
+  align-items: center;
   padding: 8px 10px 10px 8px;
-  border-top: 1px solid rgba(55, 53, 47, 0.08);
+  border-top: 1px solid #e5e3df;
   background: #f7f7f5;
 }
 

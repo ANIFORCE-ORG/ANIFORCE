@@ -126,7 +126,7 @@ const openSetting = (path: string) => {
 .settings-shell {
   display: flex;
   width: 100%;
-  height: calc(100vh - 100px);
+  height: 100vh;
   overflow: hidden;
   background: #ffffff;
   color: #37352f;

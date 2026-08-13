@@ -769,7 +769,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-[#f6f7f9] dark:bg-slate-950">
+  <div class="flex h-screen w-full overflow-hidden bg-[#f6f7f9] dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -816,11 +816,11 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                 </div>
                 <div class="text-[10px] text-slate-500 dark:text-slate-400">更新时间 {{ mockOverview.updatedAt }}</div>
               </div>
-              <div class="grid gap-[10px] p-[12px] sm:grid-cols-2 xl:grid-cols-5">
+              <div class="overview-strip">
                 <div
                   v-for="card in overviewCards"
                   :key="card.label"
-                  class="min-h-[92px] rounded-md border border-slate-200 bg-slate-50 px-[13px] py-[12px] dark:border-slate-800 dark:bg-slate-950/40"
+                  class="overview-metric"
                 >
                   <div class="flex items-center gap-[6px] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                     <span>{{ card.label }}</span>
@@ -1176,6 +1176,32 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </template>
 
 <style scoped>
+.overview-strip {
+  display: grid;
+  overflow-x: auto;
+  grid-template-columns: repeat(5, minmax(180px, 1fr));
+  background: #f8fafc;
+}
+
+.overview-metric {
+  min-width: 0;
+  min-height: 116px;
+  padding: 18px 20px;
+  border-left: 1px solid rgb(226 232 240 / 55%);
+}
+
+.overview-metric:first-child {
+  border-left: 0;
+}
+
+:global(.dark) .overview-strip {
+  background: rgb(15 23 42 / 40%);
+}
+
+:global(.dark) .overview-metric {
+  border-left-color: rgb(51 65 85 / 45%);
+}
+
 .filter-select {
   min-width: 96px;
   height: 32px;

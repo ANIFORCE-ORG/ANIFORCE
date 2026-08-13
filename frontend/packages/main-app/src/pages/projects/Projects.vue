@@ -493,7 +493,7 @@ const handleSubmitCampaign = async (data: any) => {
 .projects-shell {
   display: flex;
   width: 100%;
-  height: calc(100vh - 100px);
+  height: 100vh;
   overflow: hidden;
   background: #f7f7f5;
 }
