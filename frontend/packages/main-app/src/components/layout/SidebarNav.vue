@@ -3,6 +3,7 @@ import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useAgentSession } from '@/composables/useAgentSession'
+import AccountControls from '@/components/layout/AccountControls.vue'
 import logoSvg from '@/assets/aniforce-logo-transparent.svg'
 
 interface NavItem {
@@ -133,7 +134,7 @@ onMounted(() => {
     aria-hidden="true"
   />
   <aside
-    class="sidebar-notion fixed bottom-0 left-0 top-0 z-50 flex flex-col overflow-hidden transition-all duration-300"
+    class="sidebar-notion fixed bottom-0 left-0 top-0 z-50 flex flex-col transition-all duration-300"
     :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
   >
     <div class="sidebar-brand-row" :class="{ 'is-collapsed': isCollapsed }">
@@ -247,6 +248,8 @@ onMounted(() => {
         </ul>
       </div>
     </nav>
+
+    <AccountControls variant="sidebar" :collapsed="isCollapsed" />
   </aside>
 </template>
 

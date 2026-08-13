@@ -13,26 +13,20 @@ describe('AppHeader visual contract', () => {
     )
   })
 
-  it('uses the approved Notion-balanced header treatment', () => {
+  it('delegates account controls outside workspace routes', () => {
     expect(source).toContain("<header :class=\"['app-header', { 'app-header--workspace': isWorkspaceShell }]\">")
+    expect(source).toContain("import AccountControls from '@/components/layout/AccountControls.vue'")
+    expect(source).toContain('<AccountControls v-if="!isWorkspaceShell" variant="header" />')
     expect(source).toContain('v-if="!isWorkspaceShell"')
-    expect(source).toContain('class="header-user"')
-    expect(source).toContain('class="header-avatar"')
-    expect(source).toContain('class="header-icon-button"')
-    expect(source).toContain('class="language-switcher"')
     expect(source).toContain('border-bottom: 1px solid #e9e9e7;')
+    expect(source).toContain('min-height: 57px;')
     expect(source).toContain(':global(.dark) .app-header')
-    expect(source).toContain('.header-user:focus-visible')
     expect(source).not.toContain('backdrop-blur-md')
     expect(source).not.toContain('bg-primary/10')
     expect(source).not.toContain('border-2 border-primary/30')
   })
 
-  it('fits narrow screens without moving or resizing the Logo', () => {
-    expect(source).toContain('@media (max-width: 520px)')
-    expect(source).toContain('  .header-user {\n    gap: 4px;')
-    expect(source).toContain('  .header-user-email {\n    max-width: 88px;')
-    expect(source).toContain('  .language-option {\n    padding-right: 4px;\n    padding-left: 4px;')
+  it('does not move or resize the public Logo', () => {
     expect(source).not.toContain('max-width: 112px;')
   })
 })
