@@ -20,7 +20,7 @@ describe('Codex-inspired workspace shell', () => {
     expect(headerSource).toContain('const isWorkspaceShell = computed(() => route.meta.workspaceShell === true)')
     expect(headerSource).toContain('v-if="!isWorkspaceShell"')
     expect(headerSource).toContain('class="h-10 w-auto max-w-[176px] object-contain logo-blue"')
-    expect(headerSource).toContain('border-bottom: 0.5px solid rgba(55, 53, 47, 0.09)')
+    expect(headerSource).toContain('border-bottom: 0.5px solid rgba(55, 53, 47, 0.16)')
     expect(headerSource).toContain('justify-content: flex-end')
   })
 

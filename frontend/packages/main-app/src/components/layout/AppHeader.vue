@@ -148,7 +148,7 @@ const handleLogout = () => {
 
 .app-header--workspace {
   justify-content: flex-end;
-  border-bottom: 0.5px solid rgba(55, 53, 47, 0.09);
+  border-bottom: 0.5px solid rgba(55, 53, 47, 0.16);
 }
 
 .header-actions {
