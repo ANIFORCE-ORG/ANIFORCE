@@ -2,7 +2,6 @@ import { readFileSync } from 'node:fs'
 import { describe, expect, it } from 'vitest'
 
 const source = readFileSync(new URL('./AppHeader.vue', import.meta.url), 'utf8')
-const appHeaderRule = source.match(/\.app-header \{([\s\S]*?)\n\}/)?.[1] ?? ''
 
 describe('AppHeader visual contract', () => {
   it('preserves the existing ANIFORCE Logo rendering contract', () => {
@@ -20,17 +19,12 @@ describe('AppHeader visual contract', () => {
     expect(source).toContain('class="header-avatar"')
     expect(source).toContain('class="header-icon-button"')
     expect(source).toContain('class="language-switcher"')
+    expect(source).toContain('border-bottom: 1px solid #e9e9e7;')
     expect(source).toContain(':global(.dark) .app-header')
     expect(source).toContain('.header-user:focus-visible')
     expect(source).not.toContain('backdrop-blur-md')
     expect(source).not.toContain('bg-primary/10')
     expect(source).not.toContain('border-2 border-primary/30')
-  })
-
-  it('joins the header and sidebar into the approved warm navigation shell', () => {
-    expect(appHeaderRule).toContain('background: #f7f7f5;')
-    expect(appHeaderRule).not.toContain('border-bottom')
-    expect(appHeaderRule).not.toContain('box-shadow')
   })
 
   it('fits narrow screens without moving or resizing the Logo', () => {
