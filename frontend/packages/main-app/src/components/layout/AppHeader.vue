@@ -6,6 +6,7 @@ import { useLanguage } from '@/store/language'
 import logoSvg from '@/assets/aniforce-logo-transparent.svg'
 
 const router = useRouter()
+const route = useRoute()
 const auth = useAuthStore()
 const { language, toggleLanguage } = useLanguage()
 
@@ -24,6 +25,7 @@ const copy = {
 }
 
 const t = computed(() => copy[language.value])
+const isWorkspaceShell = computed(() => route.meta.workspaceShell === true)
 
 const handleLogoClick = () => {
   if (auth.isLoggedIn) {
@@ -49,9 +51,9 @@ const handleLogout = () => {
 </script>
 
 <template>
-  <header class="app-header">
+  <header :class="['app-header', { 'app-header--workspace': isWorkspaceShell }]">
     <!-- Logo -->
-    <div class="flex items-center gap-2 cursor-pointer shrink-0" @click="handleLogoClick">
+    <div v-if="!isWorkspaceShell" class="flex items-center gap-2 cursor-pointer shrink-0" @click="handleLogoClick">
       <img :src="logoSvg" alt="ANIFORCE" class="h-10 w-auto max-w-[176px] object-contain logo-blue" />
     </div>
 
@@ -142,6 +144,11 @@ const handleLogout = () => {
   border-bottom: 1px solid #e9e9e7;
   background: #ffffff;
   color: #37352f;
+}
+
+.app-header--workspace {
+  justify-content: flex-end;
+  border-bottom: 0.5px solid rgba(55, 53, 47, 0.09);
 }
 
 .header-actions {
@@ -365,6 +372,10 @@ const handleLogout = () => {
   border-color: #2f2f2f;
   background: #191919;
   color: #e6e6e5;
+}
+
+:global(.dark) .app-header.app-header--workspace {
+  border-bottom-color: rgba(255, 255, 255, 0.08);
 }
 
 :global(.dark) .header-user:hover,

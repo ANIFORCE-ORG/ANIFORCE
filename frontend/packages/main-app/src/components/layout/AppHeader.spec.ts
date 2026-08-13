@@ -14,7 +14,8 @@ describe('AppHeader visual contract', () => {
   })
 
   it('uses the approved Notion-balanced header treatment', () => {
-    expect(source).toContain('<header class="app-header">')
+    expect(source).toContain("<header :class=\"['app-header', { 'app-header--workspace': isWorkspaceShell }]\">")
+    expect(source).toContain('v-if="!isWorkspaceShell"')
     expect(source).toContain('class="header-user"')
     expect(source).toContain('class="header-avatar"')
     expect(source).toContain('class="header-icon-button"')

@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useAgentSession } from '@/composables/useAgentSession'
+import logoSvg from '@/assets/aniforce-logo-transparent.svg'
 
 interface NavItem {
   id: string
@@ -66,6 +67,18 @@ const displaySessions = computed(() => agentSessions.value)
 
 const SIDEBAR_COLLAPSED_KEY = 'animagus_sidebar_collapsed'
 const isCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
+const sidebarWidth = computed(() => isCollapsed.value ? '52px' : '205px')
+
+const syncSidebarWidth = () => {
+  document.documentElement.style.setProperty('--workspace-sidebar-width', sidebarWidth.value)
+}
+
+syncSidebarWidth()
+watch(sidebarWidth, syncSidebarWidth)
+
+onBeforeUnmount(() => {
+  document.documentElement.style.removeProperty('--workspace-sidebar-width')
+})
 
 const toggleCollapse = () => {
   isCollapsed.value = !isCollapsed.value
@@ -86,6 +99,10 @@ const handleNavClick = (item: NavItem) => {
   if (item.path) {
     router.push(item.path)
   }
+}
+
+const handleLogoClick = () => {
+  router.push('/home')
 }
 
 const handleSessionClick = (session: Session) => {
@@ -110,26 +127,41 @@ onMounted(() => {
 </script>
 
 <template>
+  <div
+    class="sidebar-rail-spacer flex-none transition-all duration-300"
+    :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
+    aria-hidden="true"
+  />
   <aside
-    class="sidebar-notion bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
+    class="sidebar-notion fixed bottom-0 left-0 top-0 z-50 flex flex-col overflow-hidden transition-all duration-300"
     :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
   >
-    <nav class="sidebar-scroll flex-1 overflow-y-auto pb-0 p-[12px] pt-[20px] space-y-[20px] overflow-x-hidden">
+    <div class="sidebar-brand-row" :class="{ 'is-collapsed': isCollapsed }">
+      <button
+        v-if="!isCollapsed"
+        class="sidebar-brand-button"
+        type="button"
+        aria-label="返回首页"
+        @click="handleLogoClick"
+      >
+        <img :src="logoSvg" alt="ANIFORCE" class="sidebar-brand-logo logo-blue" />
+      </button>
+      <button
+        class="sidebar-collapse flex items-center justify-center transition-colors"
+        type="button"
+        :aria-label="isCollapsed ? '展开导航栏' : '收起导航栏'"
+        @click="toggleCollapse"
+      >
+        <span class="material-symbols-outlined">
+          {{ isCollapsed ? 'menu' : 'menu_open' }}
+        </span>
+      </button>
+    </div>
+
+    <nav class="sidebar-scroll flex-1 overflow-y-auto space-y-[20px] overflow-x-hidden">
       <div>
-        <div
-          class="sidebar-section-head mb-[6px]"
-          :class="isCollapsed ? '' : 'flex items-center justify-between px-[6px]'"
-        >
+        <div class="sidebar-section-head mb-[6px]">
           <span v-if="!isCollapsed" class="sidebar-section-title text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
-          <button
-            class="sidebar-collapse rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
-            :class="isCollapsed ? 'w-full py-[10px]' : 'p-[6px]'"
-            @click="toggleCollapse"
-          >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[15px]">
-              {{ isCollapsed ? 'menu' : 'menu_open' }}
-            </span>
-          </button>
         </div>
         <ul class="sidebar-nav-list space-y-[12px]">
           <li
@@ -228,14 +260,65 @@ onMounted(() => {
   --sidebar-charcoal: #37352f;
   --sidebar-slate: #5d5b54;
   --sidebar-steel: #787671;
-  border-color: var(--sidebar-line) !important;
+  border-right: 0 !important;
   background: var(--sidebar-canvas) !important;
   color: var(--sidebar-charcoal);
   font-family: "Notion Sans", "Avenir Next", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
+.sidebar-notion::after {
+  position: absolute;
+  z-index: 2;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  background: linear-gradient(90deg, rgba(55, 53, 47, 0) 0, rgba(55, 53, 47, 0.012) 34%, rgba(55, 53, 47, 0.032) 66%, rgba(55, 53, 47, 0.068) 100%);
+  content: '';
+  pointer-events: none;
+}
+
+.sidebar-brand-row {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  height: 57px;
+  min-height: 57px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 16px;
+}
+
+.sidebar-brand-row.is-collapsed {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-brand-button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sidebar-brand-logo {
+  width: auto;
+  height: 30px;
+  max-width: 94px;
+  object-fit: contain;
+}
+
+.logo-blue {
+  filter: brightness(0) saturate(100%) invert(45%) sepia(98%) saturate(1845%) hue-rotate(205deg) brightness(102%) contrast(98%);
+}
+
 .sidebar-scroll {
-  padding: 18px 8px 12px !important;
+  position: relative;
+  z-index: 1;
+  padding: 4px 8px 12px !important;
 }
 
 .sidebar-section-head,
@@ -360,5 +443,9 @@ nav::-webkit-scrollbar-thumb {
 }
 nav::-webkit-scrollbar-thumb:hover {
   background-color: #c8c4be;
+}
+
+:global(.dark) .sidebar-notion::after {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0.05) 34%, rgba(0, 0, 0, 0.12) 66%, rgba(0, 0, 0, 0.2) 100%);
 }
 </style>

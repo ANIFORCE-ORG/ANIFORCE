@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useLanguage } from '@/store/language'
 
+const route = useRoute()
 const { language } = useLanguage()
+const isWorkspaceShell = computed(() => route.meta.workspaceShell === true)
+const isHomeWorkspace = computed(() => route.name === 'home')
 
 const copy = {
   cn: {
@@ -28,7 +33,15 @@ const copy = {
 </script>
 
 <template>
-  <footer class="mt-auto border-t border-slate-200 px-5 py-3 dark:border-slate-800 md:px-10">
+  <footer
+    :class="[
+      'app-footer mt-auto border-t border-slate-200 px-5 py-3 dark:border-slate-800 md:px-10',
+      {
+        'app-footer--workspace': isWorkspaceShell,
+        'app-footer--home': isHomeWorkspace
+      }
+    ]"
+  >
     <div class="flex flex-row items-center justify-between gap-2">
       <!-- 左侧：版权信息、品牌归属、联系方式 -->
       <div class="flex items-center gap-5 text-left">
@@ -49,3 +62,30 @@ const copy = {
     </div>
   </footer>
 </template>
+
+<style scoped>
+.app-footer--workspace {
+  padding-left: calc(var(--workspace-sidebar-width, 205px) + 40px) !important;
+}
+
+.app-footer--home {
+  border-top: 0 !important;
+}
+
+@media (max-width: 767px) {
+  .app-footer--workspace {
+    padding-right: 12px !important;
+    padding-left: calc(var(--workspace-sidebar-width, 205px) + 12px) !important;
+  }
+
+  .app-footer--workspace > div,
+  .app-footer--workspace > div > div:first-child {
+    min-width: 0;
+    flex-wrap: wrap;
+  }
+
+  .app-footer--workspace a {
+    overflow-wrap: anywhere;
+  }
+}
+</style>
