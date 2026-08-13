@@ -425,13 +425,13 @@ const handleLogout = () => {
   }
 
   .header-user {
-    gap: 6px;
+    gap: 4px;
     padding-right: 4px;
     padding-left: 4px;
   }
 
   .header-user-email {
-    max-width: 112px;
+    max-width: 88px;
   }
 
   .language-switcher {
@@ -439,8 +439,8 @@ const handleLogout = () => {
   }
 
   .language-option {
-    padding-right: 6px;
-    padding-left: 6px;
+    padding-right: 4px;
+    padding-left: 4px;
   }
 }
 </style>

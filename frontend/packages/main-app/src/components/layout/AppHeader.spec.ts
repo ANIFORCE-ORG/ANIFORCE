@@ -26,4 +26,12 @@ describe('AppHeader visual contract', () => {
     expect(source).not.toContain('bg-primary/10')
     expect(source).not.toContain('border-2 border-primary/30')
   })
+
+  it('fits narrow screens without moving or resizing the Logo', () => {
+    expect(source).toContain('@media (max-width: 520px)')
+    expect(source).toContain('  .header-user {\n    gap: 4px;')
+    expect(source).toContain('  .header-user-email {\n    max-width: 88px;')
+    expect(source).toContain('  .language-option {\n    padding-right: 4px;\n    padding-left: 4px;')
+    expect(source).not.toContain('max-width: 112px;')
+  })
 })
