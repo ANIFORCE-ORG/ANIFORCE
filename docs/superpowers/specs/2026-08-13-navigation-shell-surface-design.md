@@ -42,11 +42,11 @@ The logo is out of scope. The implementation must not change:
 
 Expected production change:
 
-- `frontend/packages/main-app/src/components/AppHeader.vue`
+- `frontend/packages/main-app/src/components/layout/AppHeader.vue`
 
 Expected test change:
 
-- `frontend/packages/main-app/src/components/AppHeader.spec.ts`
+- `frontend/packages/main-app/src/components/layout/AppHeader.spec.ts`
 
 No change is planned for `SidebarNav.vue`, routing, authentication/demo mode, APIs, business logic, global styles, or logo assets.
 
