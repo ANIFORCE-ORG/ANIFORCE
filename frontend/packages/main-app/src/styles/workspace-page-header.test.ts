@@ -8,11 +8,14 @@ const readSource = (relativePath: string) =>
 
 const AST_ELEMENT = 1
 const AST_ATTRIBUTE = 6
+const AST_DIRECTIVE = 7
 
 interface CompilerAstProp {
   type: number
   name?: string
   value?: { content: string } | null
+  arg?: { content?: string } | null
+  exp?: { content?: string } | null
 }
 
 interface CompilerAstNode {
@@ -74,6 +77,52 @@ const staticClassTokens = (element: CompilerAstElement) =>
       .split(/\s+/)
       .filter(Boolean),
   )
+
+const descendantElements = (
+  element: CompilerAstElement,
+  predicate: (candidate: CompilerAstElement) => boolean,
+) => {
+  const matches: CompilerAstElement[] = []
+  const visit = (node: CompilerAstNode) => {
+    if (node.type === AST_ELEMENT) {
+      const candidate = node as CompilerAstElement
+      if (candidate !== element && predicate(candidate)) matches.push(candidate)
+    }
+    node.children?.forEach(visit)
+  }
+  visit(element)
+  return matches
+}
+
+const directive = (
+  element: CompilerAstElement,
+  name: string,
+  argument?: string,
+) =>
+  element.props.find(
+    (prop) =>
+      prop.type === AST_DIRECTIVE &&
+      prop.name === name &&
+      (argument === undefined || prop.arg?.content === argument),
+  )
+
+const cssRuleBodies = (source: string, selectorFragment: string) =>
+  [...source.matchAll(/([^{}]+)\{([^{}]*)\}/gs)]
+    .filter(([, selector]) => selector.includes(selectorFragment))
+    .map(([, , body]) => body)
+
+const cssDeclarations = (body: string) =>
+  body
+    .split(';')
+    .map(declaration => declaration.trim())
+    .filter(Boolean)
+    .map((declaration) => {
+      const separator = declaration.indexOf(':')
+      return {
+        property: declaration.slice(0, separator).trim(),
+        value: declaration.slice(separator + 1).trim(),
+      }
+    })
 
 const sharedHeaderPages = [
   '../pages/projects/ProjectDetail.vue',
@@ -203,6 +252,150 @@ describe('workspace page header contract', () => {
     const home = readSource('../pages/Home.vue')
     expect(home).not.toContain('data-workspace-page-header')
     expect(home).not.toContain('workspace-page-header')
+  })
+})
+
+describe('Projects workspace page header contract', () => {
+  const projects = readSource('../pages/projects/Projects.vue')
+
+  it('uses one semantic shared header with one embedded search and status toolbar', () => {
+    const header = workspaceHeaderElement(projects)
+    const headerClasses = staticClassTokens(header)
+    expect(headerClasses).toContain('projects-page-bar')
+    expect(headerClasses).toContain('workspace-page-header')
+
+    const directChildClasses = header.children
+      .filter((child): child is CompilerAstElement => child.type === AST_ELEMENT)
+      .map(child => staticClassTokens(child))
+    expect(directChildClasses).toHaveLength(3)
+    expect(directChildClasses[0]).toContain('projects-page-title-wrap')
+    expect(directChildClasses[1]).toContain('projects-toolbar')
+    expect(directChildClasses[2]).toContain('projects-page-actions')
+
+    const toolbar = descendantElements(
+      header,
+      element => staticClassTokens(element).has('projects-toolbar'),
+    )
+    expect(toolbar, 'expected exactly one Projects toolbar inside the header').toHaveLength(1)
+
+    const searchInputs = descendantElements(
+      toolbar[0],
+      element => element.tag.toLowerCase() === 'input',
+    )
+    const statusFilters = descendantElements(
+      toolbar[0],
+      element => staticClassTokens(element).has('projects-status-filter'),
+    )
+    expect(searchInputs).toHaveLength(1)
+    expect(statusFilters).toHaveLength(1)
+
+    expect(staticAttribute(searchInputs[0], 'aria-label')?.value?.content).toBe(
+      '搜索项目名称或标签',
+    )
+    expect(directive(searchInputs[0], 'model')?.exp?.content).toBe('searchQuery')
+    expect(directive(searchInputs[0], 'on', 'input')?.exp?.content).toBe('handleSearch')
+
+    expect(staticAttribute(statusFilters[0], 'aria-label')?.value?.content).toBe(
+      '按项目状态筛选',
+    )
+    expect(directive(statusFilters[0], 'model')?.exp?.content).toBe('filterStatus')
+    expect(directive(statusFilters[0], 'on', 'change')?.exp?.content).toBe('handleSearch')
+
+    const createButtons = descendantElements(
+      header,
+      element => staticClassTokens(element).has('projects-create-button'),
+    )
+    expect(createButtons).toHaveLength(1)
+    expect(staticAttribute(createButtons[0], 'aria-label')?.value?.content).toBe(
+      '创建项目',
+    )
+  })
+
+  it('keeps Projects filtering, search handling, and create handling intact', () => {
+    expect(projects).toContain("filterStatus.value !== 'all'")
+    expect(projects).toContain('p.name.toLowerCase().includes(query)')
+    expect(projects).toContain(
+      'p.tags.some(tag => tag.toLowerCase().includes(query))',
+    )
+    expect(projects).toContain(
+      `const handleSearch = () => {\n  // 筛选逻辑在 computed 中处理\n}`,
+    )
+    expect(projects).toContain(
+      `const handleCreateProject = () => {\n  editingProject.value = null\n  showCreateModal.value = true\n}`,
+    )
+    expect(projects).toContain('@click="handleCreateProject"')
+  })
+
+  it('uses the fixed-height header grid and transparent zero-box toolbar contract', () => {
+    const pageBarRules = cssRuleBodies(projects, '.projects-page-bar')
+    expect(pageBarRules.length).toBeGreaterThan(0)
+    pageBarRules.forEach((body) => {
+      expect(body).not.toMatch(/\b(?:min-)?height\s*:/)
+    })
+
+    expect(projects).toMatch(
+      /\.projects-page-bar\s*\{[^}]*\bdisplay:\s*grid;[^}]*\bgrid-template-columns:\s*auto minmax\(180px,\s*1fr\) auto;[^}]*\balign-items:\s*center;[^}]*\bgap:\s*14px;/s,
+    )
+
+    const toolbarRules = cssRuleBodies(projects, '.projects-toolbar')
+    expect(toolbarRules.length).toBeGreaterThan(0)
+    toolbarRules.forEach((body) => {
+      const declarations = cssDeclarations(body)
+      expect(
+        declarations.filter(({ property }) => property === 'padding'),
+      ).toEqual(
+        declarations
+          .filter(({ property }) => property === 'padding')
+          .map(({ property }) => ({ property, value: '0' })),
+      )
+      expect(
+        declarations.filter(({ property }) => /^border(?:-[\w-]+)?$/.test(property)),
+      ).toEqual(
+        declarations
+          .filter(({ property }) => /^border(?:-[\w-]+)?$/.test(property))
+          .map(({ property }) => ({ property, value: '0' })),
+      )
+      expect(
+        declarations.filter(({ property }) => /^background(?:-color)?$/.test(property)),
+      ).toEqual(
+        declarations
+          .filter(({ property }) => /^background(?:-color)?$/.test(property))
+          .map(({ property }) => ({ property, value: 'transparent' })),
+      )
+    })
+    expect(projects).toMatch(
+      /\.projects-toolbar\s*\{[^}]*\bmin-width:\s*0;[^}]*\bdisplay:\s*grid;[^}]*\bgrid-template-columns:\s*minmax\(140px,\s*1fr\) 112px;[^}]*\bgap:\s*7px;[^}]*\bpadding:\s*0;[^}]*\bborder:\s*0;[^}]*\bbackground:\s*transparent;/s,
+    )
+    expect(projects).toMatch(
+      /\.projects-search-field input,\s*\.projects-status-filter\s*\{[^}]*\bheight:\s*34px;/s,
+    )
+  })
+
+  it('keeps Projects controls on one responsive header row', () => {
+    expect(projects).toMatch(
+      /@media \(max-width: 1180px\)[\s\S]*?\.projects-page-subtitle\s*\{\s*display:\s*none;\s*\}/,
+    )
+    expect(projects).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*?\.projects-view-switch,\s*\.projects-create-label\s*\{\s*display:\s*none;\s*\}/,
+    )
+    expect(projects).toMatch(
+      /@media \(max-width: 900px\)[\s\S]*?\.projects-create-button\s*\{[^}]*\bwidth:\s*34px;[^}]*\bheight:\s*34px;/,
+    )
+    expect(projects).toMatch(
+      /@media \(max-width: 620px\)[\s\S]*?\.projects-page-title-content\s*\{\s*display:\s*none;\s*\}/,
+    )
+    expect(projects).toMatch(
+      /@media \(max-width: 620px\)[\s\S]*?\.projects-page-bar\s*\{[^}]*\bpadding:\s*0 14px;/,
+    )
+    expect(projects).toMatch(
+      /@media \(max-width: 620px\)[\s\S]*?\.projects-toolbar\s*\{[^}]*\bgrid-template-columns:\s*minmax\(120px,\s*1fr\) 104px;/,
+    )
+    expect(projects).toMatch(
+      /@media \(max-width: 520px\)[\s\S]*?\.projects-toolbar\s*\{[^}]*\bgrid-template-columns:\s*1fr;/,
+    )
+    expect(projects).toMatch(
+      /@media \(max-width: 520px\)[\s\S]*?\.projects-status-filter\s*\{\s*display:\s*none;\s*\}/,
+    )
   })
 })
 

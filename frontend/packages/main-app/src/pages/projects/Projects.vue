@@ -348,7 +348,7 @@ const handleSubmitCampaign = async (data: any) => {
     <!-- 中间项目展示区 -->
     <main class="projects-main">
       <!-- Header -->
-      <div class="projects-page-bar">
+      <header class="projects-page-bar workspace-page-header" data-workspace-page-header>
         <div class="projects-page-title-wrap">
           <span class="projects-page-icon">
             <span class="material-symbols-outlined">folder_open</span>
@@ -357,6 +357,28 @@ const handleSubmitCampaign = async (data: any) => {
             <h1 class="projects-page-title">项目管理</h1>
             <p class="projects-page-subtitle">管理项目列表、筛选视图与 Campaign 创建入口</p>
           </div>
+        </div>
+        <div class="projects-toolbar">
+          <div class="projects-search-field">
+            <span class="material-symbols-outlined">search</span>
+            <input
+              v-model="searchQuery"
+              type="text"
+              placeholder="搜索项目名称或标签…"
+              aria-label="搜索项目名称或标签"
+              @input="handleSearch"
+            />
+          </div>
+          <select
+            v-model="filterStatus"
+            class="projects-status-filter"
+            aria-label="按项目状态筛选"
+            @change="handleSearch"
+          >
+            <option v-for="filter in statusFilters" :key="filter.value" :value="filter.value">
+              {{ filter.label }}
+            </option>
+          </select>
         </div>
         <div class="projects-page-actions">
           <!-- View Toggle -->
@@ -385,37 +407,14 @@ const handleSubmitCampaign = async (data: any) => {
           <button
             type="button"
             class="projects-create-button"
+            aria-label="创建项目"
             @click="handleCreateProject"
           >
             <span class="material-symbols-outlined">add</span>
             <span class="projects-create-label">创建项目</span>
           </button>
         </div>
-      </div>
-
-      <!-- Search & Filter Bar -->
-      <div class="projects-toolbar">
-        <div class="projects-search-field">
-          <span class="material-symbols-outlined">search</span>
-          <input
-            v-model="searchQuery"
-            type="text"
-            placeholder="搜索项目名称或标签…"
-            aria-label="搜索项目名称或标签"
-            @input="handleSearch"
-          />
-        </div>
-        <select
-          v-model="filterStatus"
-          class="projects-status-filter"
-          aria-label="按项目状态筛选"
-          @change="handleSearch"
-        >
-          <option v-for="filter in statusFilters" :key="filter.value" :value="filter.value">
-            {{ filter.label }}
-          </option>
-        </select>
-      </div>
+      </header>
 
       <!-- Projects List -->
       <div class="projects-scroll-area">
@@ -509,12 +508,10 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 .projects-page-bar {
-  min-height: 54px;
-  flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: auto minmax(180px, 1fr) auto;
   align-items: center;
-  justify-content: space-between;
-  gap: 20px;
+  gap: 14px;
   padding: 0 clamp(24px, 3vw, 48px);
   border-bottom: 1px solid #e5e3df;
   background: rgba(255, 255, 255, .88);
@@ -631,14 +628,14 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 .projects-toolbar {
-  flex: 0 0 auto;
+  min-width: 0;
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) 118px;
+  grid-template-columns: minmax(140px, 1fr) 112px;
   align-items: center;
-  gap: 9px;
-  padding: 12px clamp(24px, 3vw, 48px);
-  border-bottom: 1px solid #e5e3df;
-  background: #fafaf9;
+  gap: 7px;
+  padding: 0;
+  border: 0;
+  background: transparent;
 }
 
 .projects-search-field {
@@ -659,7 +656,7 @@ const handleSubmitCampaign = async (data: any) => {
 .projects-search-field input,
 .projects-status-filter {
   width: 100%;
-  height: 36px;
+  height: 34px;
   border: 1px solid #c8c4be;
   border-radius: 8px;
   background: #ffffff;
@@ -773,14 +770,12 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 .dark .projects-main,
-.dark .projects-toolbar,
 .dark .projects-scroll-area {
   background: #191919;
   color: #f3f3f2;
 }
 
-.dark .projects-page-bar,
-.dark .projects-toolbar {
+.dark .projects-page-bar {
   border-color: #373737;
 }
 
@@ -815,18 +810,39 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 @media (max-width: 1180px) {
+  .projects-page-subtitle {
+    display: none;
+  }
+
   .projects-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 
-@media (max-width: 720px) {
+@media (max-width: 900px) {
+  .projects-view-switch,
+  .projects-create-label {
+    display: none;
+  }
+
+  .projects-create-button {
+    width: 34px;
+    height: 34px;
+    padding: 0;
+  }
+}
+
+@media (max-width: 620px) {
+  .projects-page-title-content {
+    display: none;
+  }
+
   .projects-page-bar {
-    min-height: 54px;
+    padding: 0 14px;
   }
 
   .projects-toolbar {
-    grid-template-columns: minmax(0, 1fr) 104px;
+    grid-template-columns: minmax(120px, 1fr) 104px;
   }
 
   .projects-content {
@@ -839,27 +855,8 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 @media (max-width: 520px) {
-  .projects-page-bar {
-    min-height: 58px;
-    padding: 0 14px;
-  }
-
-  .projects-view-switch {
-    display: none;
-  }
-
-  .projects-create-button {
-    width: 34px;
-    padding: 0;
-  }
-
-  .projects-create-label {
-    display: none;
-  }
-
   .projects-toolbar {
     grid-template-columns: 1fr;
-    padding: 10px 14px;
   }
 
   .projects-status-filter {
