@@ -29,13 +29,50 @@ const workspaceRouteComponents = [...routerSource.matchAll(
   /component:\s*\(\)\s*=>\s*import\('(@\/pages\/[^']+\.vue)'\),\s*meta:\s*\{ workspaceShell: true \}/g,
 )].map(match => match[1])
 
+const staticClassTokens = (attributes: string) => {
+  const classAttribute = attributes.match(/(?:^|\s)class="([^"]*)"/)
+  return classAttribute
+    ? classAttribute[1].split(/\s+/).filter(Boolean)
+    : null
+}
+
 const rootClassTokens = (source: string) => {
   const root = source.match(/<template>(?:\s|<!--[\s\S]*?-->)*<[a-z][\w-]*\b([^>]*)>/)
   expect(root, 'expected first template element to have a static class').not.toBeNull()
 
-  const classAttribute = root![1].match(/\bclass="([^"]*)"/)
-  expect(classAttribute, 'expected first template element to have a static class').not.toBeNull()
-  return classAttribute![1].split(/\s+/)
+  const tokens = staticClassTokens(root![1])
+  expect(tokens, 'expected first template element to have a static class').not.toBeNull()
+  return tokens!
+}
+
+const elementClassTokens = (
+  source: string,
+  tagName: string,
+  requiredTokens: string[],
+) => {
+  const matches = [...source.matchAll(new RegExp(`<${tagName}\\b([^>]*)>`, 'g'))]
+    .map(match => staticClassTokens(match[1]))
+    .filter((tokens): tokens is string[] =>
+      tokens !== null && requiredTokens.every(token => tokens.includes(token)),
+    )
+
+  expect(
+    matches,
+    `expected exactly one <${tagName}> with class tokens: ${requiredTokens.join(', ')}`,
+  ).toHaveLength(1)
+  return matches[0]
+}
+
+const cssDeclarationValue = (source: string, selector: string, property: string) => {
+  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+  const rule = source.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`))
+  expect(rule, `expected CSS rule for ${selector}`).not.toBeNull()
+
+  const declaration = rule![1].match(
+    new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+?)\\s*(?:;|$)`),
+  )
+  expect(declaration, `expected ${property} declaration in ${selector}`).not.toBeNull()
+  return declaration![1].trim()
 }
 
 describe('workspace page canvas contract', () => {
@@ -57,25 +94,54 @@ describe('workspace page canvas contract', () => {
     const createCampaign = readSource('../pages/campaigns/CreateCampaign.vue')
     const material = readSource('../pages/creatives/Material.vue')
 
-    expect(monitor).not.toContain(
-      '<main class="flex flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">',
+    const monitorCanvas = elementClassTokens(
+      monitor,
+      'main',
+      ['flex-1', 'flex-col', 'overflow-hidden'],
     )
-    expect(createCampaign).not.toContain(
-      '<div class="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">',
+    expect(monitorCanvas).toContain('workspace-page-canvas')
+    expect(monitorCanvas).not.toContain('bg-slate-50')
+    expect(monitorCanvas).toContain('dark:bg-slate-950')
+
+    const createCampaignCanvas = elementClassTokens(
+      createCampaign,
+      'div',
+      ['flex-1', 'flex-col', 'overflow-hidden'],
     )
-    expect(projects).not.toContain('background: #f7f7f5;')
-    expect(material).not.toContain(
-      '<div class="flex h-screen w-full overflow-hidden bg-[#f6f7f9] dark:bg-slate-950">',
-    )
+    expect(createCampaignCanvas).toContain('workspace-page-canvas')
+    expect(createCampaignCanvas).not.toContain('bg-slate-50')
+    expect(createCampaignCanvas).toContain('dark:bg-slate-950')
+
+    expect(cssDeclarationValue(projects, '.projects-shell', 'background'))
+      .toBe('var(--workspace-canvas)')
+
+    const materialCanvas = rootClassTokens(material)
+    expect(materialCanvas).toContain('workspace-page-canvas')
+    expect(materialCanvas).not.toContain('bg-[#f6f7f9]')
   })
 
   it('preserves representative component-level soft surfaces', () => {
     const monitor = readSource('../pages/Monitor.vue')
     const material = readSource('../pages/creatives/Material.vue')
 
-    expect(monitor).toContain('<thead class="bg-slate-50 text-slate-500 dark:bg-slate-800/50">')
-    expect(material).toContain('border-dashed border-slate-300 bg-slate-50')
-    expect(material).toContain('border-l border-slate-200 bg-[#f6f7f9] shadow-2xl')
+    const monitorTableHead = elementClassTokens(monitor, 'thead', [])
+    expect(monitorTableHead).toContain('bg-slate-50')
+    expect(monitorTableHead).toContain('text-slate-500')
+    expect(monitorTableHead).toContain('dark:bg-slate-800/50')
+
+    const materialDropZone = elementClassTokens(
+      material,
+      'div',
+      ['min-h-[220px]', 'border-dashed', 'border-slate-300'],
+    )
+    expect(materialDropZone).toContain('bg-slate-50')
+
+    const materialDrawer = elementClassTokens(
+      material,
+      'aside',
+      ['border-l', 'border-slate-200', 'shadow-2xl'],
+    )
+    expect(materialDrawer).toContain('bg-[#f6f7f9]')
   })
 
   it.each(workspacePages)('%s explicitly adopts the workspace canvas root', (_name, path) => {
