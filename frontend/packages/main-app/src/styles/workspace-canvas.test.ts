@@ -63,17 +63,74 @@ const elementClassTokens = (
   return matches[0]
 }
 
-const cssDeclarationValue = (source: string, selector: string, property: string) => {
-  const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
-  const rule = source.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`))
-  expect(rule, `expected CSS rule for ${selector}`).not.toBeNull()
+const topLevelSfcStyleRules = (source: string) => {
+  const styleBlocks = [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)]
+    .map(match => match[1])
+  expect(styleBlocks, 'expected at least one SFC style block').not.toHaveLength(0)
 
-  const declaration = rule![1].match(
-    new RegExp(`(?:^|;)\\s*${property}\\s*:\\s*([^;]+?)\\s*(?:;|$)`),
-  )
-  expect(declaration, `expected ${property} declaration in ${selector}`).not.toBeNull()
-  return declaration![1].trim()
+  const styles = styleBlocks.join('\n').replace(/\/\*[\s\S]*?\*\//g, '')
+  const rules: Array<{ selector: string, body: string }> = []
+  let selectorStart = 0
+  let bodyStart = -1
+  let selector = ''
+  let depth = 0
+  let quote: '"' | "'" | null = null
+  let escaped = false
+
+  for (let index = 0; index < styles.length; index += 1) {
+    const character = styles[index]
+
+    if (quote) {
+      if (escaped) {
+        escaped = false
+      }
+      else if (character === '\\') {
+        escaped = true
+      }
+      else if (character === quote) {
+        quote = null
+      }
+      continue
+    }
+
+    if (character === '"' || character === "'") {
+      quote = character
+    }
+    else if (character === '{') {
+      if (depth === 0) {
+        selector = styles.slice(selectorStart, index).trim()
+        bodyStart = index + 1
+      }
+      depth += 1
+    }
+    else if (character === '}') {
+      if (depth === 0)
+        throw new Error('unexpected closing brace in SFC styles')
+
+      depth -= 1
+      if (depth === 0) {
+        rules.push({ selector, body: styles.slice(bodyStart, index) })
+        selectorStart = index + 1
+        bodyStart = -1
+      }
+    }
+    else if (character === ';' && depth === 0) {
+      selectorStart = index + 1
+    }
+  }
+
+  if (depth !== 0)
+    throw new Error('unclosed rule in SFC styles')
+
+  return rules
 }
+
+const backgroundDeclarations = (ruleBody: string) =>
+  [...ruleBody.matchAll(/(?:^|;)\s*(background(?:-color)?)\s*:\s*([^;]*?)(?=;|$)/gi)]
+    .map(match => ({
+      property: match[1].toLowerCase(),
+      value: match[2].trim(),
+    }))
 
 describe('workspace page canvas contract', () => {
   it('keeps exactly fifteen routes in the workspace shell', () => {
@@ -112,8 +169,12 @@ describe('workspace page canvas contract', () => {
     expect(createCampaignCanvas).not.toContain('bg-slate-50')
     expect(createCampaignCanvas).toContain('dark:bg-slate-950')
 
-    expect(cssDeclarationValue(projects, '.projects-shell', 'background'))
-      .toBe('var(--workspace-canvas)')
+    const projectShellRules = topLevelSfcStyleRules(projects)
+      .filter(rule => rule.selector === '.projects-shell')
+    expect(projectShellRules, 'expected exactly one base .projects-shell rule').toHaveLength(1)
+    expect(backgroundDeclarations(projectShellRules[0].body)).toEqual([
+      { property: 'background', value: 'var(--workspace-canvas)' },
+    ])
 
     const materialCanvas = rootClassTokens(material)
     expect(materialCanvas).toContain('workspace-page-canvas')
