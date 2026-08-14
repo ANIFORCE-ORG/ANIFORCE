@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useAgentSession } from '@/composables/useAgentSession'
@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<Props>(), {
   ],
   sessions: () => [],
   activePanel: '',
-  sessionActions: false,
+  sessionActions: true,
   sessionCreate: false
 })
 
@@ -51,6 +51,7 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const agent = useAgentSession()
+const instance = getCurrentInstance()
 
 const isAdmin = computed(() => auth.user?.system_role === 'ADMIN')
 
@@ -102,6 +103,27 @@ const handleCreateSession = () => {
     return
   }
   emit('create-session')
+}
+
+const hasExternalListener = (name: string) => Boolean((instance?.vnode.props as Record<string, unknown> | null)?.[name])
+
+const handleRenameSession = async (session: Session) => {
+  if (hasExternalListener('onRenameSession')) {
+    emit('rename-session', session)
+    return
+  }
+  const title = window.prompt('重命名对话', session.name)
+  if (!title || title.trim() === session.name) return
+  await agent.renameSession(session.id, title)
+}
+
+const handleDeleteSession = async (session: Session) => {
+  if (hasExternalListener('onDeleteSession')) {
+    emit('delete-session', session)
+    return
+  }
+  if (!window.confirm(`确定删除对话「${session.name}」吗？删除后会从历史列表移除。`)) return
+  await agent.deleteSession(session.id)
 }
 
 onMounted(() => {
@@ -195,20 +217,23 @@ onMounted(() => {
           <li
             v-for="session in displaySessions"
             :key="session.id"
-            class="sidebar-session-item group flex items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
+            class="sidebar-session-item group flex min-w-0 items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
             :class="session.active
               ? 'sidebar-item-active'
               : 'sidebar-item-idle'"
             @click="handleSessionClick(session)"
           >
-            <span class="material-symbols-outlined text-[11px]">chat</span>
-            <span class="text-[11px] flex-1 truncate">{{ session.name }}</span>
-            <div v-if="sessionActions" class="opacity-0 group-hover:opacity-100 flex items-center gap-[4px]">
-              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" title="重命名" @click.stop="emit('rename-session', session)">
-                <span class="material-symbols-outlined text-[10px]">edit</span>
+            <span class="material-symbols-outlined shrink-0 text-[11px]">chat</span>
+            <span class="sidebar-session-name min-w-0 flex-1 truncate text-[11px]">{{ session.name }}</span>
+            <div
+              v-if="sessionActions"
+              class="sidebar-session-actions pointer-events-none flex shrink-0 items-center gap-[2px] opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+            >
+              <button class="sidebar-session-action-button" title="重命名" @click.stop="handleRenameSession(session)">
+                <span class="material-symbols-outlined">edit</span>
               </button>
-              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" title="删除" @click.stop="emit('delete-session', session)">
-                <span class="material-symbols-outlined text-[10px]">delete</span>
+              <button class="sidebar-session-action-button" title="删除" @click.stop="handleDeleteSession(session)">
+                <span class="material-symbols-outlined">delete</span>
               </button>
             </div>
           </li>
@@ -335,18 +360,38 @@ onMounted(() => {
   gap: 7px !important;
 }
 
+.sidebar-session-name {
+  min-width: 0;
+}
+
 .sidebar-session-item > .material-symbols-outlined {
   width: 16px;
   flex: 0 0 16px;
   font-size: 15px !important;
 }
 
-.sidebar-session-item button {
+.sidebar-session-actions {
+  width: 38px;
+  justify-content: flex-end;
+}
+
+.sidebar-session-action-button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
   border-radius: 4px !important;
+  background: transparent;
   color: var(--sidebar-steel) !important;
 }
 
-.sidebar-session-item button:hover {
+.sidebar-session-action-button .material-symbols-outlined {
+  font-size: 12px !important;
+  line-height: 1;
+}
+
+.sidebar-session-action-button:hover {
   background: rgba(55, 53, 47, 0.08) !important;
   color: var(--sidebar-ink) !important;
 }
