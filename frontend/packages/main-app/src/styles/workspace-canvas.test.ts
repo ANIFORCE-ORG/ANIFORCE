@@ -205,6 +205,15 @@ describe('workspace page canvas contract', () => {
     expect(materialDrawer).toContain('bg-[#f6f7f9]')
   })
 
+  it('delegates existing page-family canvas variables to the shared token', () => {
+    expect(readSource('../pages/Home.vue')).toContain('--notion-canvas: var(--workspace-canvas);')
+    expect(readSource('../pages/Dashboard.vue')).toContain('--canvas: var(--workspace-canvas);')
+    expect(readSource('../pages/projects/Projects.vue')).toContain('background: var(--workspace-canvas);')
+    expect(readSource('../pages/projects/ProjectDetail.vue')).toContain('background: var(--workspace-canvas);')
+    expect(readSource('../pages/settings/Settings.vue')).toContain('background: var(--workspace-canvas);')
+    expect(readSource('./settings-notion.css')).toContain('--sn-canvas: var(--workspace-canvas);')
+  })
+
   it.each(workspacePages)('%s explicitly adopts the workspace canvas root', (_name, path) => {
     expect(rootClassTokens(readSource(path))).toContain('workspace-page-canvas')
   })

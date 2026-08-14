@@ -372,7 +372,7 @@ const handleCloseToast = () => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: #fff;
+  background: var(--workspace-canvas);
   color: var(--detail-charcoal);
 }
 
@@ -382,7 +382,7 @@ const handleCloseToast = () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--workspace-canvas);
 }
 
 .detail-page-bar {

@@ -504,7 +504,7 @@ const handleSubmitCampaign = async (data: any) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--workspace-canvas);
   color: #191919;
 }
 

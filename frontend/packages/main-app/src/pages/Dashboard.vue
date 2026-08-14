@@ -423,7 +423,7 @@ onBeforeUnmount(() => {
 }
 
 .replay-page {
-  --canvas: #fff;
+  --canvas: var(--workspace-canvas);
   --surface: #f6f5f4;
   --surface-soft: #fafaf9;
   --hairline: #e5e3df;

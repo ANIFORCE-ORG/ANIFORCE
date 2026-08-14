@@ -727,7 +727,7 @@ watch(
 
 <style scoped>
 .home-shell {
-  --notion-canvas: #ffffff;
+  --notion-canvas: var(--workspace-canvas);
   --notion-surface: #f7f7f5;
   --notion-surface-soft: #fbfbfa;
   --notion-line: rgba(55, 53, 47, 0.12);

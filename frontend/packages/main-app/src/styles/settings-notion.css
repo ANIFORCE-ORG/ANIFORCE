@@ -1,5 +1,5 @@
 .settings-notion {
-  --sn-canvas: #fff;
+  --sn-canvas: var(--workspace-canvas);
   --sn-surface: #f6f5f4;
   --sn-surface-soft: #fafaf9;
   --sn-line: #e5e3df;
@@ -26,7 +26,7 @@
   color: var(--sn-charcoal);
 }
 
-.sn-main { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
+.sn-main { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--sn-canvas); }
 .sn-page-head { min-height: 72px; flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 0 clamp(22px,3vw,38px); border-bottom: 1px solid var(--sn-line); }
 .sn-back { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sn-slate); cursor: pointer; }
 .sn-back:hover { background: var(--sn-surface); color: var(--sn-ink); }

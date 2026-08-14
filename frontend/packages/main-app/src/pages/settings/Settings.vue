@@ -128,7 +128,7 @@ const openSetting = (path: string) => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--workspace-canvas);
   color: #37352f;
 }
 
@@ -138,7 +138,7 @@ const openSetting = (path: string) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--workspace-canvas);
 }
 
 .settings-page-head {
