@@ -371,7 +371,7 @@ const handleSubmitCampaign = async (data: any) => {
             <button
               v-if="filterStatus !== 'all'"
               type="button"
-              class="projects-clear-status-filter"
+              class="projects-clear-status-filter projects-mobile-filter-clear"
               aria-label="清除状态筛选"
               @click="filterStatus = 'all'; handleSearch()"
             >
@@ -861,6 +861,12 @@ const handleSubmitCampaign = async (data: any) => {
 .dark .projects-clear-status-filter:hover {
   background: rgba(243, 243, 242, 0.14);
   color: #ffffff;
+}
+
+.dark .projects-mobile-filter-clear:focus-visible {
+  outline: 2px solid #f3f3f2;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 2px rgba(243, 243, 242, 0.45);
 }
 
 .dark .projects-empty-state p {

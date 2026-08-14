@@ -440,6 +440,7 @@ describe('Projects workspace page header contract', () => {
       element => staticClassTokens(element).has('projects-clear-status-filter'),
     )
     expect(clearButtons).toHaveLength(1)
+    expect(staticClassTokens(clearButtons[0])).toContain('projects-mobile-filter-clear')
     expect(staticAttribute(clearButtons[0], 'type')?.value?.content).toBe('button')
     expect(staticAttribute(clearButtons[0], 'aria-label')?.value?.content).toBe(
       '清除状态筛选',
@@ -486,6 +487,28 @@ describe('Projects workspace page header contract', () => {
       ]),
     )
     expect(darkFocus?.index).toBeGreaterThan(lightFocus?.index ?? Number.MAX_SAFE_INTEGER)
+  })
+
+  it('overrides the mobile filter clear focus ring in dark mode', () => {
+    const lightFocusIndex = projects.indexOf(
+      '.projects-clear-status-filter:focus-visible',
+    )
+    expect(lightFocusIndex).toBeGreaterThanOrEqual(0)
+
+    const darkFocus = projects.match(
+      /\.dark \.projects-mobile-filter-clear:focus-visible\s*\{([^}]*)\}/s,
+    )
+    expect(darkFocus, 'expected a dark mobile filter clear focus rule').not.toBeNull()
+    const declarations = cssDeclarations(darkFocus?.[1] ?? '')
+    expect(declarations).toEqual(
+      expect.arrayContaining([
+        { property: 'outline', value: '2px solid #f3f3f2' },
+        { property: 'outline-offset', value: '2px' },
+        { property: 'box-shadow', value: '0 0 0 2px rgba(243, 243, 242, 0.45)' },
+      ]),
+    )
+    expect(declarations.some(({ property }) => property === 'border')).toBe(false)
+    expect(darkFocus?.index).toBeGreaterThan(lightFocusIndex)
   })
 })
 
