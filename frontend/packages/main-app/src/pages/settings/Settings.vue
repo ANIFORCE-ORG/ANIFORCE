@@ -68,7 +68,7 @@ const openSetting = (path: string) => {
     />
 
     <main class="settings-main">
-      <header class="settings-page-head">
+      <header data-workspace-page-header class="settings-page-head workspace-page-header">
         <div class="settings-page-title-wrap">
           <span class="settings-page-icon">
             <span class="material-symbols-outlined">settings</span>
@@ -142,7 +142,6 @@ const openSetting = (path: string) => {
 }
 
 .settings-page-head {
-  min-height: 54px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;

@@ -41,6 +41,7 @@ body {
 
 :root {
   --workspace-canvas: #ffffff;
+  --workspace-page-header-height: 57px;
   --status-running-bg: #ecfdf5;
   --status-running-text: #059669;
   --status-paused-bg: #fff7ed;
@@ -50,6 +51,13 @@ body {
 
 .workspace-page-canvas {
   background-color: var(--workspace-canvas);
+}
+
+.workspace-page-header {
+  box-sizing: border-box;
+  height: var(--workspace-page-header-height);
+  min-height: var(--workspace-page-header-height);
+  flex: 0 0 var(--workspace-page-header-height);
 }
 
 /* Business status badges: shared across projects, campaigns and materials. */

@@ -395,7 +395,7 @@ onMounted(() => {
     />
 
     <main class="sn-main">
-      <header class="sn-page-head">
+      <header data-workspace-page-header class="sn-page-head workspace-page-header">
         <button class="sn-back" type="button" aria-label="返回设置" @click="router.push('/settings')">
           <svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg>
         </button>

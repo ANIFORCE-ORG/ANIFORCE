@@ -196,7 +196,7 @@ const getStatusColor = (status: string) => {
     <!-- 中间广告列表工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+      <div data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
         <h3 class="font-bold text-[13px] text-slate-900 dark:text-white">广告投放</h3>
         <button
           class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"

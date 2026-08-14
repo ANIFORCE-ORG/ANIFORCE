@@ -27,7 +27,7 @@
 }
 
 .sn-main { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--sn-canvas); }
-.sn-page-head { min-height: 72px; flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 0 clamp(22px,3vw,38px); border-bottom: 1px solid var(--sn-line); }
+.sn-page-head { display: flex; align-items: center; gap: 12px; padding: 0 clamp(22px,3vw,38px); border-bottom: 1px solid var(--sn-line); }
 .sn-back { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sn-slate); cursor: pointer; }
 .sn-back:hover { background: var(--sn-surface); color: var(--sn-ink); }
 .sn-page-title h1 { margin: 0; color: var(--sn-ink); font-size: 17px; font-weight: 650; line-height: 1.2; letter-spacing: -.3px; }
@@ -210,7 +210,7 @@
   .sn-platform-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
-  .sn-page-head { min-height: 66px; padding: 0 14px; }
+  .sn-page-head { padding: 0 14px; }
   .sn-content { padding: 18px 14px 60px; }
   .sn-account-panel,.sn-team-panel { padding-right: 14px; padding-left: 14px; }
   .sn-account-row { grid-template-columns: 1fr auto; gap: 8px; }

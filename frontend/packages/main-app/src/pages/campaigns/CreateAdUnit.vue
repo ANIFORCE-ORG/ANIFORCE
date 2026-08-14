@@ -141,7 +141,7 @@ const handleSave = async () => {
     <!-- 中间内容工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+      <div data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
         <div class="flex items-center gap-[12px]">
           <button
             class="flex items-center gap-[6px] text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"

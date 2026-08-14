@@ -236,7 +236,7 @@ const handleCloseToast = () => {
     />
 
     <main class="project-detail-main">
-      <header class="detail-page-bar">
+      <header data-workspace-page-header class="detail-page-bar workspace-page-header">
         <button class="detail-back-button" @click="handleBack">
           <span class="material-symbols-outlined">arrow_back</span>
           返回项目列表
@@ -386,7 +386,6 @@ const handleCloseToast = () => {
 }
 
 .detail-page-bar {
-  min-height: 54px;
   display: flex;
   align-items: center;
   padding: 0 clamp(24px, 3vw, 48px);

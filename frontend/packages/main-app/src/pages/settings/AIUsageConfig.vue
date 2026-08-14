@@ -30,7 +30,7 @@ const switchSession = (session: any) => {
   <div class="settings-notion workspace-page-canvas">
     <SidebarNav :nav-items="navItems" :sessions="sessions" :active-panel="activePanel" @switch-panel="switchPanel" @switch-session="switchSession" />
     <main class="sn-main">
-      <header class="sn-page-head">
+      <header data-workspace-page-header class="sn-page-head workspace-page-header">
         <button class="sn-back" type="button" aria-label="返回设置" @click="router.push('/settings')"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg></button>
         <div class="sn-page-title"><h1>AI 使用量</h1><p>查看模型调用、Token 消耗、场景日志和预算限制</p></div>
       </header>
