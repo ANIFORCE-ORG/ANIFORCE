@@ -131,7 +131,7 @@ const topLevelSfcStyleRules = (source: string) => {
 const styleDeclarations = (ruleBody: string) =>
   [...ruleBody.matchAll(/(?:^|;)\s*([-\w]+)\s*:\s*([^;]*?)(?=;|$)/g)]
     .map(match => ({
-      property: match[1].toLowerCase(),
+      property: match[1].startsWith('--') ? match[1] : match[1].toLowerCase(),
       value: match[2].trim(),
     }))
 
