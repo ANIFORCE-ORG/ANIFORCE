@@ -350,7 +350,7 @@ const handleSubmitCampaign = async (data: any) => {
       <!-- Header -->
       <header class="projects-page-bar workspace-page-header" data-workspace-page-header>
         <div class="projects-page-title-wrap">
-          <span class="projects-page-icon">
+          <span class="projects-page-icon" aria-hidden="true">
             <span class="material-symbols-outlined">folder_open</span>
           </span>
           <div class="projects-page-title-content">
@@ -898,7 +898,15 @@ const handleSubmitCampaign = async (data: any) => {
 
 @media (max-width: 620px) {
   .projects-page-title-content {
-    display: none;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
 
   .projects-page-bar {
@@ -920,6 +928,10 @@ const handleSubmitCampaign = async (data: any) => {
 
 @media (max-width: 520px) {
   .projects-page-title-wrap {
+    position: absolute;
+  }
+
+  .projects-page-icon {
     display: none;
   }
 

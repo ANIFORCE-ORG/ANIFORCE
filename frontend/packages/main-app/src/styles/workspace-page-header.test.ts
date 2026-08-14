@@ -327,6 +327,47 @@ describe('Projects workspace page header contract', () => {
     )
   })
 
+  it('keeps one Projects h1 in the accessibility tree at narrow widths', () => {
+    const header = workspaceHeaderElement(projects)
+    const headings = descendantElements(
+      header,
+      element => element.tag.toLowerCase() === 'h1',
+    )
+    expect(headings).toHaveLength(1)
+
+    const pageIcons = descendantElements(
+      header,
+      element => staticClassTokens(element).has('projects-page-icon'),
+    )
+    expect(pageIcons).toHaveLength(1)
+    expect(staticAttribute(pageIcons[0], 'aria-hidden')?.value?.content).toBe('true')
+
+    const compactStyles = mediaRuleBody(projects, 620)
+    const titleContentRule = cssRuleBodies(
+      compactStyles,
+      '.projects-page-title-content',
+    )
+    expect(titleContentRule).toHaveLength(1)
+    expect(cssDeclarations(titleContentRule[0])).toEqual(
+      expect.arrayContaining([
+        { property: 'position', value: 'absolute' },
+        { property: 'width', value: '1px' },
+        { property: 'height', value: '1px' },
+        { property: 'padding', value: '0' },
+        { property: 'margin', value: '-1px' },
+        { property: 'overflow', value: 'hidden' },
+        { property: 'clip', value: 'rect(0, 0, 0, 0)' },
+        { property: 'white-space', value: 'nowrap' },
+        { property: 'border', value: '0' },
+      ]),
+    )
+    expect(
+      cssDeclarations(titleContentRule[0]).some(
+        ({ property, value }) => property === 'display' && value === 'none',
+      ),
+    ).toBe(false)
+  })
+
   it('keeps Projects filtering, search handling, and create handling intact', () => {
     expect(projects).toContain("filterStatus.value !== 'all'")
     expect(projects).toContain('p.name.toLowerCase().includes(query)')
@@ -398,9 +439,6 @@ describe('Projects workspace page header contract', () => {
       /@media \(max-width: 900px\)[\s\S]*?\.projects-create-button\s*\{[^}]*\bwidth:\s*34px;[^}]*\bheight:\s*34px;/,
     )
     expect(projects).toMatch(
-      /@media \(max-width: 620px\)[\s\S]*?\.projects-page-title-content\s*\{\s*display:\s*none;\s*\}/,
-    )
-    expect(projects).toMatch(
       /@media \(max-width: 620px\)[\s\S]*?\.projects-page-bar\s*\{[^}]*\bpadding:\s*0 14px;/,
     )
     expect(projects).toMatch(
@@ -417,7 +455,13 @@ describe('Projects workspace page header contract', () => {
   it('compresses the 520px header to toolbar and actions columns', () => {
     const mobileStyles = mediaRuleBody(projects, 520)
     expect(mobileStyles).toMatch(
-      /\.projects-page-title-wrap\s*\{\s*display:\s*none;\s*\}/,
+      /\.projects-page-title-wrap\s*\{[^}]*\bposition:\s*absolute;[^}]*\}/s,
+    )
+    expect(mobileStyles).not.toMatch(
+      /\.projects-page-title-wrap\s*\{[^}]*\bdisplay:\s*none;/s,
+    )
+    expect(mobileStyles).toMatch(
+      /\.projects-page-icon\s*\{\s*display:\s*none;\s*\}/,
     )
     expect(mobileStyles).toMatch(
       /\.projects-page-bar\s*\{[^}]*\bgrid-template-columns:\s*minmax\(0,\s*1fr\) auto;[^}]*\bgap:\s*7px;[^}]*\bpadding:\s*0 8px;/s,
