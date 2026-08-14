@@ -81,7 +81,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"

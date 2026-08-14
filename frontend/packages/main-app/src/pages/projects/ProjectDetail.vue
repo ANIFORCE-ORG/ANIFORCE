@@ -225,7 +225,7 @@ const handleCloseToast = () => {
 </script>
 
 <template>
-  <div class="project-detail-shell">
+  <div class="project-detail-shell workspace-page-canvas">
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav
       :nav-items="navItems"

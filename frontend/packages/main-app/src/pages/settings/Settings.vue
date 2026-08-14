@@ -58,7 +58,7 @@ const openSetting = (path: string) => {
 </script>
 
 <template>
-  <div class="settings-shell">
+  <div class="settings-shell workspace-page-canvas">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"

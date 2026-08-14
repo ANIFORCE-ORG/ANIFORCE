@@ -769,7 +769,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </script>
 
 <template>
-  <div class="flex h-screen w-full overflow-hidden bg-[#f6f7f9] dark:bg-slate-950">
+  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"

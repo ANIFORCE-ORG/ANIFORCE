@@ -27,7 +27,7 @@ const switchSession = (session: any) => {
 </script>
 
 <template>
-  <div class="settings-notion">
+  <div class="settings-notion workspace-page-canvas">
     <SidebarNav :nav-items="navItems" :sessions="sessions" :active-panel="activePanel" @switch-panel="switchPanel" @switch-session="switchSession" />
     <main class="sn-main">
       <header class="sn-page-head">

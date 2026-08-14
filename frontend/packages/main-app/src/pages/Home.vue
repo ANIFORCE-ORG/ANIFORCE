@@ -515,7 +515,7 @@ watch(
 </script>
 
 <template>
-  <div class="home-shell" :class="hasContent ? 'is-conversation' : 'is-landing'">
+  <div class="home-shell workspace-page-canvas" :class="hasContent ? 'is-conversation' : 'is-landing'">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sidebarSessions"

@@ -123,7 +123,7 @@ const formatDate = (dateString?: string) => {
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav
       :nav-items="navItems"

@@ -360,7 +360,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="settings-notion">
+  <div class="settings-notion workspace-page-canvas">
     <SidebarNav :nav-items="navItems" :sessions="[]" active-panel="settings" @switch-panel="switchPanel" />
     <main class="sn-main">
       <header class="sn-page-head">

@@ -40,11 +40,16 @@ body {
 }
 
 :root {
+  --workspace-canvas: #ffffff;
   --status-running-bg: #ecfdf5;
   --status-running-text: #059669;
   --status-paused-bg: #fff7ed;
   --status-paused-text: #ea580c;
   --status-paused-border: #fdba74;
+}
+
+.workspace-page-canvas {
+  background-color: var(--workspace-canvas);
 }
 
 /* Business status badges: shared across projects, campaigns and materials. */

@@ -336,7 +336,7 @@ const handleSubmitCampaign = async (data: any) => {
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="projects-shell">
+  <div class="projects-shell workspace-page-canvas">
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav
       :nav-items="navItems"

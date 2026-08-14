@@ -156,7 +156,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <div class="dashboard-shell" :class="{ embedded: props.embedded }">
+  <div class="dashboard-shell workspace-page-canvas" :class="{ embedded: props.embedded }">
     <SidebarNav
       v-if="!props.embedded"
       :nav-items="navItems"

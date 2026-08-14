@@ -385,7 +385,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="settings-notion">
+  <div class="settings-notion workspace-page-canvas">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
