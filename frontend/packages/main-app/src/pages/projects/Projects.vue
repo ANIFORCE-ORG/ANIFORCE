@@ -368,6 +368,15 @@ const handleSubmitCampaign = async (data: any) => {
               aria-label="搜索项目名称或标签"
               @input="handleSearch"
             />
+            <button
+              v-if="filterStatus !== 'all'"
+              type="button"
+              class="projects-clear-status-filter"
+              aria-label="清除状态筛选"
+              @click="filterStatus = 'all'; handleSearch()"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">close</span>
+            </button>
           </div>
           <select
             v-model="filterStatus"
@@ -674,6 +683,40 @@ const handleSubmitCampaign = async (data: any) => {
   color: #a4a097;
 }
 
+.projects-clear-status-filter {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  width: 24px;
+  height: 24px;
+  display: none;
+  place-items: center;
+  padding: 0;
+  transform: translateY(-50%);
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #787774;
+  cursor: pointer;
+}
+
+.projects-clear-status-filter:hover {
+  background: rgba(55, 53, 47, 0.08);
+  color: #37352f;
+}
+
+.projects-clear-status-filter:focus-visible {
+  outline: 0;
+  box-shadow: 0 0 0 2px rgba(55, 53, 47, 0.28);
+}
+
+.projects-clear-status-filter .material-symbols-outlined {
+  position: static;
+  transform: none;
+  color: inherit;
+  font-size: 15px;
+}
+
 .projects-status-filter {
   padding: 0 29px 0 10px;
   cursor: pointer;
@@ -681,8 +724,8 @@ const handleSubmitCampaign = async (data: any) => {
 
 .projects-search-field input:focus,
 .projects-status-filter:focus {
-  border: 2px solid #37352f;
-  box-shadow: none;
+  border: 1px solid #37352f;
+  box-shadow: 0 0 0 2px rgba(55, 53, 47, 0.28);
 }
 
 .projects-scroll-area {
@@ -805,6 +848,21 @@ const handleSubmitCampaign = async (data: any) => {
   border-color: #464646;
 }
 
+.dark .projects-search-field input:focus,
+.dark .projects-status-filter:focus {
+  border: 1px solid #f3f3f2;
+  box-shadow: 0 0 0 2px rgba(243, 243, 242, 0.45);
+}
+
+.dark .projects-clear-status-filter {
+  color: #d6d6d3;
+}
+
+.dark .projects-clear-status-filter:hover {
+  background: rgba(243, 243, 242, 0.14);
+  color: #ffffff;
+}
+
 .dark .projects-empty-state p {
   color: #f3f3f2;
 }
@@ -855,12 +913,30 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 @media (max-width: 520px) {
+  .projects-page-title-wrap {
+    display: none;
+  }
+
+  .projects-page-bar {
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 7px;
+    padding: 0 8px;
+  }
+
   .projects-toolbar {
     grid-template-columns: 1fr;
   }
 
   .projects-status-filter {
     display: none;
+  }
+
+  .projects-search-field input {
+    padding-right: 38px;
+  }
+
+  .projects-clear-status-filter {
+    display: inline-grid;
   }
 
   .projects-content {

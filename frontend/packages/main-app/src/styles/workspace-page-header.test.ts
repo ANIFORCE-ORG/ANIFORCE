@@ -124,6 +124,22 @@ const cssDeclarations = (body: string) =>
       }
     })
 
+const mediaRuleBody = (source: string, maxWidth: number) => {
+  const marker = `@media (max-width: ${maxWidth}px) {`
+  const markerStart = source.indexOf(marker)
+  expect(markerStart, `expected ${marker}`).toBeGreaterThanOrEqual(0)
+
+  const openingBrace = source.indexOf('{', markerStart)
+  let depth = 0
+  for (let index = openingBrace; index < source.length; index += 1) {
+    if (source[index] === '{') depth += 1
+    if (source[index] === '}') depth -= 1
+    if (depth === 0) return source.slice(openingBrace + 1, index)
+  }
+
+  throw new Error(`expected ${marker} to have a closing brace`)
+}
+
 const sharedHeaderPages = [
   '../pages/projects/ProjectDetail.vue',
   '../pages/campaigns/Campaign.vue',
@@ -396,6 +412,80 @@ describe('Projects workspace page header contract', () => {
     expect(projects).toMatch(
       /@media \(max-width: 520px\)[\s\S]*?\.projects-status-filter\s*\{\s*display:\s*none;\s*\}/,
     )
+  })
+
+  it('compresses the 520px header to toolbar and actions columns', () => {
+    const mobileStyles = mediaRuleBody(projects, 520)
+    expect(mobileStyles).toMatch(
+      /\.projects-page-title-wrap\s*\{\s*display:\s*none;\s*\}/,
+    )
+    expect(mobileStyles).toMatch(
+      /\.projects-page-bar\s*\{[^}]*\bgrid-template-columns:\s*minmax\(0,\s*1fr\) auto;[^}]*\bgap:\s*7px;[^}]*\bpadding:\s*0 8px;/s,
+    )
+    expect(mobileStyles).not.toMatch(
+      /\.projects-page-bar\s*\{[^}]*\b(?:min-)?height\s*:/s,
+    )
+  })
+
+  it('offers an accessible mobile-only way to clear an active status filter', () => {
+    const header = workspaceHeaderElement(projects)
+    const searchFields = descendantElements(
+      header,
+      element => staticClassTokens(element).has('projects-search-field'),
+    )
+    expect(searchFields).toHaveLength(1)
+
+    const clearButtons = descendantElements(
+      searchFields[0],
+      element => staticClassTokens(element).has('projects-clear-status-filter'),
+    )
+    expect(clearButtons).toHaveLength(1)
+    expect(staticAttribute(clearButtons[0], 'type')?.value?.content).toBe('button')
+    expect(staticAttribute(clearButtons[0], 'aria-label')?.value?.content).toBe(
+      '清除状态筛选',
+    )
+    expect(directive(clearButtons[0], 'if')?.exp?.content).toBe(
+      "filterStatus !== 'all'",
+    )
+    expect(directive(clearButtons[0], 'on', 'click')?.exp?.content).toBe(
+      "filterStatus = 'all'; handleSearch()",
+    )
+
+    expect(projects).toMatch(
+      /\.projects-clear-status-filter\s*\{[^}]*\bdisplay:\s*none;/s,
+    )
+    const mobileStyles = mediaRuleBody(projects, 520)
+    expect(mobileStyles).toMatch(
+      /\.projects-search-field input\s*\{[^}]*\bpadding-right:\s*38px;/s,
+    )
+    expect(mobileStyles).toMatch(
+      /\.projects-clear-status-filter\s*\{[^}]*\bdisplay:\s*inline-grid;/s,
+    )
+  })
+
+  it('uses stable high-contrast focus rings in light and dark themes', () => {
+    const lightFocus = projects.match(
+      /\.projects-search-field input:focus,\s*\.projects-status-filter:focus\s*\{([^}]*)\}/s,
+    )
+    expect(lightFocus, 'expected the light Projects focus rule').not.toBeNull()
+    expect(cssDeclarations(lightFocus?.[1] ?? '')).toEqual(
+      expect.arrayContaining([
+        { property: 'border', value: '1px solid #37352f' },
+        { property: 'box-shadow', value: '0 0 0 2px rgba(55, 53, 47, 0.28)' },
+      ]),
+    )
+
+    const darkFocus = projects.match(
+      /\.dark \.projects-search-field input:focus,\s*\.dark \.projects-status-filter:focus\s*\{([^}]*)\}/s,
+    )
+    expect(darkFocus, 'expected a higher-specificity dark Projects focus rule').not.toBeNull()
+    expect(cssDeclarations(darkFocus?.[1] ?? '')).toEqual(
+      expect.arrayContaining([
+        { property: 'border', value: '1px solid #f3f3f2' },
+        { property: 'box-shadow', value: '0 0 0 2px rgba(243, 243, 242, 0.45)' },
+      ]),
+    )
+    expect(darkFocus?.index).toBeGreaterThan(lightFocus?.index ?? Number.MAX_SAFE_INTEGER)
   })
 })
 
