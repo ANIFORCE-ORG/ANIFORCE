@@ -495,7 +495,7 @@ const handleSubmitCampaign = async (data: any) => {
   width: 100%;
   height: 100vh;
   overflow: hidden;
-  background: #f7f7f5;
+  background: var(--workspace-canvas);
 }
 
 .projects-main {

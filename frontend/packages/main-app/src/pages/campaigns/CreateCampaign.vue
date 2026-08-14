@@ -264,7 +264,7 @@ onMounted(async () => {
     />
 
     <!-- 主内容区 -->
-    <div class="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
+    <div class="workspace-page-canvas flex-1 flex flex-col dark:bg-slate-950 overflow-hidden">
       <!-- Header -->
       <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
       <div class="max-w-7xl mx-auto px-[19px] py-[12px]">

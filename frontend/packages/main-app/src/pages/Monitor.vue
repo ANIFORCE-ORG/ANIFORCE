@@ -43,7 +43,7 @@ const switchSession = (session: any) => {
 <template>
   <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <SidebarNav :nav-items="navItems" :sessions="sessions" @switch-panel="switchPanel" @switch-session="switchSession" />
-    <main class="flex flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">
+    <main class="workspace-page-canvas flex flex-1 flex-col overflow-hidden dark:bg-slate-950">
       <div class="flex h-[58px] items-center justify-between border-b border-slate-200 bg-white px-6 dark:border-slate-800 dark:bg-slate-900">
         <div class="flex items-center gap-2"><span class="material-symbols-outlined text-xl text-primary">monitoring</span><h1 class="text-lg font-bold text-slate-900 dark:text-white">投放实时监控</h1><span class="ml-2 flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600"><i class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"></i>DEMO 实时</span></div>
         <select v-model="timeFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800"><option value="today">今日</option><option value="7d">近 7 日</option><option value="30d">近 30 日</option></select>

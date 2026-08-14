@@ -51,6 +51,33 @@ describe('workspace page canvas contract', () => {
     expect(globalSource).toContain('background-color: var(--workspace-canvas);')
   })
 
+  it('removes legacy gray only from full-height page canvases', () => {
+    const monitor = readSource('../pages/Monitor.vue')
+    const projects = readSource('../pages/projects/Projects.vue')
+    const createCampaign = readSource('../pages/campaigns/CreateCampaign.vue')
+    const material = readSource('../pages/creatives/Material.vue')
+
+    expect(monitor).not.toContain(
+      '<main class="flex flex-1 flex-col overflow-hidden bg-slate-50 dark:bg-slate-950">',
+    )
+    expect(createCampaign).not.toContain(
+      '<div class="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">',
+    )
+    expect(projects).not.toContain('background: #f7f7f5;')
+    expect(material).not.toContain(
+      '<div class="flex h-screen w-full overflow-hidden bg-[#f6f7f9] dark:bg-slate-950">',
+    )
+  })
+
+  it('preserves representative component-level soft surfaces', () => {
+    const monitor = readSource('../pages/Monitor.vue')
+    const material = readSource('../pages/creatives/Material.vue')
+
+    expect(monitor).toContain('<thead class="bg-slate-50 text-slate-500 dark:bg-slate-800/50">')
+    expect(material).toContain('border-dashed border-slate-300 bg-slate-50')
+    expect(material).toContain('border-l border-slate-200 bg-[#f6f7f9] shadow-2xl')
+  })
+
   it.each(workspacePages)('%s explicitly adopts the workspace canvas root', (_name, path) => {
     expect(rootClassTokens(readSource(path))).toContain('workspace-page-canvas')
   })
