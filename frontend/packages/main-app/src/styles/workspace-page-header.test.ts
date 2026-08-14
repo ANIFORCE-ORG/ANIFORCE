@@ -1,38 +1,79 @@
 import { readFileSync } from 'node:fs'
 import { fileURLToPath } from 'node:url'
+import { parse as parseSfc } from 'vue/compiler-sfc'
 import { describe, expect, it } from 'vitest'
 
 const readSource = (relativePath: string) =>
   readFileSync(fileURLToPath(new URL(relativePath, import.meta.url)), 'utf8')
 
-const templateSource = (source: string) => {
-  const match = source.match(/<template>([\s\S]*?)<\/template>/)
-  expect(match, 'expected a Vue <template>').not.toBeNull()
-  return match?.[1] ?? ''
+const AST_ELEMENT = 1
+const AST_ATTRIBUTE = 6
+
+interface CompilerAstProp {
+  type: number
+  name?: string
+  value?: { content: string } | null
 }
 
-const workspaceHeaderTag = (source: string) => {
-  const template = templateSource(source).replace(/<!--[\s\S]*?-->/g, '')
-  const matches = [
-    ...template.matchAll(
-      /<([a-z][\w-]*)\b[^>]*\sdata-workspace-page-header(?:=""|(?=[\s/>]))[^>]*>/gi,
-    ),
-  ]
+interface CompilerAstNode {
+  type: number
+  tag?: string
+  props?: CompilerAstProp[]
+  children?: CompilerAstNode[]
+}
+
+interface CompilerAstElement extends CompilerAstNode {
+  type: typeof AST_ELEMENT
+  tag: string
+  props: CompilerAstProp[]
+  children: CompilerAstNode[]
+}
+
+const staticAttribute = (element: CompilerAstElement, name: string) =>
+  element.props.find(
+    (prop) => prop.type === AST_ATTRIBUTE && prop.name === name,
+  )
+
+const workspaceHeaderElement = (source: string) => {
+  const { descriptor, errors } = parseSfc(source, {
+    filename: 'workspace-page-header.vue',
+  })
+  expect(errors, 'expected valid Vue SFC source').toHaveLength(0)
+  expect(descriptor.template, 'expected a Vue <template>').not.toBeNull()
+  expect(
+    descriptor.template?.ast,
+    'expected a parsed Vue template AST',
+  ).toBeDefined()
+
+  const matches: CompilerAstElement[] = []
+  const visit = (node: CompilerAstNode) => {
+    if (node.type === AST_ELEMENT) {
+      const element = node as CompilerAstElement
+      if (staticAttribute(element, 'data-workspace-page-header')) {
+        matches.push(element)
+      }
+    }
+    node.children?.forEach(visit)
+  }
+  visit(descriptor.template?.ast as unknown as CompilerAstNode)
+
   expect(
     matches,
     'expected exactly one first-level workspace page header marker',
   ).toHaveLength(1)
   expect(
-    matches[0][1].toLowerCase(),
+    matches[0].tag.toLowerCase(),
     'expected workspace page header marker on a semantic <header> opening tag',
   ).toBe('header')
-  return matches[0][0]
+  return matches[0]
 }
 
-const staticClassTokens = (openingTag: string) => {
-  const match = openingTag.match(/(?:^|\s)class="([^"]*)"/)
-  return new Set((match?.[1] ?? '').split(/\s+/).filter(Boolean))
-}
+const staticClassTokens = (element: CompilerAstElement) =>
+  new Set(
+    (staticAttribute(element, 'class')?.value?.content ?? '')
+      .split(/\s+/)
+      .filter(Boolean),
+  )
 
 const sharedHeaderPages = [
   '../pages/projects/ProjectDetail.vue',
@@ -59,7 +100,7 @@ const expectRuleNotToDeclareMinHeight = (
   )
 }
 
-describe('workspaceHeaderTag', () => {
+describe('workspaceHeaderElement', () => {
   it('does not count markers inside Vue template comments', () => {
     const source = `
       <template>
@@ -67,7 +108,35 @@ describe('workspaceHeaderTag', () => {
       </template>
     `
 
-    expect(() => workspaceHeaderTag(source)).toThrow()
+    expect(() => workspaceHeaderElement(source)).toThrow()
+  })
+
+  it('does not count a header-like string inside a Vue interpolation', () => {
+    const source = [
+      '<template>',
+      '  <div>{{ `<header data-workspace-page-header class="workspace-page-header"></header>` }}</div>',
+      '</template>',
+    ].join('\n')
+
+    expect(() => workspaceHeaderElement(source)).toThrow()
+  })
+
+  it.each([
+    [
+      'script',
+      `const fakeHeader = '<template><header data-workspace-page-header class="workspace-page-header"></header></template>'`,
+    ],
+    [
+      'style',
+      `.fake::before { content: '<template><header data-workspace-page-header class="workspace-page-header"></header></template>'; }`,
+    ],
+  ])('does not count header-like strings inside <%s>', (block, content) => {
+    const source = `
+      <${block}>${content}</${block}>
+      <template><div>真实页面内容</div></template>
+    `
+
+    expect(() => workspaceHeaderElement(source)).toThrow()
   })
 
   it.each(['main', 'section', 'div', 'nav'])(
@@ -79,7 +148,7 @@ describe('workspaceHeaderTag', () => {
         </template>
       `
 
-      expect(() => workspaceHeaderTag(source)).toThrow()
+      expect(() => workspaceHeaderElement(source)).toThrow()
     },
   )
 })
@@ -105,8 +174,8 @@ describe('workspace page header contract', () => {
   it.each(sharedHeaderPages)(
     '%s opts exactly one first-level header into the shared contract',
     (relativePath) => {
-      const openingTag = workspaceHeaderTag(readSource(relativePath))
-      const classes = staticClassTokens(openingTag)
+      const header = workspaceHeaderElement(readSource(relativePath))
+      const classes = staticClassTokens(header)
 
       expect(classes).toContain('workspace-page-header')
       expect(
