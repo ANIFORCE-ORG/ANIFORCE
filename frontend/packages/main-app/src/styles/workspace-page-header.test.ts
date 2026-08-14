@@ -594,10 +594,28 @@ describe('Dashboard workspace page contract', () => {
       /@media \(max-width: 900px\)[\s\S]*?\.replay-title p\s*\{\s*display:\s*none;\s*\}/,
     )
     expect(dashboard).toMatch(
-      /@media \(max-width: 620px\)[\s\S]*?\.replay-title h1\s*\{\s*display:\s*none;\s*\}/,
-    )
-    expect(dashboard).toMatch(
       /@media \(max-width: 620px\)[\s\S]*?\.refresh-label\s*\{\s*display:\s*none;\s*\}/,
     )
+  })
+
+  it('keeps the mobile Dashboard h1 in the accessibility tree without layout space', () => {
+    expect(dashboard.match(/<h1\b/g)).toHaveLength(1)
+
+    const mobileHeadingRule = dashboard.match(
+      /@media \(max-width: 620px\)[\s\S]*?\.dashboard-shell:not\(\.embedded\) \.replay-title h1\s*\{([^}]*)\}/,
+    )
+    expect(mobileHeadingRule, 'expected a mobile Dashboard h1 rule').not.toBeNull()
+
+    const declarations = mobileHeadingRule?.[1] ?? ''
+    expect(declarations).not.toMatch(/\bdisplay\s*:\s*none\s*;/)
+    expect(declarations).toMatch(/\bposition\s*:\s*absolute\s*;/)
+    expect(declarations).toMatch(/\bwidth\s*:\s*1px\s*;/)
+    expect(declarations).toMatch(/\bheight\s*:\s*1px\s*;/)
+    expect(declarations).toMatch(/\bpadding\s*:\s*0\s*;/)
+    expect(declarations).toMatch(/\bmargin\s*:\s*-1px\s*;/)
+    expect(declarations).toMatch(/\boverflow\s*:\s*hidden\s*;/)
+    expect(declarations).toMatch(/\bclip\s*:\s*rect\(0\s*,\s*0\s*,\s*0\s*,\s*0\)\s*;/)
+    expect(declarations).toMatch(/\bwhite-space\s*:\s*nowrap\s*;/)
+    expect(declarations).toMatch(/\bborder\s*:\s*0\s*;/)
   })
 })
