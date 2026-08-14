@@ -12,16 +12,20 @@ const templateSource = (source: string) => {
 }
 
 const workspaceHeaderTag = (source: string) => {
-  const template = templateSource(source)
+  const template = templateSource(source).replace(/<!--[\s\S]*?-->/g, '')
   const matches = [
     ...template.matchAll(
-      /<([a-z][\w-]*)\b[^>]*\sdata-workspace-page-header(?:="")?[^>]*>/gi,
+      /<([a-z][\w-]*)\b[^>]*\sdata-workspace-page-header(?:=""|(?=[\s/>]))[^>]*>/gi,
     ),
   ]
   expect(
     matches,
     'expected exactly one first-level workspace page header marker',
   ).toHaveLength(1)
+  expect(
+    matches[0][1].toLowerCase(),
+    'expected workspace page header marker on a semantic <header> opening tag',
+  ).toBe('header')
   return matches[0][0]
 }
 
@@ -54,6 +58,31 @@ const expectRuleNotToDeclareMinHeight = (
     new RegExp(`${escapedSelector}\\s*\\{[^}]*\\bmin-height\\s*:`, 's'),
   )
 }
+
+describe('workspaceHeaderTag', () => {
+  it('does not count markers inside Vue template comments', () => {
+    const source = `
+      <template>
+        <!-- <header data-workspace-page-header class="workspace-page-header"></header> -->
+      </template>
+    `
+
+    expect(() => workspaceHeaderTag(source)).toThrow()
+  })
+
+  it.each(['main', 'section', 'div', 'nav'])(
+    'rejects a marker placed on a <%s> element',
+    (tagName) => {
+      const source = `
+        <template>
+          <${tagName} data-workspace-page-header class="workspace-page-header"></${tagName}>
+        </template>
+      `
+
+      expect(() => workspaceHeaderTag(source)).toThrow()
+    },
+  )
+})
 
 describe('workspace page header contract', () => {
   it('defines a shared fixed 57px page header height', () => {

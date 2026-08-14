@@ -266,7 +266,7 @@ onMounted(async () => {
     <!-- 主内容区 -->
     <div class="workspace-page-canvas flex-1 flex flex-col dark:bg-slate-950 overflow-hidden">
       <!-- Header -->
-      <div data-workspace-page-header class="workspace-page-header bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+      <header data-workspace-page-header class="workspace-page-header bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
       <div class="max-w-7xl mx-auto flex h-full items-center px-[19px]">
         <div class="flex items-center gap-[12px]">
           <button
@@ -278,7 +278,7 @@ onMounted(async () => {
           <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">新建计划</h1>
           </div>
         </div>
-      </div>
+      </header>
 
       <!-- Steps Navigation -->
     <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">

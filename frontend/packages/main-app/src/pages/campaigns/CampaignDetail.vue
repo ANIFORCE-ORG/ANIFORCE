@@ -134,7 +134,7 @@ const formatDate = (dateString?: string) => {
     <!-- 中间广告详情展示区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center px-[19px]">
+      <header data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center px-[19px]">
         <div class="flex items-center gap-[12px]">
           <button
             class="flex items-center gap-[6px] text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
@@ -144,7 +144,7 @@ const formatDate = (dateString?: string) => {
             <span class="text-[11px] font-medium">返回广告列表</span>
           </button>
         </div>
-      </div>
+      </header>
 
       <!-- Content -->
       <div class="flex-1 overflow-y-auto p-[19px]">

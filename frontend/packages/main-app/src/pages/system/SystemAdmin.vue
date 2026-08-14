@@ -91,7 +91,7 @@ onMounted(() => {
     />
 
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-      <div data-workspace-page-header class="workspace-page-header flex shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
+      <header data-workspace-page-header class="workspace-page-header flex shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
         <div class="flex min-w-0 items-center gap-[8px]">
           <span class="grid h-[26px] w-[26px] place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
             <span class="material-symbols-outlined text-[16px]">admin_panel_settings</span>
@@ -101,7 +101,7 @@ onMounted(() => {
             <p class="mt-[2px] text-[10px] font-normal leading-[1.2] text-[#787671] dark:text-slate-400">管理系统配置和全局用户账号</p>
           </div>
         </div>
-      </div>
+      </header>
 
       <div class="system-admin-scroll-area">
         <div class="system-admin-content">

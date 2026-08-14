@@ -141,7 +141,7 @@ const handleSave = async () => {
     <!-- 中间内容工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+      <header data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
         <div class="flex items-center gap-[12px]">
           <button
             class="flex items-center gap-[6px] text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
@@ -153,7 +153,7 @@ const handleSave = async () => {
           <div class="h-[19px] w-px bg-slate-200 dark:bg-slate-800"></div>
           <h3 class="font-bold text-[13px] text-slate-900 dark:text-white">创建广告单元 (Ad Set)</h3>
         </div>
-      </div>
+      </header>
 
       <!-- 内容区域 -->
       <div class="flex-1 overflow-y-auto px-[19px] py-[15px]">
