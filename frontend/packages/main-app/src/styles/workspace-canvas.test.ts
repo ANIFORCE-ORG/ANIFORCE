@@ -63,12 +63,8 @@ const elementClassTokens = (
   return matches[0]
 }
 
-const topLevelSfcStyleRules = (source: string) => {
-  const styleBlocks = [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)]
-    .map(match => match[1])
-  expect(styleBlocks, 'expected at least one SFC style block').not.toHaveLength(0)
-
-  const styles = styleBlocks.join('\n').replace(/\/\*[\s\S]*?\*\//g, '')
+const topLevelStyleRules = (styles: string) => {
+  const source = styles.replace(/\/\*[\s\S]*?\*\//g, '')
   const rules: Array<{ selector: string, body: string }> = []
   let selectorStart = 0
   let bodyStart = -1
@@ -77,8 +73,8 @@ const topLevelSfcStyleRules = (source: string) => {
   let quote: '"' | "'" | null = null
   let escaped = false
 
-  for (let index = 0; index < styles.length; index += 1) {
-    const character = styles[index]
+  for (let index = 0; index < source.length; index += 1) {
+    const character = source[index]
 
     if (quote) {
       if (escaped) {
@@ -98,7 +94,7 @@ const topLevelSfcStyleRules = (source: string) => {
     }
     else if (character === '{') {
       if (depth === 0) {
-        selector = styles.slice(selectorStart, index).trim()
+        selector = source.slice(selectorStart, index).trim()
         bodyStart = index + 1
       }
       depth += 1
@@ -109,7 +105,7 @@ const topLevelSfcStyleRules = (source: string) => {
 
       depth -= 1
       if (depth === 0) {
-        rules.push({ selector, body: styles.slice(bodyStart, index) })
+        rules.push({ selector, body: source.slice(bodyStart, index) })
         selectorStart = index + 1
         bodyStart = -1
       }
@@ -125,12 +121,57 @@ const topLevelSfcStyleRules = (source: string) => {
   return rules
 }
 
-const backgroundDeclarations = (ruleBody: string) =>
-  [...ruleBody.matchAll(/(?:^|;)\s*(background(?:-color)?)\s*:\s*([^;]*?)(?=;|$)/gi)]
+const topLevelSfcStyleRules = (source: string) => {
+  const styleBlocks = [...source.matchAll(/<style\b[^>]*>([\s\S]*?)<\/style>/g)]
+    .map(match => match[1])
+  expect(styleBlocks, 'expected at least one SFC style block').not.toHaveLength(0)
+  return topLevelStyleRules(styleBlocks.join('\n'))
+}
+
+const styleDeclarations = (ruleBody: string) =>
+  [...ruleBody.matchAll(/(?:^|;)\s*([-\w]+)\s*:\s*([^;]*?)(?=;|$)/g)]
     .map(match => ({
       property: match[1].toLowerCase(),
       value: match[2].trim(),
     }))
+
+const backgroundDeclarations = (ruleBody: string) =>
+  styleDeclarations(ruleBody)
+    .filter(({ property }) => property === 'background' || property === 'background-color')
+
+const uniqueStyleRule = (
+  rules: ReturnType<typeof topLevelStyleRules>,
+  selector: string,
+) => {
+  const matches = rules.filter(rule => rule.selector === selector)
+  expect(matches, `expected exactly one base ${selector} rule`).toHaveLength(1)
+  return matches[0]
+}
+
+const expectUniqueDeclaration = (
+  rules: ReturnType<typeof topLevelStyleRules>,
+  selector: string,
+  property: string,
+  value: string,
+) => {
+  const rule = uniqueStyleRule(rules, selector)
+  expect(
+    styleDeclarations(rule.body).filter(declaration => declaration.property === property),
+    `expected exactly one ${property} declaration in ${selector}`,
+  ).toEqual([{ property, value }])
+}
+
+const expectUniqueCanvasBackground = (
+  rules: ReturnType<typeof topLevelStyleRules>,
+  selector: string,
+  value: string,
+) => {
+  const rule = uniqueStyleRule(rules, selector)
+  expect(
+    backgroundDeclarations(rule.body),
+    `expected exactly one canvas background declaration in ${selector}`,
+  ).toEqual([{ property: 'background', value }])
+}
 
 describe('workspace page canvas contract', () => {
   it('keeps exactly fifteen routes in the workspace shell', () => {
@@ -206,12 +247,40 @@ describe('workspace page canvas contract', () => {
   })
 
   it('delegates existing page-family canvas variables to the shared token', () => {
-    expect(readSource('../pages/Home.vue')).toContain('--notion-canvas: var(--workspace-canvas);')
-    expect(readSource('../pages/Dashboard.vue')).toContain('--canvas: var(--workspace-canvas);')
-    expect(readSource('../pages/projects/Projects.vue')).toContain('background: var(--workspace-canvas);')
-    expect(readSource('../pages/projects/ProjectDetail.vue')).toContain('background: var(--workspace-canvas);')
-    expect(readSource('../pages/settings/Settings.vue')).toContain('background: var(--workspace-canvas);')
-    expect(readSource('./settings-notion.css')).toContain('--sn-canvas: var(--workspace-canvas);')
+    expectUniqueDeclaration(
+      topLevelSfcStyleRules(readSource('../pages/Home.vue')),
+      '.home-shell',
+      '--notion-canvas',
+      'var(--workspace-canvas)',
+    )
+    expectUniqueDeclaration(
+      topLevelSfcStyleRules(readSource('../pages/Dashboard.vue')),
+      '.replay-page',
+      '--canvas',
+      'var(--workspace-canvas)',
+    )
+    expectUniqueCanvasBackground(
+      topLevelSfcStyleRules(readSource('../pages/projects/Projects.vue')),
+      '.projects-main',
+      'var(--workspace-canvas)',
+    )
+
+    const projectDetailRules = topLevelSfcStyleRules(readSource('../pages/projects/ProjectDetail.vue'))
+    expectUniqueCanvasBackground(projectDetailRules, '.project-detail-shell', 'var(--workspace-canvas)')
+    expectUniqueCanvasBackground(projectDetailRules, '.project-detail-main', 'var(--workspace-canvas)')
+
+    const settingsRules = topLevelSfcStyleRules(readSource('../pages/settings/Settings.vue'))
+    expectUniqueCanvasBackground(settingsRules, '.settings-shell', 'var(--workspace-canvas)')
+    expectUniqueCanvasBackground(settingsRules, '.settings-main', 'var(--workspace-canvas)')
+
+    const settingsNotionRules = topLevelStyleRules(readSource('./settings-notion.css'))
+    expectUniqueDeclaration(
+      settingsNotionRules,
+      '.settings-notion',
+      '--sn-canvas',
+      'var(--workspace-canvas)',
+    )
+    expectUniqueCanvasBackground(settingsNotionRules, '.sn-main', 'var(--sn-canvas)')
   })
 
   it.each(workspacePages)('%s explicitly adopts the workspace canvas root', (_name, path) => {
