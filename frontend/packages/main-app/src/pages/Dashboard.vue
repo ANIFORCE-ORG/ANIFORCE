@@ -15,7 +15,6 @@ const activeSession = ref('sess-g001')
 const period = ref('7')
 const platform = ref('全部平台')
 const project = ref('全部项目')
-const updatedText = ref('2026/8/4 22:23:48')
 const refreshing = ref(false)
 const toastMessage = ref('')
 const toastVisible = ref(false)
@@ -97,7 +96,6 @@ const platforms = [
       ['05-25', '$1,121', '185', '2.06x'], ['05-26', '$948', '157', '1.99x'],
       ['05-27', '$862', '143', '1.93x'],
     ],
-    insight: '05-26 · PMax 素材资产转化效率偏低。', insightValue: 'ROAS 1.94x',
   },
   {
     name: 'TikTok', account: 'Candy Blast TikTok US', campaigns: 4, score: 78, className: 'tiktok',
@@ -126,17 +124,14 @@ const switchSession = (session: any) => {
 }
 
 const changePeriod = () => {
-  updatedText.value = '统计范围已更新'
   showToast(`统计周期已切换为最近 ${period.value} 天`)
 }
 
 const changePlatform = () => {
-  updatedText.value = '平台范围已更新'
   showToast(`平台筛选：${platform.value}`)
 }
 
 const changeProject = () => {
-  updatedText.value = '项目范围已更新'
   showToast(`项目筛选：${project.value}`)
 }
 
@@ -144,7 +139,6 @@ const handleRefresh = () => {
   window.clearTimeout(refreshTimer)
   refreshing.value = false
   requestAnimationFrame(() => { refreshing.value = true })
-  updatedText.value = '刚刚更新'
   showToast('数据已刷新')
   refreshTimer = window.setTimeout(() => { refreshing.value = false }, 700)
 }
@@ -166,7 +160,7 @@ onBeforeUnmount(() => {
     />
 
     <main class="workspace replay-page">
-      <header class="page-bar replay-bar">
+      <header class="page-bar replay-bar" data-workspace-page-header :class="{ 'workspace-page-header': !props.embedded }">
         <div class="page-title replay-title">
           <span class="page-icon" aria-hidden="true">
             <span class="material-symbols-outlined">bar_chart</span>
@@ -177,33 +171,28 @@ onBeforeUnmount(() => {
           </div>
         </div>
         <div class="page-actions replay-actions">
-          <label class="filter-field">时间范围
+          <label class="filter-field">
             <select v-model="period" class="period-select" aria-label="时间范围" @change="changePeriod">
               <option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option>
             </select>
           </label>
-          <label class="filter-field">平台
+          <label class="filter-field">
             <select v-model="platform" class="period-select" aria-label="平台" @change="changePlatform">
               <option>全部平台</option><option>Meta</option><option>Google</option><option>TikTok</option>
             </select>
           </label>
-          <label class="filter-field">项目
+          <label class="filter-field">
             <select v-model="project" class="period-select" aria-label="项目" @change="changeProject">
               <option>全部项目</option><option>CANDY BLASTER</option><option>DramaBox</option>
             </select>
           </label>
           <button class="refresh-button" :class="{ refreshing }" type="button" @click="handleRefresh">
-            <span class="icon material-symbols-outlined" aria-hidden="true">refresh</span>刷新
+            <span class="icon material-symbols-outlined" aria-hidden="true">refresh</span><span class="refresh-label">刷新</span>
           </button>
         </div>
       </header>
 
       <div class="content replay-content">
-        <section class="data-note">
-          <div><strong>数据源：ANIFORCE Demo 数据集</strong><span>更新时间：{{ updatedText }}</span></div>
-          <span class="quiet-badge">Report / Monitor</span>
-        </section>
-
         <section class="replay-kpis" aria-label="核心指标">
           <article v-for="kpi in kpis" :key="kpi.label" class="replay-kpi">
             <div class="kpi-head"><span>{{ kpi.label }}</span><span class="icon material-symbols-outlined" aria-hidden="true">{{ kpi.icon }}</span></div>
@@ -217,18 +206,18 @@ onBeforeUnmount(() => {
           <div class="trend-grid">
             <div class="chart-panel">
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>消耗</span><span class="legend-item"><i class="legend-dot conversions"></i>转化</span><span class="legend-item"><i class="legend-dot roas"></i>ROAS</span></div>
-              <svg viewBox="60 24 830 138" preserveAspectRatio="none" role="img" aria-label="近七天消耗、转化和 ROAS 趋势图">
+              <svg viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" aria-label="近七天消耗、转化和 ROAS 趋势图">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
                 <g fill="#20a464" opacity=".8"><rect x="80" y="116" width="22" height="39" rx="3" /><rect x="208" y="106" width="22" height="49" rx="3" /><rect x="336" y="99" width="22" height="56" rx="3" /><rect x="464" y="91" width="22" height="64" rx="3" /><rect x="592" y="78" width="22" height="77" rx="3" /><rect x="720" y="64" width="22" height="91" rx="3" /><rect x="848" y="50" width="22" height="105" rx="3" /></g>
-                <path d="M91 106L219 98L347 90L475 82L603 73L731 57L859 48" fill="none" stroke="#4f8fe8" stroke-width="2.2" />
-                <path d="M91 138L219 121L347 104L475 116L603 83L731 66L859 57" fill="none" stroke="#dd7d00" stroke-width="2" />
-                <g fill="#4f8fe8" stroke="#fff" stroke-width="1.5"><circle cx="91" cy="106" r="3" /><circle cx="219" cy="98" r="3" /><circle cx="347" cy="90" r="3" /><circle cx="475" cy="82" r="3" /><circle cx="603" cy="73" r="3" /><circle cx="731" cy="57" r="3" /><circle cx="859" cy="48" r="3" /></g>
-                <g fill="#dd7d00" stroke="#fff" stroke-width="1.5"><circle cx="91" cy="138" r="3" /><circle cx="219" cy="121" r="3" /><circle cx="347" cy="104" r="3" /><circle cx="475" cy="116" r="3" /><circle cx="603" cy="83" r="3" /><circle cx="731" cy="66" r="3" /><circle cx="859" cy="57" r="3" /></g>
+                <path d="M91 106L219 98L347 90L475 82L603 73L731 57L859 48" fill="none" stroke="#4f8fe8" stroke-width="1.4" />
+                <path d="M91 138L219 121L347 104L475 116L603 83L731 66L859 57" fill="none" stroke="#dd7d00" stroke-width="1.35" />
+                <g fill="#4f8fe8" stroke="#fff" stroke-width="1"><circle cx="91" cy="106" r="2.1" /><circle cx="219" cy="98" r="2.1" /><circle cx="347" cy="90" r="2.1" /><circle cx="475" cy="82" r="2.1" /><circle cx="603" cy="73" r="2.1" /><circle cx="731" cy="57" r="2.1" /><circle cx="859" cy="48" r="2.1" /></g>
+                <g fill="#dd7d00" stroke="#fff" stroke-width="1"><circle cx="91" cy="138" r="2.1" /><circle cx="219" cy="121" r="2.1" /><circle cx="347" cy="104" r="2.1" /><circle cx="475" cy="116" r="2.1" /><circle cx="603" cy="83" r="2.1" /><circle cx="731" cy="66" r="2.1" /><circle cx="859" cy="57" r="2.1" /></g>
                 <g v-if="activeTrendPoint" class="chart-active-markers" aria-hidden="true">
                   <line :x1="activeTrendPoint.x" :x2="activeTrendPoint.x" y1="24" y2="155" />
-                  <rect :x="activeTrendPoint.x - 13" :y="activeTrendPoint.barY" width="26" :height="activeTrendPoint.barHeight" rx="4" />
-                  <circle class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="5" />
-                  <circle class="roas" :cx="activeTrendPoint.x" :cy="activeTrendPoint.roasY" r="5" />
+                  <rect :x="activeTrendPoint.x - 10" :y="activeTrendPoint.barY" width="20" :height="activeTrendPoint.barHeight" rx="3" />
+                  <circle class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />
+                  <circle class="roas" :cx="activeTrendPoint.x" :cy="activeTrendPoint.roasY" r="3.5" />
                 </g>
                 <rect
                   v-for="(point, index) in trendPoints"
@@ -318,7 +307,6 @@ onBeforeUnmount(() => {
                 <div class="daily-table-head" role="row"><span>日期</span><span>消耗</span><span>转化</span><span>ROAS</span></div>
                 <div v-for="row in item.daily" :key="row[0]" class="daily-table-row" role="row"><span>{{ row[0] }}</span><strong>{{ row[1] }}</strong><span>{{ row[2] }}</span><span class="daily-roas">{{ row[3] }}</span></div>
               </div>
-              <div v-if="item.insight" class="platform-insight"><span>{{ item.insight }}</span><span class="soft-chip">{{ item.insightValue }}</span></div>
             </article>
           </div>
         </section>
@@ -454,22 +442,20 @@ onBeforeUnmount(() => {
 .period-select { height: 31px; min-width: 112px; padding: 0 29px 0 10px; border: 1px solid var(--hairline-strong); border-radius: 7px; outline: none; background: #fff; color: var(--slate); font-size: 11px; cursor: pointer; }
 .content { width: min(100%,1220px); margin: 0 auto; padding: 30px clamp(24px,3vw,48px) 74px; }
 
-.replay-bar { min-height: 64px; align-items: center; }
+.replay-bar { align-items: center; }
 .replay-title { align-items: center; }
 .replay-title .page-icon { background: #f6f5f4; color: #37352f; }
 .replay-title h1 { font-size: 17px; }
 .replay-title p { margin: 2px 0 0; color: var(--steel); font-size: 10px; }
 .replay-actions { gap: 8px; }
-.filter-field { display: grid; gap: 3px; color: var(--stone); font-size: 8px; font-weight: 600; }
+.filter-field { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
 .filter-field .period-select { min-width: 92px; }
-.refresh-button { height: 31px; min-width: 116px; align-self: end; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--charcoal); font-size: 10px; font-weight: 600; cursor: pointer; }
+.refresh-button { height: 31px; min-width: 116px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--charcoal); font-size: 10px; font-weight: 600; cursor: pointer; }
 .refresh-button .icon { font-size: 15px; }
 .refreshing .icon { animation: spin .65s ease; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .replay-content { width: 100%; max-width: 1500px; padding: 14px 18px 54px; }
-.data-note { min-height: 42px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-soft); color: var(--slate); font-size: 9px; }
-.data-note strong { display: block; margin-bottom: 1px; color: var(--charcoal); }
 .quiet-badge { display: inline-flex; align-items: center; min-height: 22px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; background: #fff; color: var(--steel); font-size: 8px; font-weight: 600; white-space: nowrap; }
 button.quiet-badge { cursor: pointer; font-family: inherit; }
 
@@ -492,7 +478,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .chart-panel { position: relative; min-width: 0; height: 252px; min-height: 0; padding: 7px 2px 0; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fcfcfb; }
 .chart-legend { display: flex; align-items: center; gap: 12px; padding-left: 6px; color: var(--steel); font-size: 8px; }
 .legend-item { display: inline-flex; align-items: center; gap: 4px; }
-.legend-dot { width: 6px; height: 6px; border-radius: 50%; }
+.legend-dot { width: 5px; height: 5px; border-radius: 50%; }
 .legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }.legend-dot.roas { background: #dd7d00; }
 .chart-panel svg { display: block; width: 100%; height: 202px; margin-top: -2px; overflow: visible; }
 .chart-axis-labels { display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 3.7%; color: var(--stone); font-size: 8px; line-height: 1; }
@@ -502,9 +488,9 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .chart-hit-area { fill: transparent; cursor: pointer; outline: none; }
 .chart-hit-area:focus { fill: rgb(79 143 232 / 4%); }
 .chart-active-markers { pointer-events: none; }
-.chart-active-markers line { stroke: rgb(100 116 139 / 28%); stroke-width: 1; stroke-dasharray: 3 3; }
-.chart-active-markers rect { fill: none; stroke: #20a464; stroke-width: 2; }
-.chart-active-markers circle { fill: #ffffff; stroke-width: 2.5; }
+.chart-active-markers line { stroke: rgb(100 116 139 / 28%); stroke-width: .75; stroke-dasharray: 3 3; }
+.chart-active-markers rect { fill: none; stroke: #20a464; stroke-width: 1.2; }
+.chart-active-markers circle { fill: #ffffff; stroke-width: 1.5; }
 .chart-active-markers circle.spend { stroke: #4f8fe8; }
 .chart-active-markers circle.roas { stroke: #dd7d00; }
 .chart-tooltip { position: absolute; z-index: 4; top: 28px; width: 146px; padding: 8px 9px; border: 1px solid var(--hairline); border-radius: 7px; background: rgb(255 255 255 / 96%); box-shadow: rgba(15,15,15,.12) 0 8px 24px; color: var(--charcoal); pointer-events: none; transform: translateX(-50%); }
@@ -531,8 +517,8 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .segment-row { min-height: 46px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 8px; padding: 8px 9px; border: 1px solid var(--hairline-soft); border-radius: 7px; }
 .segment-row strong { display: block; color: var(--ink); font-size: 9px; }.segment-row small { display: block; margin-top: 2px; color: var(--steel); font-size: 8px; }
 
-.platform-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: start; gap: 8px; padding: 10px; }
-.platform-card { --accent: #4f8fe8; min-width: 0; align-self: start; border: 1px solid var(--hairline); border-radius: 9px; overflow: hidden; background: #fff; }
+.platform-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; gap: 8px; padding: 10px; }
+.platform-card { --accent: #4f8fe8; min-width: 0; align-self: stretch; border: 1px solid var(--hairline); border-radius: 9px; overflow: hidden; background: #fff; }
 .platform-card.google { --accent: #dd7d00; }.platform-card.tiktok { --accent: #16a05d; }
 .platform-top { padding: 10px; }
 .platform-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
@@ -544,7 +530,6 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .platform-metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 0; margin-top: 9px; border: 1px solid var(--hairline-soft); border-radius: 6px; overflow: hidden; background: var(--surface-soft); }
 .platform-metric { position: relative; padding: 7px 8px; }.platform-metric:not(:last-child)::after { content: ""; position: absolute; top: 22%; right: 0; bottom: 22%; width: 1px; background: #f0efed; }
 .platform-metric span { display: block; color: var(--steel); font-size: 7px; }.platform-metric strong { display: block; margin-top: 2px; color: var(--ink); font-size: 9px; }
-.platform-insight { margin: 0 8px 8px; padding: 7px 8px; display: flex; align-items: center; justify-content: space-between; gap: 8px; border-radius: 6px; background: var(--surface-soft); color: var(--slate); font-size: 8px; }
 .daily-table { margin: 0 8px 8px; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 7px; background: #fff; }
 .daily-table-head,.daily-table-row { display: grid; grid-template-columns: .8fr 1.15fr .9fr .8fr; align-items: center; gap: 8px; min-height: 30px; padding: 0 10px; }
 .daily-table-head { min-height: 28px; background: var(--surface-soft); color: var(--steel); font-size: 7px; font-weight: 600; }.daily-table-row { border-top: 1px solid #f1f0ee; color: var(--slate); font-size: 8px; }.daily-table-row:hover { background: #fafaf9; }.daily-table-row strong { color: var(--ink); font-size: 9px; font-weight: 600; }
@@ -555,16 +540,17 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 
 @media (max-width: 1220px) {
   .replay-kpis { grid-template-columns: repeat(3,1fr); }.replay-kpi:nth-child(3)::after,.replay-kpi:nth-child(6)::after { display: none; }.replay-kpi:nth-child(-n+3) { border-bottom: 1px solid #f3f2f0; }
-  .platform-grid { grid-template-columns: 1fr; }.platform-card { display: grid; grid-template-columns: 310px minmax(0,1fr); align-items: start; }.platform-card .platform-top { border-right: 1px solid var(--hairline-soft); }.platform-card .daily-table { margin: 8px; }.platform-card .platform-insight { grid-column: 1/-1; }
+  .platform-grid { grid-template-columns: 1fr; }.platform-card { display: grid; grid-template-columns: 310px minmax(0,1fr); align-items: start; }.platform-card .platform-top { border-right: 1px solid var(--hairline-soft); }.platform-card .daily-table { margin: 8px; }
 }
 @media (max-width: 900px) {
-  .replay-bar { align-items: flex-start; flex-direction: column; padding-top: 10px; padding-bottom: 10px; }.replay-actions { width: 100%; overflow-x: auto; padding-bottom: 2px; }
+  .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
   .trend-grid,.replay-split { grid-template-columns: 1fr; }.chart-summary { width: 100%; height: auto; grid-template-columns: repeat(3,1fr); grid-template-rows: 1fr; }.summary-box { border-right: 1px solid var(--hairline-soft); border-bottom: 0; }.summary-box:last-child { border-right: 0; }
   .platform-card { display: block; }.platform-card .platform-top { border-right: 0; }
 }
 @media (max-width: 620px) {
   .replay-content { padding: 12px 12px 52px; }.replay-kpis { grid-template-columns: repeat(2,1fr); }.replay-kpi { border-bottom: 1px solid #f3f2f0; }.replay-kpi:nth-child(3)::after { display: block; }.replay-kpi:nth-child(2n)::after { display: none; }.replay-kpi:nth-last-child(-n+2) { border-bottom: 0; }
-  .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }.data-note { align-items: flex-start; flex-direction: column; }
+  .dashboard-shell:not(.embedded) .replay-title h1 { display: none; }.dashboard-shell:not(.embedded) .refresh-button { width: 31px; min-width: 31px; padding: 0; }.dashboard-shell:not(.embedded) .refresh-label { display: none; }
+  .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 </style>
