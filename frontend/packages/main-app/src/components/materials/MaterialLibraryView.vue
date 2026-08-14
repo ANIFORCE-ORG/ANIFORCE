@@ -103,7 +103,7 @@ const platformClass = (platform?: string) => platform === 'Meta'
 </script>
 
 <template>
-  <div class="rounded-lg border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+  <div class="rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
     <div class="border-b border-slate-200 px-[16px] py-[14px] dark:border-slate-800">
       <div class="flex flex-wrap items-center gap-[8px]">
         <div class="relative min-w-[220px] flex-1">
@@ -178,7 +178,12 @@ const platformClass = (platform?: string) => platform === 'Meta'
           >
             <td class="px-[12px] py-[10px]">
               <div class="flex min-w-0 items-center gap-[10px]" :class="embedded ? '' : 'min-w-[280px]'">
-                <div class="relative h-[62px] w-[62px] shrink-0 overflow-hidden rounded-lg border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800">
+                <div
+                  class="relative shrink-0 overflow-hidden border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800"
+                  :class="embedded
+                    ? 'h-[62px] w-[62px] rounded-lg'
+                    : 'h-[82px] w-[54px] rounded-md'"
+                >
                   <img v-if="row.previewUrl" :src="row.previewUrl" :alt="row.name" class="h-full w-full object-cover" loading="lazy" />
                   <span v-if="row.previewUrl && row.mediaKind === 'video'" class="absolute left-1/2 top-1/2 grid h-[28px] w-[28px] -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full border-2 border-white/90 bg-slate-950/40 text-white">
                     <span class="material-symbols-outlined text-[15px]">play_arrow</span>

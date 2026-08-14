@@ -35,6 +35,7 @@ const loading = ref(false)
 const error = ref('')
 const materials = ref<Material[]>([])
 const materialOriginals = ref<Map<string, string>>(new Map())
+const materialPreviewAttemptIndexes = ref<Map<string, number>>(new Map())
 const selectedMaterialId = ref<string | null>(null)
 const detailOpen = ref(false)
 const deletingMaterial = ref<MaterialRow | null>(null)
@@ -103,10 +104,55 @@ const selectedRow = computed(() => {
   if (!material) return null
   return toMaterialRows([material], new Map(), new Map())[0] || null
 })
+const selectedPreviewCandidates = computed(() => selectedRow.value ? getMaterialPreviewCandidates(selectedRow.value) : [])
 const selectedPreviewUrl = computed(() => {
   if (!selectedRow.value) return ''
-  return materialOriginals.value.get(selectedRow.value.id) || selectedRow.value.previewUrl || ''
+  const attemptIndex = materialPreviewAttemptIndexes.value.get(selectedRow.value.id) || 0
+  return selectedPreviewCandidates.value[attemptIndex] || ''
 })
+
+const getMaterialPreviewCandidates = (row: MaterialRow) => {
+  const candidates = [
+    materialOriginals.value.get(row.id),
+    row.previewUrl,
+    row.material.poster_url,
+    row.material.preview_url,
+    row.material.thumbnail_url,
+    row.material.url,
+  ].filter((value): value is string => Boolean(value?.trim()))
+
+  return Array.from(new Set(candidates))
+}
+
+const getMaterialPreviewFallback = (material: Material) => (
+  material.poster_url ||
+  material.preview_url ||
+  material.thumbnail_url ||
+  material.url ||
+  ''
+)
+
+const setMaterialOriginalSource = (materialId: string, source: string) => {
+  if (!source) return
+  const nextOriginals = new Map(materialOriginals.value)
+  nextOriginals.set(materialId, source)
+  materialOriginals.value = nextOriginals
+
+  const nextAttempts = new Map(materialPreviewAttemptIndexes.value)
+  nextAttempts.delete(materialId)
+  materialPreviewAttemptIndexes.value = nextAttempts
+}
+
+const handleSelectedPreviewError = () => {
+  const row = selectedRow.value
+  if (!row) return
+
+  const candidates = getMaterialPreviewCandidates(row)
+  const currentIndex = candidates.indexOf(selectedPreviewUrl.value)
+  const nextAttempts = new Map(materialPreviewAttemptIndexes.value)
+  nextAttempts.set(row.id, currentIndex >= 0 ? currentIndex + 1 : (nextAttempts.get(row.id) || 0) + 1)
+  materialPreviewAttemptIndexes.value = nextAttempts
+}
 
 onMounted(async () => {
   await loadPageData()
@@ -145,9 +191,9 @@ const loadOriginalSource = async (material: Material) => {
   if (materialOriginals.value.has(material.id)) return
   try {
     const original = await getMaterialImage(material.id, false)
-    materialOriginals.value.set(material.id, original.url || original.data || material.url || '')
+    setMaterialOriginalSource(material.id, original.url || original.data || getMaterialPreviewFallback(material))
   } catch {
-    materialOriginals.value.set(material.id, material.url || material.thumbnail_url || '')
+    setMaterialOriginalSource(material.id, getMaterialPreviewFallback(material))
   }
 }
 
@@ -627,7 +673,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-[#f6f7f9] dark:bg-slate-950">
+  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-[#fafaf9] dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -638,23 +684,23 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 
     <main class="min-w-0 flex-1 bg-transparent">
       <section class="min-w-0 flex h-full flex-col">
-        <header class="flex h-[68px] shrink-0 items-center justify-between border-b border-slate-200 bg-white px-[28px] dark:border-slate-800 dark:bg-slate-900">
-          <div class="min-w-0">
-            <div class="flex items-center gap-[10px]">
-              <span class="grid h-[30px] w-[30px] place-items-center rounded-lg bg-primary/10 text-primary"><span class="material-symbols-outlined text-[17px]">video_library</span></span>
-              <div>
-                <h1 class="text-[18px] font-bold text-slate-900 dark:text-white">素材管理</h1>
-                <p class="mt-[2px] text-[11px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
-              </div>
+        <header class="flex min-h-[54px] shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
+          <div class="flex min-w-0 items-center gap-[8px]">
+            <span class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
+              <span class="material-symbols-outlined text-[16px] leading-none">video_library</span>
+            </span>
+            <div class="min-w-0">
+              <h1 class="m-0 text-[16px] font-semibold tracking-[-0.2px] text-[#1a1a1a] dark:text-white">素材管理</h1>
+              <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
             </div>
           </div>
-          <div class="flex items-center gap-[8px]">
-            <button class="inline-flex items-center gap-[6px] rounded-md border border-slate-200 px-[11px] py-[7px] text-[11px] font-semibold text-slate-700 hover:border-slate-300 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300 dark:hover:bg-slate-800" @click="openMetaSyncModal">
-              <span class="material-symbols-outlined text-[15px]">download</span>
+          <div class="flex items-center gap-[7px]">
+            <button class="inline-flex min-h-[34px] items-center justify-center gap-[7px] rounded-[8px] border border-slate-200 bg-white px-[13px] text-[11px] font-medium text-slate-700 transition-colors duration-150 hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" @click="openMetaSyncModal">
+              <span class="material-symbols-outlined text-[16px]">download</span>
               从 Meta 导入
             </button>
-            <button class="inline-flex items-center gap-[6px] rounded-md bg-primary px-[13px] py-[7px] text-[11px] font-semibold text-white shadow-sm hover:bg-primary/90" @click="openUploadModal">
-              <span class="material-symbols-outlined text-[15px]">upload</span>
+            <button type="button" class="material-create-button" @click="openUploadModal">
+              <span class="material-symbols-outlined">upload</span>
               上传素材
             </button>
           </div>
@@ -688,14 +734,13 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
           <div class="flex h-full items-center text-[14px] font-semibold">
             <span class="text-slate-900 dark:text-white">素材详情</span>
           </div>
-          <button v-if="selectedRow" class="ml-auto text-[12px] font-semibold text-primary hover:text-primary/80" @click="openEditMaterial(selectedRow)">编辑素材</button>
         </div>
 
         <div v-if="selectedRow" class="flex-1 overflow-y-auto p-[18px] max-sm:p-[14px]">
           <div class="grid gap-[12px]">
-            <aside class="rounded-lg border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
+            <aside class="rounded-md border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
               <div class="mb-[12px] flex items-center justify-between gap-[10px]"><h3 class="text-[16px] font-bold text-slate-900 dark:text-white">原始素材</h3><span class="text-[11px] text-slate-400">{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }}</span></div>
-              <div class="mt-[14px] overflow-hidden rounded-lg border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
+              <div class="mt-[14px] overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-700 dark:bg-slate-900">
                 <div class="bg-black">
                   <video
                     v-if="selectedRow.mediaKind === 'video' && selectedPreviewUrl"
@@ -704,15 +749,22 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                     controls
                     playsinline
                     preload="metadata"
+                    @error="handleSelectedPreviewError"
                   />
                   <img
                     v-else-if="selectedPreviewUrl"
                     :src="selectedPreviewUrl"
                     :alt="selectedRow.name"
                     class="aspect-[16/10] max-h-[480px] min-h-0 w-full object-contain"
+                    @error="handleSelectedPreviewError"
                   />
-                  <div v-else class="grid aspect-[16/10] place-items-center text-slate-500">
-                    <span class="material-symbols-outlined text-[40px]">broken_image</span>
+                  <div v-else class="relative grid aspect-[16/10] place-items-center overflow-hidden bg-slate-950">
+                    <div class="absolute inset-0 bg-black/65"></div>
+                    <div class="relative z-[1] flex flex-col items-center gap-[8px] text-center text-white/90">
+                      <span class="material-symbols-outlined text-[38px] text-white/70">broken_image</span>
+                      <span class="text-[13px] font-semibold">获取图片失败</span>
+                      <span class="text-[11px] text-white/55">提示获取失败</span>
+                    </div>
                   </div>
                 </div>
                 <div class="p-[12px]">
@@ -732,17 +784,17 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
             </aside>
 
             <main class="space-y-[14px]">
-              <section class="rounded-lg border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
+              <section class="rounded-md border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">文件信息</h3>
                 <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>类型 / 格式</dt><dd>{{ selectedRow.mediaKind === 'video' ? '视频' : '图片' }} · {{ selectedRow.format }}</dd></div><div class="detail-row"><dt>尺寸 / 比例</dt><dd>{{ selectedRow.material.width && selectedRow.material.height ? `${selectedRow.material.width} × ${selectedRow.material.height}` : '-' }} · {{ selectedRow.material.ratio || '-' }}</dd></div><div class="detail-row"><dt>文件大小</dt><dd>{{ selectedRow.material.file_size ? `${(selectedRow.material.file_size / 1024 / 1024).toFixed(2)} MB` : '-' }}</dd></div><div class="detail-row"><dt>视频时长</dt><dd>{{ selectedRow.material.duration ? `${selectedRow.material.duration} 秒` : '-' }}</dd></div><div class="detail-row"><dt>处理状态</dt><dd>{{ materialFileStatus(selectedRow.material.processing_status || selectedRow.material.status) }}</dd></div></dl>
               </section>
-              <section class="rounded-lg border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
+              <section class="rounded-md border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
                 <div class="flex items-center justify-between"><h3 class="text-[15px] font-bold text-slate-900 dark:text-white">平台资产</h3><span class="text-[10px] text-slate-400">平台归属</span></div>
                 <div v-if="selectedRow.material.platform_assets?.length" class="mt-[12px] space-y-[8px]"><div v-for="asset in selectedRow.material.platform_assets" :key="asset.id" class="flex items-center gap-[8px] border border-slate-200 px-[10px] py-[10px] dark:border-slate-700"><div class="min-w-0"><div class="flex flex-wrap items-center gap-[5px]"><span :class="platformClass(asset.platform)"><span class="account-dot"></span>{{ asset.platform }}</span><span class="account-chip">{{ asset.ad_account_name || asset.ad_account_id }}</span><span v-if="asset.ad_account_name" class="text-[9px] text-slate-400">{{ asset.ad_account_id }}</span></div><div class="mt-[5px] text-[10px] text-slate-400">{{ asset.asset_type === 'video' ? 'AdVideo' : 'AdImage' }} · {{ platformAssetStatus(asset.normalized_status) }}</div></div></div></div>
                 <div v-else class="mt-[12px] border border-dashed border-slate-300 px-[12px] py-[12px] text-center text-[12px] text-slate-400 dark:border-slate-700">尚未发布到广告平台账户</div>
                 <div class="mt-[12px] flex gap-[8px]"><button v-if="selectedRow.mediaKind === 'image'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'image')">发布到平台</button><button v-if="selectedRow.mediaKind === 'video'" class="flex-1 border border-slate-200 px-[8px] py-[8px] text-[11px] font-semibold text-slate-700 hover:bg-slate-50 dark:border-slate-700 dark:text-slate-300" @click="openMetaPublishModal(selectedRow, 'video')">发布到平台</button></div>
               </section>
-              <section class="rounded-lg border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
+              <section class="rounded-md border border-slate-200 bg-white p-[18px] dark:border-slate-800 dark:bg-slate-900">
                 <h3 class="text-[15px] font-bold text-slate-900 dark:text-white">素材信息</h3>
                 <dl class="mt-[14px] space-y-[12px] text-[12px]"><div class="detail-row"><dt>来源</dt><dd>{{ selectedRow.sourceLabel }}</dd></div><div class="detail-row"><dt>原始文件名</dt><dd class="break-all">{{ selectedRow.material.original_filename || '-' }}</dd></div><div class="detail-row"><dt>创建时间</dt><dd>{{ selectedRow.createdAtLabel }}</dd></div><div class="detail-row"><dt>标签</dt><dd>{{ selectedRow.tags.length ? selectedRow.tags.join(' · ') : '-' }}</dd></div></dl>
               </section>
@@ -1150,6 +1202,32 @@ tbody tr {
 .edit-input:focus {
   border-color: rgb(var(--color-primary, 59 130 246));
   box-shadow: 0 0 0 1px rgb(var(--color-primary, 59 130 246));
+}
+
+.material-create-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid #37352f;
+  border-radius: 8px;
+  background: #37352f;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+
+.material-create-button:hover {
+  border-color: #1a1a1a;
+  background: #1a1a1a;
+}
+
+.material-create-button .material-symbols-outlined {
+  font-size: 16px;
 }
 
 :global(.dark) .filter-select {

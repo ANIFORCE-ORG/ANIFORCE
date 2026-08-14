@@ -6,6 +6,7 @@ interface Props {
   confirmText?: string
   cancelText?: string
   confirmButtonClass?: string
+  variant?: 'default' | 'notion'
 }
 
 interface Emits {
@@ -14,11 +15,12 @@ interface Emits {
   (e: 'close'): void
 }
 
-const props = withDefaults(defineProps<Props>(), {
+withDefaults(defineProps<Props>(), {
   title: '确认操作',
   confirmText: '确定',
   cancelText: '取消',
-  confirmButtonClass: 'bg-blue-500 hover:bg-blue-600'
+  confirmButtonClass: 'bg-blue-500 hover:bg-blue-600',
+  variant: 'default'
 })
 
 const emit = defineEmits<Emits>()
@@ -33,79 +35,51 @@ const handleCancel = () => {
   emit('close')
 }
 
-const handleBackdropClick = (e: MouseEvent) => {
-  if (e.target === e.currentTarget) {
-    handleCancel()
-  }
+const handleBackdropClick = (event: MouseEvent) => {
+  if (event.target === event.currentTarget) handleCancel()
 }
 </script>
 
 <template>
   <Teleport to="body">
-    <Transition name="fade">
+    <Transition name="confirm-fade">
       <div
         v-if="show"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
+        class="confirm-layer"
+        :class="{ notion: variant === 'notion' }"
         @click="handleBackdropClick"
       >
-        <Transition name="scale">
-          <div
-            v-if="show"
-            class="bg-white dark:bg-slate-800 rounded-lg shadow-2xl w-full mx-4 overflow-hidden border border-slate-200 dark:border-slate-700"
-            style="max-width: 358px;"
-          >
-            <!-- 内容 -->
-            <div class="px-6 py-5">
-              <h3 class="font-bold text-slate-900 dark:text-white mb-3" style="font-size: 16px;">{{ title }}</h3>
-              <p class="text-slate-600 dark:text-slate-300 leading-relaxed" style="font-size: 12.8px;">{{ message }}</p>
-            </div>
-
-            <!-- 按钮 -->
-            <div class="px-6 py-4 bg-slate-50 dark:bg-slate-900/30 flex items-center justify-end gap-2 border-t border-slate-200 dark:border-slate-700">
-              <button
-                class="px-4 py-2 rounded-lg font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 hover:bg-slate-100 dark:hover:bg-slate-600 border border-slate-300 dark:border-slate-600 transition-all duration-200 shadow-sm hover:shadow"
-                style="font-size: 11.2px;"
-                @click="handleCancel"
-              >
-                {{ cancelText }}
-              </button>
-              <button
-                :class="[
-                  'px-4 py-2 rounded-lg font-medium text-white transition-all duration-200 shadow-sm hover:shadow-md',
-                  confirmButtonClass
-                ]"
-                style="font-size: 11.2px;"
-                @click="handleConfirm"
-              >
-                {{ confirmText }}
-              </button>
-            </div>
+        <section class="confirm-dialog" role="alertdialog" aria-modal="true">
+          <div class="confirm-copy">
+            <h2>{{ title }}</h2>
+            <p>{{ message }}</p>
           </div>
-        </Transition>
+          <footer class="confirm-actions">
+            <button class="confirm-button secondary" type="button" @click="handleCancel">{{ cancelText }}</button>
+            <button class="confirm-button primary" :class="confirmButtonClass" type="button" @click="handleConfirm">{{ confirmText }}</button>
+          </footer>
+        </section>
       </div>
     </Transition>
   </Teleport>
 </template>
 
 <style scoped>
-.fade-enter-active,
-.fade-leave-active {
-  transition: opacity 0.2s ease;
-}
-
-.fade-enter-from,
-.fade-leave-to {
-  opacity: 0;
-}
-
-.scale-enter-active,
-.scale-leave-active {
-  transition: all 0.2s ease;
-}
-
-.scale-enter-from,
-.scale-leave-to {
-  opacity: 0;
-  transform: scale(0.95);
-}
+.confirm-layer { position: fixed; z-index: 110; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(15,23,42,.6); backdrop-filter: blur(3px); }
+.confirm-dialog { width: min(420px,100%); overflow: hidden; border: 1px solid #e2e8f0; border-radius: 10px; background: #fff; box-shadow: rgba(15,23,42,.2) 0 20px 56px -12px; }
+.confirm-copy { padding: 22px 20px 18px; }
+.confirm-copy h2 { margin: 0; color: #0f172a; font-size: 15px; font-weight: 650; }
+.confirm-copy p { margin: 10px 0 0; color: #475569; font-size: 11px; line-height: 1.6; }
+.confirm-actions { min-height: 58px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; padding: 0 18px; border-top: 1px solid #e2e8f0; background: #f8fafc; }
+.confirm-button { min-height: 36px; padding: 0 13px; border-radius: 8px; font-size: 10px; font-weight: 500; cursor: pointer; }
+.confirm-button.secondary { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
+.confirm-button.primary { border: 1px solid #2383e2; background: #2383e2; color: #fff; }
+.confirm-layer.notion { background: rgba(25,24,22,.48); }
+.notion .confirm-dialog { border-color: #e5e3df; border-radius: 12px; }
+.notion .confirm-copy h2 { color: #1a1a1a; }
+.notion .confirm-copy p { color: #5d5b54; }
+.notion .confirm-actions { border-color: #e5e3df; background: #fafaf9; }
+.notion .confirm-button.secondary { border-color: #c8c4be; color: #37352f; }
+.confirm-fade-enter-active,.confirm-fade-leave-active { transition: opacity .16s ease; }
+.confirm-fade-enter-from,.confirm-fade-leave-to { opacity: 0; }
 </style>

@@ -160,7 +160,11 @@ const standardTasks = [
         <section class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm shadow-slate-200/50 dark:border-slate-800 dark:bg-slate-900 dark:shadow-none">
           <div class="rounded-lg p-3" :class="statusMeta[status].tint">
             <div class="flex items-start justify-between gap-3">
-              <span class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold" :class="statusMeta[status].badge">
+              <span
+                class="inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold"
+                :class="[statusMeta[status].badge, { 'status-chip': status === 'running' }]"
+                :data-status="status === 'running' ? 'running' : undefined"
+              >
                 <span class="material-symbols-outlined text-sm" :class="{ 'animate-spin': status === 'running' || status === 'applying' }">
                   {{ statusMeta[status].icon }}
                 </span>
@@ -223,7 +227,11 @@ const standardTasks = [
                     <p class="mt-1 text-xs leading-5 text-slate-500 dark:text-slate-400">{{ task.summary }}</p>
                   </div>
                 </div>
-                <span class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold" :class="statusMeta[task.status].badge">
+                <span
+                  class="shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold"
+                  :class="[statusMeta[task.status].badge, { 'status-chip': task.status === 'running' }]"
+                  :data-status="task.status === 'running' ? 'running' : undefined"
+                >
                   {{ statusMeta[task.status].label }}
                 </span>
               </div>

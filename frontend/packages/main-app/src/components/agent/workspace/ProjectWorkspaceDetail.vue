@@ -23,6 +23,7 @@ const remainingBudget = computed(() => Math.max(0, totalBudget.value - spent.val
 function getStatusLabel(status: string) {
   const labels: Record<string, string> = {
     active: '进行中',
+    running: '进行中',
     paused: '已暂停',
     completed: '已完成'
   }
@@ -40,7 +41,7 @@ function getStatusLabel(status: string) {
         <span class="material-symbols-outlined text-base">arrow_back</span>
         项目列表
       </button>
-      <span class="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300">
+      <span class="status-chip" :data-status="project.status">
         {{ getStatusLabel(project.status) }}
       </span>
     </div>

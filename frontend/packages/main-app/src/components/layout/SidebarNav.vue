@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, getCurrentInstance } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useAgentSession } from '@/composables/useAgentSession'
@@ -35,7 +35,7 @@ const props = withDefaults(defineProps<Props>(), {
   ],
   sessions: () => [],
   activePanel: '',
-  sessionActions: false,
+  sessionActions: true,
   sessionCreate: false
 })
 
@@ -51,6 +51,7 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const agent = useAgentSession()
+const instance = getCurrentInstance()
 
 const isAdmin = computed(() => auth.user?.system_role === 'ADMIN')
 
@@ -104,6 +105,27 @@ const handleCreateSession = () => {
   emit('create-session')
 }
 
+const hasExternalListener = (name: string) => Boolean((instance?.vnode.props as Record<string, unknown> | null)?.[name])
+
+const handleRenameSession = async (session: Session) => {
+  if (hasExternalListener('onRenameSession')) {
+    emit('rename-session', session)
+    return
+  }
+  const title = window.prompt('重命名对话', session.name)
+  if (!title || title.trim() === session.name) return
+  await agent.renameSession(session.id, title)
+}
+
+const handleDeleteSession = async (session: Session) => {
+  if (hasExternalListener('onDeleteSession')) {
+    emit('delete-session', session)
+    return
+  }
+  if (!window.confirm(`确定删除对话「${session.name}」吗？删除后会从历史列表移除。`)) return
+  await agent.deleteSession(session.id)
+}
+
 onMounted(() => {
   void agent.refreshSessions()
 })
@@ -111,18 +133,18 @@ onMounted(() => {
 
 <template>
   <aside
-    class="bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
+    class="sidebar-notion bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
     :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
   >
-    <nav class="flex-1 overflow-y-auto pb-0 p-[12px] pt-[20px] space-y-[20px] overflow-x-hidden">
+    <nav class="sidebar-scroll flex-1 overflow-y-auto pb-0 p-[12px] pt-[20px] space-y-[20px] overflow-x-hidden">
       <div>
         <div
-          class="mb-[6px]"
+          class="sidebar-section-head mb-[6px]"
           :class="isCollapsed ? '' : 'flex items-center justify-between px-[6px]'"
         >
-          <span v-if="!isCollapsed" class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
+          <span v-if="!isCollapsed" class="sidebar-section-title text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
           <button
-            class="rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
+            class="sidebar-collapse rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
             :class="isCollapsed ? 'w-full py-[10px]' : 'p-[6px]'"
             @click="toggleCollapse"
           >
@@ -131,16 +153,16 @@ onMounted(() => {
             </span>
           </button>
         </div>
-        <ul class="space-y-[12px]">
+        <ul class="sidebar-nav-list space-y-[12px]">
           <li
             v-for="item in navItems"
             :key="item.id"
-            class="flex items-center rounded-lg cursor-pointer transition-all relative group"
+            class="sidebar-nav-item flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
               isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel(item.id)
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ? 'sidebar-item-active'
+                : 'sidebar-item-idle'
             ]"
             @click="handleNavClick(item)"
           >
@@ -157,12 +179,12 @@ onMounted(() => {
 
           <li
             v-if="isAdmin"
-            class="flex items-center rounded-lg cursor-pointer transition-all relative group"
+            class="sidebar-nav-item flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
               isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel('system-admin')
-                ? 'bg-primary/10 text-primary font-semibold'
-                : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'
+                ? 'sidebar-item-active'
+                : 'sidebar-item-idle'
             ]"
             @click="handleNavClick({ id: 'system-admin', icon: 'admin_panel_settings', label: '系统管理', path: '/system-admin' })"
           >
@@ -179,36 +201,39 @@ onMounted(() => {
         </ul>
       </div>
 
-      <div v-if="displaySessions.length > 0 && !isCollapsed">
-        <div class="mb-[6px] flex items-center justify-between px-[6px]">
-          <span class="text-[10px] font-semibold text-slate-500 dark:text-slate-400">历史会话</span>
+      <div v-if="displaySessions.length > 0 && !isCollapsed" class="sidebar-session-group">
+        <div class="sidebar-session-head mb-[6px] flex items-center justify-between px-[6px]">
+          <span class="sidebar-section-title text-[10px] font-semibold text-slate-500 dark:text-slate-400">历史会话</span>
           <button
             v-if="sessionCreate"
-            class="flex h-[22px] w-[22px] items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
+            class="sidebar-create-session flex h-[22px] w-[22px] items-center justify-center rounded-md text-slate-500 transition-colors hover:bg-slate-100 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800 dark:hover:text-white"
             title="新建对话"
             @click.stop="handleCreateSession"
           >
             <span class="material-symbols-outlined text-[14px]">add</span>
           </button>
         </div>
-        <ul class="space-y-[4px]">
+        <ul class="sidebar-session-list space-y-[4px]">
           <li
             v-for="session in displaySessions"
             :key="session.id"
-            class="group flex items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
+            class="sidebar-session-item group flex min-w-0 items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
             :class="session.active
-              ? 'bg-primary/10 text-primary font-semibold'
-              : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800'"
+              ? 'sidebar-item-active'
+              : 'sidebar-item-idle'"
             @click="handleSessionClick(session)"
           >
-            <span class="material-symbols-outlined text-[11px]">chat</span>
-            <span class="text-[11px] flex-1 truncate">{{ session.name }}</span>
-            <div v-if="sessionActions" class="opacity-0 group-hover:opacity-100 flex items-center gap-[4px]">
-              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" title="重命名" @click.stop="emit('rename-session', session)">
-                <span class="material-symbols-outlined text-[10px]">edit</span>
+            <span class="material-symbols-outlined shrink-0 text-[11px]">chat</span>
+            <span class="sidebar-session-name min-w-0 flex-1 truncate text-[11px]">{{ session.name }}</span>
+            <div
+              v-if="sessionActions"
+              class="sidebar-session-actions pointer-events-none flex shrink-0 items-center gap-[2px] opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+            >
+              <button class="sidebar-session-action-button" title="重命名" @click.stop="handleRenameSession(session)">
+                <span class="material-symbols-outlined">edit</span>
               </button>
-              <button class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded" title="删除" @click.stop="emit('delete-session', session)">
-                <span class="material-symbols-outlined text-[10px]">delete</span>
+              <button class="sidebar-session-action-button" title="删除" @click.stop="handleDeleteSession(session)">
+                <span class="material-symbols-outlined">delete</span>
               </button>
             </div>
           </li>
@@ -219,14 +244,166 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.sidebar-notion {
+  --sidebar-canvas: #f7f7f5;
+  --sidebar-surface: #efefed;
+  --sidebar-surface-hover: #e9e9e7;
+  --sidebar-line: #e5e3df;
+  --sidebar-ink: #1a1a1a;
+  --sidebar-charcoal: #37352f;
+  --sidebar-slate: #5d5b54;
+  --sidebar-steel: #787671;
+  border-color: var(--sidebar-line) !important;
+  background: var(--sidebar-canvas) !important;
+  color: var(--sidebar-charcoal);
+  font-family: "Notion Sans", "Avenir Next", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+}
+
+.sidebar-scroll {
+  padding: 18px 8px 12px !important;
+}
+
+.sidebar-section-head,
+.sidebar-session-head {
+  min-height: 28px;
+  margin-bottom: 4px !important;
+  padding: 0 6px !important;
+}
+
+.sidebar-section-title {
+  color: var(--sidebar-steel) !important;
+  font-size: 10px !important;
+  font-weight: 600 !important;
+  line-height: 1.4;
+  letter-spacing: 0.01em;
+}
+
+.sidebar-collapse,
+.sidebar-create-session {
+  border: 0;
+  border-radius: 6px !important;
+  background: transparent;
+  color: var(--sidebar-steel) !important;
+}
+
+.sidebar-collapse {
+  width: 28px;
+  height: 28px;
+  padding: 0 !important;
+}
+
+.sidebar-collapse:hover,
+.sidebar-create-session:hover {
+  background: var(--sidebar-surface-hover) !important;
+  color: var(--sidebar-ink) !important;
+}
+
+.sidebar-collapse .material-symbols-outlined {
+  color: inherit !important;
+  font-size: 16px !important;
+}
+
+.sidebar-nav-list,
+.sidebar-session-list {
+  display: grid;
+  gap: 2px;
+}
+
+.sidebar-nav-item,
+.sidebar-session-item {
+  min-height: 34px;
+  padding: 6px 8px !important;
+  border-radius: 6px !important;
+  font-weight: 400 !important;
+  line-height: 1.35;
+}
+
+.sidebar-nav-item {
+  gap: 9px !important;
+}
+
+.sidebar-nav-item > .material-symbols-outlined {
+  width: 18px;
+  flex: 0 0 18px;
+  color: inherit;
+  font-size: 17px !important;
+  text-align: center;
+}
+
+.sidebar-nav-item > span:not(.material-symbols-outlined),
+.sidebar-session-item > span:last-of-type {
+  color: inherit;
+  font-size: 11px !important;
+  font-weight: inherit;
+}
+
+.sidebar-item-idle {
+  color: var(--sidebar-slate) !important;
+}
+
+.sidebar-item-idle:hover {
+  background: var(--sidebar-surface-hover) !important;
+  color: var(--sidebar-charcoal) !important;
+}
+
+.sidebar-item-active {
+  background: var(--sidebar-surface) !important;
+  color: var(--sidebar-ink) !important;
+  font-weight: 500 !important;
+}
+
+.sidebar-session-group {
+  margin-top: 18px;
+}
+
+.sidebar-session-item {
+  gap: 7px !important;
+}
+
+.sidebar-session-name {
+  min-width: 0;
+}
+
+.sidebar-session-item > .material-symbols-outlined {
+  width: 16px;
+  flex: 0 0 16px;
+  font-size: 15px !important;
+}
+
+.sidebar-session-actions {
+  width: 38px;
+  justify-content: flex-end;
+}
+
+.sidebar-session-action-button {
+  display: grid;
+  width: 18px;
+  height: 18px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px !important;
+  background: transparent;
+  color: var(--sidebar-steel) !important;
+}
+
+.sidebar-session-action-button .material-symbols-outlined {
+  font-size: 12px !important;
+  line-height: 1;
+}
+
+.sidebar-session-action-button:hover {
+  background: rgba(55, 53, 47, 0.08) !important;
+  color: var(--sidebar-ink) !important;
+}
+
 nav::-webkit-scrollbar {
   width: 3px;
 }
 nav::-webkit-scrollbar-thumb {
-  background-color: rgb(203 213 225);
+  background-color: var(--sidebar-line);
   border-radius: 1px;
 }
 nav::-webkit-scrollbar-thumb:hover {
-  background-color: rgb(148 163 184);
+  background-color: #c8c4be;
 }
 </style>

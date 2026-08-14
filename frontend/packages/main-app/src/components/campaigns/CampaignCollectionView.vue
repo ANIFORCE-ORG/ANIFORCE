@@ -57,7 +57,7 @@ function getStatusColor(status: string) {
             <span class="rounded bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600 dark:bg-slate-700 dark:text-slate-400">
               {{ campaign.platform }}
             </span>
-            <span class="rounded px-2 py-0.5 text-xs font-semibold" :class="getStatusColor(campaign.status)">
+            <span class="status-chip" :data-status="campaign.status" :class="getStatusColor(campaign.status)">
               {{ getStatusText(campaign.status) }}
             </span>
           </div>

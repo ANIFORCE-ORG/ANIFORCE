@@ -7,6 +7,7 @@ import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { navItems } from '@/config/navigation'
 import { platformApi, type PlatformConnectionResponse } from '@/api/platform'
 import { useToast } from '@/composables/useToast'
+import '@/styles/settings-notion.css'
 
 const router = useRouter()
 const { success, error: showError } = useToast()
@@ -359,6 +360,85 @@ onMounted(() => {
 </script>
 
 <template>
+  <div class="settings-notion">
+    <SidebarNav :nav-items="navItems" :sessions="[]" active-panel="settings" @switch-panel="switchPanel" />
+    <main class="sn-main">
+      <header class="sn-page-head">
+        <button class="sn-back" type="button" aria-label="返回设置" @click="router.push('/settings')"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg></button>
+        <div class="sn-page-title"><h1>平台连接</h1><p>配置 Meta、Google、TikTok 的平台授权和广告账户同步</p></div>
+      </header>
+
+      <div class="sn-scroll">
+        <div class="sn-content">
+          <div class="sn-platform-grid" role="tablist" aria-label="广告平台">
+            <button v-for="platform in platforms" :key="platform.id" class="sn-platform-card" :class="{ active: activePlatform === platform.id }" type="button" role="tab" :aria-selected="activePlatform === platform.id" @click="activePlatform = platform.id">
+              <strong>{{ platform.label }}</strong><span class="sn-connection-status" :class="{ pending: !isPlatformConnected(platform.id) }">{{ isPlatformConnected(platform.id) ? '已接入' : '待接入' }}</span><p>{{ platform.description }}</p>
+            </button>
+          </div>
+
+          <section class="sn-connection-panel">
+            <div class="sn-connection-head"><span class="sn-card-icon"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M10 13a5 5 0 007 0l2-2a5 5 0 00-7-7l-1 1M14 11a5 5 0 00-7 0l-2 2a5 5 0 007 7l1-1" /></svg></span><div><h2>{{ platforms.find(item => item.id === activePlatform)?.title }}</h2><p>{{ platforms.find(item => item.id === activePlatform)?.description }}</p></div></div>
+            <div class="sn-oauth-steps"><div class="sn-oauth-step">1. 配置应用信息</div><div class="sn-oauth-step">2. 发起 OAuth 授权</div><div class="sn-oauth-step">3. 平台确认权限</div><div class="sn-oauth-step">4. 同步广告账户</div></div>
+            <div class="sn-connection-action">
+              <span class="sn-connection-note">点击添加账户后将跳转到 {{ platforms.find(item => item.id === activePlatform)?.label }} OAuth 授权页面。</span>
+              <button v-if="activePlatform === 'meta'" class="sn-button primary" type="button" @click="handleAddMetaAccount">添加广告账户</button>
+              <button v-else-if="activePlatform === 'google'" class="sn-button primary" type="button" @click="handleAddGoogleAccount">添加广告账户</button>
+              <button v-else class="sn-button primary" type="button" disabled>开始接入</button>
+            </div>
+          </section>
+
+          <section class="sn-table-panel">
+            <header class="sn-table-head"><h2>已连接的平台账户</h2><span class="sn-badge">{{ filteredConnections.length }} 个账户</span></header>
+            <div v-if="loading" class="sn-loading">加载中...</div>
+            <div v-else-if="filteredConnections.length === 0" class="sn-table-empty">暂无 {{ platforms.find(item => item.id === activePlatform)?.label }} 平台连接</div>
+            <div v-else class="sn-table-wrap">
+              <table class="sn-platform-table">
+                <thead><tr><th style="width:44px"></th><th>账户名称</th><th v-if="activePlatform !== 'meta'">APP ID</th><th>授权范围</th><th>状态</th><th>更新时间</th><th style="text-align:right">操作</th></tr></thead>
+                <tbody>
+                  <template v-for="connection in filteredConnections" :key="connection.id">
+                    <tr>
+                      <td><button v-if="activePlatform === 'meta' || activePlatform === 'google'" class="sn-table-toggle" :class="{ open: isExpanded(connection.id) }" type="button" aria-label="展开账户详情" @click="toggleSubAccounts(connection.id)"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6" /></svg></button></td>
+                      <td><span class="sn-account-name">{{ connection.account_name || '-' }}</span><div class="sn-help">{{ connection.platform }} Business</div></td>
+                      <td v-if="activePlatform !== 'meta'" class="sn-subaccount-id">{{ connection.account_id }}</td>
+                      <td><div class="sn-scope-list"><span v-for="scope in (connection.scopes || [])" :key="scope" class="sn-scope">{{ scope }}</span><span v-if="!connection.scopes?.length">-</span></div></td>
+                      <td><span class="sn-status-dot" :class="{ warning: ['unauthorized','token_expired'].includes(getEffectiveStatus(connection)), danger: ['expired','revoked'].includes(getEffectiveStatus(connection)) }">{{ getStatusText(getEffectiveStatus(connection)) }}</span></td>
+                      <td>{{ formatDate(connection.updated_at) }}</td>
+                      <td><div class="sn-platform-actions"><button v-if="activePlatform === 'meta' || activePlatform === 'google'" class="sn-button" type="button" :disabled="getEffectiveStatus(connection) !== 'active'" @click="handleSyncAdAccounts(connection)">同步广告账号</button><button class="sn-button" type="button" :disabled="getEffectiveStatus(connection) === 'active'" @click="handleAuthorize(connection)">授权</button><button class="sn-button danger" type="button" @click="handleDelete(connection)">删除</button></div></td>
+                    </tr>
+                    <tr v-if="(activePlatform === 'meta' || activePlatform === 'google') && isExpanded(connection.id)" class="sn-detail-row">
+                      <td :colspan="activePlatform === 'meta' ? 6 : 7">
+                        <section class="sn-subaccount-section">
+                          <header class="sn-subaccount-head"><h3>子账号列表</h3><div><span>共 {{ subAccounts[connection.id]?.length || 0 }} 个子账号</span><button v-if="activePlatform === 'google'" class="sn-button primary" type="button" style="margin-left:8px" @click="openAddSubAccountDialog(connection.id)">添加子账号</button></div></header>
+                          <div v-if="loadingSubAccounts.has(connection.id)" class="sn-loading">加载子账号中...</div>
+                          <div v-else-if="subAccounts[connection.id]?.length" class="sn-table-wrap"><div class="sn-subaccount-list"><div class="sn-subaccount-grid sn-subaccount-columns"><span>子账号</span><span>Sub Account ID</span><span>更新时间</span><span style="text-align:right">操作</span></div><div v-for="subAccount in subAccounts[connection.id]" :key="subAccount.id" class="sn-subaccount-grid sn-subaccount-row"><div class="sn-subaccount-identity"><span class="sn-subaccount-name">{{ subAccount.name }}</span><span class="sn-connection-status">{{ getStatusText(subAccount.status) }}</span></div><span class="sn-subaccount-id">{{ subAccount.sub_account_id }}</span><span>{{ formatDate(subAccount.updated_at) }}</span><span class="sn-subaccount-action"><button class="sn-button danger" type="button" @click="handleDeleteSubAccount(connection.id, subAccount.id)">删除</button></span></div></div></div>
+                          <div v-else class="sn-table-empty">暂无子账号</div>
+                        </section>
+                      </td>
+                    </tr>
+                  </template>
+                </tbody>
+              </table>
+            </div>
+          </section>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <Teleport to="body">
+    <div v-if="showAddSubAccountDialog" class="settings-modal-layer" @click.self="closeAddSubAccountDialog">
+      <section class="settings-modal compact" role="dialog" aria-modal="true" aria-labelledby="add-sub-title">
+        <header class="settings-modal-head"><h2 id="add-sub-title">添加子账号</h2><button class="settings-modal-close" type="button" aria-label="关闭" @click="closeAddSubAccountDialog"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18" /></svg></button></header>
+        <div class="settings-modal-body"><div class="settings-modal-form"><div class="sn-input-group"><label>子账号名称 *</label><input v-model="newSubAccountName" class="sn-input" placeholder="请输入子账号名称" /></div><div class="sn-input-group"><label>Customer ID *</label><input v-model="newSubAccountCustomerId" class="sn-input" placeholder="请输入 Google Customer ID" /><span class="sn-help">格式：123-456-7890</span></div></div></div>
+        <footer class="settings-modal-actions"><button class="sn-button" type="button" @click="closeAddSubAccountDialog">取消</button><button class="sn-button confirm" type="button" :disabled="!newSubAccountName || !newSubAccountCustomerId" @click="handleAddSubAccount">确定添加</button></footer>
+      </section>
+    </div>
+  </Teleport>
+
+  <ConfirmDialog variant="notion" :show="showDeleteConfirm" title="确认删除" :message="`确定要删除「${deletingConnection?.account_name || deletingConnection?.account_id}」吗？`" confirm-text="确定" cancel-text="取消" confirm-button-class="bg-blue-500 hover:bg-blue-600" @confirm="confirmDelete" @cancel="cancelDelete" @close="showDeleteConfirm = false" />
+  <ToastContainer />
+
+  <template v-if="false">
   <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
@@ -532,13 +612,13 @@ onMounted(() => {
                     <td class="px-[16px] py-[12px] text-[10px]">
                       <div class="flex flex-wrap gap-[4px]">
                         <span
-                          v-for="scope in connection.scopes"
+                          v-for="scope in (connection.scopes || [])"
                           :key="scope"
                           class="px-[6px] py-[4px] rounded bg-blue-50 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
                         >
                           {{ scope }}
                         </span>
-                        <span v-if="!connection.scopes || connection.scopes.length === 0" class="text-slate-400">-</span>
+                        <span v-if="!connection.scopes?.length" class="text-slate-400">-</span>
                       </div>
                     </td>
                     <td class="px-[16px] py-[12px] text-[10px]">
@@ -741,4 +821,5 @@ onMounted(() => {
     <!-- Toast 提示容器 -->
     <ToastContainer />
   </div>
+  </template>
 </template>

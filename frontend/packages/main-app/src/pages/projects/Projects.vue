@@ -6,7 +6,6 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import CreateProjectModal from '@/components/projects/CreateProjectModal.vue'
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
 import ProjectCardCompact from '@/components/projects/ProjectCardCompact.vue'
-import ProjectCardDetailed from '@/components/projects/ProjectCardDetailed.vue'
 import Toast from '@/components/toasts/Toast.vue'
 import { getProjects, createProject, updateProject, type Project } from '@/api/projects'
 import { createCampaign } from '@/api/campaigns'
@@ -44,6 +43,7 @@ const filterStatus = ref('all')
 const createModalRef = ref<any>(null)
 const campaignModalRef = ref<any>(null)
 const cardViewType = ref<'compact' | 'detailed'>('compact')
+const selectedProjectIds = ref<Set<string>>(new Set())
 
 const sessions = ref([
   { id: 'sess_g001', name: 'Candy Blast投放咨询', active: true },
@@ -68,6 +68,10 @@ const loadProjects = async () => {
     console.log('开始加载项目数据...')
     const data = await getProjects({ limit: 50 })
     projects.value = data
+    const availableIds = new Set(data.map(project => project.id))
+    selectedProjectIds.value = new Set(
+      [...selectedProjectIds.value].filter(projectId => availableIds.has(projectId))
+    )
     console.log('项目数据加载成功:', data.length, '条')
   } catch (err: any) {
     error.value = err.message || '加载数据失败'
@@ -89,7 +93,12 @@ const filteredProjects = computed(() => {
 
   // 按状态筛选
   if (filterStatus.value !== 'all') {
-    result = result.filter(p => p.status === filterStatus.value)
+    result = result.filter(p => {
+      if (filterStatus.value === 'active') {
+        return p.status === 'active' || p.status === 'running'
+      }
+      return p.status === filterStatus.value
+    })
   }
 
   // 按搜索关键词筛选
@@ -103,6 +112,20 @@ const filteredProjects = computed(() => {
 
   return result
 })
+
+const selectedProjectCount = computed(() => selectedProjectIds.value.size)
+
+const handleProjectSelect = (project: Project, selected: boolean) => {
+  const nextSelectedIds = new Set(selectedProjectIds.value)
+
+  if (selected) {
+    nextSelectedIds.add(project.id)
+  } else {
+    nextSelectedIds.delete(project.id)
+  }
+
+  selectedProjectIds.value = nextSelectedIds
+}
 
 const switchPanel = (item: any) => {
   if (item.path) {
@@ -313,7 +336,7 @@ const handleSubmitCampaign = async (data: any) => {
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="projects-shell">
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav
       :nav-items="navItems"
@@ -323,100 +346,116 @@ const handleSubmitCampaign = async (data: any) => {
     />
 
     <!-- 中间项目展示区 -->
-    <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
+    <main class="projects-main">
       <!-- Header -->
-      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
-        <h3 class="font-bold text-[13px] text-slate-900 dark:text-white">项目管理</h3>
-        <div class="flex items-center gap-[9px]">
+      <div class="projects-page-bar">
+        <div class="projects-page-title-wrap">
+          <span class="projects-page-icon">
+            <span class="material-symbols-outlined">folder_open</span>
+          </span>
+          <div class="projects-page-title-content">
+            <h1 class="projects-page-title">项目管理</h1>
+            <p class="projects-page-subtitle">管理项目列表、筛选视图与 Campaign 创建入口</p>
+          </div>
+        </div>
+        <div class="projects-page-actions">
           <!-- View Toggle -->
-          <div class="flex items-center gap-[4px] p-[4px] rounded-md bg-slate-100 dark:bg-slate-800">
+          <div class="projects-view-switch" aria-label="项目视图切换">
             <button
-              :class="[
-                'px-[9px] py-[6px] rounded text-[10px] font-medium transition-colors',
-                cardViewType === 'compact'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              ]"
+              type="button"
+              class="projects-view-button"
+              :class="{ active: cardViewType === 'compact' }"
+              aria-label="网格视图"
+              :aria-pressed="cardViewType === 'compact'"
               @click="cardViewType = 'compact'"
             >
-              <span class="material-symbols-outlined text-[11px]">grid_view</span>
+              <span class="material-symbols-outlined">grid_view</span>
             </button>
             <button
-              :class="[
-                'px-[9px] py-[6px] rounded text-[10px] font-medium transition-colors',
-                cardViewType === 'detailed'
-                  ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-              ]"
+              type="button"
+              class="projects-view-button"
+              :class="{ active: cardViewType === 'detailed' }"
+              aria-label="列表视图"
+              :aria-pressed="cardViewType === 'detailed'"
               @click="cardViewType = 'detailed'"
             >
-              <span class="material-symbols-outlined text-[11px]">view_list</span>
+              <span class="material-symbols-outlined">view_list</span>
             </button>
           </div>
           <button
-            class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
+            type="button"
+            class="projects-create-button"
             @click="handleCreateProject"
           >
-            <span class="material-symbols-outlined text-[15px]">add</span>
-            <span class="text-[11px] font-medium">创建项目</span>
+            <span class="material-symbols-outlined">add</span>
+            <span class="projects-create-label">创建项目</span>
           </button>
         </div>
       </div>
 
       <!-- Search & Filter Bar -->
-      <div class="border-b border-slate-200 dark:border-slate-800 p-[12px]">
-        <div class="flex items-center gap-[9px]">
-          <div class="flex-1 relative">
-            <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">search</span>
-            <input
-              v-model="searchQuery"
-              type="text"
-              placeholder="搜索项目名称或标签..."
-              class="w-full pl-[31px] pr-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-900 dark:text-white placeholder:text-slate-400 focus:outline-none focus:ring-2 focus:ring-primary/20"
-              @input="handleSearch"
-            />
-          </div>
-          <select
-            v-model="filterStatus"
-            class="px-[12px] py-[6px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800 text-[11px] text-slate-700 dark:text-slate-300 focus:outline-none focus:ring-2 focus:ring-primary/20"
-            @change="handleSearch"
-          >
-            <option v-for="filter in statusFilters" :key="filter.value" :value="filter.value">
-              {{ filter.label }}
-            </option>
-          </select>
+      <div class="projects-toolbar">
+        <div class="projects-search-field">
+          <span class="material-symbols-outlined">search</span>
+          <input
+            v-model="searchQuery"
+            type="text"
+            placeholder="搜索项目名称或标签…"
+            aria-label="搜索项目名称或标签"
+            @input="handleSearch"
+          />
         </div>
+        <select
+          v-model="filterStatus"
+          class="projects-status-filter"
+          aria-label="按项目状态筛选"
+          @change="handleSearch"
+        >
+          <option v-for="filter in statusFilters" :key="filter.value" :value="filter.value">
+            {{ filter.label }}
+          </option>
+        </select>
       </div>
 
       <!-- Projects List -->
-      <div class="flex-1 overflow-y-auto p-[19px]">
-        <!-- Compact View -->
-        <div v-if="cardViewType === 'compact'" class="grid gap-[12px] md:grid-cols-2 lg:grid-cols-3">
-          <ProjectCardCompact
-            v-for="project in filteredProjects"
-            :key="project.id"
-            :project="project"
-            @edit="handleEditProject"
-            @create-task="handleCreateTask"
-            @view-tasks="console.log('View tasks:', $event)"
-            @select="console.log('Select:', $event)"
-          />
-        </div>
+      <div class="projects-scroll-area">
+        <div class="projects-content">
+          <div class="projects-content-meta" aria-live="polite">
+            <span>共 {{ filteredProjects.length }} 个项目</span>
+            <span v-if="selectedProjectCount > 0" class="projects-selection-meta">
+              <span class="material-symbols-outlined">check</span>
+              已选择 {{ selectedProjectCount }} 个
+            </span>
+          </div>
 
-        <!-- Detailed View -->
-        <div v-else class="grid gap-[12px]">
-          <ProjectCardDetailed
-            v-for="project in filteredProjects"
-            :key="project.id"
-            :project="project"
-            @view-detail="router.push(`/projects/${$event.id}`)"
-          />
-        </div>
+          <div
+            v-if="filteredProjects.length > 0"
+            class="projects-grid"
+            :class="{ 'is-list': cardViewType === 'detailed' }"
+          >
+            <ProjectCardCompact
+              v-for="project in filteredProjects"
+              :key="project.id"
+              :project="project"
+              :selected="selectedProjectIds.has(project.id)"
+              :view-type="cardViewType"
+              @edit="handleEditProject"
+              @create-task="handleCreateTask"
+              @view-tasks="console.log('View tasks:', $event)"
+              @select="handleProjectSelect"
+            />
+          </div>
 
-        <!-- Empty State -->
-        <div v-if="filteredProjects.length === 0" class="flex flex-col items-center justify-center py-[50px]">
-          <span class="material-symbols-outlined text-[47px] text-slate-300 dark:text-slate-700 mb-[12px]">folder_off</span>
-          <p class="text-[11px] text-slate-500 dark:text-slate-400">未找到匹配的项目</p>
+          <!-- Empty State -->
+          <div v-else class="projects-empty-state">
+            <div>
+              <span class="projects-empty-icon">
+                <span class="material-symbols-outlined">folder_off</span>
+              </span>
+              <h2>没有找到匹配项目</h2>
+              <p>尝试更换关键词或筛选条件。</p>
+            </div>
+          </div>
         </div>
       </div>
     </main>
@@ -449,3 +488,395 @@ const handleSubmitCampaign = async (data: any) => {
     />
   </div>
 </template>
+
+<style scoped>
+.projects-shell {
+  display: flex;
+  width: 100%;
+  height: calc(100vh - 100px);
+  overflow: hidden;
+  background: #f7f7f5;
+}
+
+.projects-main {
+  min-width: 0;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: #ffffff;
+  color: #191919;
+}
+
+.projects-page-bar {
+  min-height: 54px;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 0 clamp(24px, 3vw, 48px);
+  border-bottom: 1px solid #e5e3df;
+  background: rgba(255, 255, 255, .88);
+}
+
+.projects-page-title-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.projects-page-title-content {
+  min-width: 0;
+}
+
+.projects-page-icon {
+  width: 26px;
+  height: 26px;
+  display: grid;
+  place-items: center;
+  border-radius: 6px;
+  background: #f6f5f4;
+  color: #37352f;
+}
+
+.projects-page-icon .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.projects-page-title {
+  margin: 0;
+  color: #1a1a1a;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -.2px;
+}
+
+.projects-page-subtitle {
+  margin: 2px 0 0;
+  color: #787774;
+  font-size: 10px;
+  font-weight: 400;
+  line-height: 1.2;
+}
+
+.projects-page-actions {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.projects-view-switch {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 8px;
+  background: #f6f5f4;
+}
+
+.projects-view-button {
+  width: 29px;
+  height: 29px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: #787774;
+  cursor: pointer;
+  transition: background-color 0.16s ease, color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.projects-view-button .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.projects-view-button:hover {
+  color: #37352f;
+  background: rgba(55, 53, 47, 0.06);
+}
+
+.projects-view-button.active {
+  color: #191919;
+  background: #ffffff;
+  box-shadow: 0 1px 2px rgba(15, 15, 15, 0.08);
+}
+
+.projects-create-button {
+  min-height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border: 1px solid #37352f;
+  border-radius: 8px;
+  background: #37352f;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color .16s ease, border-color .16s ease;
+}
+
+.projects-create-button:hover {
+  border-color: #1a1a1a;
+  background: #1a1a1a;
+}
+
+.projects-create-button .material-symbols-outlined {
+  font-size: 16px;
+}
+
+.projects-toolbar {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: minmax(220px, 1fr) 118px;
+  align-items: center;
+  gap: 9px;
+  padding: 12px clamp(24px, 3vw, 48px);
+  border-bottom: 1px solid #e5e3df;
+  background: #fafaf9;
+}
+
+.projects-search-field {
+  position: relative;
+  min-width: 0;
+}
+
+.projects-search-field .material-symbols-outlined {
+  position: absolute;
+  left: 12px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: #a4a097;
+  font-size: 15px;
+  pointer-events: none;
+}
+
+.projects-search-field input,
+.projects-status-filter {
+  width: 100%;
+  height: 36px;
+  border: 1px solid #c8c4be;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #37352f;
+  font-size: 11px;
+  outline: none;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
+}
+
+.projects-search-field input {
+  padding: 0 12px 0 35px;
+}
+
+.projects-search-field input::placeholder {
+  color: #a4a097;
+}
+
+.projects-status-filter {
+  padding: 0 29px 0 10px;
+  cursor: pointer;
+}
+
+.projects-search-field input:focus,
+.projects-status-filter:focus {
+  border: 2px solid #37352f;
+  box-shadow: none;
+}
+
+.projects-scroll-area {
+  min-height: 0;
+  flex: 1;
+  overflow-y: auto;
+  background: #ffffff;
+}
+
+.projects-content {
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 24px clamp(24px, 3vw, 48px) 78px;
+}
+
+.projects-content-meta {
+  min-height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+  color: #a4a097;
+  font-size: 10px;
+}
+
+.projects-selection-meta {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #37352f;
+}
+
+.projects-selection-meta .material-symbols-outlined {
+  font-size: 12px;
+}
+
+.projects-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.projects-grid.is-list {
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+.projects-empty-state {
+  min-height: 260px;
+  display: grid;
+  place-items: center;
+  padding: 42px;
+  border: 1px dashed #c8c4be;
+  border-radius: 12px;
+  background: #fafaf9;
+  text-align: center;
+}
+
+.projects-empty-icon {
+  width: 42px;
+  height: 42px;
+  display: grid;
+  place-items: center;
+  margin: 0 auto 12px;
+  border-radius: 10px;
+  background: #f6f5f4;
+  color: #5d5b54;
+}
+
+.projects-empty-icon .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.projects-empty-state h2 {
+  margin: 0;
+  color: #1a1a1a;
+  font-size: 15px;
+}
+
+.projects-empty-state p {
+  margin: 6px 0 0;
+  color: #787671;
+  font-size: 11px;
+}
+
+.dark .projects-main,
+.dark .projects-toolbar,
+.dark .projects-scroll-area {
+  background: #191919;
+  color: #f3f3f2;
+}
+
+.dark .projects-page-bar,
+.dark .projects-toolbar {
+  border-color: #373737;
+}
+
+.dark .projects-page-title {
+  color: #f3f3f2;
+}
+
+.dark .projects-content-meta {
+  color: #a6a6a2;
+}
+
+.dark .projects-view-switch,
+.dark .projects-empty-state {
+  border-color: #464646;
+  background: #242424;
+}
+
+.dark .projects-view-button.active,
+.dark .projects-search-field input,
+.dark .projects-status-filter {
+  background: #2f2f2f;
+  color: #f3f3f2;
+}
+
+.dark .projects-search-field input,
+.dark .projects-status-filter {
+  border-color: #464646;
+}
+
+.dark .projects-empty-state p {
+  color: #f3f3f2;
+}
+
+@media (max-width: 1180px) {
+  .projects-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .projects-page-bar {
+    min-height: 54px;
+  }
+
+  .projects-toolbar {
+    grid-template-columns: minmax(0, 1fr) 104px;
+  }
+
+  .projects-content {
+    padding-top: 18px;
+  }
+
+  .projects-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 520px) {
+  .projects-page-bar {
+    min-height: 58px;
+    padding: 0 14px;
+  }
+
+  .projects-view-switch {
+    display: none;
+  }
+
+  .projects-create-button {
+    width: 34px;
+    padding: 0;
+  }
+
+  .projects-create-label {
+    display: none;
+  }
+
+  .projects-toolbar {
+    grid-template-columns: 1fr;
+    padding: 10px 14px;
+  }
+
+  .projects-status-filter {
+    display: none;
+  }
+
+  .projects-content {
+    padding: 18px 14px 58px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .projects-view-button,
+  .projects-create-button,
+  .projects-search-field input,
+  .projects-status-filter {
+    transition-duration: .01ms !important;
+  }
+}
+</style>

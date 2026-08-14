@@ -52,13 +52,21 @@ function handleSelect(project: Project, selected: boolean) {
     </div>
 
     <div v-else-if="projects.length" class="grid gap-4">
-      <ProjectCardDetailed
-        v-for="project in projects"
-        :key="project.id"
-        :project="project"
-        :mode="mode"
-        @view-detail="emit('viewDetail', $event)"
-      />
+      <div v-for="project in projects" :key="project.id" class="group relative">
+        <ProjectCardDetailed
+          :project="project"
+          :mode="mode"
+          @view-detail="emit('viewDetail', $event)"
+        />
+        <button
+          v-if="embedded"
+          class="mention-btn absolute right-[12px] top-[12px] z-10 rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-all hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
+          title="引用到对话"
+          @click="emit('mention', project)"
+        >
+          @mention
+        </button>
+      </div>
     </div>
 
     <div v-else class="flex flex-col items-center justify-center py-16">

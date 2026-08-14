@@ -5,6 +5,7 @@ interface WorkspaceHydrationTarget {
   clearSession(sessionId: string): void
   upsertProjection(sessionId: string, projection: any): void
   createApprovalDraft(
+    sessionId: string,
     checkpointId: string,
     runId: string,
     toolName: string,
@@ -52,7 +53,7 @@ export function hydrateWorkspaceSnapshot(
   const toolName = String(approval.tool_name || '')
   const args = record(approval.edited_arguments || approval.original_arguments)
   const status = approvalDraftStatus(String(approval.status || ''), String(approval.decision || ''))
-  workspace.createApprovalDraft(checkpointId, runId, toolName, 'approval.review', args)
+  workspace.createApprovalDraft(sessionId, checkpointId, runId, toolName, 'approval.review', args)
   workspace.setApprovalDraftStatus(checkpointId, status)
   workspace.upsertProjection(sessionId, {
     id: `proj_approval_${checkpointId}`,

@@ -145,7 +145,11 @@ export const useAuthStore = defineStore('auth', () => {
       name: 'Admin',
       email: 'admin@animagus.ai',
     }
-    token.value = 'fake-jwt-token-demo-' + Date.now()
+    const demoPayload = btoa(JSON.stringify({
+      sub: 'admin-001',
+      exp: Math.floor(Date.now() / 1000) + 24 * 60 * 60,
+    })).replace(/=/g, '').replace(/\+/g, '-').replace(/\//g, '_')
+    token.value = `demo.${demoPayload}.local`
   }
 
   // 退出登录
@@ -156,6 +160,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // 验证token有效性
   async function validateToken(): Promise<boolean> {
+    if (import.meta.env.VITE_DEMO_MODE === 'true') return true
     if (!token.value) return false
 
     try {

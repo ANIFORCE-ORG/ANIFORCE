@@ -318,7 +318,7 @@ const handleSubmitContact = async () => {
           />
         </div>
 
-        <div class="mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
+        <div class="relative z-10 mx-auto grid max-w-7xl items-center gap-10 lg:grid-cols-[0.9fr_1.1fr]">
           <!-- Left Content -->
           <div>
             <p class="inline-flex rounded-md bg-primary/10 px-[11px] py-[5px] text-[11px] font-semibold uppercase tracking-wide text-primary">
@@ -712,7 +712,8 @@ const handleSubmitContact = async () => {
   right: 0;
   bottom: 0;
   left: 0;
-  z-index: -1;
+  z-index: 0;
+  pointer-events: none;
   overflow: hidden;
   background:
     linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
@@ -776,6 +777,7 @@ const handleSubmitContact = async () => {
 /* === AI Float Card === */
 .ai-float-card {
   position: absolute;
+  z-index: 20;
   right: -20px;
   bottom: 31px;
   width: min(234px, 48%);
