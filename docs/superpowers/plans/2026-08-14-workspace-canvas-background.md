@@ -110,7 +110,7 @@ describe('workspace page canvas contract', () => {
 Run:
 
 ```bash
-pnpm --filter main-app test -- src/styles/workspace-canvas.test.ts
+pnpm --filter main-app test src/styles/workspace-canvas.test.ts
 ```
 
 Expected: FAIL because `global.css` does not yet define `--workspace-canvas` or `.workspace-page-canvas`, and the page roots do not contain the marker.
@@ -194,7 +194,7 @@ For the seven Tailwind roots that currently contain `bg-slate-50` or `bg-[#f6f7f
 Run:
 
 ```bash
-pnpm --filter main-app test -- src/styles/workspace-canvas.test.ts
+pnpm --filter main-app test src/styles/workspace-canvas.test.ts
 ```
 
 Expected: PASS, 17 tests total: one route-count test, one token test, and fifteen parameterized page-root tests.
@@ -258,7 +258,7 @@ Append these tests inside the existing `describe` block:
 Run:
 
 ```bash
-pnpm --filter main-app test -- src/styles/workspace-canvas.test.ts
+pnpm --filter main-app test src/styles/workspace-canvas.test.ts
 ```
 
 Expected: FAIL because Monitor's main canvas, Create Campaign's inner full-height canvas, and Projects' scoped shell still paint legacy gray backgrounds.
@@ -294,7 +294,7 @@ Do not change Material's drawer declaration containing `border-l ... bg-[#f6f7f9
 Run:
 
 ```bash
-pnpm --filter main-app test -- src/styles/workspace-canvas.test.ts
+pnpm --filter main-app test src/styles/workspace-canvas.test.ts
 ```
 
 Expected: PASS, including both protected-surface assertions.
@@ -356,7 +356,7 @@ Append this test inside the existing `describe` block:
 Run:
 
 ```bash
-pnpm --filter main-app test -- src/styles/workspace-canvas.test.ts
+pnpm --filter main-app test src/styles/workspace-canvas.test.ts
 ```
 
 Expected: FAIL because Home, Dashboard, Project Detail, Settings, and the shared settings stylesheet still hard-code white locally.
@@ -400,7 +400,7 @@ settings-notion.css, inside the single-line .sn-main rule
 Run:
 
 ```bash
-pnpm --filter main-app test -- src/styles/workspace-canvas.test.ts
+pnpm --filter main-app test src/styles/workspace-canvas.test.ts
 ```
 
 Expected: PASS.
@@ -410,7 +410,7 @@ Expected: PASS.
 Run:
 
 ```bash
-pnpm --filter main-app test -- \
+pnpm --filter main-app test \
   src/styles/workspace-canvas.test.ts \
   src/components/layout/WorkspaceShell.spec.ts \
   src/components/layout/AppHeader.spec.ts \
@@ -457,7 +457,7 @@ Expected: `git diff --check` produces no output and the Vite production build su
 Run:
 
 ```bash
-pnpm --filter main-app test -- \
+pnpm --filter main-app test \
   src/styles/workspace-canvas.test.ts \
   src/components/layout/WorkspaceShell.spec.ts \
   src/components/layout/AppHeader.spec.ts \
