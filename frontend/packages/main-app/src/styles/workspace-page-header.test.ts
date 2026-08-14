@@ -279,6 +279,9 @@ describe('Dashboard workspace page contract', () => {
   it('keeps the standalone Dashboard header fixed-height and responsive', () => {
     expectRuleNotToDeclareMinHeight(dashboard, '.replay-bar')
     expect(dashboard).toContain('<span class="refresh-label">刷新</span>')
+    expect(dashboard).toMatch(
+      /<button class="refresh-button"[^>]*\baria-label="刷新数据"[^>]*>/,
+    )
     expect(dashboard).toMatch(/\.filter-field\s*\{[^}]*\bdisplay:\s*flex;/s)
     expect(dashboard).not.toMatch(/\.refresh-button\s*\{[^}]*\balign-self:\s*end;/s)
     expect(dashboard).toMatch(

@@ -186,7 +186,7 @@ onBeforeUnmount(() => {
               <option>全部项目</option><option>CANDY BLASTER</option><option>DramaBox</option>
             </select>
           </label>
-          <button class="refresh-button" :class="{ refreshing }" type="button" @click="handleRefresh">
+          <button class="refresh-button" :class="{ refreshing }" type="button" aria-label="刷新数据" @click="handleRefresh">
             <span class="icon material-symbols-outlined" aria-hidden="true">refresh</span><span class="refresh-label">刷新</span>
           </button>
         </div>
