@@ -41,8 +41,8 @@
 .sn-icon { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .sn-button { min-width: max-content; min-height: 36px; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid var(--sn-line-strong); border-radius: 8px; background: #fff; color: var(--sn-charcoal); font-size: 10px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; }
 .sn-button:hover { border-color: var(--sn-charcoal); color: var(--sn-ink); }
-.sn-button.primary { border-color: var(--sn-charcoal); background: var(--sn-charcoal); color: #fff; }
-.sn-button.primary:hover { border-color: var(--sn-ink); background: var(--sn-ink); color: #fff; }
+.sn-button.primary { border-color: var(--workspace-action-primary, var(--sn-blue)); background: var(--workspace-action-primary, var(--sn-blue)); color: #fff; }
+.sn-button.primary:hover { border-color: var(--workspace-action-primary-hover, var(--sn-blue-hover)); background: var(--workspace-action-primary-hover, var(--sn-blue-hover)); color: #fff; }
 .sn-button.confirm { border-color: var(--sn-blue); background: var(--sn-blue); color: #fff; }
 .sn-button.confirm:hover { border-color: var(--sn-blue-hover); background: var(--sn-blue-hover); color: #fff; }
 .sn-button.danger { border-color: #e7c5c7; background: #fff; color: var(--sn-danger); }

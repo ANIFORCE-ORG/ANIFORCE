@@ -1,9 +1,11 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useAgentSession } from '@/composables/useAgentSession'
 import AccountControls from '@/components/layout/AccountControls.vue'
+import SessionRenameDialog from '@/components/layout/SessionRenameDialog.vue'
+import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import logoSvg from '@/assets/aniforce-logo-transparent.svg'
 
 interface NavItem {
@@ -37,7 +39,7 @@ const props = withDefaults(defineProps<Props>(), {
   ],
   sessions: () => [],
   activePanel: '',
-  sessionActions: false,
+  sessionActions: true,
   sessionCreate: false
 })
 
@@ -66,6 +68,9 @@ const agentSessions = computed(() =>
 
 const displaySessions = computed(() => agentSessions.value)
 const openSessionMenuId = ref<string | null>(null)
+const localRenameDialog = ref<Session | null>(null)
+const localRenameValue = ref('')
+const localDeleteDialog = ref<Session | null>(null)
 
 const SESSION_NAME_MAX_LENGTH = 12
 const truncateSessionName = (name: string) => {
@@ -83,14 +88,43 @@ const toggleSessionMenu = (sessionId: string) => {
   openSessionMenuId.value = openSessionMenuId.value === sessionId ? null : sessionId
 }
 
+const openSessionMenu = (sessionId: string) => {
+  openSessionMenuId.value = sessionId
+}
+
 const handleRenameSession = (session: Session) => {
   closeSessionMenu()
-  emit('rename-session', session)
+  if (route.path === '/home') {
+    emit('rename-session', session)
+    return
+  }
+  localRenameDialog.value = session
+  localRenameValue.value = session.name
+  nextTick(() => document.querySelector<HTMLInputElement>('[data-sidebar-session-rename-input]')?.focus())
 }
 
 const handleDeleteSession = (session: Session) => {
   closeSessionMenu()
-  emit('delete-session', session)
+  if (route.path === '/home') {
+    emit('delete-session', session)
+    return
+  }
+  localDeleteDialog.value = session
+}
+
+const confirmLocalRename = async () => {
+  const session = localRenameDialog.value
+  const title = localRenameValue.value.trim()
+  if (!session || !title) return
+  await agent.renameSession(session.id, title)
+  localRenameDialog.value = null
+}
+
+const confirmLocalDelete = async () => {
+  const session = localDeleteDialog.value
+  if (!session) return
+  await agent.deleteSession(session.id)
+  localDeleteDialog.value = null
 }
 
 const handleDocumentClick = () => {
@@ -268,18 +302,23 @@ onMounted(() => {
               { 'is-menu-open': openSessionMenuId === session.id }
             ]"
             @click="handleSessionClick(session)"
+            @contextmenu.prevent.stop="openSessionMenu(session.id)"
           >
             <span class="material-symbols-outlined text-[11px]">chat</span>
             <span class="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-[11px]" :title="session.name">{{ truncateSessionName(session.name) }}</span>
-            <div v-if="sessionActions" class="flex flex-none items-center gap-[4px] opacity-0 group-hover:opacity-100">
+            <div
+              v-if="sessionActions"
+              class="sidebar-session-actions flex items-center"
+            >
               <button
-                class="p-[4px] hover:bg-slate-200 dark:hover:bg-slate-700 rounded"
+                class="sidebar-session-action-button hover:bg-slate-200 dark:hover:bg-slate-700"
                 type="button"
                 title="会话操作"
+                :aria-label="`${session.name}的会话操作`"
                 :aria-expanded="openSessionMenuId === session.id"
                 @click.stop="toggleSessionMenu(session.id)"
               >
-                <span class="material-symbols-outlined text-[10px]">edit</span>
+                <span class="material-symbols-outlined">more_horiz</span>
               </button>
             </div>
             <div v-if="openSessionMenuId === session.id" class="session-action-menu" role="menu" @click.stop>
@@ -299,6 +338,24 @@ onMounted(() => {
 
     <AccountControls variant="sidebar" :collapsed="isCollapsed" />
   </aside>
+
+  <SessionRenameDialog
+    v-model="localRenameValue"
+    :show="Boolean(localRenameDialog)"
+    @confirm="confirmLocalRename"
+    @close="localRenameDialog = null"
+  />
+
+  <ConfirmDialog
+    :show="Boolean(localDeleteDialog)"
+    title="删除对话"
+    :message="`确定删除对话「${localDeleteDialog?.name || ''}」吗？删除后将从历史会话中移除，且无法撤销。`"
+    confirm-text="删除"
+    tone="danger"
+    variant="notion"
+    @confirm="confirmLocalDelete"
+    @close="localDeleteDialog = null"
+  />
 </template>
 
 <style scoped>
@@ -381,7 +438,7 @@ onMounted(() => {
 
 .sidebar-section-title {
   color: var(--sidebar-steel) !important;
-  font-size: 10px !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
   line-height: 1.4;
   letter-spacing: 0.01em;
@@ -418,31 +475,36 @@ onMounted(() => {
   gap: 2px;
 }
 
+.sidebar-session-list {
+  width: 100%;
+  min-width: 0;
+}
+
 .sidebar-nav-item,
 .sidebar-session-item {
-  min-height: 34px;
-  padding: 6px 8px !important;
+  min-height: 36px;
+  padding: 7px 9px !important;
   border-radius: 6px !important;
   font-weight: 400 !important;
   line-height: 1.35;
 }
 
 .sidebar-nav-item {
-  gap: 9px !important;
+  gap: 11px !important;
 }
 
 .sidebar-nav-item > .material-symbols-outlined {
-  width: 18px;
-  flex: 0 0 18px;
+  width: 20px;
+  flex: 0 0 20px;
   color: inherit;
-  font-size: 17px !important;
+  font-size: 19px !important;
   text-align: center;
 }
 
 .sidebar-nav-item > span:not(.material-symbols-outlined),
 .sidebar-session-item > span:last-of-type {
   color: inherit;
-  font-size: 11px !important;
+  font-size: 13px !important;
   font-weight: inherit;
 }
 
@@ -467,7 +529,54 @@ onMounted(() => {
 
 .sidebar-session-item {
   position: relative;
-  gap: 7px !important;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  gap: 9px !important;
+}
+
+.sidebar-session-item > span[title] {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.sidebar-session-actions {
+  width: 24px;
+  min-width: 24px;
+  flex: 0 0 24px;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.sidebar-session-item:hover .sidebar-session-actions,
+.sidebar-session-item:focus-within .sidebar-session-actions,
+.sidebar-session-item.sidebar-item-active .sidebar-session-actions,
+.sidebar-session-item.is-menu-open .sidebar-session-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-session-list:has(.sidebar-session-item:hover)
+  .sidebar-session-item.sidebar-item-active:not(:hover):not(:focus-within):not(.is-menu-open)
+  .sidebar-session-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-session-action-button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0 !important;
+  border: 0;
+  background: transparent;
+}
+
+.sidebar-session-action-button .material-symbols-outlined {
+  font-size: 14px !important;
 }
 
 .sidebar-session-item.is-menu-open {
@@ -538,7 +647,7 @@ onMounted(() => {
 .sidebar-session-item > .material-symbols-outlined {
   width: 16px;
   flex: 0 0 16px;
-  font-size: 15px !important;
+  font-size: 17px !important;
 }
 
 .sidebar-session-item button {

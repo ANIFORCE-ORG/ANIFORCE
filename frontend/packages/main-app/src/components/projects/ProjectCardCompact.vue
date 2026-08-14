@@ -146,7 +146,7 @@ const handleViewDetail = () => {
   align-items: center;
   gap: 7px;
   color: #787671;
-  font-size: 10px;
+  font-size: 12px;
   cursor: pointer;
 }
 
@@ -186,7 +186,7 @@ const handleViewDetail = () => {
   border-radius: 999px;
   background: #eaf3ec;
   color: #2f6f41;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -218,7 +218,7 @@ const handleViewDetail = () => {
   min-height: 42px;
   margin: 8px 0 0;
   color: #787671;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.65;
 }
 
@@ -238,7 +238,7 @@ const handleViewDetail = () => {
   border-radius: 6px;
   background: #f6f5f4;
   color: #5d5b54;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 600;
   white-space: nowrap;
 }
@@ -263,7 +263,7 @@ const handleViewDetail = () => {
   border-radius: 8px;
   background: #ffffff;
   color: #37352f;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   white-space: nowrap;

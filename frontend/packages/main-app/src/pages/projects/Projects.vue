@@ -349,13 +349,12 @@ const handleSubmitCampaign = async (data: any) => {
     <main class="projects-main">
       <!-- Header -->
       <header class="projects-page-bar workspace-page-header" data-workspace-page-header>
-        <div class="projects-page-title-wrap">
-          <span class="projects-page-icon" aria-hidden="true">
+        <div class="projects-page-title-wrap workspace-page-heading">
+          <span class="projects-page-icon workspace-page-heading-icon" aria-hidden="true">
             <span class="material-symbols-outlined">folder_open</span>
           </span>
-          <div class="projects-page-title-content">
+          <div class="projects-page-title-content workspace-page-heading-text">
             <h1 class="projects-page-title">项目管理</h1>
-            <p class="projects-page-subtitle">管理项目列表、筛选视图与 Campaign 创建入口</p>
           </div>
         </div>
         <div class="projects-toolbar">
@@ -427,7 +426,7 @@ const handleSubmitCampaign = async (data: any) => {
 
       <!-- Projects List -->
       <div class="projects-scroll-area">
-        <div class="projects-content">
+        <div class="projects-content workspace-page-content">
           <div class="projects-content-meta" aria-live="polite">
             <span>共 {{ filteredProjects.length }} 个项目</span>
             <span v-if="selectedProjectCount > 0" class="projects-selection-meta">
@@ -617,9 +616,9 @@ const handleSubmitCampaign = async (data: any) => {
   justify-content: center;
   gap: 7px;
   padding: 0 13px;
-  border: 1px solid #37352f;
+  border: 1px solid var(--workspace-action-primary, #137fec);
   border-radius: 8px;
-  background: #37352f;
+  background: var(--workspace-action-primary, #137fec);
   color: #ffffff;
   font-size: 11px;
   font-weight: 500;
@@ -628,8 +627,8 @@ const handleSubmitCampaign = async (data: any) => {
 }
 
 .projects-create-button:hover {
-  border-color: #1a1a1a;
-  background: #1a1a1a;
+  border-color: var(--workspace-action-primary-hover, #0f6fcf);
+  background: var(--workspace-action-primary-hover, #0f6fcf);
 }
 
 .projects-create-button .material-symbols-outlined {

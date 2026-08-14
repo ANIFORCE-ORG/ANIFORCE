@@ -395,18 +395,17 @@ onMounted(() => {
     />
 
     <main class="sn-main">
-      <header data-workspace-page-header class="sn-page-head workspace-page-header">
-        <button class="sn-back" type="button" aria-label="返回设置" @click="router.push('/settings')">
+      <header data-workspace-page-header class="sn-page-head workspace-page-header workspace-page-heading">
+        <button class="sn-back workspace-page-back" type="button" aria-label="返回设置" @click="router.push('/settings')">
           <svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg>
         </button>
-        <div class="sn-page-title">
+        <div class="sn-page-title workspace-page-heading-text">
           <h1>系统账号设置</h1>
-          <p>管理团队成员、登录身份和基础账号信息</p>
         </div>
       </header>
 
       <div class="sn-scroll">
-        <div class="sn-content">
+        <div class="sn-content workspace-page-content">
           <section class="sn-section">
             <h2 class="sn-section-title">登录账户信息</h2>
             <div class="sn-panel sn-account-panel">

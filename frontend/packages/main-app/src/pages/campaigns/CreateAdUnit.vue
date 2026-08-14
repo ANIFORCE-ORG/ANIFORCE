@@ -156,7 +156,7 @@ const handleSave = async () => {
       </header>
 
       <!-- 内容区域 -->
-      <div class="flex-1 overflow-y-auto px-[19px] py-[15px]">
+      <div class="workspace-page-content flex-1 overflow-y-auto px-[19px] py-[15px]">
         <!-- 错误提示 -->
         <div v-if="errors.submit" class="mb-[12px] p-[10px] rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
           <div class="flex items-center gap-[6px]">
@@ -423,7 +423,7 @@ const handleSave = async () => {
       </div>
 
       <!-- 底部按钮栏 -->
-      <div class="h-[60px] border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-[8px] px-[19px] bg-white dark:bg-slate-900">
+      <div class="workspace-page-content h-[60px] border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-[8px] px-[19px] bg-white dark:bg-slate-900">
         <button
           type="button"
           class="px-[13px] py-[6px] text-[10px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"

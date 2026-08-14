@@ -28,21 +28,25 @@ export function hydrateWorkspaceSnapshot(
   sessionId: string,
   snapshot: AgentSessionSnapshot,
 ): void {
-  workspace.clearSession(sessionId)
-  for (const artifact of snapshot.artifacts) {
-    const payload = record(artifact.payload)
-    const surface = String(artifact.surface || payload.surface || '') as WorkspaceSurface
-    if (!surface) continue
-    workspace.upsertProjection(sessionId, {
-      id: String(artifact.artifact_id),
-      sessionId,
-      runId: String(artifact.run_id || ''),
-      sourceToolCallId: artifact.source_tool_call_id ? String(artifact.source_tool_call_id) : undefined,
-      surface,
-      mode: artifact.status === 'failed' ? 'failed' : 'readonly',
-      payload,
-      updatedAt: Date.parse(String(artifact.updated_at || '')) || Date.now(),
-    })
+  // 空快照常见于异步落库和本地 Mock。此时保留当前会话已有的投影，避免
+  // “切到新对话再返回”后把已经展开的工作区清空。
+  if (snapshot.artifacts.length) {
+    workspace.clearSession(sessionId)
+    for (const artifact of snapshot.artifacts) {
+      const payload = record(artifact.payload)
+      const surface = String(artifact.surface || payload.surface || '') as WorkspaceSurface
+      if (!surface) continue
+      workspace.upsertProjection(sessionId, {
+        id: String(artifact.artifact_id),
+        sessionId,
+        runId: String(artifact.run_id || ''),
+        sourceToolCallId: artifact.source_tool_call_id ? String(artifact.source_tool_call_id) : undefined,
+        surface,
+        mode: artifact.status === 'failed' ? 'failed' : 'readonly',
+        payload,
+        updatedAt: Date.parse(String(artifact.updated_at || '')) || Date.now(),
+      })
+    }
   }
   const approval = snapshot.pending_approval || snapshot.approvals[snapshot.approvals.length - 1]
   if (!approval) return

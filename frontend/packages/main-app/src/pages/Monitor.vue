@@ -45,14 +45,14 @@ const switchSession = (session: any) => {
     <SidebarNav :nav-items="navItems" :sessions="sessions" @switch-panel="switchPanel" @switch-session="switchSession" />
     <main class="workspace-page-canvas flex flex-1 flex-col overflow-hidden dark:bg-slate-950">
       <header data-workspace-page-header class="workspace-page-header flex items-center justify-between border-b border-slate-200 bg-white px-6 dark:border-slate-800 dark:bg-slate-900">
-        <div class="flex items-center gap-2"><span class="material-symbols-outlined text-xl text-primary">monitoring</span><h1 class="text-lg font-bold text-slate-900 dark:text-white">投放实时监控</h1><span class="ml-2 flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600"><i class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"></i>DEMO 实时</span></div>
+        <div class="workspace-page-heading"><span class="workspace-page-heading-icon material-symbols-outlined text-primary">monitoring</span><h1 class="text-slate-900 dark:text-white">投放实时监控</h1><span class="ml-2 flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600"><i class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"></i>DEMO 实时</span></div>
         <select v-model="timeFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800"><option value="today">今日</option><option value="7d">近 7 日</option><option value="30d">近 30 日</option></select>
       </header>
 
-      <div class="flex-1 overflow-y-auto p-6">
-        <div class="mx-auto max-w-7xl space-y-5">
+      <div class="workspace-page-content flex-1 overflow-y-auto p-6">
+        <div class="workspace-page-header-content space-y-5">
           <section class="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-            <article v-for="metric in metrics" :key="metric.label" class="rounded-xl border border-slate-200 bg-white p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><div class="flex items-center justify-between"><span class="text-xs text-slate-500">{{ metric.label }}</span><span class="material-symbols-outlined rounded-lg p-2 text-lg" :class="metric.tone">{{ metric.icon }}</span></div><div class="mt-3 flex items-end gap-2"><strong class="text-2xl text-slate-900 dark:text-white">{{ metric.value }}</strong><span class="mb-1 text-xs font-semibold text-emerald-600">{{ metric.change }}</span></div></article>
+            <article v-for="metric in metrics" :key="metric.label" class="workspace-metric-surface rounded-xl border border-slate-200 p-4 shadow-sm dark:border-slate-800 dark:bg-slate-900"><div class="flex items-center justify-between"><span class="text-xs text-slate-500">{{ metric.label }}</span><span class="material-symbols-outlined rounded-lg p-2 text-lg" :class="metric.tone">{{ metric.icon }}</span></div><div class="mt-3 flex items-end gap-2"><strong class="text-2xl text-slate-900 dark:text-white">{{ metric.value }}</strong><span class="mb-1 text-xs font-semibold text-emerald-600">{{ metric.change }}</span></div></article>
           </section>
 
           <section class="grid gap-5 xl:grid-cols-[1.45fr_.55fr]">

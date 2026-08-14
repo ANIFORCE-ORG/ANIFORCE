@@ -197,7 +197,10 @@ const getStatusColor = (status: string) => {
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
       <header data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
-        <h3 class="font-bold text-[13px] text-slate-900 dark:text-white">广告投放</h3>
+        <div class="workspace-page-heading">
+          <span class="workspace-page-heading-icon" aria-hidden="true"><span class="material-symbols-outlined">campaign</span></span>
+          <h3 class="text-slate-900 dark:text-white">广告投放</h3>
+        </div>
         <button
           class="flex items-center gap-[6px] px-[12px] py-[6px] rounded-md bg-primary text-white hover:bg-primary/90 transition-colors"
           @click="handleCreateCampaign"
@@ -208,7 +211,7 @@ const getStatusColor = (status: string) => {
       </header>
 
       <!-- 错误提示 -->
-      <div v-if="error" class="mx-[19px] mt-[12px] p-[9px] rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
+      <div v-if="error" class="workspace-page-margin-x mx-[19px] mt-[12px] p-[9px] rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
         <div class="flex items-center gap-[6px]">
           <span class="material-symbols-outlined text-red-600 dark:text-red-400 text-[15px]">error</span>
           <span class="text-[11px] text-red-600 dark:text-red-400">{{ error }}</span>
@@ -216,7 +219,7 @@ const getStatusColor = (status: string) => {
       </div>
 
       <!-- 搜索和筛选栏 -->
-      <div class="border-b border-slate-200 dark:border-slate-800 p-[12px]">
+      <div class="workspace-page-content border-b border-slate-200 dark:border-slate-800 p-[12px]">
         <div class="flex items-center gap-[9px]">
           <div class="flex-1 relative">
             <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">search</span>
@@ -258,7 +261,7 @@ const getStatusColor = (status: string) => {
       </div>
 
       <!-- 广告列表 -->
-      <div class="flex-1 overflow-y-auto p-[19px]">
+      <div class="workspace-page-content flex-1 overflow-y-auto p-[19px]">
         <div class="space-y-[9px]">
           <div
             v-for="campaign in filteredCampaigns"

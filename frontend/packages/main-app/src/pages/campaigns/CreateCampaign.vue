@@ -267,7 +267,7 @@ onMounted(async () => {
     <div class="workspace-page-canvas flex-1 flex flex-col dark:bg-slate-950 overflow-hidden">
       <!-- Header -->
       <header data-workspace-page-header class="workspace-page-header bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-7xl mx-auto flex h-full items-center px-[19px]">
+      <div class="workspace-page-header-content flex h-full items-center px-[19px]">
         <div class="flex items-center gap-[12px]">
           <button
             @click="handleBack"
@@ -282,7 +282,7 @@ onMounted(async () => {
 
       <!-- Steps Navigation -->
     <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-7xl mx-auto px-[19px] py-[19px]">
+      <div class="workspace-page-content px-[19px] py-[19px]">
         <div class="flex items-center justify-between">
           <div
             v-for="(step, index) in steps"
@@ -326,7 +326,7 @@ onMounted(async () => {
 
       <!-- Content -->
       <div class="flex-1 overflow-y-auto">
-        <div class="mx-auto px-[19px] py-[25px]">
+        <div class="workspace-page-content mx-auto px-[19px] py-[25px]">
       <!-- Step 1: 准备 -->
       <div v-if="currentStep === 1" class="space-y-[19px]">
         <!-- 选择所属分组 -->

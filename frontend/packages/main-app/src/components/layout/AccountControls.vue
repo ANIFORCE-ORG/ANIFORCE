@@ -364,7 +364,7 @@ onBeforeUnmount(() => {
 .account-start-button {
   padding: 6px 10px;
   border-radius: 5px;
-  background: #37352f;
+  background: var(--workspace-action-primary, #137fec);
   color: #ffffff;
   cursor: pointer;
   font-size: 11px;
@@ -624,8 +624,8 @@ onBeforeUnmount(() => {
 }
 
 :global(.dark) .account-start-button {
-  background: #e6e6e5;
-  color: #191919;
+  background: var(--workspace-action-primary, #137fec);
+  color: #ffffff;
 }
 
 @media (max-width: 520px) {

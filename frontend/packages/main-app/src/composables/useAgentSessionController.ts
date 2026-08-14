@@ -274,6 +274,9 @@ export function useAgentSessionController() {
     const selectingActiveRun = store.agentRunning && store.activeRunSessionId === session.id
     store.activeSessionId = session.id
     localStorage.setItem('aniforce.activeSessionId', session.id)
+    // 先恢复该会话的本地快照。服务端在异步落库或本地 Mock 场景下可能暂时
+    // 返回空消息，不能因此覆盖用户刚刚完成的对话和工作区上下文。
+    store.restoreFromLocalStorage(session.id)
     store.loading = true
     store.error = null
     if (!selectingActiveRun && !store.agentRunning) {
@@ -289,10 +292,12 @@ export function useAgentSessionController() {
     try {
       if (!selectingActiveRun) {
         const snapshot = await getAgentSessionSnapshot(session.id)
-        store.setMessages(session.id, snapshot.messages)
+        const cachedMessages = store.messagesBySession.get(session.id) || []
+        store.setMessages(
+          session.id,
+          snapshot.messages.length ? snapshot.messages : cachedMessages,
+        )
         applyPersistedTaskState(snapshot.state?.task_state, snapshot.pending_approval)
-        restoreTimelineFromCache()
-        restoreWorkspaceFromCache()
         hydrateWorkspaceSnapshot(workspace, session.id, snapshot)
         if (snapshot.latest_run && ['queued', 'resume_queued', 'running', 'cancel_requested'].includes(String(snapshot.latest_run.status))) {
           const runId = String(snapshot.latest_run.run_id)

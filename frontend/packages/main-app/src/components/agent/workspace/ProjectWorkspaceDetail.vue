@@ -111,7 +111,7 @@ function getStatusLabel(status: string) {
       </div>
       <div class="grid gap-2 sm:grid-cols-2">
         <button
-          class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-slate-900 px-3 text-sm font-medium text-white hover:bg-slate-800 dark:bg-white dark:text-slate-950 dark:hover:bg-slate-100"
+          class="inline-flex h-9 items-center justify-center gap-2 rounded-md bg-primary px-3 text-sm font-medium text-white hover:bg-primary/90 dark:bg-primary dark:text-white dark:hover:bg-primary/90"
           @click="emit('analyze', project)"
         >
           <span class="material-symbols-outlined text-base">query_stats</span>

@@ -69,19 +69,18 @@ const openSetting = (path: string) => {
 
     <main class="settings-main">
       <header data-workspace-page-header class="settings-page-head workspace-page-header">
-        <div class="settings-page-title-wrap">
-          <span class="settings-page-icon">
+        <div class="settings-page-title-wrap workspace-page-heading">
+          <span class="settings-page-icon workspace-page-heading-icon">
             <span class="material-symbols-outlined">settings</span>
           </span>
-          <div class="settings-page-title">
+          <div class="settings-page-title workspace-page-heading-text">
             <h1>设置</h1>
-            <p>管理 Agent 系统账号、系统配置和广告平台连接</p>
           </div>
         </div>
       </header>
 
       <div class="settings-scroll-area">
-        <div class="settings-content">
+        <div class="settings-content workspace-page-content">
           <div class="settings-grid">
             <button
               v-for="card in settingCards"
@@ -265,7 +264,7 @@ const openSetting = (path: string) => {
 .settings-card h2 {
   margin: 0;
   color: #1a1a1a;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -273,7 +272,7 @@ const openSetting = (path: string) => {
 .settings-card p {
   margin: 8px 0 18px;
   color: #787671;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -283,7 +282,7 @@ const openSetting = (path: string) => {
   align-items: center;
   gap: 5px;
   color: #37352f;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 550;
   line-height: 1.2;
 }

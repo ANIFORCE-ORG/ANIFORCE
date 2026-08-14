@@ -147,7 +147,7 @@ const formatDate = (dateString?: string) => {
       </header>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto p-[19px]">
+      <div class="workspace-page-content flex-1 overflow-y-auto p-[19px]">
         <!-- Campaign 详情信息 -->
         <aside class="mb-[15px] p-[16px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 shadow-sm">
           <div class="flex items-center gap-[12px] mb-[6px]">

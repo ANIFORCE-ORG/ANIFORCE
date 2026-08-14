@@ -82,7 +82,8 @@ const agentSessions: any[] = [
   },
 ]
 
-let lastAgentPrompt = ''
+const agentRuns = new Map<string, { sessionId: string; prompt: string }>()
+const completedAgentRuns = new Set<string>()
 
 const jsonResponse = (data: unknown, status = 200) => new Response(JSON.stringify(data), {
   status,
@@ -110,7 +111,23 @@ function createRecord(collection: any[], body: any, prefix: string, defaults: Re
 }
 
 function mockAgentEvents(runId: string): Response {
-  const answer = `这是 Demo Agent 基于本地样例数据的回答。针对“${lastAgentPrompt || '当前投放'}”，建议先查看高消耗低回收计划，再复制高 CTR 素材的前三秒钩子进行小预算测试。`
+  const run = agentRuns.get(runId)
+  const prompt = run?.prompt || '当前投放'
+  const answer = `这是 Demo Agent 基于本地样例数据的回答。针对“${prompt}”，建议先查看高消耗低回收计划，再复制高 CTR 素材的前三秒钩子进行小预算测试。`
+
+  if (run && !completedAgentRuns.has(runId)) {
+    const session = agentSessions.find(item => item.id === run.sessionId || item.session_id === run.sessionId)
+    if (session) {
+      session.messages = Array.isArray(session.messages) ? session.messages : []
+      session.messages.push(
+        { id: `${runId}-user`, role: 'user', content: prompt, created_at: new Date().toISOString() },
+        { id: `${runId}-assistant`, role: 'assistant', content: answer, created_at: new Date().toISOString() },
+      )
+      session.updated_at = new Date().toISOString()
+    }
+    completedAgentRuns.add(runId)
+  }
+
   const events = [
     ['runtime.started', { run_id: runId, task_id: runId }],
     ['message.updated', { delta: answer }],
@@ -240,7 +257,35 @@ async function handleMockRequest(url: URL, init?: RequestInit): Promise<Response
 
   if (path === '/agent/health') return jsonResponse({ status: 'healthy', provider: 'mock', model: 'ANIFORCE Demo Agent' })
   if (path === '/agent/sessions' && method === 'GET') return jsonResponse(agentSessions)
-  if (path === '/agent/sessions' && method === 'POST') return jsonResponse(createRecord(agentSessions, { ...body, session_id: `session-${Date.now()}`, messages: [] }, 'session', { title: body.title || '新对话', status: 'active' }))
+  if (path === '/agent/sessions' && method === 'POST') {
+    const sessionId = `session-${Date.now()}`
+    const session = {
+      id: sessionId,
+      session_id: sessionId,
+      title: body.title || '新对话',
+      status: 'active',
+      messages: [],
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }
+    agentSessions.unshift(session)
+    return jsonResponse(session)
+  }
+  const agentSessionSnapshotMatch = path.match(/^\/agent\/sessions\/([^/]+)\/snapshot$/)
+  if (agentSessionSnapshotMatch && method === 'GET') {
+    const session = agentSessions.find(item => item.id === agentSessionSnapshotMatch[1] || item.session_id === agentSessionSnapshotMatch[1]) || agentSessions[0]
+    return jsonResponse({
+      session,
+      state: null,
+      messages: Array.isArray(session?.messages) ? session.messages : [],
+      latest_run: null,
+      pending_approval: null,
+      approvals: [],
+      tool_calls: [],
+      artifacts: [],
+      last_persisted_sequence: 0,
+    })
+  }
   const agentSessionMatch = path.match(/^\/agent\/sessions\/([^/]+)$/)
   if (agentSessionMatch) {
     const index = agentSessions.findIndex(item => item.id === agentSessionMatch[1] || item.session_id === agentSessionMatch[1])
@@ -249,8 +294,9 @@ async function handleMockRequest(url: URL, init?: RequestInit): Promise<Response
     if (index >= 0 && method === 'PATCH') { agentSessions[index] = { ...agentSessions[index], ...body, updated_at: now }; return jsonResponse(agentSessions[index]) }
   }
   if (path === '/agent/runs' && method === 'POST') {
-    lastAgentPrompt = body.prompt || ''
-    return jsonResponse({ run_id: `run-${Date.now()}`, session_id: body.session_id, status: 'running' })
+    const runId = `run-${Date.now()}`
+    agentRuns.set(runId, { sessionId: String(body.session_id || ''), prompt: String(body.prompt || '') })
+    return jsonResponse({ run_id: runId, session_id: body.session_id, status: 'running' })
   }
   const runEventsMatch = path.match(/^\/agent\/runs\/([^/]+)\/events$/)
   if (runEventsMatch) return mockAgentEvents(runEventsMatch[1])

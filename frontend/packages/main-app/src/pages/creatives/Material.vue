@@ -103,95 +103,87 @@ type OverviewCard = {
   label: string
   value: string
   sub: string
-  icon: string
 }
+
+type OverviewPeriod = 'today' | 'last7Days' | 'last30Days'
 
 type AnalysisCard = {
+  badge: string
   title: string
   body: string
-  icon: string
-  panelClass: string
-  pillClass: string
+  badgeClass: string
 }
 
-const formatCompactNumber = (value: number) => new Intl.NumberFormat('zh-CN', {
-  notation: 'compact',
-  maximumFractionDigits: 1,
-}).format(value)
+const overviewPeriodOptions: Array<{ value: OverviewPeriod; label: string; dateRange: string }> = [
+  { value: 'today', label: '今日', dateRange: '2026-08-14 至 2026-08-14' },
+  { value: 'last7Days', label: '近 7 天', dateRange: '2026-08-08 至 2026-08-14' },
+  { value: 'last30Days', label: '近 30 天', dateRange: '2026-07-16 至 2026-08-14' },
+]
 
-const formatCurrency = (value: number) => new Intl.NumberFormat('zh-CN', {
-  style: 'currency',
-  currency: 'CNY',
-  maximumFractionDigits: 0,
-}).format(value)
-
-const formatNumber = (value: number, digits = 2) => value.toFixed(digits)
+const overviewPeriod = ref<OverviewPeriod>('today')
+const overviewCompareEnabled = ref(false)
+const overviewComparison = ref('previousPeriod')
+const overviewPeriodConfig = computed(() => (
+  overviewPeriodOptions.find(option => option.value === overviewPeriod.value) || overviewPeriodOptions[0]
+))
+const overviewDateRange = computed(() => overviewPeriodConfig.value.dateRange)
 
 const mockOverview = {
-  periodLabel: '近 7 天',
   updatedAt: '14:06',
-  spend: 12840,
-  impressions: 2140000,
-  clicks: 31840,
-  roas: 2.86,
-  shortVideoSpend: 7640,
-  activeMaterials: 26,
 }
 
 const overviewCards = computed<OverviewCard[]>(() => [
   {
-    label: '周期消耗',
-    value: formatCurrency(mockOverview.spend),
-    sub: `${mockOverview.periodLabel} · 更新时间 ${mockOverview.updatedAt}`,
-    icon: 'payments',
+    label: '当前结果',
+    value: '7',
+    sub: '图片与视频素材',
   },
   {
-    label: '展示量',
-    value: formatCompactNumber(mockOverview.impressions),
-    sub: `活跃素材 ${mockOverview.activeMaterials} 个`,
-    icon: 'visibility',
+    label: '可投放',
+    value: '3',
+    sub: '可直接使用素材',
   },
   {
-    label: '点击量',
-    value: formatCompactNumber(mockOverview.clicks),
-    sub: '以视频素材贡献为主',
-    icon: 'ads_click',
+    label: '处理中',
+    value: '2',
+    sub: '待平台返回结果',
   },
   {
-    label: '平均 ROAS',
-    value: `${formatNumber(mockOverview.roas)}x`,
-    sub: mockOverview.roas >= 2.5 ? '回收健康' : '需观察',
-    icon: 'monitoring',
+    label: '高疲劳',
+    value: '3',
+    sub: '建议替换或降预算',
   },
   {
-    label: '短视频消耗',
-    value: formatCurrency(mockOverview.shortVideoSpend),
-    sub: '竖版素材占比更高',
-    icon: 'movie',
+    label: '平均评分',
+    value: '78',
+    sub: '质量与投放信号',
   },
 ])
 
 const analysisCards = computed<AnalysisCard[]>(() => [
   {
-    title: '高效素材',
-    body: '竖版视频在当前周期的表现更稳，建议优先复制同主题脚本并扩大投放频次。',
-    icon: 'trending_up',
-    panelClass: 'border-emerald-200 bg-emerald-50 text-emerald-950 dark:border-emerald-900/40 dark:bg-emerald-950/30 dark:text-emerald-50',
-    pillClass: 'bg-white/75 text-emerald-800 dark:bg-slate-900/50 dark:text-emerald-200',
+    badge: '优先放量',
+    title: 'CB_Meta_Reels_LevelWin_A',
+    body: '该素材在当前周期 ROAS 2.76x，贡献收入 $23,239。建议保留主投放位，并扩展相似开头与同类版位。',
+    badgeClass: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-200',
   },
   {
-    title: '风险提示',
-    body: '部分静态图在连续曝光后开始疲劳，建议尽快替换首帧和 CTA 文案。',
-    icon: 'warning',
-    panelClass: 'border-amber-200 bg-amber-50 text-amber-950 dark:border-amber-900/40 dark:bg-amber-950/30 dark:text-amber-50',
-    pillClass: 'bg-white/75 text-amber-800 dark:bg-slate-900/50 dark:text-amber-200',
+    badge: '预算预警',
+    title: 'CB_Archive_StaticReward_1x1_Old',
+    body: '最高消耗素材为 $9,880。3 个素材 ROAS 低于 2.0，建议降预算或替换前 3 秒钩子。',
+    badgeClass: 'bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-200',
   },
   {
-    title: '优化建议',
-    body: '新增 1:1 与 4:5 备选尺寸后，素材在信息流和故事流的适配会更稳定。',
-    icon: 'auto_awesome',
-    panelClass: 'border-sky-200 bg-sky-50 text-sky-950 dark:border-sky-900/40 dark:bg-sky-950/30 dark:text-sky-50',
-    pillClass: 'bg-white/75 text-sky-800 dark:bg-slate-900/50 dark:text-sky-200',
+    badge: '疲劳风险',
+    title: '3 个高疲劳素材',
+    body: '重点处理 CB_Archive_StaticReward_1x1_Old，疲劳度 88%。建议补充同主题新剪辑。',
+    badgeClass: 'bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-200',
+  },
+  {
+    badge: '短视频表现',
+    title: '3 条视频素材',
+    body: '视频素材周期消耗 $14,600，CTR 4.04%。竖版素材适合继续在 Reels / TikTok 信息流做小预算扩量。',
+    badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-200',
   },
 ])
 
@@ -781,13 +773,12 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
     <main class="min-w-0 flex-1 bg-transparent">
       <section class="min-w-0 flex h-full flex-col">
         <header data-workspace-page-header class="workspace-page-header flex shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
-          <div class="flex min-w-0 items-center gap-[8px]">
-            <span class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
+          <div class="workspace-page-heading flex min-w-0 items-center gap-[8px]">
+            <span class="workspace-page-heading-icon grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
               <span class="material-symbols-outlined text-[16px] leading-none">video_library</span>
             </span>
-            <div class="min-w-0">
+            <div class="workspace-page-heading-text min-w-0">
               <h1 class="m-0 text-[16px] font-semibold tracking-[-0.2px] text-[#1a1a1a] dark:text-white">素材管理</h1>
-              <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
             </div>
           </div>
           <div class="flex items-center gap-[7px]">
@@ -802,30 +793,61 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
           </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto px-[28px] py-[22px] max-md:px-[16px] max-md:py-[16px]">
+        <div class="workspace-page-content flex-1 overflow-y-auto px-[28px] py-[22px] max-md:px-[16px] max-md:py-[16px]">
           <div v-if="error" class="mb-[12px] rounded-md border border-red-200 bg-red-50 px-[12px] py-[9px] text-[11px] text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
             {{ error }}
           </div>
 
           <div class="mb-[14px] space-y-[12px]">
-            <section class="overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-              <div class="flex items-center justify-between border-b border-slate-100 px-[14px] py-[10px] dark:border-slate-800">
-                <div>
-                  <strong class="text-[12px] font-semibold text-slate-900 dark:text-white">素材周期看板</strong>
-                  <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">{{ mockOverview.periodLabel }} · 前端演示数据</p>
-                </div>
-                <div class="text-[10px] text-slate-500 dark:text-slate-400">更新时间 {{ mockOverview.updatedAt }}</div>
+            <section class="overview-filter-panel" aria-label="素材周期筛选与对比维度">
+              <div class="overview-report-meta">
+                <strong>素材周期报表</strong>
+                <span class="overview-report-divider" aria-hidden="true"></span>
+                <span>更新时间 {{ mockOverview.updatedAt }}</span>
               </div>
+
+              <div class="overview-filter-controls">
+                <label class="overview-filter-field">
+                  <span class="overview-filter-label">时间维度：</span>
+                  <select v-model="overviewPeriod" class="overview-period-select" aria-label="时间维度">
+                    <option v-for="option in overviewPeriodOptions" :key="option.value" :value="option.value">
+                      {{ option.label }}
+                    </option>
+                  </select>
+                </label>
+
+                <span class="overview-filter-divider" aria-hidden="true"></span>
+
+                <div class="overview-date-range" aria-label="当前日期范围">
+                  <span>{{ overviewDateRange }}</span>
+                  <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                </div>
+
+                <span class="overview-filter-divider" aria-hidden="true"></span>
+
+                <label class="overview-compare-toggle">
+                  <input v-model="overviewCompareEnabled" type="checkbox" />
+                  <span>对比</span>
+                </label>
+
+                <label v-if="overviewCompareEnabled" class="overview-filter-field overview-comparison-field">
+                  <span class="overview-filter-label">对比维度：</span>
+                  <select v-model="overviewComparison" class="overview-period-select" aria-label="对比维度">
+                    <option value="previousPeriod">上一周期</option>
+                    <option value="lastYear">去年同期</option>
+                  </select>
+                </label>
+              </div>
+            </section>
+
+            <section class="overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
               <div class="overview-strip">
                 <div
                   v-for="card in overviewCards"
                   :key="card.label"
                   class="overview-metric"
                 >
-                  <div class="flex items-center gap-[6px] text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-                    <span>{{ card.label }}</span>
-                    <span class="material-symbols-outlined text-[15px] text-slate-400">{{ card.icon }}</span>
-                  </div>
+                  <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{{ card.label }}</div>
                   <div class="mt-[8px] truncate text-[21px] font-bold leading-none text-slate-900 dark:text-white">{{ card.value }}</div>
                   <div class="mt-[6px] truncate text-[10px] text-slate-500 dark:text-slate-400">{{ card.sub }}</div>
                 </div>
@@ -836,21 +858,25 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
               <div class="flex items-center justify-between border-b border-slate-100 px-[14px] py-[10px] dark:border-slate-800">
                 <div>
                   <strong class="text-[12px] font-semibold text-slate-900 dark:text-white">素材智能分析</strong>
-                  <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">基于当前素材表现生成的前端演示结论</p>
+                  <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">全部周期 · 7 个素材</p>
                 </div>
+                <button
+                  type="button"
+                  class="inline-flex min-h-[34px] items-center justify-center rounded-[8px] border border-primary bg-primary px-[13px] text-[11px] font-semibold text-white transition-colors duration-150 hover:bg-primary/90 dark:border-primary dark:bg-primary dark:text-white"
+                  @click="success('素材智能分析已重新生成')"
+                >
+                  重新分析
+                </button>
               </div>
-              <div class="grid gap-[10px] p-[12px] md:grid-cols-3">
+              <div class="grid gap-[10px] p-[12px] md:grid-cols-2">
                 <div
                   v-for="item in analysisCards"
                   :key="item.title"
-                  class="min-h-[116px] rounded-md border px-[13px] py-[12px]"
-                  :class="item.panelClass"
+                  class="min-h-[112px] rounded-[8px] border border-slate-100 bg-slate-50/40 px-[13px] py-[12px] text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-white"
                 >
-                  <div :class="['inline-flex min-h-[22px] items-center gap-[6px] rounded-full px-[8px] text-[11px] font-semibold', item.pillClass]">
-                    <span class="material-symbols-outlined text-[14px]">{{ item.icon }}</span>
-                    <span>{{ item.title }}</span>
-                  </div>
-                  <p class="mt-[8px] text-[12px] leading-relaxed opacity-80">{{ item.body }}</p>
+                  <div :class="['inline-flex min-h-[22px] items-center rounded-full px-[8px] text-[10px] font-semibold', item.badgeClass]">{{ item.badge }}</div>
+                  <h3 class="mt-[8px] break-words text-[12px] font-semibold leading-[1.45] text-slate-900 dark:text-white">{{ item.title }}</h3>
+                  <p class="mt-[7px] text-[11px] leading-[1.65] text-slate-600 dark:text-slate-300">{{ item.body }}</p>
                 </div>
               </div>
             </section>
@@ -1176,11 +1202,164 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </template>
 
 <style scoped>
+.overview-filter-panel {
+  display: flex;
+  min-height: 54px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  overflow-x: auto;
+  border: 1px solid #e5e3df;
+  border-radius: 8px;
+  background: #ffffff;
+  padding: 0 16px;
+}
+
+.overview-report-meta {
+  display: inline-flex;
+  min-width: max-content;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 10px;
+  color: #787671;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.overview-report-meta strong {
+  color: #1a1a1a;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.overview-report-divider {
+  width: 1px;
+  height: 16px;
+  background: #ede9e4;
+}
+
+.overview-filter-controls {
+  display: flex;
+  min-width: max-content;
+  margin-left: auto;
+  align-items: center;
+  gap: 12px;
+  color: #37352f;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.overview-filter-field,
+.overview-date-range,
+.overview-compare-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.overview-filter-label {
+  color: #5d5b54;
+}
+
+.overview-period-select {
+  min-height: 34px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  padding: 6px 24px 6px 4px;
+  color: #1a1a1a;
+  font: inherit;
+  font-weight: 500;
+  outline: none;
+  cursor: pointer;
+}
+
+.overview-period-select:hover,
+.overview-period-select:focus-visible {
+  background: #f6f5f4;
+}
+
+.overview-filter-divider {
+  width: 1px;
+  height: 20px;
+  background: #ede9e4;
+}
+
+.overview-date-range {
+  color: #1a1a1a;
+  font-weight: 500;
+}
+
+.overview-date-range .material-symbols-outlined {
+  color: #787671;
+  font-size: 18px;
+}
+
+.overview-compare-toggle {
+  min-height: 34px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.overview-compare-toggle input {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #37352f;
+}
+
+.overview-comparison-field {
+  margin-left: 2px;
+  padding-left: 12px;
+  border-left: 1px solid #ede9e4;
+}
+
+:global(.dark) .overview-filter-panel {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42);
+}
+
+:global(.dark) .overview-filter-controls,
+:global(.dark) .overview-period-select,
+:global(.dark) .overview-date-range {
+  color: rgb(241 245 249);
+}
+
+:global(.dark) .overview-report-meta {
+  color: rgb(148 163 184);
+}
+
+:global(.dark) .overview-report-meta strong {
+  color: rgb(241 245 249);
+}
+
+:global(.dark) .overview-filter-label,
+:global(.dark) .overview-date-range .material-symbols-outlined {
+  color: rgb(148 163 184);
+}
+
+:global(.dark) .overview-filter-divider {
+  background-color: rgb(51 65 85);
+}
+
+:global(.dark) .overview-report-divider {
+  background-color: rgb(51 65 85);
+}
+
+:global(.dark) .overview-comparison-field {
+  border-color: rgb(51 65 85);
+}
+
+:global(.dark) .overview-period-select:hover,
+:global(.dark) .overview-period-select:focus-visible {
+  background: rgb(30 41 59);
+}
+
 .overview-strip {
   display: grid;
   overflow-x: auto;
   grid-template-columns: repeat(5, minmax(180px, 1fr));
-  background: #f8fafc;
+  background: #ffffff;
 }
 
 .overview-metric {
@@ -1382,9 +1561,9 @@ tbody tr {
   justify-content: center;
   gap: 7px;
   padding: 0 13px;
-  border: 1px solid #37352f;
+  border: 1px solid var(--workspace-action-primary, #137fec);
   border-radius: 8px;
-  background: #37352f;
+  background: var(--workspace-action-primary, #137fec);
   color: #ffffff;
   font-size: 11px;
   font-weight: 500;
@@ -1393,8 +1572,8 @@ tbody tr {
 }
 
 .material-create-button:hover {
-  border-color: #1a1a1a;
-  background: #1a1a1a;
+  border-color: var(--workspace-action-primary-hover, #0f6fcf);
+  background: var(--workspace-action-primary-hover, #0f6fcf);
 }
 
 .material-create-button .material-symbols-outlined {
