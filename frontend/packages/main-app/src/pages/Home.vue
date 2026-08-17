@@ -6,6 +6,7 @@ export default { name: 'Home' }
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, onActivated, onDeactivated, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
+import SessionRenameDialog from '@/components/layout/SessionRenameDialog.vue'
 import MessageView from '@/components/agent/MessageView.vue'
 import LiveWorkspaceShell from '@/components/agent/workspace/LiveWorkspaceShell.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
@@ -15,6 +16,7 @@ import { normalizeTaskPanelStatus, taskStatusPresentation } from '@/agent/taskPr
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
 import { navItems } from '@/config/navigation'
+import aniforceWorkflowHero from '@/assets/aniforce-workflow-hero.png'
 
 const router = useRouter()
 const route = useRoute()
@@ -69,31 +71,31 @@ const intentModes: Array<{
 
 const starterActions = [
   {
-    icon: 'folder_open',
-    label: '查看现有项目',
-    description: '拉取当前账号下的项目，并在右侧工作台打开项目列表。',
-    prompt: '现在有哪些项目？',
+    icon: 'portfolio',
+    label: '盘点投放资产',
+    description: '统一查看项目、计划与素材，快速接续当前工作。',
+    prompt: '帮我盘点当前账号下的项目、投放计划和素材。',
     mode: 'chat' as const
   },
   {
-    icon: 'add_task',
-    label: '创建投放项目',
-    description: '进入项目管理模式，先沉淀草稿再确认落库。',
-    prompt: '帮我创建一个新的投放项目，需要先整理项目草稿。',
+    icon: 'launch',
+    label: '启动增长项目',
+    description: '从目标、市场和预算出发，创建清晰的投放草稿。',
+    prompt: '帮我启动一个新的增长项目，先根据目标、市场和预算整理投放草稿。',
     mode: 'project' as const
   },
   {
-    icon: 'monitoring',
-    label: '分析投放表现',
-    description: '结合项目、计划、素材和消耗数据做诊断。',
-    prompt: '帮我分析当前投放项目和计划的表现。',
+    icon: 'diagnose',
+    label: '发现增长机会',
+    description: '结合消耗、转化与素材信号，定位扩量和止损机会。',
+    prompt: '帮我诊断当前投放表现，找出值得扩量和需要止损的机会。',
     mode: 'chat' as const
   },
   {
-    icon: 'auto_awesome',
-    label: '生成素材 Brief',
-    description: '基于投放目标生成可交给素材流程的 Brief。',
-    prompt: '帮我为一个投放项目生成素材 Brief。',
+    icon: 'creative',
+    label: '生成创意方案',
+    description: '将投放目标转成素材 Brief 与可执行创意方向。',
+    prompt: '帮我把投放目标整理成素材 Brief 和可执行的创意方向。',
     mode: 'chat' as const
   }
 ]
@@ -643,7 +645,7 @@ watch(
 </script>
 
 <template>
-  <div class="home-shell" :class="hasContent ? 'is-conversation' : 'is-landing'">
+  <div class="home-shell workspace-page-canvas" :class="hasContent ? 'is-conversation' : 'is-landing'">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sidebarSessions"
@@ -660,13 +662,13 @@ watch(
     <main class="home-main">
       <div class="home-main__scroll">
         <section v-if="!hasContent" class="landing-document">
+          <img class="landing-visual" :src="aniforceWorkflowHero" alt="" aria-hidden="true" />
           <header class="landing-hero">
-            <h1>又见面啦！有新的投放计划吗？</h1>
-            <p>利用 AI 驱动的见解和素材生成，快速启动您的下一个全球营销活动。</p>
+            <h1>从洞察到行动，让每一次投放更确定</h1>
+            <p>ANIFORCE 连接项目、数据与素材，用 AI 帮你判断下一步，并把策略快速变成可执行任务。</p>
           </header>
 
-          <section v-if="!hasInteracted" class="quick-start" aria-labelledby="quick-start-title">
-            <h2 id="quick-start-title">快速开始</h2>
+          <section v-if="!hasInteracted" class="quick-start" aria-label="快捷入口">
             <div class="quick-grid">
               <button
                 v-for="action in starterActions"
@@ -675,7 +677,28 @@ watch(
                 type="button"
                 @click="runStarterAction(action)"
               >
-                <span class="quick-card__icon material-symbols-outlined">{{ action.icon }}</span>
+                <span class="quick-card__icon" aria-hidden="true">
+                  <svg v-if="action.icon === 'portfolio'" class="quick-card__icon-svg" viewBox="0 0 32 32">
+                    <path d="M5.5 10h7l2.4 2.5h11.6v13H5.5z" />
+                    <path class="quick-card__icon-accent" d="M8.5 10V6.5h14.7a2.3 2.3 0 0 1 2.3 2.3v3.7" />
+                  </svg>
+                  <svg v-else-if="action.icon === 'launch'" class="quick-card__icon-svg" viewBox="0 0 32 32">
+                    <circle cx="15.5" cy="16.5" r="10" />
+                    <circle cx="15.5" cy="16.5" r="4" />
+                    <path class="quick-card__icon-accent" d="m15.5 16.5 10-10m-4.5 0h4.5V11" />
+                  </svg>
+                  <svg v-else-if="action.icon === 'diagnose'" class="quick-card__icon-svg" viewBox="0 0 32 32">
+                    <path d="m4.5 19 6-6 5 4 6.5-9" />
+                    <path class="quick-card__icon-accent" d="M18 8h4v4" />
+                    <circle cx="20.5" cy="22" r="5.5" />
+                    <path d="m24.5 26 3.5 3.5" />
+                  </svg>
+                  <svg v-else class="quick-card__icon-svg" viewBox="0 0 32 32">
+                    <rect x="5.5" y="7.5" width="21" height="18" rx="3" />
+                    <path class="quick-card__icon-accent" d="m16 11 1.4 3.6L21 16l-3.6 1.4L16 21l-1.4-3.6L11 16l3.6-1.4z" />
+                    <path d="M24 3.5v4M22 5.5h4" />
+                  </svg>
+                </span>
                 <strong>{{ action.label }}</strong>
                 <span>{{ action.description }}</span>
               </button>
@@ -903,45 +926,21 @@ watch(
     </div>
   </div>
 
-  <Teleport to="body">
-    <Transition name="fade">
-      <div
-        v-if="renameDialog"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-black/60 px-4 backdrop-blur-sm"
-        @click.self="renameDialog = null"
-      >
-        <div class="w-full max-w-md overflow-hidden rounded-xl border border-slate-200 bg-white shadow-2xl dark:border-slate-700 dark:bg-slate-900">
-          <div class="border-b border-slate-100 px-6 py-5 dark:border-slate-800">
-            <h3 class="text-base font-semibold text-slate-950 dark:text-white">重命名对话</h3>
-            <p class="mt-1 text-sm text-slate-500 dark:text-slate-400">为这条历史会话设置一个更容易识别的名称。</p>
-          </div>
-          <div class="px-6 py-5">
-            <input
-              v-model="renameValue"
-              data-session-rename-input
-              class="w-full rounded-lg border border-slate-200 bg-white px-3 py-2.5 text-sm text-slate-900 outline-none transition focus:border-primary focus:ring-4 focus:ring-primary/10 dark:border-slate-700 dark:bg-slate-950 dark:text-white"
-              maxlength="80"
-              placeholder="输入会话名称"
-              @keydown.enter.prevent="confirmRenameSession"
-              @keydown.esc.prevent="renameDialog = null"
-            />
-          </div>
-          <div class="flex justify-end gap-2 border-t border-slate-100 bg-slate-50 px-6 py-4 dark:border-slate-800 dark:bg-slate-950/60">
-            <button class="rounded-lg border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800" @click="renameDialog = null">取消</button>
-            <button class="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-white hover:bg-primary/90 disabled:opacity-50" :disabled="!renameValue.trim()" @click="confirmRenameSession">保存</button>
-          </div>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <SessionRenameDialog
+    v-model="renameValue"
+    :show="Boolean(renameDialog)"
+    @confirm="confirmRenameSession"
+    @close="renameDialog = null"
+  />
 
   <ConfirmDialog
     :show="Boolean(deleteDialog)"
     title="删除对话"
-    :message="`确定删除对话「${deleteDialog?.name || ''}」吗？删除后会从历史列表移除。`"
+    :message="`确定删除对话「${deleteDialog?.name || ''}」吗？删除后将从历史会话中移除，且无法撤销。`"
     confirm-text="删除"
     cancel-text="取消"
-    confirm-button-class="bg-red-600 hover:bg-red-700"
+    tone="danger"
+    variant="notion"
     @confirm="confirmDeleteSession"
     @close="deleteDialog = null"
   />
@@ -949,7 +948,7 @@ watch(
 
 <style scoped>
 .home-shell {
-  --notion-canvas: #ffffff;
+  --notion-canvas: var(--workspace-canvas);
   --notion-surface: #f7f7f5;
   --notion-surface-soft: #fbfbfa;
   --notion-line: rgba(55, 53, 47, 0.12);
@@ -964,7 +963,7 @@ watch(
   --notion-green: #0f9d73;
   display: flex;
   width: 100%;
-  height: calc(100vh - 101px);
+  height: 100vh;
   min-height: 620px;
   overflow: hidden;
   background: var(--notion-canvas);
@@ -990,32 +989,49 @@ watch(
 
 .landing-document {
   display: flex;
-  width: min(100%, 860px);
+  width: min(100%, 1080px);
   min-height: 100%;
   margin: 0 auto;
-  padding: clamp(54px, 7vh, 82px) 24px 22px;
+  padding: clamp(260px, 38vh, 720px) 36px 48px;
   box-sizing: border-box;
+  align-items: center;
   flex-direction: column;
 }
 
 .landing-hero {
-  text-align: left;
+  max-width: 900px;
+  text-align: center;
 }
 
 .landing-hero h1 {
   margin: 0;
   color: var(--notion-ink);
-  font-size: clamp(34px, 3vw, 44px);
+  font-size: clamp(34px, 3.2vw, 46px);
   font-weight: 600;
   line-height: 1.14;
   letter-spacing: -1px;
 }
 
 .landing-hero p {
-  margin: 13px 0 30px;
+  margin: 14px 0 0;
   color: var(--notion-steel);
-  font-size: 15px;
+  font-size: 16px;
   line-height: 1.6;
+}
+
+.home-shell.is-landing,
+.home-shell.is-landing .home-main,
+.home-shell.is-landing .home-main__scroll {
+  background: var(--notion-canvas);
+}
+
+.landing-visual {
+  display: block;
+  width: 260px;
+  height: auto;
+  flex: 0 0 auto;
+  margin-bottom: 28px;
+  object-fit: contain;
 }
 
 .composer {
@@ -1027,7 +1043,7 @@ watch(
   align-items: center;
   padding: 8px 10px;
   border: 1px solid var(--notion-line-strong);
-  border-radius: 20px;
+  border-radius: 12px;
   background: var(--notion-canvas);
   box-shadow: rgba(15, 15, 15, 0.06) 0 8px 24px;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
@@ -1144,20 +1160,14 @@ watch(
 }
 
 .landing-input-dock {
-  width: 100%;
+  width: min(100%, 860px);
   margin: auto auto 0;
   padding-top: 32px;
 }
 
 .quick-start {
-  margin-top: 38px;
-}
-
-.quick-start h2 {
-  margin: 0 0 16px;
-  color: var(--notion-ink);
-  font-size: 18px;
-  font-weight: 600;
+  width: min(100%, 860px);
+  margin: 60px auto 0;
 }
 
 .quick-grid {
@@ -1190,44 +1200,44 @@ watch(
 }
 
 .quick-card__icon {
-  display: grid;
+  display: block;
   width: 36px;
   height: 36px;
   place-items: center;
-  margin-bottom: 17px;
-  border-radius: 8px;
-  background: var(--notion-surface);
+  margin-bottom: 18px;
+  background: transparent;
   color: var(--notion-charcoal);
-  font-size: 19px;
   box-shadow: none;
 }
 
-.quick-card:nth-child(2) .quick-card__icon {
-  background: #f3f0ff;
-  color: #5645d4;
+.quick-card__icon-svg {
+  display: block;
+  width: 36px;
+  height: 36px;
+  overflow: visible;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
-.quick-card:nth-child(3) .quick-card__icon {
-  background: #eef7f3;
-  color: #0f7b5f;
-}
-
-.quick-card:nth-child(4) .quick-card__icon {
-  background: #eef6ff;
-  color: var(--notion-blue);
+.quick-card__icon-accent {
+  stroke: var(--notion-blue);
+  stroke-width: 2.2;
 }
 
 .quick-card strong {
   margin-bottom: 7px;
   color: var(--notion-ink);
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 600;
 }
 
 .quick-card > span:last-child {
   color: rgba(55, 53, 47, 0.72);
-  font-size: 11px;
-  line-height: 1.5;
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .conversation-document {
@@ -1771,7 +1781,7 @@ watch(
 @media (max-width: 720px) {
   .home-shell {
     height: auto;
-    min-height: calc(100vh - 101px);
+    min-height: 100vh;
   }
 
   .landing-document {

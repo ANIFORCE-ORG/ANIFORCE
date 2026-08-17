@@ -1,7 +1,12 @@
 <script setup lang="ts">
+import { computed } from 'vue'
+import { useRoute } from 'vue-router'
 import { useLanguage } from '@/store/language'
 
+const route = useRoute()
 const { language } = useLanguage()
+const isWorkspaceShell = computed(() => route.meta.workspaceShell === true)
+const isHomeWorkspace = computed(() => route.name === 'home')
 
 const copy = {
   cn: {
@@ -28,24 +33,84 @@ const copy = {
 </script>
 
 <template>
-  <footer class="mt-auto border-t border-slate-200 px-5 py-3 dark:border-slate-800 md:px-10">
-    <div class="flex flex-row items-center justify-between gap-2">
-      <!-- 左侧：版权信息、品牌归属、联系方式 -->
-      <div class="flex items-center gap-5 text-left">
-        <span class="text-[10px] text-slate-500">{{ copy[language].copyright }}</span>
-        <a class="text-[10px] text-slate-500 hover:text-primary" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">粤ICP备2026067584号-1</a>
-        <a class="text-[10px] text-slate-500 hover:text-primary" href="https://beian.mps.gov.cn/#/query/webSearch?code=44010602016311"" target="_blank" rel="noreferrer">粤公网安备44010602016311号</a>
-      </div>
-
-      <!-- 右侧：网站链接 + 备案 + 导航链接 -->
-      <div class="flex flex-col items-center gap-2 lg:items-end">
-        <!-- 导航链接 -->
-        <div class="flex flex-wrap items-center justify-center gap-x-5 gap-y-1.5 lg:justify-end">
-          <RouterLink class="text-[10px] text-slate-500 hover:text-primary" to="/privacy">{{ copy[language].privacy }}</RouterLink>
-          <RouterLink class="text-[10px] text-slate-500 hover:text-primary" to="/terms">{{ copy[language].terms }}</RouterLink>
-          <RouterLink class="text-[10px] text-slate-500 hover:text-primary" to="/contact">{{ copy[language].contact }}</RouterLink>
-        </div>
-      </div>
+  <footer
+    v-if="!isWorkspaceShell"
+    :class="[
+      'app-footer mt-auto border-t border-slate-200 px-5 py-3 dark:border-slate-800 md:px-10',
+      {
+        'app-footer--workspace': isWorkspaceShell,
+        'app-footer--home': isHomeWorkspace
+      }
+    ]"
+  >
+    <div class="app-footer-content">
+      <span class="app-footer-item">{{ copy[language].copyright }}</span>
+      <a class="app-footer-item hover:text-primary" href="https://beian.miit.gov.cn/" target="_blank" rel="noreferrer">粤ICP备2026067584号-1</a>
+      <a class="app-footer-item hover:text-primary" href="https://beian.mps.gov.cn/#/query/webSearch?code=44010602016311" target="_blank" rel="noreferrer">粤公网安备44010602016311号</a>
+      <RouterLink class="app-footer-item hover:text-primary" to="/privacy">{{ copy[language].privacy }}</RouterLink>
+      <RouterLink class="app-footer-item hover:text-primary" to="/terms">{{ copy[language].terms }}</RouterLink>
+      <RouterLink class="app-footer-item hover:text-primary" to="/contact">{{ copy[language].contact }}</RouterLink>
     </div>
   </footer>
 </template>
+
+<style scoped>
+.app-footer-content {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 32px;
+}
+
+.app-footer-item {
+  flex: none;
+  color: #64748b;
+  font-size: 10px;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.app-footer--workspace {
+  box-sizing: border-box;
+  height: 57px;
+  min-height: 57px;
+  display: flex;
+  align-items: center;
+  padding-top: 0 !important;
+  padding-bottom: 0 !important;
+  padding-left: calc(var(--workspace-sidebar-width, 205px) + 40px) !important;
+  border-top: 1px solid rgba(55, 53, 47, 0.08) !important;
+  background: #f7f7f5;
+}
+
+.app-footer--home:not(.app-footer--workspace) {
+  border-top: 0 !important;
+}
+
+@media (max-width: 767px) {
+  .app-footer-content {
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: 8px 12px;
+  }
+
+  .app-footer-item {
+    text-align: center;
+    white-space: normal;
+  }
+
+  .app-footer--workspace {
+    height: auto;
+    min-height: 57px;
+    padding-top: 12px !important;
+    padding-bottom: 12px !important;
+    padding-right: 12px !important;
+    padding-left: calc(var(--workspace-sidebar-width, 205px) + 12px) !important;
+  }
+
+  .app-footer--workspace a {
+    overflow-wrap: anywhere;
+  }
+}
+</style>

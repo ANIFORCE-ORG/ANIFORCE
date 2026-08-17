@@ -673,7 +673,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-[#fafaf9] dark:bg-slate-950">
+  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -684,14 +684,13 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 
     <main class="min-w-0 flex-1 bg-transparent">
       <section class="min-w-0 flex h-full flex-col">
-        <header class="flex min-h-[54px] shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
-          <div class="flex min-w-0 items-center gap-[8px]">
-            <span class="grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
+        <header data-workspace-page-header class="workspace-page-header flex shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
+          <div class="workspace-page-heading flex min-w-0 items-center gap-[8px]">
+            <span class="workspace-page-heading-icon grid h-[26px] w-[26px] shrink-0 place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
               <span class="material-symbols-outlined text-[16px] leading-none">video_library</span>
             </span>
-            <div class="min-w-0">
+            <div class="workspace-page-heading-text min-w-0">
               <h1 class="m-0 text-[16px] font-semibold tracking-[-0.2px] text-[#1a1a1a] dark:text-white">素材管理</h1>
-              <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">收集、查找并发布素材到广告平台账户</p>
             </div>
           </div>
           <div class="flex items-center gap-[7px]">
@@ -706,7 +705,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
           </div>
         </header>
 
-        <div class="flex-1 overflow-y-auto px-[28px] py-[22px] max-md:px-[16px] max-md:py-[16px]">
+        <div class="workspace-page-content flex-1 overflow-y-auto px-[28px] py-[22px] max-md:px-[16px] max-md:py-[16px]">
           <div v-if="error" class="mb-[12px] rounded-md border border-red-200 bg-red-50 px-[12px] py-[9px] text-[11px] text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
             {{ error }}
           </div>

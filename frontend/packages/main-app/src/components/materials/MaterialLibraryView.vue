@@ -140,10 +140,6 @@ const platformClass = (platform?: string) => platform === 'Meta'
       </div>
     </div>
 
-    <div class="flex items-center justify-between border-b border-slate-100 px-[16px] py-[9px] dark:border-slate-800">
-      <span class="text-[10px] font-medium text-slate-400">{{ filteredRows.length }} 项素材</span>
-      <span class="text-[10px] text-slate-400">点击素材查看完整信息</span>
-    </div>
     <div class="overflow-x-auto">
       <table class="w-full text-left" :class="embedded ? 'min-w-[420px]' : 'min-w-[980px]'">
         <thead class="bg-slate-50 text-[10px] uppercase text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">

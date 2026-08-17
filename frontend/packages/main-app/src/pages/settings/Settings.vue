@@ -58,7 +58,7 @@ const openSetting = (path: string) => {
 </script>
 
 <template>
-  <div class="settings-shell">
+  <div class="settings-shell workspace-page-canvas">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -68,20 +68,19 @@ const openSetting = (path: string) => {
     />
 
     <main class="settings-main">
-      <header class="settings-page-head">
-        <div class="settings-page-title-wrap">
-          <span class="settings-page-icon">
+      <header data-workspace-page-header class="settings-page-head workspace-page-header">
+        <div class="settings-page-title-wrap workspace-page-heading">
+          <span class="settings-page-icon workspace-page-heading-icon">
             <span class="material-symbols-outlined">settings</span>
           </span>
-          <div class="settings-page-title">
+          <div class="settings-page-title workspace-page-heading-text">
             <h1>设置</h1>
-            <p>管理 Agent 系统账号、系统配置和广告平台连接</p>
           </div>
         </div>
       </header>
 
       <div class="settings-scroll-area">
-        <div class="settings-content">
+        <div class="settings-content workspace-page-content">
           <div class="settings-grid">
             <button
               v-for="card in settingCards"
@@ -126,9 +125,9 @@ const openSetting = (path: string) => {
 .settings-shell {
   display: flex;
   width: 100%;
-  height: calc(100vh - 100px);
+  height: 100vh;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--workspace-canvas);
   color: #37352f;
 }
 
@@ -138,11 +137,10 @@ const openSetting = (path: string) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #ffffff;
+  background: var(--workspace-canvas);
 }
 
 .settings-page-head {
-  min-height: 54px;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -266,7 +264,7 @@ const openSetting = (path: string) => {
 .settings-card h2 {
   margin: 0;
   color: #1a1a1a;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -274,7 +272,7 @@ const openSetting = (path: string) => {
 .settings-card p {
   margin: 8px 0 18px;
   color: #787671;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -284,7 +282,7 @@ const openSetting = (path: string) => {
   align-items: center;
   gap: 5px;
   color: #37352f;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 550;
   line-height: 1.2;
 }

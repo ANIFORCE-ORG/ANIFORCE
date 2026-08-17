@@ -360,16 +360,16 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="settings-notion">
+  <div class="settings-notion workspace-page-canvas">
     <SidebarNav :nav-items="navItems" :sessions="[]" active-panel="settings" @switch-panel="switchPanel" />
     <main class="sn-main">
-      <header class="sn-page-head">
-        <button class="sn-back" type="button" aria-label="返回设置" @click="router.push('/settings')"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg></button>
-        <div class="sn-page-title"><h1>平台连接</h1><p>配置 Meta、Google、TikTok 的平台授权和广告账户同步</p></div>
+      <header data-workspace-page-header class="sn-page-head workspace-page-header workspace-page-heading">
+        <button class="sn-back workspace-page-back" type="button" aria-label="返回设置" @click="router.push('/settings')"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg></button>
+        <div class="sn-page-title workspace-page-heading-text"><h1>平台连接</h1></div>
       </header>
 
       <div class="sn-scroll">
-        <div class="sn-content">
+        <div class="sn-content workspace-page-content">
           <div class="sn-platform-grid" role="tablist" aria-label="广告平台">
             <button v-for="platform in platforms" :key="platform.id" class="sn-platform-card" :class="{ active: activePlatform === platform.id }" type="button" role="tab" :aria-selected="activePlatform === platform.id" @click="activePlatform = platform.id">
               <strong>{{ platform.label }}</strong><span class="sn-connection-status" :class="{ pending: !isPlatformConnected(platform.id) }">{{ isPlatformConnected(platform.id) ? '已接入' : '待接入' }}</span><p>{{ platform.description }}</p>
@@ -439,7 +439,7 @@ onMounted(() => {
   <ToastContainer />
 
   <template v-if="false">
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="flex h-screen w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="[]"

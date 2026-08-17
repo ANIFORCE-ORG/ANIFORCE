@@ -1,5 +1,5 @@
 .settings-notion {
-  --sn-canvas: #fff;
+  --sn-canvas: var(--workspace-canvas);
   --sn-surface: #f6f5f4;
   --sn-surface-soft: #fafaf9;
   --sn-line: #e5e3df;
@@ -20,14 +20,14 @@
   --sn-danger-bg: #fbefef;
   display: flex;
   width: 100%;
-  height: calc(100vh - 100px);
+  height: 100dvh;
   overflow: hidden;
   background: var(--sn-canvas);
   color: var(--sn-charcoal);
 }
 
-.sn-main { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: #fff; }
-.sn-page-head { min-height: 72px; flex: 0 0 auto; display: flex; align-items: center; gap: 12px; padding: 0 clamp(22px,3vw,38px); border-bottom: 1px solid var(--sn-line); }
+.sn-main { min-width: 0; flex: 1; display: flex; flex-direction: column; overflow: hidden; background: var(--sn-canvas); }
+.sn-page-head { display: flex; align-items: center; gap: 12px; padding: 0 clamp(22px,3vw,38px); border-bottom: 1px solid var(--sn-line); }
 .sn-back { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 0; border-radius: 6px; background: transparent; color: var(--sn-slate); cursor: pointer; }
 .sn-back:hover { background: var(--sn-surface); color: var(--sn-ink); }
 .sn-page-title h1 { margin: 0; color: var(--sn-ink); font-size: 17px; font-weight: 650; line-height: 1.2; letter-spacing: -.3px; }
@@ -41,8 +41,8 @@
 .sn-icon { width: 18px; height: 18px; display: block; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .sn-button { min-width: max-content; min-height: 36px; display: inline-flex; flex: 0 0 auto; align-items: center; justify-content: center; gap: 7px; padding: 0 13px; border: 1px solid var(--sn-line-strong); border-radius: 8px; background: #fff; color: var(--sn-charcoal); font-size: 10px; font-weight: 500; line-height: 1; white-space: nowrap; cursor: pointer; }
 .sn-button:hover { border-color: var(--sn-charcoal); color: var(--sn-ink); }
-.sn-button.primary { border-color: var(--sn-charcoal); background: var(--sn-charcoal); color: #fff; }
-.sn-button.primary:hover { border-color: var(--sn-ink); background: var(--sn-ink); color: #fff; }
+.sn-button.primary { border-color: var(--workspace-action-primary, var(--sn-blue)); background: var(--workspace-action-primary, var(--sn-blue)); color: #fff; }
+.sn-button.primary:hover { border-color: var(--workspace-action-primary-hover, var(--sn-blue-hover)); background: var(--workspace-action-primary-hover, var(--sn-blue-hover)); color: #fff; }
 .sn-button.confirm { border-color: var(--sn-blue); background: var(--sn-blue); color: #fff; }
 .sn-button.confirm:hover { border-color: var(--sn-blue-hover); background: var(--sn-blue-hover); color: #fff; }
 .sn-button.danger { border-color: #e7c5c7; background: #fff; color: var(--sn-danger); }
@@ -210,7 +210,7 @@
   .sn-platform-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 720px) {
-  .sn-page-head { min-height: 66px; padding: 0 14px; }
+  .sn-page-head { padding: 0 14px; }
   .sn-content { padding: 18px 14px 60px; }
   .sn-account-panel,.sn-team-panel { padding-right: 14px; padding-left: 14px; }
   .sn-account-row { grid-template-columns: 1fr auto; gap: 8px; }
@@ -227,4 +227,13 @@
   .sn-member-table { min-width: 620px; }
   .sn-members { overflow-x: auto; }
   .settings-modal-layer { padding: 10px; }
+}
+@media (max-width: 520px) {
+  .sn-oauth-steps,.sn-summary-grid { grid-template-columns: 1fr; }
+  .sn-account-row { grid-template-columns: 1fr; padding: 14px 0; }
+  .sn-account-row > .sn-button { width: 100%; }
+  .sn-team-actions,.sn-password-actions,.settings-modal-actions { flex-wrap: wrap; }
+  .sn-team-actions .sn-button,.sn-password-actions .sn-button { flex: 1 1 140px; }
+  .sn-invite-row { grid-template-columns: 1fr; }
+  .settings-modal-actions .sn-button { flex: 1 1 120px; }
 }
