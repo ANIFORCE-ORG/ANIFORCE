@@ -91,11 +91,12 @@ const copy = {
 @media (max-width: 767px) {
   .app-footer-content {
     flex-wrap: wrap;
+    justify-content: center;
     gap: 8px 12px;
   }
 
   .app-footer-item {
-    text-align: right;
+    text-align: center;
     white-space: normal;
   }
 

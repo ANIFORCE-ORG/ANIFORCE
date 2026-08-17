@@ -35,7 +35,7 @@ describe('Codex-inspired workspace shell', () => {
     expect(sidebarSource).toContain('height: 30px')
     expect(sidebarSource).toContain('rgba(55, 53, 47, 0.068) 100%')
     expect(sidebarSource).toContain("import AccountControls from '@/components/layout/AccountControls.vue'")
-    expect(sidebarSource).toContain('<AccountControls variant="sidebar" :collapsed="isCollapsed" />')
+    expect(sidebarSource).toContain('<AccountControls variant="sidebar" :collapsed="isSidebarCollapsed" />')
     expect(sidebarSource).not.toContain('z-50 flex flex-col overflow-hidden transition-all')
   })
 

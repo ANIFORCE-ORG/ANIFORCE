@@ -50,7 +50,7 @@ const handleTrigger = () => {
 const handleLogout = () => {
   auth.logout()
   showMenu.value = false
-  void router.push('/')
+  void router.push('/login')
 }
 
 const handleWindowKeydown = (event: KeyboardEvent) => {
@@ -628,6 +628,17 @@ onBeforeUnmount(() => {
   color: #ffffff;
 }
 
+@media (max-width: 767px) {
+  .account-popover--sidebar {
+    position: fixed;
+    right: 10px;
+    bottom: max(10px, env(safe-area-inset-bottom));
+    left: 62px;
+    width: auto;
+    max-width: 280px;
+  }
+}
+
 @media (max-width: 520px) {
   .account-controls--header {
     gap: 3px;
@@ -639,8 +650,8 @@ onBeforeUnmount(() => {
     padding-left: 4px;
   }
 
-  .account-identity > span {
-    max-width: 88px;
+  .account-controls--header .account-identity {
+    display: none;
   }
 
   .account-controls--header .language-switcher {

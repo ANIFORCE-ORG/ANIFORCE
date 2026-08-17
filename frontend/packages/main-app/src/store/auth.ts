@@ -33,6 +33,8 @@ export interface LoginResponse {
 
 const AUTH_STORAGE_KEY = 'animagus_auth'
 const TOKEN_STORAGE_KEY = 'animagus_token'
+const DEMO_LOGOUT_STORAGE_KEY = 'aniforce_demo_logged_out'
+const isDemoMode = import.meta.env.VITE_DEMO_MODE === 'true'
 
 export const useAuthStore = defineStore('auth', () => {
   // 从localStorage初始化状态
@@ -41,8 +43,15 @@ export const useAuthStore = defineStore('auth', () => {
 
   const user = ref<User | null>(storedUser ? JSON.parse(storedUser) : null)
   const token = ref<string | null>(storedToken)
+  const hasExplicitDemoLogout = ref(isDemoMode && sessionStorage.getItem(DEMO_LOGOUT_STORAGE_KEY) === 'true')
 
   const isLoggedIn = computed(() => !!user.value && !!token.value)
+
+  function clearExplicitDemoLogout() {
+    if (!isDemoMode) return
+    hasExplicitDemoLogout.value = false
+    sessionStorage.removeItem(DEMO_LOGOUT_STORAGE_KEY)
+  }
 
   // 监听状态变化,自动持久化到localStorage
   watch(user, (newUser) => {
@@ -76,6 +85,7 @@ export const useAuthStore = defineStore('auth', () => {
         console.log('[Auth] User system_role:', response.data.data.user.system_role)
         user.value = response.data.data.user
         token.value = response.data.data.access_token
+        clearExplicitDemoLogout()
         return response.data
       }
 
@@ -122,6 +132,7 @@ export const useAuthStore = defineStore('auth', () => {
       if (response.data.success && response.data.data) {
         user.value = response.data.data.user
         token.value = response.data.data.access_token
+        clearExplicitDemoLogout()
         return response.data
       }
 
@@ -140,6 +151,7 @@ export const useAuthStore = defineStore('auth', () => {
 
   // Demo模式的假登录(用于开发测试)
   function fakeLogin() {
+    clearExplicitDemoLogout()
     user.value = {
       id: 'admin-001',
       name: 'Admin',
@@ -156,6 +168,10 @@ export const useAuthStore = defineStore('auth', () => {
   function logout() {
     user.value = null
     token.value = null
+    if (isDemoMode) {
+      hasExplicitDemoLogout.value = true
+      sessionStorage.setItem(DEMO_LOGOUT_STORAGE_KEY, 'true')
+    }
   }
 
   // 验证token有效性
@@ -177,6 +193,7 @@ export const useAuthStore = defineStore('auth', () => {
     user,
     token,
     isLoggedIn,
+    hasExplicitDemoLogout,
     login,
     register,
     fakeLogin,

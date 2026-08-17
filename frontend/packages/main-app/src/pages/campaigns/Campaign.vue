@@ -220,8 +220,8 @@ const getStatusColor = (status: string) => {
 
       <!-- 搜索和筛选栏 -->
       <div class="workspace-page-content border-b border-slate-200 dark:border-slate-800 p-[12px]">
-        <div class="flex items-center gap-[9px]">
-          <div class="flex-1 relative">
+        <div class="campaign-filter-bar flex items-center gap-[9px]">
+          <div class="campaign-search flex-1 relative">
             <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-slate-400 text-[15px]">search</span>
             <input
               v-model="searchQuery"
@@ -269,7 +269,7 @@ const getStatusColor = (status: string) => {
             class="bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded p-[12px] hover:shadow-md transition-all"
           >
             <!-- 广告头部 -->
-            <div class="flex items-start justify-between mb-[6px]">
+            <div class="campaign-card-head flex items-start justify-between mb-[6px]">
               <div class="flex-1">
                 <h4 class="text-[11px] font-bold text-slate-900 dark:text-white mb-[4px]">
                   {{ campaign.name }}
@@ -278,7 +278,7 @@ const getStatusColor = (status: string) => {
                   <span>所属项目: {{ campaign.project_name }}</span>
                 </div>
               </div>
-              <div class="flex items-center gap-[6px]">
+              <div class="campaign-card-badges flex items-center gap-[6px]">
                 <span
                   class="text-[10px] font-medium px-[6px] py-[2px] rounded bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-400"
                 >
@@ -317,7 +317,7 @@ const getStatusColor = (status: string) => {
             </div>
 
             <!-- 操作按钮 -->
-            <div class="flex items-center gap-[6px]">
+            <div class="campaign-card-actions flex items-center gap-[6px]">
               <button
                 class="flex-1 px-[9px] py-[6px] text-[10px] font-medium rounded bg-slate-100 dark:bg-slate-700 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-600 transition-colors"
                 @click="handleViewCampaign(campaign.id)"
@@ -356,3 +356,41 @@ const getStatusColor = (status: string) => {
 
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 720px) {
+  .campaign-filter-bar {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .campaign-search {
+    grid-column: 1 / -1;
+  }
+
+  .campaign-filter-bar select {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .campaign-filter-bar select:last-child {
+    grid-column: 1 / -1;
+  }
+
+  .campaign-card-head {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .campaign-card-badges,
+  .campaign-card-actions {
+    width: 100%;
+    flex-wrap: wrap;
+  }
+
+  .campaign-card-actions button {
+    flex: 1 1 120px;
+  }
+}
+</style>

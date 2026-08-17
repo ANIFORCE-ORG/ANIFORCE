@@ -169,7 +169,7 @@ const handleSave = async () => {
           <!-- 任务与 Ad Set 配置 -->
           <section class="p-[13px] rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <h2 class="text-[11px] font-semibold text-slate-900 dark:text-white mb-[10px]">任务与 Ad Set 配置</h2>
-            <div class="grid grid-cols-2 gap-[10px]">
+            <div class="grid grid-cols-1 gap-[10px] md:grid-cols-2">
               <!-- 任务名称 -->
               <div>
                 <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
@@ -337,7 +337,7 @@ const handleSave = async () => {
           <!-- 广告素材配置 -->
           <section class="p-[13px] rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <h2 class="text-[11px] font-semibold text-slate-900 dark:text-white mb-[10px]">广告素材配置</h2>
-            <div class="grid grid-cols-2 gap-[10px]">
+            <div class="grid grid-cols-1 gap-[10px] md:grid-cols-2">
               <!-- 广告名称 -->
               <div>
                 <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">

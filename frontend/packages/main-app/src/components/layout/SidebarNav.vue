@@ -133,21 +133,36 @@ const handleDocumentClick = () => {
 
 const SIDEBAR_COLLAPSED_KEY = 'animagus_sidebar_collapsed'
 const isCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
-const sidebarWidth = computed(() => isCollapsed.value ? '52px' : '205px')
+const isNarrowViewport = ref(false)
+const mobileExpanded = ref(false)
+const isSidebarCollapsed = computed(() => isNarrowViewport.value ? !mobileExpanded.value : isCollapsed.value)
+const sidebarWidth = computed(() => isSidebarCollapsed.value ? '52px' : '205px')
+const layoutSidebarWidth = computed(() => isNarrowViewport.value ? '52px' : sidebarWidth.value)
+let narrowViewportMedia: MediaQueryList | null = null
 
 const syncSidebarWidth = () => {
-  document.documentElement.style.setProperty('--workspace-sidebar-width', sidebarWidth.value)
+  document.documentElement.style.setProperty('--workspace-sidebar-width', layoutSidebarWidth.value)
 }
 
 syncSidebarWidth()
-watch(sidebarWidth, syncSidebarWidth)
+watch(layoutSidebarWidth, syncSidebarWidth)
+
+const handleNarrowViewportChange = (event: MediaQueryListEvent | MediaQueryList) => {
+  isNarrowViewport.value = event.matches
+  if (!event.matches) mobileExpanded.value = false
+}
 
 onBeforeUnmount(() => {
   document.documentElement.style.removeProperty('--workspace-sidebar-width')
   document.removeEventListener('click', handleDocumentClick)
+  narrowViewportMedia?.removeEventListener('change', handleNarrowViewportChange)
 })
 
 const toggleCollapse = () => {
+  if (isNarrowViewport.value) {
+    mobileExpanded.value = !mobileExpanded.value
+    return
+  }
   isCollapsed.value = !isCollapsed.value
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed.value))
 }
@@ -162,6 +177,7 @@ const isActivePanel = (itemId: string) => {
 }
 
 const handleNavClick = (item: NavItem) => {
+  mobileExpanded.value = false
   emit('switch-panel', item)
   if (item.path) {
     router.push(item.path)
@@ -169,10 +185,12 @@ const handleNavClick = (item: NavItem) => {
 }
 
 const handleLogoClick = () => {
+  mobileExpanded.value = false
   router.push('/home')
 }
 
 const handleSessionClick = (session: Session) => {
+  mobileExpanded.value = false
   closeSessionMenu()
   if (route.path !== '/home') {
     router.push({ path: '/home', query: { session_id: session.id } })
@@ -191,6 +209,9 @@ const handleCreateSession = () => {
 
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
+  narrowViewportMedia = window.matchMedia('(max-width: 767px)')
+  handleNarrowViewportChange(narrowViewportMedia)
+  narrowViewportMedia.addEventListener('change', handleNarrowViewportChange)
   void agent.refreshSessions()
 })
 </script>
@@ -198,16 +219,24 @@ onMounted(() => {
 <template>
   <div
     class="sidebar-rail-spacer flex-none transition-all duration-300"
-    :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
+    :class="isNarrowViewport ? 'w-[52px]' : (isSidebarCollapsed ? 'w-[52px]' : 'w-[205px]')"
     aria-hidden="true"
   />
+  <button
+    v-if="isNarrowViewport && mobileExpanded"
+    class="sidebar-mobile-backdrop"
+    type="button"
+    aria-label="关闭导航栏"
+    @click="mobileExpanded = false"
+  />
   <aside
+    id="workspace-sidebar-navigation"
     class="sidebar-notion fixed bottom-0 left-0 top-0 z-50 flex flex-col transition-all duration-300"
-    :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
+    :class="isSidebarCollapsed ? 'w-[52px]' : 'w-[205px]'"
   >
-    <div class="sidebar-brand-row" :class="{ 'is-collapsed': isCollapsed }">
+    <div class="sidebar-brand-row" :class="{ 'is-collapsed': isSidebarCollapsed }">
       <button
-        v-if="!isCollapsed"
+        v-if="!isSidebarCollapsed"
         class="sidebar-brand-button"
         type="button"
         aria-label="返回首页"
@@ -218,11 +247,13 @@ onMounted(() => {
       <button
         class="sidebar-collapse flex items-center justify-center transition-colors"
         type="button"
-        :aria-label="isCollapsed ? '展开导航栏' : '收起导航栏'"
+        aria-controls="workspace-sidebar-navigation"
+        :aria-expanded="!isSidebarCollapsed"
+        :aria-label="isSidebarCollapsed ? '展开导航栏' : '收起导航栏'"
         @click="toggleCollapse"
       >
         <span class="material-symbols-outlined">
-          {{ isCollapsed ? 'menu' : 'menu_open' }}
+          {{ isSidebarCollapsed ? 'menu' : 'menu_open' }}
         </span>
       </button>
     </div>
@@ -230,7 +261,7 @@ onMounted(() => {
     <nav class="sidebar-scroll flex-1 overflow-y-auto space-y-[20px] overflow-x-hidden">
       <div>
         <div class="sidebar-section-head mb-[6px]">
-          <span v-if="!isCollapsed" class="sidebar-section-title text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
+          <span v-if="!isSidebarCollapsed" class="sidebar-section-title text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
         </div>
         <ul class="sidebar-nav-list space-y-[12px]">
           <li
@@ -238,7 +269,7 @@ onMounted(() => {
             :key="item.id"
             class="sidebar-nav-item flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
-              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
+              isSidebarCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel(item.id)
                 ? 'sidebar-item-active'
                 : 'sidebar-item-idle'
@@ -246,10 +277,10 @@ onMounted(() => {
             @click="handleNavClick(item)"
           >
             <span class="material-symbols-outlined text-[15px]">{{ item.icon }}</span>
-            <span v-if="!isCollapsed" class="text-[11px]">{{ item.label }}</span>
+            <span v-if="!isSidebarCollapsed" class="text-[11px]">{{ item.label }}</span>
 
             <div
-              v-if="isCollapsed"
+              v-if="isSidebarCollapsed"
               class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
             >
               {{ item.label }}
@@ -260,7 +291,7 @@ onMounted(() => {
             v-if="isAdmin"
             class="sidebar-nav-item flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
-              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
+              isSidebarCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel('system-admin')
                 ? 'sidebar-item-active'
                 : 'sidebar-item-idle'
@@ -268,10 +299,10 @@ onMounted(() => {
             @click="handleNavClick({ id: 'system-admin', icon: 'admin_panel_settings', label: '系统管理', path: '/system-admin' })"
           >
             <span class="material-symbols-outlined text-[15px]">admin_panel_settings</span>
-            <span v-if="!isCollapsed" class="text-[11px]">系统管理</span>
+            <span v-if="!isSidebarCollapsed" class="text-[11px]">系统管理</span>
 
             <div
-              v-if="isCollapsed"
+              v-if="isSidebarCollapsed"
               class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
             >
               系统管理
@@ -280,7 +311,7 @@ onMounted(() => {
         </ul>
       </div>
 
-      <div v-if="displaySessions.length > 0 && !isCollapsed" class="sidebar-session-group">
+      <div v-if="displaySessions.length > 0 && !isSidebarCollapsed" class="sidebar-session-group">
         <div class="sidebar-session-head mb-[6px] flex items-center justify-between px-[6px]">
           <span class="sidebar-section-title text-[10px] font-semibold text-slate-500 dark:text-slate-400">历史会话</span>
           <button
@@ -336,7 +367,7 @@ onMounted(() => {
       </div>
     </nav>
 
-    <AccountControls variant="sidebar" :collapsed="isCollapsed" />
+    <AccountControls variant="sidebar" :collapsed="isSidebarCollapsed" />
   </aside>
 
   <SessionRenameDialog
@@ -359,6 +390,15 @@ onMounted(() => {
 </template>
 
 <style scoped>
+.sidebar-mobile-backdrop {
+  position: fixed;
+  z-index: 49;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 15, 15, 0.2);
+  cursor: default;
+}
+
 .sidebar-notion {
   --sidebar-canvas: #f7f7f5;
   --sidebar-surface: #efefed;

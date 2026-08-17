@@ -45,8 +45,8 @@ const switchSession = (session: any) => {
     <SidebarNav :nav-items="navItems" :sessions="sessions" @switch-panel="switchPanel" @switch-session="switchSession" />
     <main class="workspace-page-canvas flex flex-1 flex-col overflow-hidden dark:bg-slate-950">
       <header data-workspace-page-header class="workspace-page-header flex items-center justify-between border-b border-slate-200 bg-white px-6 dark:border-slate-800 dark:bg-slate-900">
-        <div class="workspace-page-heading"><span class="workspace-page-heading-icon material-symbols-outlined text-primary">monitoring</span><h1 class="text-slate-900 dark:text-white">投放实时监控</h1><span class="ml-2 flex items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600"><i class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"></i>DEMO 实时</span></div>
-        <select v-model="timeFilter" class="rounded-lg border border-slate-200 bg-white px-3 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800"><option value="today">今日</option><option value="7d">近 7 日</option><option value="30d">近 30 日</option></select>
+        <div class="workspace-page-heading"><span class="workspace-page-heading-icon material-symbols-outlined text-primary">monitoring</span><h1 class="text-slate-900 dark:text-white">投放实时监控</h1><span class="ml-2 hidden items-center gap-1 rounded-full bg-emerald-50 px-2 py-1 text-[10px] font-semibold text-emerald-600 sm:flex"><i class="h-1.5 w-1.5 animate-pulse rounded-full bg-emerald-500"></i>DEMO 实时</span></div>
+        <select v-model="timeFilter" class="max-w-[96px] rounded-lg border border-slate-200 bg-white px-2 py-2 text-xs text-slate-600 dark:border-slate-700 dark:bg-slate-800 sm:max-w-none sm:px-3"><option value="today">今日</option><option value="7d">近 7 日</option><option value="30d">近 30 日</option></select>
       </header>
 
       <div class="workspace-page-content flex-1 overflow-y-auto p-6">

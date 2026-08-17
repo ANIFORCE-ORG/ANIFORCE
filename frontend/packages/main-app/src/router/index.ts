@@ -143,7 +143,7 @@ router.beforeEach((to, from, next) => {
 
   // 本地 Demo 模式直接进入业务页面，不经过登录页。
   // 仅在 VITE_DEMO_MODE=true 时生效，生产环境仍使用正常认证流程。
-  if (import.meta.env.VITE_DEMO_MODE === 'true' && !auth.isLoggedIn) {
+  if (import.meta.env.VITE_DEMO_MODE === 'true' && !auth.isLoggedIn && !auth.hasExplicitDemoLogout) {
     auth.fakeLogin()
   }
 

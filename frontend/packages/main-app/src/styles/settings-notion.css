@@ -20,7 +20,7 @@
   --sn-danger-bg: #fbefef;
   display: flex;
   width: 100%;
-  height: 100vh;
+  height: 100dvh;
   overflow: hidden;
   background: var(--sn-canvas);
   color: var(--sn-charcoal);
@@ -227,4 +227,13 @@
   .sn-member-table { min-width: 620px; }
   .sn-members { overflow-x: auto; }
   .settings-modal-layer { padding: 10px; }
+}
+@media (max-width: 520px) {
+  .sn-oauth-steps,.sn-summary-grid { grid-template-columns: 1fr; }
+  .sn-account-row { grid-template-columns: 1fr; padding: 14px 0; }
+  .sn-account-row > .sn-button { width: 100%; }
+  .sn-team-actions,.sn-password-actions,.settings-modal-actions { flex-wrap: wrap; }
+  .sn-team-actions .sn-button,.sn-password-actions .sn-button { flex: 1 1 140px; }
+  .sn-invite-row { grid-template-columns: 1fr; }
+  .settings-modal-actions .sn-button { flex: 1 1 120px; }
 }

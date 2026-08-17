@@ -38,4 +38,10 @@ describe('shared account controls', () => {
     expect(source).toContain('EN')
     expect(source).toContain('logout')
   })
+
+  it('sends an explicitly logged-out user to the login page', () => {
+    const logoutHandler = source.match(/const handleLogout = \(\) => \{[\s\S]*?\n\}/)?.[0] ?? ''
+
+    expect(logoutHandler).toContain("router.push('/login')")
+  })
 })

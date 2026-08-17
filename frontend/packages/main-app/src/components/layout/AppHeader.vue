@@ -73,4 +73,17 @@ const handleLogoClick = () => {
     padding-left: 40px;
   }
 }
+
+@media (max-width: 520px) {
+  .app-header {
+    gap: 8px;
+    padding: 6px 10px;
+  }
+
+  .app-header img {
+    width: auto;
+    height: 32px;
+    max-width: 110px;
+  }
+}
 </style>
