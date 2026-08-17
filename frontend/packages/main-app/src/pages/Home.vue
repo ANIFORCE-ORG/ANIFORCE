@@ -13,6 +13,7 @@ import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import type { TaskPanelAction, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { resolveHomeSessionState, shouldApplyHomeSessionState } from '@/agent/homeSessionState'
 import { normalizeTaskPanelStatus, taskStatusPresentation } from '@/agent/taskPresentation'
+import { getHiddenToolActivity, getToolPresentation } from '@/utils/toolNameMapping'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
 import { navItems } from '@/config/navigation'
@@ -132,6 +133,22 @@ const taskStatus = computed<TaskPanelStatus>(() => {
   if (visibleMessages.value.length > 1) return 'completed'
   if (visibleMessages.value.length > 0 || hasInteracted.value) return 'created'
   return 'created'
+})
+const hasPendingApprovalMessage = computed(() => {
+  const streaming = agent.streamingMessage.value
+  const messages = streaming ? [...visibleMessages.value, streaming] : visibleMessages.value
+  return messages.some(message => (
+    Array.isArray(message.content)
+    && message.content.some(block => {
+      const item = block as Record<string, unknown>
+      return item?.type === 'approval' && String(item.status || 'pending') === 'pending'
+    })
+  ))
+})
+const approvalNoticeVisible = computed(() => {
+  if (hasPendingApprovalMessage.value) return false
+  const draft = agent.workspaceApprovalDraft.value
+  return draft ? draft.status === 'pending' : taskStatus.value === 'waiting_approval'
 })
 const taskSummary = computed(() => {
   if (currentTask.value?.summary) return currentTask.value.summary
@@ -273,15 +290,17 @@ function scrollToBottom() {
 }
 
 function phaseLabel(phase: AgentPhase): string {
-  if (phase?.kind === 'queued') return '任务已入队，等待 Worker 派发...'
+  if (phase?.kind === 'queued') return '任务已入队，正在等待执行...'
   if (phase?.kind === 'running_tools') {
-    const names = phase.tools.map(t => t.name)
-    if (!names.length) return 'Agent 正在调用工具...'
-    if (names.length === 1) return `Agent 正在调用 ${names[0]}...`
-    return `Agent 正在调用 ${names.slice(0, 2).join(', ')}${names.length > 2 ? ` 等 ${names.length} 个工具` : ''}...`
+    if (!phase.tools.length) return '正在处理任务...'
+    if (phase.tools.length > 1) return `正在并行处理 ${phase.tools.length} 项任务...`
+    const toolName = phase.tools[0].name
+    const hidden = getHiddenToolActivity(toolName, 'running')
+    if (hidden) return `${hidden.label}...`
+    return `${getToolPresentation(toolName, 'running').title}...`
   }
-  if (phase?.kind === 'waiting_model') return 'Agent 正在思考...'
-  return 'Agent 正在处理...'
+  if (phase?.kind === 'waiting_model') return '正在分析和整理结果...'
+  return '正在处理任务...'
 }
 
 function clampWorkspaceWidth(value: number): number {
@@ -808,8 +827,17 @@ watch(
 
                 <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="conversation-loading">
                   <span class="conversation-loading__spinner"></span>
-                  <span>{{ phaseLabel(agent.agentPhase.value) }}</span>
+                  <span>{{ agent.commandStatus.value || phaseLabel(agent.agentPhase.value) }}</span>
                 </div>
+
+                <section v-if="approvalNoticeVisible" class="conversation-approval-notice" role="status">
+                  <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
+                  <div>
+                    <strong>等待你确认</strong>
+                    <p>操作内容已在右侧工作台准备好，确认后才会继续执行。</p>
+                  </div>
+                  <button type="button" @click="handleTaskAction('open_approval')">查看</button>
+                </section>
               </template>
             </div>
           </div>
@@ -1468,6 +1496,58 @@ watch(
   color: var(--notion-blue);
 }
 
+.conversation-approval-notice {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 11px 12px;
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  border-radius: 6px;
+  background: #fffaf0;
+  color: var(--notion-charcoal);
+}
+
+.conversation-approval-notice > .material-symbols-outlined {
+  color: #b45309;
+  font-size: 18px;
+}
+
+.conversation-approval-notice strong,
+.conversation-approval-notice p {
+  display: block;
+  margin: 0;
+}
+
+.conversation-approval-notice strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.conversation-approval-notice p {
+  margin-top: 2px;
+  color: var(--notion-steel);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conversation-approval-notice button {
+  height: 28px;
+  border: 1px solid rgba(180, 83, 9, 0.3);
+  border-radius: 5px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #92400e;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.conversation-approval-notice button:hover {
+  background: #fff7e6;
+}
+
 .conversation-error {
   display: flex;
   align-items: flex-start;
@@ -1665,8 +1745,7 @@ watch(
 }
 
 .conversation-thread :deep(.activity-card),
-.conversation-thread :deep(.tool-call-block),
-.conversation-thread :deep(.thinking-block) {
+.conversation-thread :deep(.tool-call-block) {
   border: 1px solid rgba(55, 53, 47, 0.1);
   border-radius: 6px;
   background: var(--notion-surface-soft);
@@ -1677,20 +1756,23 @@ watch(
   padding: 9px 11px;
 }
 
-.conversation-thread :deep(.tool-header),
-.conversation-thread :deep(.thinking-header) {
-  min-height: 35px;
-  padding: 0 11px;
+.conversation-thread :deep(.tool-header) {
+  min-height: 38px;
+  padding: 7px 11px;
 }
 
-.conversation-thread :deep(.tool-name),
+.conversation-thread :deep(.tool-name) {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
 .conversation-thread :deep(.activity-tool) {
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
   font-size: 11px;
   font-weight: 600;
 }
 
-.conversation-thread :deep(.tool-status-dot.done),
 .conversation-thread :deep(.status-dot-completed) {
   background: var(--notion-green);
 }
