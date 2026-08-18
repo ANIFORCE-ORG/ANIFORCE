@@ -14,7 +14,6 @@ import type { TaskPanelAction, TaskPanelArtifact, TaskPanelStatus, TaskPanelStep
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
 import { navItems } from '@/config/navigation'
-import aniforceWorkflowHero from '@/assets/aniforce-workflow-hero.png'
 
 const router = useRouter()
 const route = useRoute()
@@ -29,6 +28,9 @@ const workspaceDragging = ref(false)
 const renameDialog = ref<{ id: string; name: string } | null>(null)
 const renameValue = ref('')
 const deleteDialog = ref<{ id: string; name: string } | null>(null)
+const strategyExpanded = ref(false)
+const promptInputRef = ref<HTMLTextAreaElement | null>(null)
+let promptResizeObserver: ResizeObserver | null = null
 
 const intentModes: Array<{
   key: 'chat' | 'project'
@@ -65,34 +67,69 @@ const intentModes: Array<{
 
 const starterActions = [
   {
-    icon: 'portfolio',
-    label: '盘点投放资产',
-    description: '统一查看项目、计划与素材，快速接续当前工作。',
-    prompt: '帮我盘点当前账号下的项目、投放计划和素材。',
+    icon: 'analytics',
+    label: '今日投放复盘',
+    description: '汇总核心指标，输出计划分层与今日调控清单。',
+    prompt: '请复盘当前账号最近 7 天的投放表现。按平台、项目和广告计划汇总消耗、转化、CPA、CTR、CVR 与 ROAS；先校验数据完整性和归因成熟度，再将计划分为「可放量 / 观察 / 控量 / 暂停」，说明判断依据，并给出未来 24 小时可执行的预算、出价和素材调整清单。若缺少业务类型、渠道、目标 CPA/ROAS 或日期范围，请先向我确认。',
     mode: 'chat' as const
   },
   {
-    icon: 'launch',
-    label: '启动增长项目',
-    description: '从目标、市场和预算出发，创建清晰的投放草稿。',
-    prompt: '帮我启动一个新的增长项目，先根据目标、市场和预算整理投放草稿。',
-    mode: 'project' as const
-  },
-  {
-    icon: 'diagnose',
-    label: '发现增长机会',
-    description: '结合消耗、转化与素材信号，定位扩量和止损机会。',
-    prompt: '帮我诊断当前投放表现，找出值得扩量和需要止损的机会。',
+    icon: 'tune',
+    label: '计划分层调控',
+    description: '识别可放量、观察、控量和暂停计划。',
+    prompt: '请诊断当前广告计划表现，并按「可放量 / 观察 / 控量 / 暂停」四类输出清单。综合消耗、转化量、CPA、CTR、CVR、ROAS、趋势和样本量判断；对每个计划说明关键证据，并给出明确动作，例如预算上调 10%-30%、预算下调 20%-40%、出价调整 5%-15%、补充素材或暂停。请标记数据不足和归因未成熟的计划，避免过早下结论。',
     mode: 'chat' as const
   },
   {
-    icon: 'creative',
-    label: '生成创意方案',
-    description: '将投放目标转成素材 Brief 与可执行创意方向。',
-    prompt: '帮我把投放目标整理成素材 Brief 和可执行的创意方向。',
+    icon: 'image_search',
+    label: '素材表现诊断',
+    description: '定位高潜、疲劳和低效素材，明确迭代方向。',
+    prompt: '请分析当前素材表现。结合消耗、CTR、CVR、CPA、ROAS、转化量和连续多日趋势，识别高潜、点击强转化弱、点击弱转化强、疲劳和低效素材；输出 Top 素材、风险素材及判断依据，并给出下一批素材的选题、前 3 秒钩子、卖点、画面结构、版位尺寸和 A/B 变量建议。样本不足的素材请单独标记为待观察。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'account_balance_wallet',
+    label: '预算扩量建议',
+    description: '找到预算承接空间，制定阶梯扩量与止损线。',
+    prompt: '请评估当前投放的预算承接能力，并制定未来 3 天的阶梯扩量方案。找出 CPA 低于目标、ROAS 高于目标且转化稳定的计划，估算可增加的预算区间；同时设置单次调幅、观察周期、回撤条件和止损线。请按平台与计划输出「维持 / 小幅扩量 / 重点扩量 / 降预算」清单，并说明每项调整的数据依据。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'compare_arrows',
+    label: '渠道效果对比',
+    description: '对比平台效率、量级、质量和增长潜力。',
+    prompt: '请对比各投放渠道最近 7 天与前 7 天的表现。统一指标口径后，从消耗、转化量、CPA、CTR、CVR、ROAS、量级、趋势和稳定性评估渠道角色，区分扩量引擎、质量引擎、效率问题、交付问题、实验和止损渠道；输出预算迁移建议、需要保留的实验预算以及下一周期的验证指标。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'warning',
+    label: '异常波动排查',
+    description: '定位消耗、成本或转化突变的可能原因。',
+    prompt: '请排查当前投放中的异常波动。对比最近 24 小时、近 3 天均值和上周同期，识别消耗突增或骤降、CPA 恶化、CTR/CVR 跳变、ROAS 下滑和转化断层；按「数据与归因 / 账户与审核 / 预算与出价 / 定向与流量 / 素材疲劳 / 落地页承接」逐层定位原因，列出证据、影响范围、排查顺序和可以立即执行的恢复动作。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'schedule',
+    label: '素材疲劳监控',
+    description: '识别衰退拐点，安排换素材和复用节奏。',
+    prompt: '请监控素材疲劳并给出换新节奏。以连续 3 天 CTR 下降、CPA 上升、频次增加和转化衰减为主要信号，结合素材上线天数、消耗占比和样本量识别「健康 / 预警 / 疲劳 / 应停」素材；输出需要继续放量、降频、替换和暂停的清单，并为疲劳素材提供同主题改版、开头重剪、卖点替换和版位适配建议。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'experiment',
+    label: '下一轮测试方案',
+    description: '把诊断结论转成可执行的 A/B 测试矩阵。',
+    prompt: '请基于当前投放问题设计下一轮 A/B 测试方案。先明确核心假设，再分别为素材、受众、版位、出价和落地页设计单变量测试；给出测试组与对照组、预算分配、最小样本量、观察周期、成功指标、停止条件和结论记录模板。请按影响力和实施成本排序，优先给出本周可落地的 3-5 个实验。',
     mode: 'chat' as const
   }
 ]
+
+const visibleStarterActions = computed(() => (
+  strategyExpanded.value ? starterActions : starterActions.slice(0, 4)
+))
+const isPromptExpanded = computed(() => (
+  Array.from(inputText.value).length > 72 || inputText.value.includes('\n')
+))
 
 const visibleMessages = computed(() => agent.visibleMessages.value)
 const hasContent = computed(() => (
@@ -261,6 +298,42 @@ function scrollToBottom() {
   })
 }
 
+function resizePromptInput(target = promptInputRef.value) {
+  if (!target) return
+  target.style.height = 'auto'
+  target.style.height = `${Math.max(24, target.scrollHeight)}px`
+}
+
+function observePromptInput() {
+  promptResizeObserver?.disconnect()
+  promptResizeObserver = null
+
+  const target = promptInputRef.value
+  if (!target) return
+
+  resizePromptInput(target)
+  if (typeof ResizeObserver === 'undefined') return
+
+  let previousWidth = target.getBoundingClientRect().width
+  promptResizeObserver = new ResizeObserver(entries => {
+    const nextWidth = entries[0]?.contentRect.width ?? target.getBoundingClientRect().width
+    if (Math.abs(nextWidth - previousWidth) < 0.5) return
+    previousWidth = nextWidth
+    resizePromptInput(target)
+  })
+  promptResizeObserver.observe(target)
+}
+
+function handlePromptInput(event: Event) {
+  resizePromptInput(event.currentTarget as HTMLTextAreaElement)
+}
+
+function handlePromptKeydown(event: KeyboardEvent) {
+  if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
+  event.preventDefault()
+  void handleSubmit()
+}
+
 function phaseLabel(phase: AgentPhase): string {
   if (phase?.kind === 'queued') return '任务已入队，等待 Worker 派发...'
   if (phase?.kind === 'running_tools') {
@@ -331,7 +404,10 @@ async function runStarterAction(action: typeof starterActions[number]) {
   activeIntentMode.value = action.mode
   inputText.value = action.prompt
   await nextTick()
-  await handleSubmit()
+  const input = document.querySelector<HTMLTextAreaElement>('[data-agent-input="home"]')
+  resizePromptInput(input)
+  input?.focus()
+  input?.setSelectionRange(input.value.length, input.value.length)
 }
 
 function navigateTo(path: string) {
@@ -485,6 +561,7 @@ onMounted(async () => {
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
+  observePromptInput()
   await Promise.all([agent.refreshModels(), agent.refreshSessions()])
   if (await selectSessionFromRoute()) return
   showNewConversationHome()
@@ -496,6 +573,7 @@ onActivated(() => {
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   agent.resumeTypewriter?.()
+  void nextTick(() => observePromptInput())
   if (route.query.session_id) void selectSessionFromRoute()
   else showNewConversationHome()
 })
@@ -504,12 +582,16 @@ onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  promptResizeObserver?.disconnect()
+  promptResizeObserver = null
 })
 
 onDeactivated(() => {
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
+  promptResizeObserver?.disconnect()
+  promptResizeObserver = null
   agent.pauseTypewriter?.()
 })
 
@@ -520,6 +602,14 @@ watch(
     else showNewConversationHome()
   }
 )
+
+watch(inputText, () => {
+  void nextTick(() => resizePromptInput())
+})
+
+watch(hasContent, () => {
+  void nextTick(() => observePromptInput())
+})
 </script>
 
 <template>
@@ -540,60 +630,58 @@ watch(
     <main class="home-main">
       <div class="home-main__scroll">
         <section v-if="!hasContent" class="landing-document">
-          <img class="landing-visual" :src="aniforceWorkflowHero" alt="" aria-hidden="true" />
-          <header class="landing-hero">
-            <h1>从洞察到行动，让每一次投放更确定</h1>
-            <p>ANIFORCE 连接项目、数据与素材，用 AI 帮你判断下一步，并把策略快速变成可执行任务。</p>
-          </header>
+          <div class="landing-primary">
+            <header class="landing-hero">
+              <h1>让每一次投放，都有清晰的下一步</h1>
+              <p>ANIFORCE 串联项目、计划、素材与效果数据，帮你完成复盘诊断、预算调控和创意迭代。</p>
+            </header>
 
-          <section v-if="!hasInteracted" class="quick-start" aria-label="快捷入口">
-            <div class="quick-grid">
-              <button
-                v-for="action in starterActions"
-                :key="action.label"
-                class="quick-card"
-                type="button"
-                @click="runStarterAction(action)"
-              >
-                <span class="quick-card__icon" aria-hidden="true">
-                  <svg v-if="action.icon === 'portfolio'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <path d="M5.5 10h7l2.4 2.5h11.6v13H5.5z" />
-                    <path class="quick-card__icon-accent" d="M8.5 10V6.5h14.7a2.3 2.3 0 0 1 2.3 2.3v3.7" />
-                  </svg>
-                  <svg v-else-if="action.icon === 'launch'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <circle cx="15.5" cy="16.5" r="10" />
-                    <circle cx="15.5" cy="16.5" r="4" />
-                    <path class="quick-card__icon-accent" d="m15.5 16.5 10-10m-4.5 0h4.5V11" />
-                  </svg>
-                  <svg v-else-if="action.icon === 'diagnose'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <path d="m4.5 19 6-6 5 4 6.5-9" />
-                    <path class="quick-card__icon-accent" d="M18 8h4v4" />
-                    <circle cx="20.5" cy="22" r="5.5" />
-                    <path d="m24.5 26 3.5 3.5" />
-                  </svg>
-                  <svg v-else class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <rect x="5.5" y="7.5" width="21" height="18" rx="3" />
-                    <path class="quick-card__icon-accent" d="m16 11 1.4 3.6L21 16l-3.6 1.4L16 21l-1.4-3.6L11 16l3.6-1.4z" />
-                    <path d="M24 3.5v4M22 5.5h4" />
-                  </svg>
-                </span>
-                <strong>{{ action.label }}</strong>
-                <span>{{ action.description }}</span>
-              </button>
-            </div>
-          </section>
+            <section v-if="!hasInteracted" class="quick-start" aria-label="常用投放策略">
+              <div class="quick-start__header">
+                <strong>常用投放策略</strong>
+                <button
+                  class="quick-start__toggle"
+                  type="button"
+                  :aria-expanded="strategyExpanded"
+                  aria-controls="strategy-grid"
+                  @click="strategyExpanded = !strategyExpanded"
+                >
+                  <span>{{ strategyExpanded ? '收起策略' : '展开更多策略' }}</span>
+                  <span class="material-symbols-outlined" :class="{ expanded: strategyExpanded }" aria-hidden="true">expand_more</span>
+                </button>
+              </div>
+              <div id="strategy-grid" class="quick-grid">
+                <button
+                  v-for="action in visibleStarterActions"
+                  :key="action.label"
+                  class="quick-card"
+                  type="button"
+                  @click="runStarterAction(action)"
+                >
+                  <span class="quick-card__icon" aria-hidden="true">
+                    <span class="material-symbols-outlined">{{ action.icon }}</span>
+                  </span>
+                  <strong>{{ action.label }}</strong>
+                  <span>{{ action.description }}</span>
+                </button>
+              </div>
+            </section>
+          </div>
 
-          <div class="landing-input-dock">
-            <div class="composer" role="search">
+          <div class="landing-input-dock" :class="{ 'is-expanded': isPromptExpanded }">
+            <div class="composer" :class="{ 'composer--expanded': isPromptExpanded }" role="search">
               <button class="composer__icon" type="button" aria-label="添加附件">
                 <span class="material-symbols-outlined">attach_file</span>
               </button>
-              <input
+              <textarea
+                ref="promptInputRef"
                 v-model="inputText"
                 data-agent-input="home"
+                aria-label="任务内容"
                 placeholder="继续输入任务或补充信息..."
-                type="text"
-                @keydown.enter="handleSubmit"
+                rows="1"
+                @input="handlePromptInput"
+                @keydown="handlePromptKeydown"
               />
               <button class="composer__icon" type="button" aria-label="语音输入">
                 <span class="material-symbols-outlined">mic</span>
@@ -654,16 +742,19 @@ watch(
       </div>
 
       <div v-if="hasContent" class="conversation-input-dock">
-        <div class="composer conversation-composer" role="search">
+        <div class="composer conversation-composer" :class="{ 'composer--expanded': isPromptExpanded }" role="search">
           <button class="composer__icon" type="button" aria-label="添加附件">
             <span class="material-symbols-outlined">attach_file</span>
           </button>
-          <input
+          <textarea
+            ref="promptInputRef"
             v-model="inputText"
             data-agent-input="home"
+            aria-label="任务内容"
             placeholder="继续输入任务或补充信息..."
-            type="text"
-            @keydown.enter="handleSubmit"
+            rows="1"
+            @input="handlePromptInput"
+            @keydown="handlePromptKeydown"
           />
           <button class="composer__icon" type="button" aria-label="语音输入">
             <span class="material-symbols-outlined">mic</span>
@@ -747,8 +838,8 @@ watch(
   --notion-green: #0f9d73;
   display: flex;
   width: 100%;
-  height: 100vh;
-  min-height: 620px;
+  height: calc(100dvh + 11.111111dvh);
+  min-height: 0;
   overflow: hidden;
   background: var(--notion-canvas);
   color: var(--notion-charcoal);
@@ -772,14 +863,24 @@ watch(
 }
 
 .landing-document {
-  display: flex;
+  display: grid;
   width: min(100%, 1080px);
   min-height: 100%;
+  grid-template-rows: minmax(min-content, 1fr) auto;
+  gap: clamp(20px, 4vh, 52px);
   margin: 0 auto;
-  padding: clamp(260px, 38vh, 720px) 36px 48px;
+  padding: clamp(24px, 4vh, 56px) clamp(18px, 3vw, 36px) clamp(18px, 3vh, 36px);
   box-sizing: border-box;
+}
+
+.landing-primary {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-self: center;
   align-items: center;
   flex-direction: column;
+  padding-block: clamp(18px, 4vh, 64px);
 }
 
 .landing-hero {
@@ -790,7 +891,7 @@ watch(
 .landing-hero h1 {
   margin: 0;
   color: var(--notion-ink);
-  font-size: clamp(34px, 3.2vw, 46px);
+  font-size: clamp(28px, 3vw, 44px);
   font-weight: 600;
   line-height: 1.14;
   letter-spacing: -1px;
@@ -799,7 +900,7 @@ watch(
 .landing-hero p {
   margin: 14px 0 0;
   color: var(--notion-steel);
-  font-size: 16px;
+  font-size: clamp(14px, 1.2vw, 16px);
   line-height: 1.6;
 }
 
@@ -809,21 +910,12 @@ watch(
   background: var(--notion-canvas);
 }
 
-.landing-visual {
-  display: block;
-  width: 260px;
-  height: auto;
-  flex: 0 0 auto;
-  margin-bottom: 28px;
-  object-fit: contain;
-}
-
 .composer {
   display: grid;
   width: 100%;
-  height: 60px;
+  min-height: 60px;
   grid-template-columns: 36px minmax(0, 1fr) 36px 38px;
-  grid-template-rows: 1fr;
+  grid-template-rows: auto;
   align-items: center;
   padding: 8px 10px;
   border: 1px solid var(--notion-line-strong);
@@ -838,22 +930,40 @@ watch(
   box-shadow: rgba(35, 131, 226, 0.13) 0 0 0 2px, rgba(15, 15, 15, 0.08) 0 10px 28px;
 }
 
-.composer input {
+.composer textarea {
   grid-row: 1;
   grid-column: 2;
   min-width: 0;
   width: 100%;
+  min-height: 24px;
   align-self: center;
   padding: 0 8px;
+  overflow: hidden;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--notion-ink);
+  field-sizing: content;
   font-size: 15px;
   line-height: 1.55;
+  resize: none;
 }
 
-.composer input::placeholder {
+.composer.composer--expanded {
+  grid-template-rows: auto 38px;
+  align-items: center;
+  row-gap: 8px;
+  padding: 14px 10px 8px;
+}
+
+.composer.composer--expanded textarea {
+  grid-row: 1;
+  grid-column: 1 / -1;
+  align-self: stretch;
+  padding: 0 12px;
+}
+
+.composer textarea::placeholder {
   color: var(--notion-stone);
 }
 
@@ -883,6 +993,14 @@ watch(
   grid-column: 3;
 }
 
+.composer.composer--expanded > .composer__icon[aria-label="添加附件"] {
+  grid-row: 2;
+}
+
+.composer.composer--expanded > .composer__icon[aria-label="语音输入"] {
+  grid-row: 2;
+}
+
 .composer__icon:hover {
   background: rgba(55, 53, 47, 0.06);
   color: var(--notion-ink);
@@ -901,6 +1019,10 @@ watch(
   background: var(--notion-blue);
   color: #ffffff;
   transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.composer.composer--expanded > .composer__send {
+  grid-row: 2;
 }
 
 .composer__send:hover:not(:disabled) {
@@ -930,13 +1052,67 @@ watch(
 
 .landing-input-dock {
   width: min(100%, 860px);
-  margin: auto auto 0;
-  padding-top: 32px;
+  margin: 0 auto;
+  align-self: end;
+  transition: width 0.2s ease;
+}
+
+.landing-input-dock.is-expanded {
+  width: min(100%, 1080px);
 }
 
 .quick-start {
   width: min(100%, 860px);
-  margin: 60px auto 0;
+  margin: clamp(32px, 5vh, 56px) auto 0;
+}
+
+.quick-start__header {
+  min-height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 12px;
+}
+
+.quick-start__header strong {
+  color: var(--notion-ink);
+  font-size: 14px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.quick-start__toggle {
+  min-height: 34px;
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  padding: 0 10px;
+  border: 1px solid var(--notion-line);
+  border-radius: 8px;
+  background: var(--notion-canvas);
+  color: var(--notion-slate);
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.15s ease, border-color 0.15s ease, color 0.15s ease;
+}
+
+.quick-start__toggle:hover {
+  border-color: var(--notion-line-strong);
+  background: var(--notion-surface-soft);
+  color: var(--notion-ink);
+}
+
+.quick-start__toggle .material-symbols-outlined {
+  font-size: 18px;
+  transition: transform 0.18s ease;
+}
+
+.quick-start__toggle .material-symbols-outlined.expanded {
+  transform: rotate(180deg);
 }
 
 .quick-grid {
@@ -969,7 +1145,7 @@ watch(
 }
 
 .quick-card__icon {
-  display: block;
+  display: grid;
   width: 36px;
   height: 36px;
   place-items: center;
@@ -979,21 +1155,10 @@ watch(
   box-shadow: none;
 }
 
-.quick-card__icon-svg {
-  display: block;
-  width: 36px;
-  height: 36px;
-  overflow: visible;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.quick-card__icon-accent {
-  stroke: var(--notion-blue);
-  stroke-width: 2.2;
+.quick-card__icon .material-symbols-outlined {
+  color: var(--notion-charcoal);
+  font-size: 34px;
+  font-variation-settings: 'FILL' 0, 'wght' 420, 'GRAD' 0, 'opsz' 32;
 }
 
 .quick-card strong {
@@ -1004,9 +1169,13 @@ watch(
 }
 
 .quick-card > span:last-child {
+  display: -webkit-box;
+  overflow: hidden;
   color: rgba(55, 53, 47, 0.72);
   font-size: 13px;
   line-height: 1.55;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
 }
 
 .conversation-document {
@@ -1069,6 +1238,11 @@ watch(
   width: min(100%, 720px);
   margin: 0 auto;
   background: #ffffff;
+  transition: width 0.2s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.conversation-composer.composer--expanded {
+  width: min(100%, 960px);
 }
 
 .conversation-thread :deep(.user-message) {
@@ -1217,7 +1391,8 @@ watch(
 
 @media (max-width: 980px) {
   .landing-document {
-    padding-top: 48px;
+    gap: 28px;
+    padding: 32px 24px 24px;
   }
 
   .quick-grid {
@@ -1227,17 +1402,17 @@ watch(
 
 @media (max-width: 720px) {
   .home-shell {
-    height: auto;
-    min-height: 100vh;
+    height: calc(100dvh + 11.111111dvh);
   }
 
   .landing-document {
     margin: 0 auto;
-    padding: 40px 20px 18px;
+    gap: 24px;
+    padding: 24px 20px 18px;
   }
 
   .landing-hero h1 {
-    font-size: 32px;
+    font-size: clamp(27px, 7vw, 34px);
   }
 
   .conversation-document {
@@ -1258,20 +1433,60 @@ watch(
     min-height: 140px;
   }
 
-  .landing-input-dock {
-    padding-top: 24px;
+  .quick-start__header {
+    align-items: flex-start;
   }
 
   .composer {
-    height: 60px;
+    min-height: 60px;
     grid-template-columns: 34px minmax(0, 1fr) 34px 38px;
     padding: 8px;
-    border-radius: 18px;
+    border-radius: 12px;
   }
 
   .conversation-input-dock {
     padding-right: 14px;
     padding-left: 14px;
+  }
+}
+
+@media (max-height: 820px) and (min-width: 981px) {
+  .landing-document {
+    gap: 18px;
+    padding-top: 18px;
+    padding-bottom: 18px;
+  }
+
+  .landing-primary {
+    padding-block: 0;
+  }
+
+  .landing-hero h1 {
+    font-size: 32px;
+  }
+
+  .landing-hero p {
+    margin-top: 8px;
+    font-size: 14px;
+  }
+
+  .quick-start {
+    margin-top: 22px;
+  }
+
+  .quick-card {
+    min-height: 124px;
+    padding: 14px;
+  }
+
+  .quick-card__icon {
+    width: 32px;
+    height: 32px;
+    margin-bottom: 10px;
+  }
+
+  .quick-card__icon .material-symbols-outlined {
+    font-size: 30px;
   }
 }
 

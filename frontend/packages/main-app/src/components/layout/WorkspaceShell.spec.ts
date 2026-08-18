@@ -39,6 +39,31 @@ describe('Codex-inspired workspace shell', () => {
     expect(sidebarSource).not.toContain('z-50 flex flex-col overflow-hidden transition-all')
   })
 
+  it('keeps the original logo mark and separates it from the Notion wordmark', () => {
+    expect(sidebarSource).toContain('class="sidebar-brand-mark"')
+    expect(sidebarSource).toContain('<img :src="logoSvg" alt="" class="sidebar-brand-logo logo-blue" />')
+    expect(sidebarSource).toContain('class="sidebar-brand-divider"')
+    expect(sidebarSource).toContain('class="sidebar-brand-name">Aniforce</span>')
+    expect(sidebarSource).not.toContain('sidebar-brand-edition')
+    expect(sidebarSource).not.toContain('>Pro</span>')
+    expect(sidebarSource).toContain('font-family: "Notion Sans"')
+    expect(sidebarSource).toContain('background: rgba(55, 53, 47, 0.14)')
+    expect(sidebarSource).toContain('border-bottom: 1px solid rgba(55, 53, 47, 0.08)')
+  })
+
+  it('uses the 240px desktop sidebar width consistently', () => {
+    expect(sidebarSource).toContain("const sidebarWidth = computed(() => isSidebarCollapsed.value ? '52px' : '240px')")
+    expect(sidebarSource).toContain("isSidebarCollapsed ? 'w-[52px]' : 'w-[240px]'")
+  })
+
+  it('lets session titles truncate responsively with the available sidebar width', () => {
+    expect(sidebarSource).toContain('class="sidebar-session-title min-w-0 flex-1"')
+    expect(sidebarSource).toContain('{{ session.name }}')
+    expect(sidebarSource).not.toContain('SESSION_NAME_MAX_LENGTH')
+    expect(sidebarSource).not.toContain('truncateSessionName')
+    expect(sidebarSource).toMatch(/\.sidebar-session-title \{[\s\S]*?overflow: hidden;[\s\S]*?text-overflow: ellipsis;[\s\S]*?white-space: nowrap;/)
+  })
+
   it('keeps session actions inside the sidebar and reveals them only on interaction', () => {
     expect(sidebarSource).toContain('sessionActions: true')
     expect(sidebarSource).toContain('class="sidebar-session-actions flex items-center"')
@@ -67,7 +92,7 @@ describe('Codex-inspired workspace shell', () => {
   it('offsets workspace footer content and removes only the Home divider', () => {
     expect(footerSource).toContain('route.meta.workspaceShell === true')
     expect(footerSource).toContain("route.name === 'home'")
-    expect(footerSource).toContain('var(--workspace-sidebar-width, 205px)')
+    expect(footerSource).toContain('var(--workspace-sidebar-width, 240px)')
     expect(footerSource).toContain('border-top: 0 !important')
   })
 })

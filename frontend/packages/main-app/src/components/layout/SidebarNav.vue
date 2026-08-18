@@ -72,14 +72,6 @@ const localRenameDialog = ref<Session | null>(null)
 const localRenameValue = ref('')
 const localDeleteDialog = ref<Session | null>(null)
 
-const SESSION_NAME_MAX_LENGTH = 12
-const truncateSessionName = (name: string) => {
-  const characters = Array.from(name)
-  return characters.length > SESSION_NAME_MAX_LENGTH
-    ? `${characters.slice(0, SESSION_NAME_MAX_LENGTH).join('')}...`
-    : name
-}
-
 const closeSessionMenu = () => {
   openSessionMenuId.value = null
 }
@@ -136,7 +128,7 @@ const isCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
 const isNarrowViewport = ref(false)
 const mobileExpanded = ref(false)
 const isSidebarCollapsed = computed(() => isNarrowViewport.value ? !mobileExpanded.value : isCollapsed.value)
-const sidebarWidth = computed(() => isSidebarCollapsed.value ? '52px' : '205px')
+const sidebarWidth = computed(() => isSidebarCollapsed.value ? '52px' : '240px')
 const layoutSidebarWidth = computed(() => isNarrowViewport.value ? '52px' : sidebarWidth.value)
 let narrowViewportMedia: MediaQueryList | null = null
 
@@ -219,7 +211,7 @@ onMounted(() => {
 <template>
   <div
     class="sidebar-rail-spacer flex-none transition-all duration-300"
-    :class="isNarrowViewport ? 'w-[52px]' : (isSidebarCollapsed ? 'w-[52px]' : 'w-[205px]')"
+    :class="isNarrowViewport ? 'w-[52px]' : (isSidebarCollapsed ? 'w-[52px]' : 'w-[240px]')"
     aria-hidden="true"
   />
   <button
@@ -232,7 +224,7 @@ onMounted(() => {
   <aside
     id="workspace-sidebar-navigation"
     class="sidebar-notion fixed bottom-0 left-0 top-0 z-50 flex flex-col transition-all duration-300"
-    :class="isSidebarCollapsed ? 'w-[52px]' : 'w-[205px]'"
+    :class="isSidebarCollapsed ? 'w-[52px]' : 'w-[240px]'"
   >
     <div class="sidebar-brand-row" :class="{ 'is-collapsed': isSidebarCollapsed }">
       <button
@@ -242,7 +234,13 @@ onMounted(() => {
         aria-label="返回首页"
         @click="handleLogoClick"
       >
-        <img :src="logoSvg" alt="ANIFORCE" class="sidebar-brand-logo logo-blue" />
+        <span class="sidebar-brand-lockup" aria-hidden="true">
+          <span class="sidebar-brand-mark">
+            <img :src="logoSvg" alt="" class="sidebar-brand-logo logo-blue" />
+          </span>
+          <span class="sidebar-brand-divider" aria-hidden="true" />
+          <span class="sidebar-brand-name">Aniforce</span>
+        </span>
       </button>
       <button
         class="sidebar-collapse flex items-center justify-center transition-colors"
@@ -336,7 +334,7 @@ onMounted(() => {
             @contextmenu.prevent.stop="openSessionMenu(session.id)"
           >
             <span class="material-symbols-outlined text-[11px]">chat</span>
-            <span class="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-[11px]" :title="session.name">{{ truncateSessionName(session.name) }}</span>
+            <span class="sidebar-session-title min-w-0 flex-1" :title="session.name">{{ session.name }}</span>
             <div
               v-if="sessionActions"
               class="sidebar-session-actions flex items-center"
@@ -435,6 +433,9 @@ onMounted(() => {
   align-items: center;
   justify-content: space-between;
   padding: 0 8px 0 16px;
+  border-bottom: 1px solid rgba(55, 53, 47, 0.08);
+  background: rgba(247, 247, 245, 0.94);
+  backdrop-filter: blur(8px);
 }
 
 .sidebar-brand-row.is-collapsed {
@@ -444,19 +445,68 @@ onMounted(() => {
 
 .sidebar-brand-button {
   display: flex;
+  min-height: 36px;
   min-width: 0;
   align-items: center;
-  padding: 0;
+  margin-left: -6px;
+  padding: 3px 6px;
   border: 0;
+  border-radius: 8px;
   background: transparent;
   cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.sidebar-brand-button:hover {
+  background: rgba(55, 53, 47, 0.06);
+}
+
+.sidebar-brand-button:focus-visible,
+.sidebar-collapse:focus-visible {
+  outline: 2px solid rgba(35, 131, 226, 0.4);
+  outline-offset: 1px;
+}
+
+.sidebar-brand-lockup {
+  display: inline-flex;
+  min-width: 0;
+  align-items: center;
+  gap: 10px;
+}
+
+.sidebar-brand-mark {
+  width: 36px;
+  height: 30px;
+  display: block;
+  flex: 0 0 36px;
+  overflow: hidden;
 }
 
 .sidebar-brand-logo {
-  width: auto;
+  width: 110px;
   height: 30px;
-  max-width: 94px;
+  max-width: none;
   object-fit: contain;
+  object-position: left center;
+}
+
+.sidebar-brand-divider {
+  width: 1px;
+  height: 20px;
+  flex: 0 0 1px;
+  background: rgba(55, 53, 47, 0.14);
+}
+
+.sidebar-brand-name {
+  overflow: hidden;
+  color: var(--sidebar-charcoal);
+  font-family: "Notion Sans", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1;
+  letter-spacing: -0.45px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .logo-blue {
@@ -493,9 +543,10 @@ onMounted(() => {
 }
 
 .sidebar-collapse {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   padding: 0 !important;
+  border-radius: 8px !important;
 }
 
 .sidebar-collapse:hover,
@@ -575,9 +626,12 @@ onMounted(() => {
   gap: 9px !important;
 }
 
-.sidebar-session-item > span[title] {
+.sidebar-session-title {
   min-width: 0;
   max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .sidebar-session-actions {

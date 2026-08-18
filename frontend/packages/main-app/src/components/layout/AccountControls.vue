@@ -258,6 +258,8 @@ onBeforeUnmount(() => {
 }
 
 .account-trigger--header {
+  min-height: 38px;
+  align-items: center;
   gap: 8px;
   padding: 4px 6px;
 }
@@ -277,17 +279,23 @@ onBeforeUnmount(() => {
 }
 
 .account-avatar {
-  display: grid;
+  display: inline-flex;
   width: 28px;
   height: 28px;
   flex: none;
-  place-items: center;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  overflow: hidden;
   border: 1px solid #d9d9d6;
   border-radius: 50%;
   background: #f7f7f5;
   color: #37352f;
   font-size: 11px;
   font-weight: 600;
+  line-height: 1;
+  text-align: center;
+  vertical-align: middle;
 }
 
 .account-identity,
@@ -296,6 +304,11 @@ onBeforeUnmount(() => {
   min-width: 0;
   flex-direction: column;
   align-items: flex-start;
+  justify-content: center;
+}
+
+.account-identity {
+  gap: 1px;
 }
 
 .account-identity strong {

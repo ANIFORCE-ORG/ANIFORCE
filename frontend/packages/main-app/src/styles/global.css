@@ -48,14 +48,27 @@ html {
 
 body {
   margin: 0;
+  min-height: 100dvh;
   overflow-x: hidden;
   font-family: 'Notion Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
 }
 
+/* Workspace routes own their scrolling inside the page canvas. Prevent the scaled
+   application root from creating a second document scrollbar alongside it. */
+html:has(.workspace-app-shell),
+body:has(.workspace-app-shell) {
+  height: 100dvh;
+  overflow: hidden;
+  overscroll-behavior: none;
+}
+
 #app {
-  min-height: 100dvh;
+  width: calc(100% + 11.111111%);
+  min-height: calc(100dvh + 11.111111dvh);
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+  transform: scale(var(--app-ui-scale));
+  transform-origin: top left;
 }
 
 img,
@@ -78,9 +91,13 @@ canvas {
 }
 
 :root {
+  --app-ui-scale: 0.9;
+  --workspace-sidebar-width: 240px;
+  --workspace-scrollbar-size: 8px;
   --workspace-canvas: #ffffff;
   --workspace-page-header-height: 57px;
   --workspace-page-gutter: clamp(24px, 3vw, 48px);
+  --workspace-content-max-width: 1440px;
   --workspace-font-family: 'Notion Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   --workspace-content-surface: #ffffff;
   --workspace-metric-surface: #f6f5f4;
@@ -102,6 +119,40 @@ canvas {
   font-family: var(--workspace-font-family);
   font-size: 14px;
   line-height: 1.5;
+}
+
+/* Keep page centering based on the usable scrollport, not on a reserved gutter. */
+.workspace-page-canvas,
+.workspace-page-canvas * {
+  scrollbar-color: rgba(120, 118, 113, 0.42) transparent;
+  scrollbar-gutter: auto;
+  scrollbar-width: thin;
+}
+
+.workspace-page-canvas::-webkit-scrollbar,
+.workspace-page-canvas *::-webkit-scrollbar {
+  width: var(--workspace-scrollbar-size);
+  height: var(--workspace-scrollbar-size);
+}
+
+.workspace-page-canvas::-webkit-scrollbar-track,
+.workspace-page-canvas *::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.workspace-page-canvas::-webkit-scrollbar-button,
+.workspace-page-canvas *::-webkit-scrollbar-button {
+  display: none;
+  width: 0;
+  height: 0;
+}
+
+.workspace-page-canvas::-webkit-scrollbar-thumb,
+.workspace-page-canvas *::-webkit-scrollbar-thumb {
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: rgba(120, 118, 113, 0.42);
+  background-clip: content-box;
 }
 
 .workspace-page-canvas button,
@@ -190,13 +241,28 @@ canvas {
 }
 
 .workspace-page-content {
-  width: 100% !important;
-  max-width: none !important;
-  margin-right: 0 !important;
-  margin-left: 0 !important;
+  width: min(100%, var(--workspace-content-max-width)) !important;
+  max-width: var(--workspace-content-max-width) !important;
+  margin-right: auto !important;
+  margin-left: auto !important;
   padding-right: var(--workspace-page-gutter) !important;
   padding-left: var(--workspace-page-gutter) !important;
   box-sizing: border-box;
+}
+
+/* Reserve one narrow scrollbar lane on primary page scrollers. This prevents the
+   centered content from jumping when a viewport starts or stops overflowing. */
+.workspace-page-canvas :where(
+  .home-main__scroll,
+  .replay-page,
+  .projects-scroll-area,
+  .detail-scroll-area,
+  .settings-scroll-area,
+  .sn-scroll,
+  .system-admin-scroll-area,
+  .workspace-page-content[class*="overflow-y-auto"]
+) {
+  scrollbar-gutter: stable;
 }
 
 .workspace-page-margin-x {
@@ -313,9 +379,17 @@ canvas {
 }
 
 /* Route-wide responsive safeguards. Individual pages can refine these defaults. */
+#app > div:first-child,
+#app > div:first-child > .workspace-page-canvas,
+#app > div:first-child > .settings-notion,
+#app .min-h-screen {
+  min-height: calc(100dvh + 11.111111dvh);
+}
+
+#app .h-screen,
 .workspace-page-canvas.h-screen,
 .settings-notion.h-screen {
-  height: 100dvh;
+  height: calc(100dvh + 11.111111dvh);
 }
 
 .workspace-page-canvas > main,
@@ -329,6 +403,14 @@ canvas {
   max-width: 100vw;
   max-height: 100dvh;
   overscroll-behavior: contain;
+}
+
+/* The sidebar spacer owns the navigation column. The page keeps the entire remaining
+   column and every inner content container centers itself with auto inline margins. */
+#app > div:first-child > .workspace-page-canvas:has(> .sidebar-rail-spacer) {
+  width: 100%;
+  min-width: 0;
+  padding-right: 0;
 }
 
 @media (max-width: 767px) {

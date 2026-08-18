@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest'
 const read = (relativePath: string) => readFileSync(new URL(relativePath, import.meta.url), 'utf8')
 
 const globalCss = read('./global.css')
+const app = read('../App.vue')
 const sidebar = read('../components/layout/SidebarNav.vue')
+const home = read('../pages/Home.vue')
 const campaign = read('../pages/campaigns/Campaign.vue')
 const campaignDetail = read('../pages/campaigns/CampaignDetail.vue')
 const createCampaign = read('../pages/campaigns/CreateCampaign.vue')
@@ -14,6 +16,12 @@ const organizationDialog = read('../components/settings/OrganizationDetail.vue')
 
 describe('application-wide responsive layout', () => {
   it('provides viewport, overflow and media safety defaults', () => {
+    expect(globalCss).toContain('--app-ui-scale: 0.9;')
+    expect(globalCss).toContain('transform: scale(var(--app-ui-scale));')
+    expect(globalCss).toContain('transform-origin: top left;')
+    expect(globalCss).not.toContain('zoom: var(--app-ui-scale);')
+    expect(globalCss).toContain('#app .min-h-screen')
+    expect(globalCss).toContain('#app .h-screen')
     expect(globalCss).toContain('min-width: 320px;')
     expect(globalCss).toContain('min-height: 100dvh;')
     expect(globalCss).toContain('overflow-wrap: anywhere;')
@@ -36,6 +44,35 @@ describe('application-wide responsive layout', () => {
     expect(sidebar).toContain('const mobileExpanded = ref(false)')
     expect(sidebar).toContain('class="sidebar-mobile-backdrop"')
     expect(sidebar).toContain(':aria-expanded="!isSidebarCollapsed"')
+  })
+
+  it('forces every workspace content container to remain centered in the main column', () => {
+    expect(globalCss).toContain('.workspace-page-canvas:has(> .sidebar-rail-spacer)')
+    expect(globalCss).toContain('--workspace-sidebar-width: 240px;')
+    expect(globalCss).toContain('--workspace-content-max-width: 1440px;')
+    expect(globalCss).toContain('width: min(100%, var(--workspace-content-max-width)) !important;')
+    expect(globalCss).toContain('max-width: var(--workspace-content-max-width) !important;')
+    expect(globalCss).toContain('margin-right: auto !important;')
+    expect(globalCss).toContain('margin-left: auto !important;')
+    expect(globalCss).toContain('padding-right: 0;')
+    expect(globalCss).not.toContain('padding-right: var(--workspace-sidebar-width, 240px);')
+    expect(home).toMatch(/\.landing-document \{[\s\S]*?margin: 0 auto;/)
+  })
+
+  it('keeps workspace scrollbars narrow, right-aligned and outside centering math', () => {
+    expect(globalCss).toContain('--workspace-scrollbar-size: 8px;')
+    expect(globalCss).toContain('scrollbar-gutter: auto;')
+    expect(globalCss).toMatch(/\.workspace-page-canvas :where\([\s\S]*?scrollbar-gutter: stable;/)
+    expect(globalCss).toContain('scrollbar-width: thin;')
+    expect(globalCss).toContain('width: var(--workspace-scrollbar-size);')
+    expect(globalCss).toContain('::-webkit-scrollbar-button')
+  })
+
+  it('prevents the scaled workspace shell from creating a second document scrollbar', () => {
+    expect(app).toContain("workspace-app-shell bg-white")
+    expect(globalCss).toContain('html:has(.workspace-app-shell)')
+    expect(globalCss).toContain('body:has(.workspace-app-shell)')
+    expect(globalCss).toMatch(/body:has\(\.workspace-app-shell\) \{[\s\S]*?height: 100dvh;[\s\S]*?overflow: hidden;/)
   })
 
   it('allows campaign search, cards and details to reflow', () => {

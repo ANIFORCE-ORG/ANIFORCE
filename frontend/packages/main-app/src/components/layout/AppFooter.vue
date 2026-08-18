@@ -79,7 +79,7 @@ const copy = {
   align-items: center;
   padding-top: 0 !important;
   padding-bottom: 0 !important;
-  padding-left: calc(var(--workspace-sidebar-width, 205px) + 40px) !important;
+  padding-left: calc(var(--workspace-sidebar-width, 240px) + 40px) !important;
   border-top: 1px solid rgba(55, 53, 47, 0.08) !important;
   background: #f7f7f5;
 }
@@ -106,7 +106,7 @@ const copy = {
     padding-top: 12px !important;
     padding-bottom: 12px !important;
     padding-right: 12px !important;
-    padding-left: calc(var(--workspace-sidebar-width, 205px) + 12px) !important;
+    padding-left: calc(var(--workspace-sidebar-width, 240px) + 12px) !important;
   }
 
   .app-footer--workspace a {

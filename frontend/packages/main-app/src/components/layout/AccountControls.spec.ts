@@ -39,6 +39,13 @@ describe('shared account controls', () => {
     expect(source).toContain('logout')
   })
 
+  it('keeps the avatar and account identity vertically aligned', () => {
+    expect(source).toMatch(/\.account-trigger--header \{[\s\S]*?min-height: 38px;[\s\S]*?align-items: center;/)
+    expect(source).toMatch(/\.account-avatar \{[\s\S]*?display: inline-flex;[\s\S]*?align-items: center;[\s\S]*?justify-content: center;/)
+    expect(source).toMatch(/\.account-avatar \{[\s\S]*?box-sizing: border-box;[\s\S]*?overflow: hidden;[\s\S]*?line-height: 1;/)
+    expect(source).toMatch(/\.account-identity,[\s\S]*?justify-content: center;/)
+  })
+
   it('sends an explicitly logged-out user to the login page', () => {
     const logoutHandler = source.match(/const handleLogout = \(\) => \{[\s\S]*?\n\}/)?.[0] ?? ''
 
