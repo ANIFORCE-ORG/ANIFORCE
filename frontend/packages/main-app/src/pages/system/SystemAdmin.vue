@@ -81,7 +81,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -91,20 +91,19 @@ onMounted(() => {
     />
 
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
-      <div class="flex min-h-[54px] shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
-        <div class="flex min-w-0 items-center gap-[8px]">
-          <span class="grid h-[26px] w-[26px] place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
+      <header data-workspace-page-header class="workspace-page-header flex shrink-0 items-center justify-between gap-[20px] border-b border-[#e5e3df] bg-white/90 px-[clamp(24px,3vw,48px)] dark:border-slate-800 dark:bg-slate-900">
+        <div class="workspace-page-heading flex min-w-0 items-center gap-[8px]">
+          <span class="workspace-page-heading-icon grid h-[26px] w-[26px] place-items-center rounded-[6px] bg-[#f6f5f4] text-[#37352f] dark:bg-slate-800 dark:text-slate-300">
             <span class="material-symbols-outlined text-[16px]">admin_panel_settings</span>
           </span>
-          <div class="min-w-0">
+          <div class="workspace-page-heading-text min-w-0">
             <h1 class="m-0 text-[16px] font-semibold tracking-[-0.2px] text-[#1a1a1a] dark:text-white">系统管理</h1>
-            <p class="mt-[2px] text-[10px] font-normal leading-[1.2] text-[#787671] dark:text-slate-400">管理系统配置和全局用户账号</p>
           </div>
         </div>
-      </div>
+      </header>
 
       <div class="system-admin-scroll-area">
-        <div class="system-admin-content">
+        <div class="system-admin-content workspace-page-content">
         <!-- 卡片式管理入口 -->
         <div v-if="!showSystemPanel && !showUserManagementPanel" class="system-admin-grid">
           <button
@@ -242,7 +241,7 @@ onMounted(() => {
 .system-admin-card h2 {
   margin: 0;
   color: #1a1a1a;
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
   line-height: 1.35;
 }
@@ -250,7 +249,7 @@ onMounted(() => {
 .system-admin-card p {
   margin: 8px 0 18px;
   color: #787671;
-  font-size: 11px;
+  font-size: 13px;
   line-height: 1.55;
 }
 
@@ -260,7 +259,7 @@ onMounted(() => {
   align-items: center;
   gap: 5px;
   color: #37352f;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 550;
   line-height: 1.2;
 }

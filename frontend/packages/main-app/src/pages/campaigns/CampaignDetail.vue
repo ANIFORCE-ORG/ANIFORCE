@@ -123,7 +123,7 @@ const formatDate = (dateString?: string) => {
 
 <template>
   <!-- 三栏布局容器 -->
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav
       :nav-items="navItems"
@@ -134,7 +134,7 @@ const formatDate = (dateString?: string) => {
     <!-- 中间广告详情展示区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center px-[19px]">
+      <header data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center px-[19px]">
         <div class="flex items-center gap-[12px]">
           <button
             class="flex items-center gap-[6px] text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
@@ -144,13 +144,13 @@ const formatDate = (dateString?: string) => {
             <span class="text-[11px] font-medium">返回广告列表</span>
           </button>
         </div>
-      </div>
+      </header>
 
       <!-- Content -->
-      <div class="flex-1 overflow-y-auto p-[19px]">
+      <div class="workspace-page-content flex-1 overflow-y-auto p-[19px]">
         <!-- Campaign 详情信息 -->
         <aside class="mb-[15px] p-[16px] rounded-md border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-800/50 shadow-sm">
-          <div class="flex items-center gap-[12px] mb-[6px]">
+          <div class="campaign-detail-head flex items-center gap-[12px] mb-[6px]">
             <h2 class="text-[17px] font-bold text-slate-900 dark:text-white">{{ campaign?.name }}</h2>
             <div class="h-[19px] w-px bg-slate-200 dark:bg-slate-800"></div>
             <div class="flex-1">
@@ -159,7 +159,7 @@ const formatDate = (dateString?: string) => {
             </div>
           </div>
 
-          <div class="grid grid-cols-4 gap-[8px]">
+          <div class="grid grid-cols-1 gap-[8px] sm:grid-cols-2 xl:grid-cols-4">
             <!-- 平台 -->
             <div class="border border-slate-200 dark:border-slate-700 rounded-md p-[8px_10px]">
               <span class="block text-[9px] text-slate-600 dark:text-slate-400 leading-snug">平台</span>
@@ -262,3 +262,16 @@ const formatDate = (dateString?: string) => {
     />
   </div>
 </template>
+
+<style scoped>
+@media (max-width: 640px) {
+  .campaign-detail-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .campaign-detail-head > .h-\[19px\] {
+    display: none;
+  }
+}
+</style>

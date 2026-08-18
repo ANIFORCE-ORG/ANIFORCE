@@ -71,7 +71,7 @@
         <Transition name="scale">
           <div
             v-if="show"
-            class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-[750px] mx-4 h-[702px] overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col"
+            class="bg-white dark:bg-slate-800 rounded-md shadow-2xl w-full max-w-[750px] mx-4 h-[min(702px,calc(100dvh-24px))] overflow-hidden border border-slate-200 dark:border-slate-700 flex flex-col"
             @click.stop
           >
             <!-- 头部 -->

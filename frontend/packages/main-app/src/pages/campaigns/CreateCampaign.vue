@@ -255,7 +255,7 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <!-- 左侧导航栏 -->
     <SidebarNav
       :nav-items="navItems"
@@ -264,10 +264,10 @@ onMounted(async () => {
     />
 
     <!-- 主内容区 -->
-    <div class="flex-1 flex flex-col bg-slate-50 dark:bg-slate-950 overflow-hidden">
+    <div class="workspace-page-canvas flex-1 flex flex-col dark:bg-slate-950 overflow-hidden">
       <!-- Header -->
-      <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-7xl mx-auto px-[19px] py-[12px]">
+      <header data-workspace-page-header class="workspace-page-header bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+      <div class="workspace-page-header-content flex h-full items-center px-[19px]">
         <div class="flex items-center gap-[12px]">
           <button
             @click="handleBack"
@@ -278,11 +278,11 @@ onMounted(async () => {
           <h1 class="text-[17px] font-bold text-slate-900 dark:text-white">新建计划</h1>
           </div>
         </div>
-      </div>
+      </header>
 
       <!-- Steps Navigation -->
-    <div class="bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
-      <div class="max-w-7xl mx-auto px-[19px] py-[19px]">
+    <div class="campaign-stepper-scroll overflow-x-auto bg-white border-b border-slate-200 dark:border-slate-800 dark:bg-slate-900">
+      <div class="workspace-page-content min-w-[560px] px-[19px] py-[19px]">
         <div class="flex items-center justify-between">
           <div
             v-for="(step, index) in steps"
@@ -326,7 +326,7 @@ onMounted(async () => {
 
       <!-- Content -->
       <div class="flex-1 overflow-y-auto">
-        <div class="mx-auto px-[19px] py-[25px]">
+        <div class="workspace-page-content mx-auto px-[19px] py-[25px]">
       <!-- Step 1: 准备 -->
       <div v-if="currentStep === 1" class="space-y-[19px]">
         <!-- 选择所属分组 -->
@@ -413,7 +413,7 @@ onMounted(async () => {
             <span class="material-symbols-outlined text-[17px] text-primary">flag</span>
             <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">推广目标</h3>
           </div>
-          <div class="grid grid-cols-2 gap-[12px]">
+          <div class="grid grid-cols-1 gap-[12px] md:grid-cols-2">
             <div
               v-for="objective in objectives"
               :key="objective.id"
@@ -473,7 +473,7 @@ onMounted(async () => {
             <span class="material-symbols-outlined text-[17px] text-primary">trending_up</span>
             <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">出价策略</h3>
           </div>
-          <div class="grid grid-cols-2 gap-[12px] mb-[12px]">
+          <div class="grid grid-cols-1 gap-[12px] mb-[12px] md:grid-cols-2">
             <div
               v-for="strategy in biddingStrategies"
               :key="strategy.id"
@@ -506,7 +506,7 @@ onMounted(async () => {
             <span class="material-symbols-outlined text-[17px] text-primary">schedule</span>
             <h3 class="text-[15px] font-semibold text-slate-900 dark:text-white">投放时间</h3>
           </div>
-          <div class="grid grid-cols-2 gap-[12px]">
+          <div class="grid grid-cols-1 gap-[12px] md:grid-cols-2">
             <div>
               <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">开始日期</label>
               <input
@@ -538,7 +538,7 @@ onMounted(async () => {
           </div>
           
           <!-- 已选择的素材列表 -->
-          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-2 gap-[12px] mb-[12px]">
+          <div v-if="selectedMaterials.length > 0" class="grid grid-cols-1 gap-[12px] mb-[12px] md:grid-cols-2">
             <div
               v-for="material in selectedMaterials"
               :key="material.id"
@@ -622,7 +622,7 @@ onMounted(async () => {
                 <option value="female">女性</option>
               </select>
             </div>
-            <div class="grid grid-cols-2 gap-[12px]">
+            <div class="grid grid-cols-1 gap-[12px] md:grid-cols-2">
               <div>
                 <label class="block text-[11px] font-medium text-slate-700 dark:text-slate-300 mb-[6px]">最小年龄</label>
                 <input

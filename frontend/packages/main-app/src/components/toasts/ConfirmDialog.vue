@@ -7,6 +7,7 @@ interface Props {
   cancelText?: string
   confirmButtonClass?: string
   variant?: 'default' | 'notion'
+  tone?: 'primary' | 'danger'
 }
 
 interface Emits {
@@ -20,7 +21,8 @@ withDefaults(defineProps<Props>(), {
   confirmText: '确定',
   cancelText: '取消',
   confirmButtonClass: 'bg-blue-500 hover:bg-blue-600',
-  variant: 'default'
+  variant: 'default',
+  tone: 'primary'
 })
 
 const emit = defineEmits<Emits>()
@@ -56,7 +58,7 @@ const handleBackdropClick = (event: MouseEvent) => {
           </div>
           <footer class="confirm-actions">
             <button class="confirm-button secondary" type="button" @click="handleCancel">{{ cancelText }}</button>
-            <button class="confirm-button primary" :class="confirmButtonClass" type="button" @click="handleConfirm">{{ confirmText }}</button>
+            <button class="confirm-button primary" :class="[confirmButtonClass, { danger: tone === 'danger' }]" type="button" @click="handleConfirm">{{ confirmText }}</button>
           </footer>
         </section>
       </div>
@@ -74,12 +76,17 @@ const handleBackdropClick = (event: MouseEvent) => {
 .confirm-button { min-height: 36px; padding: 0 13px; border-radius: 8px; font-size: 10px; font-weight: 500; cursor: pointer; }
 .confirm-button.secondary { border: 1px solid #cbd5e1; background: #fff; color: #334155; }
 .confirm-button.primary { border: 1px solid #2383e2; background: #2383e2; color: #fff; }
+.confirm-button.primary.danger { border-color: #e03131; background: #e03131; color: #fff; }
+.confirm-button.primary.danger:hover { border-color: #c92a2a; background: #c92a2a; }
 .confirm-layer.notion { background: rgba(25,24,22,.48); }
-.notion .confirm-dialog { border-color: #e5e3df; border-radius: 12px; }
-.notion .confirm-copy h2 { color: #1a1a1a; }
-.notion .confirm-copy p { color: #5d5b54; }
-.notion .confirm-actions { border-color: #e5e3df; background: #fafaf9; }
+.notion .confirm-dialog { border-color: #e5e3df; border-radius: 12px; box-shadow: rgba(15,15,15,.16) 0 16px 48px -8px; font-family: "Notion Sans", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif; }
+.notion .confirm-copy { padding: 20px 20px 18px; }
+.notion .confirm-copy h2 { color: #1a1a1a; font-size: 15px; font-weight: 600; line-height: 1.4; }
+.notion .confirm-copy p { margin-top: 7px; color: #787671; font-size: 13px; line-height: 1.55; }
+.notion .confirm-actions { min-height: 58px; padding: 10px 20px; border-color: #ede9e4; background: #fafaf9; }
+.notion .confirm-button { min-height: 36px; padding: 0 14px; border-radius: 8px; font-size: 13px; font-weight: 500; }
 .notion .confirm-button.secondary { border-color: #c8c4be; color: #37352f; }
+.notion .confirm-button.secondary:hover { background: #f6f5f4; }
 .confirm-fade-enter-active,.confirm-fade-leave-active { transition: opacity .16s ease; }
 .confirm-fade-enter-from,.confirm-fade-leave-to { opacity: 0; }
 </style>

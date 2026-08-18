@@ -27,15 +27,15 @@ const switchSession = (session: any) => {
 </script>
 
 <template>
-  <div class="settings-notion">
+  <div class="settings-notion workspace-page-canvas">
     <SidebarNav :nav-items="navItems" :sessions="sessions" :active-panel="activePanel" @switch-panel="switchPanel" @switch-session="switchSession" />
     <main class="sn-main">
-      <header class="sn-page-head">
-        <button class="sn-back" type="button" aria-label="返回设置" @click="router.push('/settings')"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg></button>
-        <div class="sn-page-title"><h1>AI 使用量</h1><p>查看模型调用、Token 消耗、场景日志和预算限制</p></div>
+      <header data-workspace-page-header class="sn-page-head workspace-page-header workspace-page-heading">
+        <button class="sn-back workspace-page-back" type="button" aria-label="返回设置" @click="router.push('/settings')"><svg class="sn-icon" viewBox="0 0 24 24"><path d="M19 12H5M10 7l-5 5 5 5" /></svg></button>
+        <div class="sn-page-title workspace-page-heading-text"><h1>AI 使用量</h1></div>
       </header>
       <div class="sn-scroll">
-        <div class="sn-content">
+        <div class="sn-content workspace-page-content">
           <section class="sn-empty-state">
             <span class="sn-empty-icon"><svg class="sn-icon" style="width:25px;height:25px" viewBox="0 0 24 24"><rect x="3" y="3" width="18" height="18" rx="2" /><path d="M7 17v-4M12 17V8M17 17v-7" /></svg></span>
             <h2>AI 使用量统计功能开发中</h2>

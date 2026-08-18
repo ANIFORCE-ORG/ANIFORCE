@@ -81,8 +81,15 @@ export const useAgentStore = defineStore('agent', () => {
   // 持久化
   function restoreFromLocalStorage(sessionId: string): void {
     try {
+      const messagesKey = `aniforce_messages_${sessionId}`
       const timelineKey = `aniforce_timeline_${sessionId}`
       const workspaceKey = `aniforce_workspace_${sessionId}`
+
+      const cachedMessages = localStorage.getItem(messagesKey)
+      if (cachedMessages) {
+        const parsedMessages = JSON.parse(cachedMessages)
+        if (Array.isArray(parsedMessages)) messagesBySession.value.set(sessionId, parsedMessages)
+      }
       
       const cachedTimeline = localStorage.getItem(timelineKey)
       if (cachedTimeline) {
@@ -100,6 +107,11 @@ export const useAgentStore = defineStore('agent', () => {
   
   function persistToLocalStorage(sessionId: string): void {
     try {
+      const messages = messagesBySession.value.get(sessionId)
+      if (messages && messages.length) {
+        localStorage.setItem(`aniforce_messages_${sessionId}`, JSON.stringify(messages))
+      }
+
       const timeline = timelineBySession.value.get(sessionId)
       if (timeline && timeline.length) {
         localStorage.setItem(`aniforce_timeline_${sessionId}`, JSON.stringify(timeline))
@@ -123,6 +135,7 @@ export const useAgentStore = defineStore('agent', () => {
     errorsBySession.value.delete(sessionId)
     commandStatusBySession.value.delete(sessionId)
     currentTaskBySession.value.delete(sessionId)
+    localStorage.removeItem(`aniforce_messages_${sessionId}`)
     localStorage.removeItem(`aniforce_timeline_${sessionId}`)
     localStorage.removeItem(`aniforce_workspace_${sessionId}`)
   }
@@ -143,11 +156,13 @@ export const useAgentStore = defineStore('agent', () => {
 
   function setMessages(sessionId: string, msgs: AgentMessage[]): void {
     messagesBySession.value.set(sessionId, msgs)
+    persistToLocalStorage(sessionId)
   }
   
   function appendMessage(sessionId: string, msg: AgentMessage): void {
     const current = messagesBySession.value.get(sessionId) || []
     messagesBySession.value.set(sessionId, [...current, msg])
+    persistToLocalStorage(sessionId)
   }
   
   // AG-UI: 插入或更新 activity 消息
@@ -162,6 +177,7 @@ export const useAgentStore = defineStore('agent', () => {
       // 插入新 activity
       messagesBySession.value.set(sessionId, [...current, msg])
     }
+    persistToLocalStorage(sessionId)
   }
   
   function upsertTimelineBlock(sessionId: string, block: AgentTimelineBlock): void {
