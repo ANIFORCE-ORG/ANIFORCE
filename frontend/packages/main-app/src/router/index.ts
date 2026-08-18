@@ -3,6 +3,16 @@ import { useAuthStore } from '@/store/auth'
 
 const router = createRouter({
   history: createWebHistory(),
+  scrollBehavior(to) {
+    if (to.hash) {
+      return {
+        el: to.hash,
+        behavior: 'smooth',
+      }
+    }
+
+    return { top: 0 }
+  },
   routes: [
     {
       path: '/',
@@ -12,7 +22,7 @@ const router = createRouter({
     {
       path: '/contact',
       name: 'contact',
-      component: () => import('@/pages/Contact.vue'),
+      redirect: { path: '/', hash: '#contact' },
     },
     {
       path: '/privacy',

@@ -113,19 +113,43 @@ cleanup() {
 }
 trap cleanup SIGINT SIGTERM
 
+wait_for_url() {
+  local url="$1"
+  local name="$2"
+  local timeout="${3:-20}"
+  local elapsed=0
+  while [ "$elapsed" -lt "$timeout" ]; do
+    if curl -fsS "$url" >/dev/null 2>&1; then
+      ok "$name 已就绪 ($url)"
+      return 0
+    fi
+    sleep 1
+    elapsed=$((elapsed + 1))
+  done
+  return 1
+}
+
 # ============================================================
 #  1. 环境检测
 # ============================================================
 info "========== 环境检测 =========="
 
 # --- Python ---
-if command -v python3 &>/dev/null; then
+VENV_DIR="$BACKEND_DIR/.venv"
+if [ -n "${PYTHON_BIN:-}" ]; then
+  PY="$PYTHON_BIN"
+elif command -v python3.11 &>/dev/null; then
+  PY="python3.11"
+elif command -v python3.12 &>/dev/null; then
+  PY="python3.12"
+elif command -v python3 &>/dev/null; then
   PY="python3"
 elif command -v python &>/dev/null; then
   PY="python"
 else
   fail "未检测到 Python，请先安装 Python 3.10+"
 fi
+BASE_PY="$PY"
 PY_VER=$($PY --version 2>&1 | awk '{print $2}')
 PY_MAJOR=$(echo "$PY_VER" | cut -d. -f1)
 PY_MINOR=$(echo "$PY_VER" | cut -d. -f2)
@@ -168,18 +192,34 @@ info "========== 后端依赖 =========="
 cd "$BACKEND_DIR"
 
 # 虚拟环境
-if [ ! -d "venv/bin" ] && [ ! -d "venv/Scripts" ]; then
+VENV_DIR=".venv"
+if [ ! -d "$VENV_DIR/bin" ] && [ ! -d "$VENV_DIR/Scripts" ]; then
   info "创建 Python 虚拟环境..."
-  $PY -m venv venv
+  $BASE_PY -m venv "$VENV_DIR"
 fi
 
 # 激活虚拟环境
-if [ -f "venv/bin/activate" ]; then
-  source venv/bin/activate
-elif [ -f "venv/Scripts/activate" ]; then
-  source venv/Scripts/activate
+if [ -f "$VENV_DIR/bin/activate" ]; then
+  source "$VENV_DIR/bin/activate"
+  PY="$VENV_DIR/bin/python"
+elif [ -f "$VENV_DIR/Scripts/activate" ]; then
+  source "$VENV_DIR/Scripts/activate"
+  PY="$VENV_DIR/Scripts/python.exe"
 fi
 ok "虚拟环境已激活"
+
+ensure_backend_env() {
+  local py_cmd="$1"
+  if ! "$py_cmd" -m pip --version &>/dev/null; then
+    "$py_cmd" -m ensurepip --upgrade
+  fi
+  "$py_cmd" -m pip install -q --upgrade pip
+  "$py_cmd" -m pip install -q -r requirements.txt
+  "$py_cmd" - <<'PY'
+import fastapi, pydantic, pydantic_core, uvicorn
+print("backend imports ok")
+PY
+}
 
 # 安装依赖
 if [ "$ONLY" = "frontend" ]; then
@@ -188,8 +228,14 @@ elif [ "$SKIP_INSTALL" -eq 1 ]; then
   warn "已启用 --skip-install，跳过后端依赖安装"
 else
   info "安装 Python 依赖..."
-  pip install -q --upgrade pip
-  pip install -q -r requirements.txt
+  if ! ensure_backend_env "$PY"; then
+    warn "后端虚拟环境依赖损坏或安装失败，正在重建 $VENV_DIR ..."
+    rm -rf "$VENV_DIR"
+    $BASE_PY -m venv "$VENV_DIR"
+    source "$VENV_DIR/bin/activate"
+    PY="$VENV_DIR/bin/python"
+    ensure_backend_env "$PY" || fail "后端依赖安装失败"
+  fi
   ok "后端依赖安装完成"
 fi
 
@@ -292,12 +338,12 @@ else
   cd "$BACKEND_DIR"
 
   # 确保虚拟环境已激活并更新 Python 路径
-  if [ -f "venv/bin/activate" ]; then
-    source venv/bin/activate
-    PY="venv/bin/python"
-  elif [ -f "venv/Scripts/activate" ]; then
-    source venv/Scripts/activate
-    PY="venv/Scripts/python.exe"
+  if [ -f ".venv/bin/activate" ]; then
+    source .venv/bin/activate
+    PY=".venv/bin/python"
+  elif [ -f ".venv/Scripts/activate" ]; then
+    source .venv/Scripts/activate
+    PY=".venv/Scripts/python.exe"
   fi
 
   # 检查后端端口
@@ -308,7 +354,7 @@ if lsof -i :$BACKEND_PORT -sTCP:LISTEN &>/dev/null; then
 fi
 
   info "启动 FastAPI 后端 (http://localhost:$BACKEND_PORT)..."
-  UVICORN_RELOAD_FLAG="--reload"
+  UVICORN_RELOAD_FLAG="--reload --reload-dir app --reload-dir alembic --reload-exclude .venv --reload-exclude venv"
   UVICORN_WORKERS_FLAG=""
   if [ "$MODE" = "cloud" ]; then
     UVICORN_RELOAD_FLAG=""
@@ -320,7 +366,7 @@ fi
   echo "$BACKEND_PID" >> "$PID_FILE"
   sleep 2
 
-  if kill -0 "$BACKEND_PID" 2>/dev/null; then
+  if kill -0 "$BACKEND_PID" 2>/dev/null && wait_for_url "http://127.0.0.1:$BACKEND_PORT/health" "后端"; then
     ok "后端已启动 (PID: $BACKEND_PID)"
   else
     fail "后端启动失败，请检查日志"
@@ -349,13 +395,13 @@ fi
   if [ "$MODE" = "cloud" ]; then
     VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-0.0.0.0} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev --host 0.0.0.0 --port $FRONTEND_PORT &
   else
-    VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-127.0.0.1} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev &
+    VITE_BACKEND_HOST=${VITE_BACKEND_HOST:-127.0.0.1} VITE_FRONTEND_PORT=$FRONTEND_PORT VITE_BACKEND_PORT=$BACKEND_PORT pnpm dev --host 127.0.0.1 --port $FRONTEND_PORT &
   fi
   FRONTEND_PID=$!
   echo "$FRONTEND_PID" >> "$PID_FILE"
   sleep 3
 
-  if kill -0 "$FRONTEND_PID" 2>/dev/null; then
+  if kill -0 "$FRONTEND_PID" 2>/dev/null && wait_for_url "http://127.0.0.1:$FRONTEND_PORT/" "前端"; then
     ok "前端已启动 (PID: $FRONTEND_PID)"
   else
     fail "前端启动失败，请检查日志"
@@ -368,7 +414,15 @@ fi
 
 # 获取本机 Network IP（优先取第一个非 127 的 IPv4）
 get_network_ip() {
-  ip -4 addr show 2>/dev/null | grep -oP '(?<=inet\s)\d+(\.\d+){3}' | grep -v '^127\.' | head -1 || hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost"
+  if command -v ip &>/dev/null; then
+    ip -4 addr show 2>/dev/null | awk '/inet / { sub(/\/.*/, "", $2); if ($2 !~ /^127\./) { print $2; exit } }'
+    return
+  fi
+  if command -v ipconfig &>/dev/null; then
+    ipconfig getifaddr en0 2>/dev/null || ipconfig getifaddr en1 2>/dev/null || echo "localhost"
+    return
+  fi
+  hostname -I 2>/dev/null | awk '{print $1}' || echo "localhost"
 }
 NETWORK_IP=$(get_network_ip)
 
@@ -397,9 +451,9 @@ echo ""
 # 自动打开浏览器访问前端（cloud 模式默认不打开）
 if [ "$MODE" = "local" ]; then
   if command -v open &>/dev/null; then
-    open "http://localhost:$FRONTEND_PORT"
+    open "http://localhost:$FRONTEND_PORT" 2>/dev/null || true
   elif command -v xdg-open &>/dev/null; then
-    xdg-open "http://localhost:$FRONTEND_PORT"
+    xdg-open "http://localhost:$FRONTEND_PORT" 2>/dev/null || true
   fi
 fi
 

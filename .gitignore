@@ -56,6 +56,7 @@ htmlcov/
 
 # ===== 构建产物 =====
 *.tsbuildinfo
+vite.config.d.ts
 
 # ===== 数据文件 =====
 backend/data/images/

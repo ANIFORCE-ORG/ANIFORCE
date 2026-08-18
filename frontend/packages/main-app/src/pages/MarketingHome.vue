@@ -88,6 +88,7 @@ const copy = {
       eyebrow: '免费体验',
       title: '让你的投放团队先少开 5 个后台。',
       body: '留下联系方式，ANIFORCE将为你升级现有的广告投放流程。',
+      contactNote: '公司与产品咨询：support@aniforce.cc',
       marks: [
         { value: '30 min', label: '快速梳理投放流程' },
         { value: 'API', label: '确认渠道字段与权限' },
@@ -220,6 +221,7 @@ const copy = {
       eyebrow: 'Free trial',
       title: 'Let your media team open 5 fewer dashboards.',
       body: 'Leave your contact information. ANIFORCE will upgrade your existing advertising workflow.',
+      contactNote: 'Company and product inquiries: support@aniforce.cc',
       marks: [
         { value: '30 min', label: 'Map your media workflow' },
         { value: 'API', label: 'Review channel fields and access' },
@@ -544,6 +546,7 @@ const pageCopy = computed(() => copy[language.value])
               <span class="mt-2 block text-xs text-slate-300">{{ mark.label }}</span>
             </div>
           </div>
+          <p class="mt-5 text-xs leading-5 text-slate-400">{{ pageCopy.contact.contactNote }}</p>
         </div>
 
         <form class="rounded-md border border-white/15 bg-white/10 p-5" @submit.prevent>
