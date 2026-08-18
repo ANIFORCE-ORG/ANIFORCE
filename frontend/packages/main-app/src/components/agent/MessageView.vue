@@ -19,6 +19,7 @@ const emit = defineEmits<{
 
 const hovered = ref(false)
 const copied = ref(false)
+const processExpanded = ref(false)
 const codeCopied = ref<Record<number, boolean>>({})
 const streamStartedAt = ref<number | null>(null)
 const tps = ref<number | null>(null)
@@ -47,16 +48,38 @@ const isAssistant = computed(() => props.message.role === 'assistant')
 const isActivity = computed(() => props.message.role === 'activity')
 const textContent = computed(() => messageText(props.message))
 const blocks = computed(() => contentBlocks(props.message))
+const hasTextOutput = computed(() => blocks.value.some(block => block.type === 'text' && String(block.text || '').trim()))
+const processBlocks = computed(() => blocks.value.filter(block => {
+  if (block.type === 'thinking') return Boolean(thinkingText(block).trim())
+  if (block.type === 'toolCall') return processToolPresentation(block).visible
+  return false
+}))
+const thinkingBlocks = computed(() => processBlocks.value.filter(block => block.type === 'thinking'))
+const processToolBlocks = computed(() => processBlocks.value.filter(block => block.type === 'toolCall'))
+const hasProcessDetails = computed(() => processBlocks.value.length > 0)
+const processIsActive = computed(() => {
+  if (!props.isStreaming) return false
+  const latest = blocks.value[blocks.value.length - 1]
+  return latest?.type === 'thinking' || latest?.type === 'toolCall'
+})
+const processHasError = computed(() => processToolBlocks.value.some(block => toolState(block) === 'error'))
+const processLiveLabel = computed(() => {
+  const current = processBlocks.value[processBlocks.value.length - 1]
+  if (!current) return '正在分析你的问题'
+  if (current.type === 'thinking') return continuationLabel(blocks.value.indexOf(current))
+  return processToolPresentation(current).title
+})
+const processSummary = computed(() => {
+  const parts: string[] = []
+  if (thinkingBlocks.value.length) parts.push(`${thinkingBlocks.value.length} 段思考`)
+  if (processToolBlocks.value.length) parts.push(`${processToolBlocks.value.length} 项操作`)
+  const label = processIsActive.value ? processLiveLabel.value : '处理过程'
+  return parts.length ? `${label} · ${parts.join(' · ')}` : label
+})
 const userImageBlocks = computed(() => {
   const content = props.message.content
   if (!Array.isArray(content)) return []
   return content.filter(block => block && typeof block === 'object' && block.type === 'image') as Record<string, unknown>[]
-})
-const modelLabel = computed(() => {
-  const provider = props.message.provider
-  const model = props.message.model
-  if (!model) return ''
-  return props.modelNames?.[`${provider}:${model}`] || props.modelNames?.[model] || model
 })
 const estimatedTokens = computed(() => Math.round(textContent.value.length / 4))
 const usageText = computed(() => formatUsage(props.message.usage))
@@ -69,7 +92,6 @@ interface RunActivityPresentation {
 
 // A run gets one foreground signal. Raw reasoning and hidden tools never enter
 // the DOM, but they still keep the user informed through this safe fallback.
-const hasTextOutput = computed(() => blocks.value.some(b => b.type === 'text' && String(b.text || '').trim()))
 const hasRunningTools = computed(() => props.isStreaming && blocks.value.some(b => b.type === 'toolCall' && !hasToolResult(b)))
 const runActivity = computed<RunActivityPresentation | null>(() => {
   if (!props.isStreaming) return null
@@ -199,6 +221,9 @@ function resolveApproval(block: Record<string, unknown>, decision: 'approve' | '
   emit('approval', { runId: String(block.runId), checkpointId: String(block.checkpointId), decision })
 }
 
+function thinkingText(block: Record<string, unknown>): string {
+  return String(block.thinking || block.content || block.summary || '')
+}
 function toolId(block: Record<string, unknown>): string {
   return String(block.toolCallId || block.id || '')
 }
@@ -215,6 +240,19 @@ function toolResult(block: Record<string, unknown>): unknown {
 }
 function toolPresentation(block: Record<string, unknown>) {
   return getToolPresentation(toolName(block), toolState(block), toolResult(block))
+}
+function processToolPresentation(block: Record<string, unknown>): {
+  visible: boolean
+  icon: string
+  title: string
+  summary: string
+} {
+  const presentation = toolPresentation(block)
+  if (presentation.visible) return presentation
+  const hidden = getHiddenToolActivity(toolName(block), toolState(block))
+  return hidden
+    ? { visible: true, icon: hidden.icon, title: hidden.label, summary: '' }
+    : { visible: false, icon: 'progress_activity', title: '', summary: '' }
 }
 function imageSrc(block: Record<string, unknown>): string {
   if (typeof block.data === 'string') return `data:${String(block.mimeType || 'image/png')};base64,${block.data}`
@@ -342,11 +380,57 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
       <span v-if="tps !== null" class="tps-badge">{{ tps.toFixed(1) }} t/s</span>
     </div>
 
-    <!-- Block list: raw reasoning stays hidden; visible business activity remains. -->
     <div class="assistant-block-list">
+      <div v-if="hasProcessDetails" class="process-disclosure">
+        <button
+          class="process-toggle"
+          :class="{ 'is-active': processIsActive, 'is-expanded': processExpanded, 'has-error': processHasError }"
+          type="button"
+          :aria-expanded="processExpanded"
+          @click="processExpanded = !processExpanded"
+        >
+          <span class="material-symbols-outlined process-chevron" aria-hidden="true">chevron_right</span>
+          <span class="material-symbols-outlined process-glyph" aria-hidden="true">psychology</span>
+          <span class="process-summary">{{ processSummary }}</span>
+        </button>
+
+        <Transition name="process-reveal">
+          <div v-if="processExpanded" class="process-panel">
+            <template v-for="(item, index) in processBlocks" :key="item.type === 'toolCall' ? (toolId(item) || index) : `thinking-${index}`">
+              <div
+                v-if="item.type === 'thinking'"
+                class="process-timeline-item thought-item"
+                :class="{ 'is-current': processIsActive && index === processBlocks.length - 1 }"
+              >
+                <span class="material-symbols-outlined process-entry-icon" :class="{ breathing: processIsActive && index === processBlocks.length - 1 }" aria-hidden="true">neurology</span>
+                <div class="thought-copy">
+                  <span>思考</span>
+                  <p>{{ thinkingText(item) }}</p>
+                </div>
+              </div>
+
+              <div
+                v-else
+                class="process-tool-row"
+                :class="[`is-${toolState(item)}`, { 'is-current': processIsActive && index === processBlocks.length - 1 }]"
+              >
+                <span class="material-symbols-outlined process-tool-icon" aria-hidden="true">{{ processToolPresentation(item).icon }}</span>
+                <span class="process-tool-copy">
+                  <strong>{{ processToolPresentation(item).title }}</strong>
+                  <small v-if="processToolPresentation(item).summary">{{ processToolPresentation(item).summary }}</small>
+                </span>
+                <span class="process-tool-state" aria-hidden="true">
+                  <span v-if="toolState(item) === 'running'" class="tool-spinner"></span>
+                  <span v-else class="material-symbols-outlined">{{ toolState(item) === 'error' ? 'priority_high' : 'check' }}</span>
+                </span>
+              </div>
+            </template>
+          </div>
+        </Transition>
+      </div>
+
       <template v-for="(block, i) in blocks" :key="i">
-        <!-- Reasoning is represented by the singleton run activity below. -->
-        <template v-if="block.type === 'thinking'"></template>
+        <template v-if="block.type === 'thinking' || block.type === 'toolCall'"></template>
 
         <!-- Text Block: 纯 markdown，无包装，流式时带光标 -->
         <div v-else-if="block.type === 'text'" class="markdown-body" :class="{ 'streaming-text': isStreaming && isLastBlock(i) }">
@@ -372,31 +456,10 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
             </div>
           </div>
         </div>
-
-        <!-- Tool activity: user-facing business status only; raw payloads stay out of the UI. -->
-        <div
-          v-else-if="block.type === 'toolCall' && toolPresentation(block).visible"
-          class="tool-call-block"
-          :class="[`is-${toolState(block)}`, `is-${toolPresentation(block).category}`]"
-          role="status"
-          aria-live="polite"
-        >
-          <div class="tool-header">
-            <span class="material-symbols-outlined tool-icon" aria-hidden="true">{{ toolPresentation(block).icon }}</span>
-            <span class="tool-copy">
-              <strong class="tool-name">{{ toolPresentation(block).title }}</strong>
-              <small v-if="toolPresentation(block).summary" class="tool-summary">{{ toolPresentation(block).summary }}</small>
-            </span>
-            <span class="tool-state-icon" :class="toolState(block)" aria-hidden="true">
-              <span v-if="toolState(block) === 'running'" class="tool-spinner"></span>
-              <span v-else class="material-symbols-outlined">{{ toolState(block) === 'error' ? 'priority_high' : 'check' }}</span>
-            </span>
-          </div>
-        </div>
       </template>
 
       <div
-        v-if="runActivity"
+        v-if="runActivity && !hasProcessDetails"
         class="run-activity"
         :data-mode="runActivity.mode"
         role="status"
@@ -522,25 +585,6 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
 
 /* text 阶段：无额外动效，靠光标 */
 
-/* tools 阶段：左侧琥珀色脉冲条 */
-.assistant-message.phase-tools::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #f9ab00;
-  border-radius: 1px;
-  animation: phase-pulse 1.5s ease-in-out infinite;
-  opacity: 0.6;
-}
-
-@keyframes phase-pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.8; }
-}
-
 /* 流式指示器：只在有文本输出时显示 */
 .streaming-indicators {
   display: flex;
@@ -557,12 +601,183 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   to { opacity: 1; }
 }
 
-/* Block list: transient reasoning status, text, approvals, and tools. */
+/* Block list: process disclosure, final answer, and approvals. */
 .assistant-block-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 0;
+}
+
+.process-disclosure {
+  margin: 1px 0 5px;
+}
+
+.process-toggle {
+  display: inline-flex;
+  min-height: 28px;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  padding: 3px 5px 3px 0;
+  color: var(--text-muted, #5f6368);
+  cursor: pointer;
+  font: inherit;
+  transition: color 180ms ease, opacity 180ms ease;
+}
+
+.process-toggle:hover { color: var(--text, #202124); }
+.process-toggle:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #1a73e8) 34%, transparent); outline-offset: 2px; }
+
+.process-chevron {
+  width: 16px;
+  flex: 0 0 16px;
+  font-size: 17px;
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.process-toggle.is-expanded .process-chevron { transform: rotate(90deg); }
+
+.process-glyph {
+  width: 18px;
+  flex: 0 0 18px;
+  color: var(--text-dim, #9aa0a6);
+  font-size: 16px;
+  font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 20;
+}
+.process-toggle.is-active .process-glyph {
+  color: var(--accent, #1a73e8);
+  animation: process-breathe 2.8s ease-in-out infinite;
+}
+.process-toggle.has-error .process-glyph { color: var(--error, #d93025); }
+
+.process-summary {
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-panel {
+  position: relative;
+  margin: 3px 0 8px 8px;
+  padding: 5px 0 4px 24px;
+}
+.process-panel::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  bottom: 5px;
+  left: 7px;
+  width: 1px;
+  background: color-mix(in srgb, var(--text-dim, #9aa0a6) 22%, transparent);
+}
+
+.process-timeline-item,
+.process-tool-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 20px;
+  align-items: start;
+  gap: 7px;
+}
+.process-timeline-item + .process-timeline-item,
+.process-timeline-item + .process-tool-row,
+.process-tool-row + .process-timeline-item,
+.process-tool-row + .process-tool-row { margin-top: 10px; }
+
+.process-entry-icon {
+  margin-top: 1px;
+  color: var(--text-dim, #9aa0a6);
+  font-size: 15px;
+  font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 20;
+}
+.process-entry-icon.breathing { animation: process-breathe 2.8s ease-in-out infinite; }
+.thought-copy {
+  max-width: 720px;
+  color: color-mix(in srgb, var(--text-muted, #5f6368) 86%, transparent);
+  font-size: 12px;
+  line-height: 1.75;
+}
+.thought-copy > span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-dim, #9aa0a6);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.thought-copy p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.thought-item.is-current .thought-copy p::after {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  margin-left: 3px;
+  background: currentColor;
+  opacity: 0.65;
+  vertical-align: -0.16em;
+  animation: thought-cursor 1.2s ease-in-out infinite;
+}
+
+.process-tool-row {
+  min-height: 30px;
+  align-items: center;
+  color: var(--text-muted, #5f6368);
+}
+.process-tool-icon { color: var(--text-dim, #9aa0a6); font-size: 15px; }
+.process-tool-row.is-current .process-tool-icon { animation: process-breathe 2.8s ease-in-out infinite; }
+.process-tool-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+.process-tool-copy strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 11.5px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process-tool-copy small {
+  overflow: hidden;
+  color: var(--text-dim, #9aa0a6);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process-tool-state {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  color: var(--success, #16803c);
+}
+.process-tool-state .material-symbols-outlined { font-size: 14px; }
+.process-tool-row.is-error .process-tool-copy strong,
+.process-tool-row.is-error .process-tool-state { color: var(--error, #d93025); }
+
+.process-reveal-enter-active,
+.process-reveal-leave-active { transition: opacity 180ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+.process-reveal-enter-from,
+.process-reveal-leave-to { opacity: 0; transform: translateY(-4px); }
+
+@keyframes process-breathe {
+  0%, 100% { opacity: 0.56; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+@keyframes thought-cursor {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.75; }
 }
 
 /* Markdown Body - 对齐 CustomPiAgent: 14px/1.7，紧凑间距 */
@@ -880,109 +1095,6 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   background: #92400e;
 }
 
-/* Tool activity - business language, no raw runtime payloads. */
-.tool-call-block {
-  overflow: hidden;
-  border: 1px solid var(--outline-variant, #e8eaed);
-  border-radius: 8px;
-  background: var(--surface-container, #f8fafd);
-  color: var(--text, #202124);
-  font-size: 12px;
-  animation: tool-activity-enter 180ms cubic-bezier(0.16, 1, 0.3, 1) both;
-  transition: border-color 160ms cubic-bezier(0.16, 1, 0.3, 1), background-color 160ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.tool-call-block.is-running {
-  border-color: color-mix(in srgb, var(--accent, #1a73e8) 24%, var(--outline-variant, #e8eaed));
-}
-
-.tool-call-block.is-error {
-  border-color: color-mix(in srgb, var(--error, #d93025) 34%, var(--outline-variant, #e8eaed));
-  background: color-mix(in srgb, var(--error, #d93025) 5%, var(--surface, #fff));
-}
-
-.tool-header {
-  display: flex;
-  min-width: 0;
-  min-height: 38px;
-  align-items: center;
-  gap: 9px;
-  padding: 7px 11px;
-}
-
-.tool-icon {
-  width: 20px;
-  flex: 0 0 20px;
-  color: var(--text-muted, #5f6368);
-  font-size: 16px;
-  line-height: 1;
-  text-align: center;
-}
-
-.tool-call-block.is-read .tool-icon {
-  color: var(--accent, #1a73e8);
-}
-
-.tool-call-block.is-write .tool-icon,
-.tool-call-block.is-link .tool-icon {
-  color: var(--text, #202124);
-}
-
-.tool-copy {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  align-items: baseline;
-  gap: 8px;
-}
-
-.tool-name {
-  overflow: hidden;
-  color: inherit;
-  font-family: inherit;
-  font-size: 12.5px;
-  font-weight: 600;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tool-summary {
-  overflow: hidden;
-  color: var(--text-dim, #9aa0a6);
-  font-size: 11px;
-  line-height: 1.4;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tool-call-block.is-error .tool-name {
-  color: var(--error, #d93025);
-}
-
-.tool-state-icon {
-  display: grid;
-  width: 20px;
-  height: 20px;
-  flex: 0 0 20px;
-  place-items: center;
-  border-radius: 50%;
-}
-
-.tool-state-icon .material-symbols-outlined {
-  font-size: 15px;
-}
-
-.tool-state-icon.completed {
-  background: color-mix(in srgb, var(--success, #16803c) 10%, transparent);
-  color: var(--success, #16803c);
-}
-
-.tool-state-icon.error {
-  background: color-mix(in srgb, var(--error, #d93025) 9%, transparent);
-  color: var(--error, #d93025);
-}
-
 .tool-spinner {
   width: 14px;
   height: 14px;
@@ -992,25 +1104,23 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   animation: tool-spinner-rotate 900ms linear infinite;
 }
 
-@keyframes tool-activity-enter {
-  from {
-    opacity: 0;
-    transform: translateY(4px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-
 @keyframes tool-spinner-rotate {
   to { transform: rotate(360deg); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .run-activity,
-  .tool-call-block {
+  .process-glyph,
+  .process-entry-icon.breathing,
+  .process-tool-row.is-current .process-tool-icon,
+  .thought-item.is-current .thought-copy p::after {
     animation: none;
+  }
+
+  .process-chevron,
+  .process-reveal-enter-active,
+  .process-reveal-leave-active {
+    transition: none;
   }
 
   .run-activity__dots i {

@@ -50,21 +50,22 @@ describe('MessageView tool activity contract', () => {
   const { descriptor, errors } = parseSfc(source, { filename: 'MessageView.vue' })
   const template = descriptor.template?.content || ''
 
-  it('uses one run activity fallback without rendering reasoning content', () => {
+  it('keeps process details collapsed until the user opens them', () => {
     expect(errors).toHaveLength(0)
-    expect(template).toContain("block.type === 'thinking'")
-    expect(template).toContain('v-if="runActivity"')
-    expect(template).toContain('runActivity.label')
+    expect(source).toContain('const processExpanded = ref(false)')
+    expect(template).toContain(':aria-expanded="processExpanded"')
+    expect(template).toContain('v-if="processExpanded"')
+    expect(template).toContain('thinkingText(item)')
+    expect(template).toContain('runActivity && !hasProcessDetails')
     expect(template).not.toContain('{{ block.thinking }}')
-    expect(template).not.toContain('expandedThinking')
     expect(template).not.toContain('thinking-char-hint')
   })
 
-  it('renders productized tool activity without raw payload controls', () => {
-    expect(template).toContain('toolPresentation(block).title')
-    expect(template).toContain('toolPresentation(block).summary')
-    expect(template).not.toContain('toolInput(block)')
-    expect(template).not.toContain('toolBlockResultText(block)')
+  it('renders productized process activity without raw payload controls', () => {
+    expect(template).toContain('processToolPresentation(item).title')
+    expect(template).toContain('processToolPresentation(item).summary')
+    expect(template).not.toContain('toolInput(')
+    expect(template).not.toContain('toolBlockResultText(')
     expect(template).not.toContain('tool-pre')
     expect(template).not.toContain('expandedTools')
   })
