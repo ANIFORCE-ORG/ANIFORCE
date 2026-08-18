@@ -141,7 +141,11 @@ const platformClass = (platform?: string) => platform === 'Meta'
     </div>
 
     <div class="overflow-x-auto">
-      <table class="w-full text-left" :class="embedded ? 'min-w-[420px]' : 'min-w-[980px]'">
+      <table class="w-full text-left" :class="embedded ? 'table-fixed' : 'min-w-[980px]'">
+        <colgroup v-if="embedded">
+          <col />
+          <col class="w-[74px]" />
+        </colgroup>
         <thead class="bg-slate-50 text-[10px] uppercase text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
           <tr>
             <th class="px-[12px] py-[9px] font-semibold">素材</th>
@@ -151,7 +155,7 @@ const platformClass = (platform?: string) => platform === 'Meta'
             <th v-if="!embedded" class="px-[10px] py-[9px] font-semibold">尺寸 / 比例</th>
             <th v-if="!embedded" class="px-[10px] py-[9px] font-semibold">大小 / 时长</th>
             <th v-if="!embedded" class="px-[10px] py-[9px] font-semibold">创建时间</th>
-            <th class="px-[10px] py-[9px] font-semibold">操作</th>
+            <th class="w-[74px] px-[10px] py-[9px] text-right font-semibold">操作</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -213,18 +217,20 @@ const platformClass = (platform?: string) => platform === 'Meta'
             <td v-if="!embedded" class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.material.width && row.material.height ? `${row.material.width} × ${row.material.height}` : '-' }} · {{ row.ratio }}</td>
             <td v-if="!embedded" class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.fileSizeLabel }}<span v-if="row.durationLabel !== '-'"> · {{ row.durationLabel }}</span></td>
             <td v-if="!embedded" class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.createdAtLabel }}</td>
-            <td class="px-[10px] py-[10px]">
-              <div class="flex items-center gap-[2px]">
-                <button v-if="embedded" class="rounded-md p-[5px] text-slate-400 hover:bg-primary/10 hover:text-primary" title="预览素材" @click.stop="selectRow(row)">
-                  <span class="material-symbols-outlined text-[15px]">visibility</span>
+            <td class="w-[74px] px-[8px] py-[10px]">
+              <div class="flex items-center justify-end gap-[2px]">
+                <button v-if="embedded" class="material-action" type="button" title="预览素材" aria-label="预览素材" @click.stop="selectRow(row)">
+                  <span class="material-symbols-outlined">visibility</span>
                 </button>
                 <button
                   v-if="embedded"
-                  class="mention-btn rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-all hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
+                  class="material-action"
+                  type="button"
                   title="引用到对话"
+                  :aria-label="`在对话中引用 ${row.name}`"
                   @click.stop="emit('mention', row.material)"
                 >
-                  @mention
+                  <span class="material-symbols-outlined">alternate_email</span>
                 </button>
                 <button v-if="allowDelete" class="rounded-md p-[5px] text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" title="从 ANIFORCE 删除" @click.stop="emit('delete', row)">
                   <span class="material-symbols-outlined text-[15px]">delete</span>
@@ -291,17 +297,20 @@ const platformClass = (platform?: string) => platform === 'Meta'
 .account-dot { height: 6px; width: 6px; border-radius: 999px; background: rgb(37 99 235); }
 tbody tr { transition: background-color 140ms ease, border-color 140ms ease; }
 
-.mention-btn { cursor: pointer; }
-
-.mention-btn:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
-  background: white !important;
-  border-color: rgb(var(--color-primary)) !important;
+.material-action {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(148 163 184);
+  cursor: pointer;
 }
 
-.mention-btn:active {
-  transform: translateY(0) scale(0.95);
-  transition-duration: 0.1s;
-}
+.material-action .material-symbols-outlined { font-size: 17px; }
+.material-action:hover { background: rgb(239 246 255); color: rgb(37 99 235); }
+.material-action:focus-visible { outline: 2px solid rgb(147 197 253); outline-offset: 1px; }
 </style>

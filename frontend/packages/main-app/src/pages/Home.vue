@@ -16,6 +16,7 @@ import { normalizeTaskPanelStatus, taskStatusPresentation } from '@/agent/taskPr
 import { getHiddenToolActivity, getToolPresentation } from '@/utils/toolNameMapping'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
+import { workspaceResultProjectionRegistry } from '@/store/workspace'
 import { navItems } from '@/config/navigation'
 import aniforceWorkflowHero from '@/assets/aniforce-workflow-hero.png'
 
@@ -26,8 +27,12 @@ const inputText = ref('')
 const hasInteracted = ref(false)
 const modelMenuOpen = ref(false)
 const activeIntentMode = ref<'chat' | 'project'>('chat')
-const workspaceCollapsed = ref(localStorage.getItem('aniforce.workspace.collapsed') === '1')
+const initialWorkspaceCollapsed = localStorage.getItem('aniforce.workspace.collapsed') === '1'
+const workspaceCollapsed = ref(initialWorkspaceCollapsed)
+const workspaceManuallyCollapsed = ref(initialWorkspaceCollapsed)
 const workspaceWidth = ref(Number(localStorage.getItem('aniforce.workspace.width') || 470))
+const isDesktopWorkspaceViewport = ref(window.matchMedia('(min-width: 1280px)').matches)
+const seenWorkspaceProjectionBySession = ref<Record<string, string>>({})
 const workspaceDragging = ref(false)
 const renameDialog = ref<{ id: string; name: string } | null>(null)
 const renameValue = ref('')
@@ -118,13 +123,51 @@ const activeSessionId = computed(() => agent.activeSession.value?.id || '')
 const currentTask = computed(() => agent.currentTask.value)
 const hasBusinessTask = computed(() => Boolean(currentTask.value?.task_type && currentTask.value.task_type !== 'conversation' && currentTask.value.task_type !== 'data_query'))
 const hasWorkspaceToolResults = computed(() => Boolean(agent.workspaceProjection.value) || agent.workspaceToolResults.value.length > 0)
-const taskPanelVisible = computed(() => true)
+const workspaceProjection = computed(() => agent.workspaceProjection.value)
+const workspaceApprovalDraft = computed(() => agent.workspaceApprovalDraft.value)
+const workspaceUpdating = computed(() => {
+  const draftStatus = workspaceApprovalDraft.value?.status
+  if (draftStatus === 'executing' || draftStatus === 'approved') return true
+  if (!agent.agentRunning.value || agent.agentPhase.value?.kind !== 'running_tools') return false
+  return agent.agentPhase.value.tools.some(tool => (
+    tool.name === 'request_workspace_projection'
+    || Boolean(workspaceResultProjectionRegistry[tool.name])
+  ))
+})
+const workspaceHasNewResult = computed(() => {
+  const projection = workspaceProjection.value
+  if (!projection) return false
+  return seenWorkspaceProjectionBySession.value[activeSessionId.value] !== projection.id
+})
+const workspaceAttention = computed<'idle' | 'updating' | 'new' | 'approval' | 'executing' | 'error'>(() => {
+  const draftStatus = workspaceApprovalDraft.value?.status
+  if (draftStatus === 'pending') return 'approval'
+  if (draftStatus === 'executing' || draftStatus === 'approved') return 'executing'
+  if (workspaceProjection.value?.mode === 'failed') return 'error'
+  if (workspaceUpdating.value) return 'updating'
+  if (workspaceHasNewResult.value) return 'new'
+  return 'idle'
+})
+const workspaceHasDisplayContent = computed(() => Boolean(
+  workspaceProjection.value || workspaceApprovalDraft.value
+))
+const workspaceStatusLabel = computed(() => ({
+  idle: '',
+  updating: workspaceProjection.value ? '更新中' : '准备中',
+  new: '',
+  approval: '需要确认',
+  executing: '执行中',
+  error: '未完成',
+})[workspaceAttention.value])
+const workspaceEffectiveCollapsed = computed(() => (
+  workspaceCollapsed.value || !workspaceHasDisplayContent.value
+))
 const taskStateVisible = computed(() => Boolean(currentTask.value || agent.commandStatus.value))
 const taskStatusMeta = computed(() => taskStatusPresentation[taskStatus.value])
 const taskStatusLabel = computed(() => taskStatusMeta.value.label)
 const runningSession = computed(() => agent.sessions.value.find(session => session.id === agent.activeRunSessionId.value) || null)
 const workspaceStyle = computed(() => ({
-  width: workspaceCollapsed.value ? '56px' : `${workspaceWidth.value}px`
+  width: workspaceEffectiveCollapsed.value ? '56px' : `${workspaceWidth.value}px`
 }))
 const taskStatus = computed<TaskPanelStatus>(() => {
   if (currentTask.value?.status) return normalizeTaskPanelStatus(currentTask.value.status)
@@ -308,13 +351,32 @@ function clampWorkspaceWidth(value: number): number {
   return Math.min(Math.max(value, 360), viewportMax)
 }
 
+function handleWorkspaceViewportResize(): void {
+  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
+  isDesktopWorkspaceViewport.value = window.matchMedia('(min-width: 1280px)').matches
+  if (isDesktopWorkspaceViewport.value && !workspaceCollapsed.value) markWorkspaceProjectionSeen()
+}
+
 function persistWorkspaceState() {
   localStorage.setItem('aniforce.workspace.width', String(workspaceWidth.value))
   localStorage.setItem('aniforce.workspace.collapsed', workspaceCollapsed.value ? '1' : '0')
 }
 
+function markWorkspaceProjectionSeen(): void {
+  const projection = workspaceProjection.value
+  const sessionId = activeSessionId.value
+  if (!projection || !sessionId) return
+  seenWorkspaceProjectionBySession.value = {
+    ...seenWorkspaceProjectionBySession.value,
+    [sessionId]: projection.id,
+  }
+}
+
 function toggleWorkspaceCollapsed() {
+  if (!workspaceHasDisplayContent.value) return
   workspaceCollapsed.value = !workspaceCollapsed.value
+  workspaceManuallyCollapsed.value = workspaceCollapsed.value
+  if (!workspaceCollapsed.value) markWorkspaceProjectionSeen()
   persistWorkspaceState()
 }
 
@@ -456,6 +518,8 @@ function handleTaskAction(action: string) {
   }
   if (action === 'open_approval') {
     workspaceCollapsed.value = false
+    workspaceManuallyCollapsed.value = false
+    markWorkspaceProjectionSeen()
     persistWorkspaceState()
     return
   }
@@ -494,6 +558,9 @@ async function createSessionForActiveMode() {
   }
   hasInteracted.value = false
   inputText.value = ''
+  workspaceCollapsed.value = false
+  workspaceManuallyCollapsed.value = false
+  persistWorkspaceState()
   if (route.path !== '/home' || route.query.session_id) await router.push('/home')
 }
 
@@ -609,7 +676,8 @@ function handleVisibilityChange() {
 }
 
 onMounted(async () => {
-  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
+  handleWorkspaceViewportResize()
+  window.addEventListener('resize', handleWorkspaceViewportResize)
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -619,7 +687,8 @@ onMounted(async () => {
 })
 
 onActivated(() => {
-  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
+  handleWorkspaceViewportResize()
+  window.addEventListener('resize', handleWorkspaceViewportResize)
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -628,12 +697,14 @@ onActivated(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleWorkspaceViewportResize)
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onDeactivated(() => {
+  window.removeEventListener('resize', handleWorkspaceViewportResize)
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
@@ -653,10 +724,25 @@ watch(
 )
 
 watch(
-  () => taskStatus.value === 'waiting_approval' || agent.workspaceApprovalDraft.value?.status === 'pending',
+  () => [activeSessionId.value, workspaceProjection.value?.id || ''] as const,
+  ([sessionId, projectionId], previous) => {
+    if (!projectionId) return
+    if (previous && sessionId === previous[0] && projectionId === previous[1]) return
+    if (!workspaceManuallyCollapsed.value) workspaceCollapsed.value = false
+    if (!workspaceCollapsed.value && isDesktopWorkspaceViewport.value) {
+      markWorkspaceProjectionSeen()
+    }
+    persistWorkspaceState()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => taskStatus.value === 'waiting_approval' || workspaceApprovalDraft.value?.status === 'pending',
   needsApproval => {
-    if (!needsApproval || !workspaceCollapsed.value) return
+    if (!needsApproval || !workspaceCollapsed.value || workspaceManuallyCollapsed.value) return
     workspaceCollapsed.value = false
+    markWorkspaceProjectionSeen()
     persistWorkspaceState()
   },
   { immediate: true },
@@ -919,13 +1005,13 @@ watch(
     </main>
 
     <div
-      v-if="hasContent && taskPanelVisible"
+      v-if="isDesktopWorkspaceViewport"
       class="workspace-column"
-      :class="{ collapsed: workspaceCollapsed }"
+      :class="{ collapsed: workspaceEffectiveCollapsed }"
       :style="workspaceStyle"
     >
       <button
-        v-if="!workspaceCollapsed"
+        v-if="!workspaceEffectiveCollapsed"
         class="workspace-resize-handle"
         type="button"
         aria-label="调整工作台宽度"
@@ -933,11 +1019,14 @@ watch(
       ></button>
       <LiveWorkspaceShell
         class="home-workspace"
-        :visible="hasContent"
-        :collapsed="workspaceCollapsed"
+        visible
+        :collapsed="workspaceEffectiveCollapsed"
+        :can-expand="workspaceHasDisplayContent"
         :session-id="agent.activeSession.value?.id"
-        :projection="agent.workspaceProjection.value"
-        :approval-draft="agent.workspaceApprovalDraft.value"
+        :projection="workspaceProjection"
+        :approval-draft="workspaceApprovalDraft"
+        :attention="workspaceAttention"
+        :status-label="workspaceStatusLabel"
         @toggle-collapse="toggleWorkspaceCollapsed"
         @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: agent.workspaceApprovalDraft.value?.runId || '' })"
         @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
@@ -952,6 +1041,30 @@ watch(
         @view-material="openMaterial"
       />
     </div>
+
+    <LiveWorkspaceShell
+      v-if="!isDesktopWorkspaceViewport"
+      mobile
+      visible
+      :can-expand="workspaceHasDisplayContent"
+      :session-id="agent.activeSession.value?.id"
+      :projection="workspaceProjection"
+      :approval-draft="workspaceApprovalDraft"
+      :attention="workspaceAttention"
+      :status-label="workspaceStatusLabel"
+      @opened="markWorkspaceProjectionSeen"
+      @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: workspaceApprovalDraft?.runId || '' })"
+      @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, workspaceApprovalDraft?.runId || '')"
+      @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
+      @select-entity="agent.selectWorkspaceEntity"
+      @mention-entity="appendMentionToInput"
+      @view-project="projectId => openProject({ id: projectId })"
+      @edit-project="editProject"
+      @create-project-task="createProjectTask"
+      @view-project-tasks="viewProjectTasks"
+      @view-campaign="openCampaign"
+      @view-material="openMaterial"
+    />
   </div>
 
   <SessionRenameDialog
