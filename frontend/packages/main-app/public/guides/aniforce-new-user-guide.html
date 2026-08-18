@@ -1,0 +1,1099 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="color-scheme" content="light">
+  <title>ANIFORCE 新手引导</title>
+  <style>
+    :root {
+      --notion-ink: #37352f;
+      --notion-ink-strong: #20201e;
+      --notion-muted: #787774;
+      --notion-faint: #9b9a97;
+      --notion-line: #e9e9e7;
+      --notion-line-strong: #d8d8d5;
+      --notion-canvas: #ffffff;
+      --notion-surface: #f7f7f5;
+      --notion-surface-hover: #efefed;
+      --notion-blue: #2383e2;
+      --notion-blue-hover: #1b6fc1;
+      --notion-blue-soft: #eaf3fb;
+      --notion-green: #2f6b3c;
+      --notion-green-soft: #edf5ee;
+      --notion-brown: #9f6b53;
+      --notion-brown-soft: #f5eeee;
+      --notion-yellow: #906b18;
+      --notion-yellow-soft: #fbf3db;
+      --shadow-sm: 0 1px 2px rgba(15, 15, 15, .05), 0 0 0 1px rgba(15, 15, 15, .02);
+      --shadow-pop: 0 12px 36px rgba(15, 15, 15, .08), 0 2px 8px rgba(15, 15, 15, .04);
+      --page-width: 1080px;
+    }
+
+    * { box-sizing: border-box; }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      min-width: 320px;
+      margin: 0;
+      background: var(--notion-canvas);
+      color: var(--notion-ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
+      font-size: 15px;
+      line-height: 1.5;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    button, input { font: inherit; }
+    button { color: inherit; }
+    [hidden] { display: none !important; }
+
+    .topbar {
+      position: sticky;
+      z-index: 20;
+      top: 0;
+      height: 46px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      border-bottom: 1px solid rgba(233, 233, 231, .82);
+      background: rgba(255, 255, 255, .92);
+      backdrop-filter: blur(12px);
+    }
+
+    .brand, .topbar-meta {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      background: var(--notion-ink-strong);
+      color: #fff;
+      font-size: 12px;
+      font-weight: 750;
+      letter-spacing: -.04em;
+    }
+
+    .brand strong { font-size: 13px; font-weight: 650; }
+    .crumb { color: var(--notion-faint); font-size: 13px; }
+
+    .topbar-meta {
+      color: var(--notion-muted);
+      font-size: 12px;
+    }
+
+    .status-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #35a65f;
+      box-shadow: 0 0 0 3px var(--notion-green-soft);
+    }
+
+    .cover {
+      height: 156px;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 18% 26%, rgba(35, 131, 226, .14) 0 2px, transparent 3px),
+        radial-gradient(circle at 76% 40%, rgba(159, 107, 83, .12) 0 2px, transparent 3px),
+        linear-gradient(135deg, #f3f2ee 0%, #f7f6f3 44%, #eef4f8 100%);
+      background-size: 34px 34px, 42px 42px, auto;
+      border-bottom: 1px solid rgba(233, 233, 231, .68);
+    }
+
+    .cover-inner {
+      width: min(calc(100% - 40px), var(--page-width));
+      height: 100%;
+      display: flex;
+      align-items: flex-end;
+      justify-content: flex-end;
+      margin: 0 auto;
+      padding: 0 8px 22px;
+    }
+
+    .cover-note {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      padding: 7px 10px;
+      border: 1px solid rgba(255, 255, 255, .78);
+      border-radius: 7px;
+      background: rgba(255, 255, 255, .72);
+      color: var(--notion-muted);
+      box-shadow: var(--shadow-sm);
+      font-size: 11px;
+      backdrop-filter: blur(8px);
+    }
+
+    .page {
+      width: min(calc(100% - 40px), var(--page-width));
+      margin: 0 auto;
+      padding: 0 8px 72px;
+    }
+
+    .page-icon {
+      width: 68px;
+      height: 68px;
+      display: grid;
+      place-items: center;
+      margin-top: -34px;
+      border: 1px solid var(--notion-line);
+      border-radius: 16px;
+      background: #fff;
+      color: var(--notion-blue);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .page-icon svg { width: 34px; height: 34px; }
+
+    .page-head { padding: 18px 0 22px; }
+
+    .eyebrow {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 8px;
+      color: var(--notion-muted);
+      font-size: 11px;
+      font-weight: 650;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .eyebrow::before {
+      content: "";
+      width: 18px;
+      height: 1px;
+      background: var(--notion-line-strong);
+    }
+
+    h1 {
+      margin: 0;
+      color: var(--notion-ink-strong);
+      font-size: clamp(34px, 5vw, 48px);
+      font-weight: 720;
+      letter-spacing: -.045em;
+      line-height: 1.08;
+    }
+
+    .lede {
+      max-width: 700px;
+      margin: 12px 0 0;
+      color: var(--notion-muted);
+      font-size: 15px;
+    }
+
+    .callout {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 11px;
+      margin: 0 0 24px;
+      padding: 13px 15px;
+      border-radius: 8px;
+      background: var(--notion-blue-soft);
+      color: #315d86;
+      font-size: 13px;
+    }
+
+    .callout-icon {
+      width: 22px;
+      height: 22px;
+      display: grid;
+      place-items: center;
+      border-radius: 6px;
+      background: rgba(35, 131, 226, .12);
+      color: var(--notion-blue);
+      font-weight: 750;
+    }
+
+    .guide-shell {
+      display: grid;
+      grid-template-columns: 210px minmax(0, 1fr);
+      gap: 28px;
+      align-items: start;
+    }
+
+    .guide-rail {
+      position: sticky;
+      top: 70px;
+      padding: 12px;
+      border: 1px solid var(--notion-line);
+      border-radius: 10px;
+      background: var(--notion-surface);
+    }
+
+    .rail-label {
+      margin: 0 8px 9px;
+      color: var(--notion-faint);
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+
+    .rail-step {
+      width: 100%;
+      display: grid;
+      grid-template-columns: 26px minmax(0, 1fr);
+      gap: 9px;
+      align-items: center;
+      padding: 8px;
+      border: 0;
+      border-radius: 7px;
+      background: transparent;
+      color: var(--notion-muted);
+      text-align: left;
+      cursor: default;
+    }
+
+    .rail-step + .rail-step { margin-top: 2px; }
+
+    .rail-step.active {
+      background: #fff;
+      color: var(--notion-ink);
+      box-shadow: var(--shadow-sm);
+    }
+
+    .rail-step.complete { color: var(--notion-green); }
+
+    .rail-index {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--notion-line-strong);
+      border-radius: 6px;
+      background: #fff;
+      font-size: 10px;
+      font-weight: 700;
+    }
+
+    .rail-step.active .rail-index {
+      border-color: var(--notion-blue);
+      background: var(--notion-blue);
+      color: #fff;
+    }
+
+    .rail-step.complete .rail-index {
+      border-color: #cfe4d2;
+      background: var(--notion-green-soft);
+    }
+
+    .rail-copy strong { display: block; font-size: 12px; font-weight: 650; }
+    .rail-copy span { display: block; margin-top: 2px; color: var(--notion-faint); font-size: 10px; }
+
+    .rail-progress {
+      height: 4px;
+      margin: 13px 8px 5px;
+      overflow: hidden;
+      border-radius: 999px;
+      background: #e4e4e1;
+    }
+
+    .rail-progress span {
+      display: block;
+      width: 33.333%;
+      height: 100%;
+      border-radius: inherit;
+      background: var(--notion-blue);
+      transition: width .24s ease;
+    }
+
+    .guide-card {
+      min-width: 0;
+      overflow: hidden;
+      border: 1px solid var(--notion-line);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow-pop);
+    }
+
+    .guide-pane { animation: pane-in .28s ease both; }
+    .guide-pane:focus { outline: none; }
+
+    @keyframes pane-in {
+      from { opacity: 0; transform: translateY(5px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    .pane-head {
+      display: flex;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 26px 28px 20px;
+      border-bottom: 1px solid var(--notion-line);
+    }
+
+    .pane-kicker {
+      margin-bottom: 7px;
+      color: var(--notion-blue);
+      font-size: 11px;
+      font-weight: 700;
+    }
+
+    .pane-head h2 {
+      margin: 0;
+      color: var(--notion-ink-strong);
+      font-size: 23px;
+      font-weight: 700;
+      letter-spacing: -.025em;
+      line-height: 1.2;
+    }
+
+    .pane-head p {
+      max-width: 570px;
+      margin: 8px 0 0;
+      color: var(--notion-muted);
+      font-size: 13px;
+    }
+
+    .step-chip {
+      height: 26px;
+      display: inline-flex;
+      align-items: center;
+      flex: 0 0 auto;
+      padding: 0 9px;
+      border-radius: 6px;
+      background: var(--notion-surface);
+      color: var(--notion-muted);
+      font-size: 10px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .pane-body { padding: 22px 28px 26px; }
+
+    .choice-grid { display: grid; gap: 10px; }
+
+    .choice-card {
+      position: relative;
+      width: 100%;
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr) auto;
+      gap: 13px;
+      align-items: center;
+      padding: 15px;
+      border: 1px solid var(--notion-line);
+      border-radius: 9px;
+      background: #fff;
+      text-align: left;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease, box-shadow .16s ease;
+    }
+
+    .choice-card:hover { background: var(--notion-surface); }
+
+    .choice-card.active {
+      border-color: var(--notion-ink);
+      box-shadow: inset 0 0 0 1px var(--notion-ink);
+    }
+
+    .choice-icon {
+      width: 38px;
+      height: 38px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--notion-blue-soft);
+      color: var(--notion-blue);
+    }
+
+    .choice-card[data-guide-choice="org"] .choice-icon {
+      background: var(--notion-brown-soft);
+      color: var(--notion-brown);
+    }
+
+    .choice-card[data-guide-choice="skip"] .choice-icon {
+      background: var(--notion-yellow-soft);
+      color: var(--notion-yellow);
+    }
+
+    .choice-icon svg { width: 20px; height: 20px; }
+
+    .choice-copy { min-width: 0; }
+    .choice-copy h3 { margin: 0; font-size: 14px; font-weight: 680; }
+    .choice-copy p { margin: 4px 0 0; color: var(--notion-muted); font-size: 12px; }
+
+    .tag {
+      min-height: 22px;
+      display: inline-flex;
+      align-items: center;
+      padding: 3px 7px;
+      border-radius: 5px;
+      background: var(--notion-surface);
+      color: var(--notion-muted);
+      font-size: 9px;
+      font-weight: 650;
+      white-space: nowrap;
+    }
+
+    .tag.blue { background: var(--notion-blue-soft); color: var(--notion-blue); }
+    .tag.green { background: var(--notion-green-soft); color: var(--notion-green); }
+
+    .org-form {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+      margin-top: 14px;
+      padding: 15px;
+      border-radius: 9px;
+      background: var(--notion-surface);
+    }
+
+    .field { display: grid; gap: 6px; }
+    .field span { color: var(--notion-muted); font-size: 11px; font-weight: 600; }
+
+    .field input {
+      width: 100%;
+      height: 38px;
+      padding: 0 10px;
+      border: 1px solid var(--notion-line-strong);
+      border-radius: 7px;
+      outline: none;
+      background: #fff;
+      color: var(--notion-ink);
+      font-size: 12px;
+    }
+
+    .field input:focus {
+      border-color: var(--notion-blue);
+      box-shadow: 0 0 0 3px rgba(35, 131, 226, .12);
+    }
+
+    .pane-foot {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 12px 28px;
+      border-top: 1px solid var(--notion-line);
+      background: var(--notion-surface);
+    }
+
+    .helper { color: var(--notion-muted); font-size: 11px; }
+    .button-row { display: flex; gap: 8px; }
+
+    .button {
+      min-height: 34px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 7px;
+      padding: 0 12px;
+      border: 1px solid var(--notion-line-strong);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--notion-ink);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, transform .15s ease;
+    }
+
+    .button:hover { border-color: #b9b9b5; background: var(--notion-surface-hover); }
+    .button:active { transform: translateY(1px); }
+
+    .button.primary {
+      border-color: var(--notion-blue);
+      background: var(--notion-blue);
+      color: #fff;
+    }
+
+    .button.primary:hover { border-color: var(--notion-blue-hover); background: var(--notion-blue-hover); }
+    .button.ghost { border-color: transparent; background: transparent; color: var(--notion-muted); }
+    .button.ghost:hover { background: var(--notion-surface-hover); color: var(--notion-ink); }
+
+    .channel-list { display: grid; gap: 9px; }
+
+    .channel-row {
+      display: grid;
+      grid-template-columns: 34px minmax(0, 1fr) auto;
+      gap: 13px;
+      align-items: center;
+      padding: 14px 15px;
+      border: 1px solid var(--notion-line);
+      border-radius: 9px;
+      background: #fff;
+      cursor: pointer;
+      transition: border-color .16s ease, background .16s ease;
+    }
+
+    .channel-row:hover { background: var(--notion-surface); }
+    .channel-row.active { border-color: var(--notion-ink); box-shadow: inset 0 0 0 1px var(--notion-ink); }
+
+    .radio {
+      width: 18px;
+      height: 18px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--notion-line-strong);
+      border-radius: 50%;
+      background: #fff;
+    }
+
+    .radio::after {
+      content: "";
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--notion-blue);
+      opacity: 0;
+      transform: scale(.5);
+      transition: opacity .15s ease, transform .15s ease;
+    }
+
+    .channel-row.active .radio { border-color: var(--notion-blue); }
+    .channel-row.active .radio::after { opacity: 1; transform: scale(1); }
+    .channel-copy h3 { margin: 0; font-size: 13px; font-weight: 680; }
+    .channel-copy p { margin: 4px 0 0; color: var(--notion-muted); font-size: 11px; }
+
+    .connect-button { min-width: 86px; }
+    .connect-button.selected { border-color: #cfe4d2; background: var(--notion-green-soft); color: var(--notion-green); }
+
+    .oauth-note {
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr);
+      gap: 9px;
+      margin-top: 14px;
+      padding: 12px;
+      border-radius: 8px;
+      background: var(--notion-surface);
+      color: var(--notion-muted);
+      font-size: 11px;
+    }
+
+    .done-wrap { padding: 30px 28px 28px; }
+
+    .done-hero {
+      display: grid;
+      grid-template-columns: 52px minmax(0, 1fr);
+      gap: 15px;
+      align-items: center;
+      padding-bottom: 23px;
+      border-bottom: 1px solid var(--notion-line);
+    }
+
+    .done-mark {
+      width: 52px;
+      height: 52px;
+      display: grid;
+      place-items: center;
+      border-radius: 12px;
+      background: var(--notion-green-soft);
+      color: var(--notion-green);
+    }
+
+    .done-mark svg { width: 27px; height: 27px; }
+    .done-hero h2 { margin: 0; color: var(--notion-ink-strong); font-size: 22px; letter-spacing: -.02em; }
+    .done-hero p { margin: 6px 0 0; color: var(--notion-muted); font-size: 12px; }
+
+    .summary-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-top: 18px;
+    }
+
+    .summary-item {
+      padding: 13px 14px;
+      border: 1px solid var(--notion-line);
+      border-radius: 8px;
+      background: #fff;
+    }
+
+    .summary-item span { display: block; color: var(--notion-faint); font-size: 10px; }
+    .summary-item strong { display: block; margin-top: 5px; font-size: 13px; font-weight: 650; }
+
+    .next-title { margin: 24px 0 10px; font-size: 13px; font-weight: 680; }
+    .next-list { border-top: 1px solid var(--notion-line); }
+
+    .next-item {
+      display: grid;
+      grid-template-columns: 24px minmax(0, 1fr) auto;
+      gap: 10px;
+      align-items: center;
+      padding: 12px 2px;
+      border-bottom: 1px solid var(--notion-line);
+    }
+
+    .next-check {
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--notion-line-strong);
+      border-radius: 5px;
+      color: var(--notion-muted);
+      font-size: 11px;
+    }
+
+    .next-copy strong { display: block; font-size: 12px; font-weight: 650; }
+    .next-copy span { display: block; margin-top: 2px; color: var(--notion-muted); font-size: 10px; }
+
+    .toast {
+      position: fixed;
+      z-index: 50;
+      right: 18px;
+      bottom: 18px;
+      max-width: min(360px, calc(100vw - 36px));
+      padding: 10px 13px;
+      border: 1px solid #30302e;
+      border-radius: 8px;
+      background: var(--notion-ink-strong);
+      color: #fff;
+      box-shadow: var(--shadow-pop);
+      font-size: 12px;
+      opacity: 0;
+      pointer-events: none;
+      transform: translateY(8px);
+      transition: opacity .18s ease, transform .18s ease;
+    }
+
+    .toast.show { opacity: 1; transform: translateY(0); }
+
+    svg.icon {
+      width: 18px;
+      height: 18px;
+      display: block;
+      fill: none;
+      stroke: currentColor;
+      stroke-width: 1.8;
+      stroke-linecap: round;
+      stroke-linejoin: round;
+    }
+
+    @media (max-width: 780px) {
+      .cover { height: 118px; }
+      .guide-shell { grid-template-columns: 1fr; gap: 14px; }
+      .guide-rail { position: static; display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
+      .rail-label, .rail-progress { grid-column: 1 / -1; }
+      .rail-step { grid-template-columns: 24px minmax(0, 1fr); padding: 7px; }
+      .rail-copy span { display: none; }
+    }
+
+    @media (max-width: 560px) {
+      .topbar { padding: 0 11px; }
+      .crumb, .topbar-meta span:last-child { display: none; }
+      .page { width: min(calc(100% - 24px), var(--page-width)); padding-right: 0; padding-left: 0; }
+      .cover-inner { width: calc(100% - 24px); }
+      .page-icon { width: 58px; height: 58px; margin-top: -29px; border-radius: 14px; }
+      h1 { font-size: 34px; }
+      .pane-head, .pane-body, .done-wrap { padding-right: 18px; padding-left: 18px; }
+      .pane-head { flex-direction: column; gap: 12px; }
+      .step-chip { align-self: flex-start; }
+      .choice-card { grid-template-columns: 36px minmax(0, 1fr); }
+      .choice-card > .tag { grid-column: 2; justify-self: start; }
+      .org-form, .summary-grid { grid-template-columns: 1fr; }
+      .channel-row { grid-template-columns: 24px minmax(0, 1fr); }
+      .connect-button { grid-column: 2; justify-self: start; }
+      .pane-foot { align-items: stretch; flex-direction: column; padding-right: 18px; padding-left: 18px; }
+      .button-row { justify-content: flex-end; }
+      .next-item { grid-template-columns: 24px minmax(0, 1fr); }
+      .next-item > .tag { grid-column: 2; justify-self: start; }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        scroll-behavior: auto !important;
+        animation-duration: .01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: .01ms !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <span class="brand-mark" aria-hidden="true">A</span>
+      <strong>ANIFORCE</strong>
+      <span class="crumb">/</span>
+      <span class="crumb">新手引导</span>
+    </div>
+    <div class="topbar-meta">
+      <span class="status-dot" aria-hidden="true"></span>
+      <span>初始化向导</span>
+    </div>
+  </header>
+
+  <div class="cover" aria-hidden="true">
+    <div class="cover-inner">
+      <span class="cover-note">约 2 分钟完成基础配置</span>
+    </div>
+  </div>
+
+  <main class="page">
+    <div class="page-icon" aria-hidden="true">
+      <svg class="icon" viewBox="0 0 24 24"><path d="M12 3v18M3 12h18"/><path d="m5.7 5.7 12.6 12.6M18.3 5.7 5.7 18.3"/></svg>
+    </div>
+
+    <header class="page-head">
+      <div class="eyebrow">Getting started</div>
+      <h1>欢迎使用 ANIFORCE</h1>
+      <p class="lede">选择初始化方式、连接广告渠道，并确认你的工作台准备状态。所有设置之后都可以再次调整。</p>
+    </header>
+
+    <aside class="callout">
+      <span class="callout-icon" aria-hidden="true">i</span>
+      <span>此独立页面用于呈现新手引导流程；真实渠道授权仍由 ANIFORCE 已配置的官方 OAuth 接口发起，不在页面中保存密钥。</span>
+    </aside>
+
+    <div class="guide-shell">
+      <nav class="guide-rail" aria-label="新手引导进度">
+        <p class="rail-label">设置进度</p>
+        <div class="rail-step active" data-rail-step="intro" aria-current="step">
+          <span class="rail-index">1</span>
+          <span class="rail-copy"><strong>初始化方式</strong><span>选择你的起点</span></span>
+        </div>
+        <div class="rail-step" data-rail-step="connect">
+          <span class="rail-index">2</span>
+          <span class="rail-copy"><strong>连接渠道</strong><span>选择广告平台</span></span>
+        </div>
+        <div class="rail-step" data-rail-step="done">
+          <span class="rail-index">3</span>
+          <span class="rail-copy"><strong>完成设置</strong><span>查看下一步</span></span>
+        </div>
+        <div class="rail-progress" aria-hidden="true"><span data-progress></span></div>
+      </nav>
+
+      <section class="guide-card" aria-label="新手引导内容">
+        <div class="guide-pane" data-guide-pane="intro">
+          <header class="pane-head">
+            <div>
+              <div class="pane-kicker">注册完成后的第 1 步</div>
+              <h2>先选择你的初始化方式</h2>
+              <p>ANIFORCE 会根据你的选择，安排连接广告渠道、加入已有组织，或先进入工作台。</p>
+            </div>
+            <span class="step-chip">Step 1 / 3</span>
+          </header>
+
+          <div class="pane-body">
+            <div class="choice-grid" role="group" aria-label="初始化方式">
+              <button class="choice-card active" type="button" data-guide-choice="channel" aria-pressed="true">
+                <span class="choice-icon" aria-hidden="true">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M4 7h16M7 4v6M4 17h16M17 14v6"/></svg>
+                </span>
+                <span class="choice-copy"><h3>渠道配置</h3><p>连接广告渠道，读取账户、计划、素材和核心指标。</p></span>
+                <span class="tag blue">推荐 · 约 2 min</span>
+              </button>
+
+              <button class="choice-card" type="button" data-guide-choice="org" aria-pressed="false">
+                <span class="choice-icon" aria-hidden="true">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M19 8v6M22 11h-6"/></svg>
+                </span>
+                <span class="choice-copy"><h3>加入组织</h3><p>输入团队提供的组织名称与邀请码，加入共享配置。</p></span>
+                <span class="tag">团队协作</span>
+              </button>
+
+              <button class="choice-card" type="button" data-guide-choice="skip" aria-pressed="false">
+                <span class="choice-icon" aria-hidden="true">
+                  <svg class="icon" viewBox="0 0 24 24"><path d="m5 4 14 8-14 8V4Z"/></svg>
+                </span>
+                <span class="choice-copy"><h3>稍后配置</h3><p>先熟悉工作台，之后再创建或加入组织并连接广告账户。</p></span>
+                <span class="tag">随时返回</span>
+              </button>
+            </div>
+
+            <div class="org-form" data-org-form hidden>
+              <label class="field">
+                <span>组织名字</span>
+                <input id="orgName" type="text" autocomplete="organization" placeholder="例如 Aniforce Growth Team">
+              </label>
+              <label class="field">
+                <span>邀请码</span>
+                <input id="inviteCode" type="text" autocomplete="off" placeholder="例如 AF-2026-88K">
+              </label>
+            </div>
+          </div>
+
+          <footer class="pane-foot">
+            <span class="helper" data-choice-helper>建议先连接至少一个广告渠道</span>
+            <div class="button-row">
+              <button class="button primary" type="button" data-guide-next="intro">继续连接渠道</button>
+            </div>
+          </footer>
+        </div>
+
+        <div class="guide-pane" data-guide-pane="connect" hidden>
+          <header class="pane-head">
+            <div>
+              <div class="pane-kicker">选择一个常用平台</div>
+              <h2>选择需要连接的广告渠道</h2>
+              <p>确认后由系统进入对应平台的官方授权流程。此页面只记录你的流程选择。</p>
+            </div>
+            <span class="step-chip">Step 2 / 3</span>
+          </header>
+
+          <div class="pane-body">
+            <div class="channel-list" role="radiogroup" aria-label="广告渠道">
+              <div class="channel-row active" data-guide-channel="google" role="radio" aria-checked="true" tabindex="0">
+                <span class="radio" aria-hidden="true"></span>
+                <span class="channel-copy"><h3>Google Ads</h3><p>同步客户、Campaign、素材资源和投放指标。</p></span>
+                <button class="button connect-button" type="button" data-guide-connect="google">选择</button>
+              </div>
+              <div class="channel-row" data-guide-channel="meta" role="radio" aria-checked="false" tabindex="0">
+                <span class="radio" aria-hidden="true"></span>
+                <span class="channel-copy"><h3>Meta Ads</h3><p>同步广告账户、Campaign、创意和投放数据。</p></span>
+                <button class="button connect-button" type="button" data-guide-connect="meta">选择</button>
+              </div>
+              <div class="channel-row" data-guide-channel="tiktok" role="radio" aria-checked="false" tabindex="0">
+                <span class="radio" aria-hidden="true"></span>
+                <span class="channel-copy"><h3>TikTok Ads</h3><p>同步广告主、Spark 素材、Campaign 和报表。</p></span>
+                <button class="button connect-button" type="button" data-guide-connect="tiktok">选择</button>
+              </div>
+            </div>
+
+            <div class="oauth-note">
+              <span aria-hidden="true">🔒</span>
+              <span>授权会在平台官方页面完成。ANIFORCE 不会在本页展示或保存 App Secret。</span>
+            </div>
+          </div>
+
+          <footer class="pane-foot">
+            <span class="helper">当前选择：<strong data-selected-channel>Google Ads</strong></span>
+            <div class="button-row">
+              <button class="button ghost" type="button" data-guide-back>返回</button>
+              <button class="button primary" type="button" data-guide-next="connect">确认并完成</button>
+            </div>
+          </footer>
+        </div>
+
+        <div class="guide-pane" data-guide-pane="done" hidden>
+          <div class="done-wrap">
+            <section class="done-hero">
+              <span class="done-mark" aria-hidden="true">
+                <svg class="icon" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></svg>
+              </span>
+              <div>
+                <h2>完成初始化设置</h2>
+                <p>工作台已根据你的选择准备就绪。未完成的项目会继续保留在引导入口中。</p>
+              </div>
+            </section>
+
+            <div class="summary-grid" aria-label="初始化摘要">
+              <div class="summary-item"><span>广告渠道</span><strong data-summary-channel>未选择</strong></div>
+              <div class="summary-item"><span>组织</span><strong data-summary-org>未加入</strong></div>
+            </div>
+
+            <h3 class="next-title">后续任务</h3>
+            <div class="next-list">
+              <div class="next-item">
+                <span class="next-check">1</span>
+                <span class="next-copy"><strong>完成官方渠道授权</strong><span>在业务系统中拉取账户、计划和素材数据。</span></span>
+                <span class="tag" data-task-sync>待开始</span>
+              </div>
+              <div class="next-item">
+                <span class="next-check">2</span>
+                <span class="next-copy"><strong>查看素材评估</strong><span>筛选素材评分、疲劳度和投放表现。</span></span>
+                <span class="tag green">可查看</span>
+              </div>
+              <div class="next-item">
+                <span class="next-check">3</span>
+                <span class="next-copy"><strong>补充团队配置</strong><span>需要共享配置时，创建或加入一个组织。</span></span>
+                <span class="tag">可选</span>
+              </div>
+            </div>
+          </div>
+
+          <footer class="pane-foot">
+            <span class="helper">之后仍可重新打开新手引导</span>
+            <div class="button-row">
+              <button class="button" type="button" data-guide-restart>重新选择</button>
+              <button class="button primary" type="button" data-guide-finish>完成引导</button>
+            </div>
+          </footer>
+        </div>
+      </section>
+    </div>
+  </main>
+
+  <div class="toast" role="status" aria-live="polite" aria-atomic="true" data-toast></div>
+
+  <script>
+    (() => {
+      const state = {
+        pane: 'intro',
+        choice: 'channel',
+        channel: 'google',
+        organization: '',
+      };
+
+      const labels = {
+        google: 'Google Ads',
+        meta: 'Meta Ads',
+        tiktok: 'TikTok Ads',
+      };
+
+      const paneOrder = ['intro', 'connect', 'done'];
+      const panes = [...document.querySelectorAll('[data-guide-pane]')];
+      const railSteps = [...document.querySelectorAll('[data-rail-step]')];
+      const choiceButtons = [...document.querySelectorAll('[data-guide-choice]')];
+      const channelRows = [...document.querySelectorAll('[data-guide-channel]')];
+      const progress = document.querySelector('[data-progress]');
+      const orgForm = document.querySelector('[data-org-form]');
+      const orgName = document.querySelector('#orgName');
+      const inviteCode = document.querySelector('#inviteCode');
+      const helper = document.querySelector('[data-choice-helper]');
+      const introNext = document.querySelector('[data-guide-next="intro"]');
+      const toastNode = document.querySelector('[data-toast]');
+      let toastTimer;
+
+      function toast(message) {
+        window.clearTimeout(toastTimer);
+        toastNode.textContent = message;
+        toastNode.classList.add('show');
+        toastTimer = window.setTimeout(() => toastNode.classList.remove('show'), 2200);
+      }
+
+      function showPane(nextPane, shouldScroll = true) {
+        state.pane = nextPane;
+        const activeIndex = paneOrder.indexOf(nextPane);
+
+        panes.forEach((pane) => {
+          const active = pane.dataset.guidePane === nextPane;
+          pane.hidden = !active;
+          if (active) pane.setAttribute('tabindex', '-1');
+        });
+
+        railSteps.forEach((step, index) => {
+          const active = step.dataset.railStep === nextPane;
+          step.classList.toggle('active', active);
+          step.classList.toggle('complete', index < activeIndex);
+          active ? step.setAttribute('aria-current', 'step') : step.removeAttribute('aria-current');
+          step.querySelector('.rail-index').textContent = index < activeIndex ? '✓' : String(index + 1);
+        });
+
+        progress.style.width = `${((activeIndex + 1) / paneOrder.length) * 100}%`;
+        const activePane = panes.find((pane) => pane.dataset.guidePane === nextPane);
+        activePane?.focus({ preventScroll: true });
+        if (shouldScroll) {
+          document.querySelector('.guide-card')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+      }
+
+      function selectChoice(choice) {
+        state.choice = choice;
+        choiceButtons.forEach((button) => {
+          const active = button.dataset.guideChoice === choice;
+          button.classList.toggle('active', active);
+          button.setAttribute('aria-pressed', String(active));
+        });
+
+        orgForm.hidden = choice !== 'org';
+        const copy = {
+          channel: ['建议先连接至少一个广告渠道', '继续连接渠道'],
+          org: ['准备好组织名称和团队邀请码', '申请加入组织'],
+          skip: ['所有设置之后都可以再次完成', '稍后配置'],
+        }[choice];
+        helper.textContent = copy[0];
+        introNext.textContent = copy[1];
+        if (choice === 'org') window.setTimeout(() => orgName.focus(), 0);
+      }
+
+      function selectChannel(channel, announce = true) {
+        state.channel = channel;
+        channelRows.forEach((row) => {
+          const active = row.dataset.guideChannel === channel;
+          row.classList.toggle('active', active);
+          row.setAttribute('aria-checked', String(active));
+          const button = row.querySelector('[data-guide-connect]');
+          button.classList.toggle('selected', active);
+          button.textContent = active ? '已选择' : '选择';
+        });
+        document.querySelector('[data-selected-channel]').textContent = labels[channel];
+        if (announce) {
+          toast(`已选择 ${labels[channel]}，实际授权将在官方页面完成`);
+        }
+      }
+
+      function updateSummary() {
+        const channel = state.choice === 'channel' ? labels[state.channel] : '稍后配置';
+        const organization = state.organization || '未加入';
+        document.querySelector('[data-summary-channel]').textContent = channel;
+        document.querySelector('[data-summary-org]').textContent = organization;
+        const task = document.querySelector('[data-task-sync]');
+        task.textContent = state.choice === 'channel' ? '待授权' : '待开始';
+        task.classList.toggle('blue', state.choice === 'channel');
+      }
+
+      choiceButtons.forEach((button) => {
+        button.addEventListener('click', () => selectChoice(button.dataset.guideChoice));
+      });
+
+      introNext.addEventListener('click', () => {
+        if (state.choice === 'channel') {
+          showPane('connect');
+          return;
+        }
+
+        if (state.choice === 'org') {
+          const name = orgName.value.trim();
+          const code = inviteCode.value.trim();
+          if (!name || !code) {
+            toast('请填写组织名字和邀请码');
+            (!name ? orgName : inviteCode).focus();
+            return;
+          }
+          state.organization = name;
+          updateSummary();
+          showPane('done');
+          return;
+        }
+
+        state.organization = '';
+        updateSummary();
+        showPane('done');
+      });
+
+      channelRows.forEach((row) => {
+        row.addEventListener('click', (event) => {
+          if (event.target.closest('[data-guide-connect]')) return;
+          selectChannel(row.dataset.guideChannel);
+        });
+        row.addEventListener('keydown', (event) => {
+          if (!['Enter', ' '].includes(event.key)) return;
+          event.preventDefault();
+          selectChannel(row.dataset.guideChannel);
+        });
+      });
+
+      document.querySelectorAll('[data-guide-connect]').forEach((button) => {
+        button.addEventListener('click', () => selectChannel(button.dataset.guideConnect));
+      });
+
+      document.querySelector('[data-guide-back]').addEventListener('click', () => showPane('intro'));
+
+      document.querySelector('[data-guide-next="connect"]').addEventListener('click', () => {
+        updateSummary();
+        showPane('done');
+      });
+
+      document.querySelector('[data-guide-restart]').addEventListener('click', () => {
+        state.organization = '';
+        orgName.value = '';
+        inviteCode.value = '';
+        selectChoice('channel');
+        selectChannel('google', false);
+        showPane('intro');
+      });
+
+      document.querySelector('[data-guide-finish]').addEventListener('click', () => {
+        toast('新手引导已完成');
+      });
+
+      selectChannel('google', false);
+      showPane('intro', false);
+    })();
+  </script>
+</body>
+</html>
