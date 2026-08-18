@@ -761,7 +761,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </script>
 
 <template>
-  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
+  <div class="material-notion-page workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -793,7 +793,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
           </div>
         </header>
 
-        <div class="workspace-page-content flex-1 overflow-y-auto px-[28px] py-[22px] max-md:px-[16px] max-md:py-[16px]">
+        <div class="material-notion-content workspace-page-content flex-1 overflow-y-auto px-[28px] py-[22px] max-md:px-[16px] max-md:py-[16px]">
           <div v-if="error" class="mb-[12px] rounded-md border border-red-200 bg-red-50 px-[12px] py-[9px] text-[11px] text-red-700 dark:border-red-900 dark:bg-red-950/30 dark:text-red-300">
             {{ error }}
           </div>
@@ -840,29 +840,29 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
               </div>
             </section>
 
-            <section class="overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+            <section class="material-notion-section overview-metrics-panel overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
               <div class="overview-strip">
                 <div
                   v-for="card in overviewCards"
                   :key="card.label"
                   class="overview-metric"
                 >
-                  <div class="text-[11px] font-semibold text-slate-500 dark:text-slate-400">{{ card.label }}</div>
-                  <div class="mt-[8px] truncate text-[21px] font-bold leading-none text-slate-900 dark:text-white">{{ card.value }}</div>
-                  <div class="mt-[6px] truncate text-[10px] text-slate-500 dark:text-slate-400">{{ card.sub }}</div>
+                  <div class="overview-metric-label text-[11px] font-semibold text-slate-500 dark:text-slate-400">{{ card.label }}</div>
+                  <div class="overview-metric-value mt-[8px] truncate text-[21px] font-bold leading-none text-slate-900 dark:text-white">{{ card.value }}</div>
+                  <div class="overview-metric-sub mt-[6px] truncate text-[10px] text-slate-500 dark:text-slate-400">{{ card.sub }}</div>
                 </div>
               </div>
             </section>
 
-            <section class="overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-              <div class="flex items-center justify-between border-b border-slate-100 px-[14px] py-[10px] dark:border-slate-800">
+            <section class="material-notion-section material-analysis-panel overflow-hidden rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
+              <div class="material-analysis-header flex items-center justify-between border-b border-slate-100 px-[14px] py-[10px] dark:border-slate-800">
                 <div>
                   <strong class="text-[12px] font-semibold text-slate-900 dark:text-white">素材智能分析</strong>
                   <p class="mt-[2px] text-[10px] text-slate-500 dark:text-slate-400">全部周期 · 7 个素材</p>
                 </div>
                 <button
                   type="button"
-                  class="inline-flex min-h-[34px] items-center justify-center rounded-[8px] border border-primary bg-primary px-[13px] text-[11px] font-semibold text-white transition-colors duration-150 hover:bg-primary/90 dark:border-primary dark:bg-primary dark:text-white"
+                  class="material-notion-action inline-flex min-h-[34px] items-center justify-center rounded-[8px] border border-primary bg-primary px-[13px] text-[11px] font-semibold text-white transition-colors duration-150 hover:bg-primary/90 dark:border-primary dark:bg-primary dark:text-white"
                   @click="success('素材智能分析已重新生成')"
                 >
                   重新分析
@@ -872,7 +872,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                 <div
                   v-for="item in analysisCards"
                   :key="item.title"
-                  class="min-h-[112px] rounded-[8px] border border-slate-100 bg-slate-50/40 px-[13px] py-[12px] text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-white"
+                  class="material-analysis-card min-h-[112px] rounded-[8px] border border-slate-100 bg-slate-50/40 px-[13px] py-[12px] text-slate-900 dark:border-slate-800 dark:bg-slate-950/30 dark:text-white"
                 >
                   <div :class="['inline-flex min-h-[22px] items-center rounded-full px-[8px] text-[10px] font-semibold', item.badgeClass]">{{ item.badge }}</div>
                   <h3 class="mt-[8px] break-words text-[12px] font-semibold leading-[1.45] text-slate-900 dark:text-white">{{ item.title }}</h3>
@@ -886,6 +886,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
             :materials="materials"
             :loading="loading"
             :selected-material-id="selectedMaterialId"
+            variant="notion"
             allow-delete
             @select="selectRow"
             @delete="askDeleteMaterial"
@@ -1202,6 +1203,66 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </template>
 
 <style scoped>
+.material-notion-page {
+  --mn-canvas: #ffffff;
+  --mn-surface: #f6f5f4;
+  --mn-surface-soft: #fafaf9;
+  --mn-hairline: #e5e3df;
+  --mn-hairline-soft: #ede9e4;
+  --mn-ink: #37352f;
+  --mn-muted: #787671;
+  background: var(--mn-canvas);
+  color: var(--mn-ink);
+  font-family: var(--workspace-font-family);
+}
+
+.material-notion-content {
+  background: var(--mn-canvas);
+}
+
+.material-notion-section {
+  border-color: var(--mn-hairline);
+  border-radius: 8px;
+  box-shadow: none;
+}
+
+.overview-metrics-panel,
+.material-analysis-panel {
+  background: var(--mn-canvas);
+}
+
+.overview-metric-label,
+.overview-metric-sub {
+  color: var(--mn-muted);
+}
+
+.overview-metric-value {
+  color: var(--mn-ink);
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.material-analysis-header {
+  border-color: var(--mn-hairline-soft);
+  background: var(--mn-canvas);
+}
+
+.material-analysis-card {
+  border-color: var(--mn-hairline-soft);
+  background: var(--mn-surface-soft);
+  box-shadow: none;
+  transition: background-color 140ms ease, border-color 140ms ease;
+}
+
+.material-analysis-card:hover {
+  border-color: var(--mn-hairline);
+  background: var(--mn-surface);
+}
+
+.material-notion-action {
+  box-shadow: none;
+}
+
 .overview-filter-panel {
   display: flex;
   min-height: 54px;
@@ -1366,7 +1427,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
   min-width: 0;
   min-height: 116px;
   padding: 18px 20px;
-  border-left: 1px solid rgb(226 232 240 / 55%);
+  border-left: 1px solid #ede9e4;
 }
 
 .overview-metric:first-child {
