@@ -130,7 +130,7 @@ const handleSave = async () => {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-slate-50 dark:bg-slate-950">
+  <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <!-- 左侧导航栏 -->
     <SidebarNav
       :nav-items="navItems"
@@ -141,7 +141,7 @@ const handleSave = async () => {
     <!-- 中间内容工作区 -->
     <main class="flex-1 flex flex-col bg-white dark:bg-slate-900 overflow-hidden">
       <!-- Header -->
-      <div class="h-[50px] border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
+      <header data-workspace-page-header class="workspace-page-header border-b border-slate-200 dark:border-slate-800 flex items-center justify-between px-[19px]">
         <div class="flex items-center gap-[12px]">
           <button
             class="flex items-center gap-[6px] text-slate-600 dark:text-slate-400 hover:text-primary transition-colors"
@@ -153,10 +153,10 @@ const handleSave = async () => {
           <div class="h-[19px] w-px bg-slate-200 dark:bg-slate-800"></div>
           <h3 class="font-bold text-[13px] text-slate-900 dark:text-white">创建广告单元 (Ad Set)</h3>
         </div>
-      </div>
+      </header>
 
       <!-- 内容区域 -->
-      <div class="flex-1 overflow-y-auto px-[19px] py-[15px]">
+      <div class="workspace-page-content flex-1 overflow-y-auto px-[19px] py-[15px]">
         <!-- 错误提示 -->
         <div v-if="errors.submit" class="mb-[12px] p-[10px] rounded-md bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
           <div class="flex items-center gap-[6px]">
@@ -169,7 +169,7 @@ const handleSave = async () => {
           <!-- 任务与 Ad Set 配置 -->
           <section class="p-[13px] rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <h2 class="text-[11px] font-semibold text-slate-900 dark:text-white mb-[10px]">任务与 Ad Set 配置</h2>
-            <div class="grid grid-cols-2 gap-[10px]">
+            <div class="grid grid-cols-1 gap-[10px] md:grid-cols-2">
               <!-- 任务名称 -->
               <div>
                 <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
@@ -337,7 +337,7 @@ const handleSave = async () => {
           <!-- 广告素材配置 -->
           <section class="p-[13px] rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800/50">
             <h2 class="text-[11px] font-semibold text-slate-900 dark:text-white mb-[10px]">广告素材配置</h2>
-            <div class="grid grid-cols-2 gap-[10px]">
+            <div class="grid grid-cols-1 gap-[10px] md:grid-cols-2">
               <!-- 广告名称 -->
               <div>
                 <label class="block text-[9px] font-normal text-slate-700 dark:text-slate-300 mb-[5px]">
@@ -423,7 +423,7 @@ const handleSave = async () => {
       </div>
 
       <!-- 底部按钮栏 -->
-      <div class="h-[60px] border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-[8px] px-[19px] bg-white dark:bg-slate-900">
+      <div class="workspace-page-content h-[60px] border-t border-slate-200 dark:border-slate-800 flex items-center justify-end gap-[8px] px-[19px] bg-white dark:bg-slate-900">
         <button
           type="button"
           class="px-[13px] py-[6px] text-[10px] font-medium text-slate-700 dark:text-slate-300 bg-white dark:bg-slate-700 border border-slate-300 dark:border-slate-600 rounded-md hover:bg-slate-50 dark:hover:bg-slate-600 transition-colors"

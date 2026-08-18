@@ -22,13 +22,13 @@ const opportunities = [
 </script>
 
 <template>
-  <main class="flex-1 bg-slate-50 px-6 py-8 dark:bg-slate-950 md:px-10">
+  <main class="flex-1 bg-slate-50 px-4 py-6 dark:bg-slate-950 sm:px-6 sm:py-8 md:px-10">
     <div class="mx-auto max-w-7xl space-y-6">
       <div class="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div class="flex items-center gap-3">
             <span class="material-symbols-outlined text-3xl text-primary">trending_up</span>
-            <h1 class="text-2xl font-bold tracking-tight text-slate-900 dark:text-white">市场分析</h1>
+            <h1 class="text-xl font-bold tracking-tight text-slate-900 dark:text-white sm:text-2xl">市场分析</h1>
             <span class="rounded-full bg-blue-50 px-2.5 py-1 text-[10px] font-semibold text-blue-600">DEMO 数据</span>
           </div>
           <p class="mt-2 text-sm text-slate-500">聚合热门题材、渠道基准和市场扩量机会</p>
@@ -50,7 +50,7 @@ const opportunities = [
         <div class="overflow-hidden rounded-xl border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
           <div class="border-b border-slate-100 px-5 py-4 dark:border-slate-800"><h2 class="font-semibold text-slate-900 dark:text-white">热门创意趋势</h2><p class="mt-1 text-xs text-slate-500">按增长速度与互动热度综合排序</p></div>
           <div class="divide-y divide-slate-100 dark:divide-slate-800">
-            <div v-for="trend in trends" :key="trend.rank" class="grid grid-cols-[34px_1fr_90px] items-center gap-3 px-5 py-4">
+            <div v-for="trend in trends" :key="trend.rank" class="grid grid-cols-[28px_minmax(0,1fr)_72px] items-center gap-2 px-3 py-4 sm:grid-cols-[34px_minmax(0,1fr)_90px] sm:gap-3 sm:px-5">
               <span class="flex h-7 w-7 items-center justify-center rounded-full bg-slate-100 text-xs font-bold text-slate-600">{{ trend.rank }}</span>
               <div><div class="font-medium text-slate-800 dark:text-slate-100">{{ trend.name }}</div><div class="mt-1 flex flex-wrap gap-1.5"><span class="text-[10px] text-slate-400">{{ trend.category }}</span><span v-for="tag in trend.tags" :key="tag" class="rounded bg-slate-100 px-1.5 py-0.5 text-[9px] text-slate-500">{{ tag }}</span></div></div>
               <div class="text-right"><div class="text-sm font-bold text-emerald-600">+{{ trend.growth }}%</div><div class="mt-1 text-[10px] text-slate-400">热度 {{ trend.heat }}</div></div>

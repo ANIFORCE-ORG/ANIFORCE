@@ -225,7 +225,7 @@ const handleCloseToast = () => {
 </script>
 
 <template>
-  <div class="project-detail-shell">
+  <div class="project-detail-shell workspace-page-canvas">
     <!-- 左侧功能导航抽屉 -->
     <SidebarNav
       :nav-items="navItems"
@@ -236,7 +236,7 @@ const handleCloseToast = () => {
     />
 
     <main class="project-detail-main">
-      <header class="detail-page-bar">
+      <header data-workspace-page-header class="detail-page-bar workspace-page-header">
         <button class="detail-back-button" @click="handleBack">
           <span class="material-symbols-outlined">arrow_back</span>
           返回项目列表
@@ -244,7 +244,7 @@ const handleCloseToast = () => {
       </header>
 
       <div class="detail-scroll-area">
-        <div class="detail-content">
+        <div class="detail-content workspace-page-content">
           <section class="project-panel">
             <div class="project-head">
               <h1>{{ project?.name || '-' }}</h1>
@@ -370,9 +370,9 @@ const handleCloseToast = () => {
   --detail-stone: #a4a097;
   display: flex;
   width: 100%;
-  height: calc(100vh - 100px);
+  height: 100vh;
   overflow: hidden;
-  background: #fff;
+  background: var(--workspace-canvas);
   color: var(--detail-charcoal);
 }
 
@@ -382,11 +382,10 @@ const handleCloseToast = () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  background: #fff;
+  background: var(--workspace-canvas);
 }
 
 .detail-page-bar {
-  min-height: 54px;
   display: flex;
   align-items: center;
   padding: 0 clamp(24px, 3vw, 48px);
@@ -555,9 +554,9 @@ const handleCloseToast = () => {
   justify-content: center;
   gap: 7px;
   padding: 0 13px;
-  border: 1px solid var(--detail-charcoal);
+  border: 1px solid var(--workspace-action-primary, #137fec);
   border-radius: 8px;
-  background: var(--detail-charcoal);
+  background: var(--workspace-action-primary, #137fec);
   color: #fff;
   font-size: 11px;
   font-weight: 500;
@@ -565,8 +564,8 @@ const handleCloseToast = () => {
 }
 
 .primary-button:hover {
-  border-color: var(--detail-ink);
-  background: var(--detail-ink);
+  border-color: var(--workspace-action-primary-hover, #0f6fcf);
+  background: var(--workspace-action-primary-hover, #0f6fcf);
 }
 
 .primary-button .material-symbols-outlined {

@@ -18,6 +18,7 @@ const router = createRouter({
       path: '/home',
       name: 'home',
       component: () => import('@/pages/Home.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/market-analysis',
@@ -28,46 +29,55 @@ const router = createRouter({
       path: '/campaign',
       name: 'campaign',
       component: () => import('@/pages/campaigns/Campaign.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/material',
       name: 'material',
       component: () => import('@/pages/creatives/Material.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/monitor',
       name: 'monitor',
       component: () => import('@/pages/Monitor.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/dashboard',
       name: 'dashboard',
       component: () => import('@/pages/Dashboard.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/projects',
       name: 'projects',
       component: () => import('@/pages/projects/Projects.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/projects/:id',
       name: 'project-detail',
       component: () => import('@/pages/projects/ProjectDetail.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/campaigns/:id',
       name: 'campaign-detail',
       component: () => import('@/pages/campaigns/CampaignDetail.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/campaigns/create',
       name: 'create-campaign',
       component: () => import('@/pages/campaigns/CreateCampaign.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/campaigns/:campaignId/ad-units/create',
       name: 'create-ad-unit',
       component: () => import('@/pages/campaigns/CreateAdUnit.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/login',
@@ -83,26 +93,31 @@ const router = createRouter({
       path: '/settings',
       name: 'settings',
       component: () => import('@/pages/settings/Settings.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/account-config',
       name: 'account-config',
       component: () => import('@/pages/settings/AccountConfig.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/ai-usage-config',
       name: 'ai-usage-config',
       component: () => import('@/pages/settings/AIUsageConfig.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/platform-connections',
       name: 'platform-connections',
       component: () => import('@/pages/settings/PlatformConnections.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/system-admin',
       name: 'system-admin',
       component: () => import('@/pages/system/SystemAdmin.vue'),
+      meta: { workspaceShell: true },
     },
     {
       path: '/privacy',
@@ -128,7 +143,7 @@ router.beforeEach((to, from, next) => {
 
   // 本地 Demo 模式直接进入业务页面，不经过登录页。
   // 仅在 VITE_DEMO_MODE=true 时生效，生产环境仍使用正常认证流程。
-  if (import.meta.env.VITE_DEMO_MODE === 'true' && !auth.isLoggedIn) {
+  if (import.meta.env.VITE_DEMO_MODE === 'true' && !auth.isLoggedIn && !auth.hasExplicitDemoLogout) {
     auth.fakeLogin()
   }
 

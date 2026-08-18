@@ -1,8 +1,12 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, getCurrentInstance } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useAgentSession } from '@/composables/useAgentSession'
+import AccountControls from '@/components/layout/AccountControls.vue'
+import SessionRenameDialog from '@/components/layout/SessionRenameDialog.vue'
+import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
+import logoSvg from '@/assets/aniforce-logo-transparent.svg'
 
 interface NavItem {
   id: string
@@ -51,7 +55,6 @@ const router = useRouter()
 const route = useRoute()
 const auth = useAuthStore()
 const agent = useAgentSession()
-const instance = getCurrentInstance()
 
 const isAdmin = computed(() => auth.user?.system_role === 'ADMIN')
 
@@ -64,11 +67,102 @@ const agentSessions = computed(() =>
 )
 
 const displaySessions = computed(() => agentSessions.value)
+const openSessionMenuId = ref<string | null>(null)
+const localRenameDialog = ref<Session | null>(null)
+const localRenameValue = ref('')
+const localDeleteDialog = ref<Session | null>(null)
+
+const SESSION_NAME_MAX_LENGTH = 12
+const truncateSessionName = (name: string) => {
+  const characters = Array.from(name)
+  return characters.length > SESSION_NAME_MAX_LENGTH
+    ? `${characters.slice(0, SESSION_NAME_MAX_LENGTH).join('')}...`
+    : name
+}
+
+const closeSessionMenu = () => {
+  openSessionMenuId.value = null
+}
+
+const toggleSessionMenu = (sessionId: string) => {
+  openSessionMenuId.value = openSessionMenuId.value === sessionId ? null : sessionId
+}
+
+const openSessionMenu = (sessionId: string) => {
+  openSessionMenuId.value = sessionId
+}
+
+const handleRenameSession = (session: Session) => {
+  closeSessionMenu()
+  if (route.path === '/home') {
+    emit('rename-session', session)
+    return
+  }
+  localRenameDialog.value = session
+  localRenameValue.value = session.name
+  nextTick(() => document.querySelector<HTMLInputElement>('[data-sidebar-session-rename-input]')?.focus())
+}
+
+const handleDeleteSession = (session: Session) => {
+  closeSessionMenu()
+  if (route.path === '/home') {
+    emit('delete-session', session)
+    return
+  }
+  localDeleteDialog.value = session
+}
+
+const confirmLocalRename = async () => {
+  const session = localRenameDialog.value
+  const title = localRenameValue.value.trim()
+  if (!session || !title) return
+  await agent.renameSession(session.id, title)
+  localRenameDialog.value = null
+}
+
+const confirmLocalDelete = async () => {
+  const session = localDeleteDialog.value
+  if (!session) return
+  await agent.deleteSession(session.id)
+  localDeleteDialog.value = null
+}
+
+const handleDocumentClick = () => {
+  closeSessionMenu()
+}
 
 const SIDEBAR_COLLAPSED_KEY = 'animagus_sidebar_collapsed'
 const isCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
+const isNarrowViewport = ref(false)
+const mobileExpanded = ref(false)
+const isSidebarCollapsed = computed(() => isNarrowViewport.value ? !mobileExpanded.value : isCollapsed.value)
+const sidebarWidth = computed(() => isSidebarCollapsed.value ? '52px' : '205px')
+const layoutSidebarWidth = computed(() => isNarrowViewport.value ? '52px' : sidebarWidth.value)
+let narrowViewportMedia: MediaQueryList | null = null
+
+const syncSidebarWidth = () => {
+  document.documentElement.style.setProperty('--workspace-sidebar-width', layoutSidebarWidth.value)
+}
+
+syncSidebarWidth()
+watch(layoutSidebarWidth, syncSidebarWidth)
+
+const handleNarrowViewportChange = (event: MediaQueryListEvent | MediaQueryList) => {
+  isNarrowViewport.value = event.matches
+  if (!event.matches) mobileExpanded.value = false
+}
+
+onBeforeUnmount(() => {
+  document.documentElement.style.removeProperty('--workspace-sidebar-width')
+  document.removeEventListener('click', handleDocumentClick)
+  narrowViewportMedia?.removeEventListener('change', handleNarrowViewportChange)
+})
 
 const toggleCollapse = () => {
+  if (isNarrowViewport.value) {
+    mobileExpanded.value = !mobileExpanded.value
+    return
+  }
   isCollapsed.value = !isCollapsed.value
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(isCollapsed.value))
 }
@@ -83,13 +177,21 @@ const isActivePanel = (itemId: string) => {
 }
 
 const handleNavClick = (item: NavItem) => {
+  mobileExpanded.value = false
   emit('switch-panel', item)
   if (item.path) {
     router.push(item.path)
   }
 }
 
+const handleLogoClick = () => {
+  mobileExpanded.value = false
+  router.push('/home')
+}
+
 const handleSessionClick = (session: Session) => {
+  mobileExpanded.value = false
+  closeSessionMenu()
   if (route.path !== '/home') {
     router.push({ path: '/home', query: { session_id: session.id } })
     return
@@ -105,53 +207,61 @@ const handleCreateSession = () => {
   emit('create-session')
 }
 
-const hasExternalListener = (name: string) => Boolean((instance?.vnode.props as Record<string, unknown> | null)?.[name])
-
-const handleRenameSession = async (session: Session) => {
-  if (hasExternalListener('onRenameSession')) {
-    emit('rename-session', session)
-    return
-  }
-  const title = window.prompt('重命名对话', session.name)
-  if (!title || title.trim() === session.name) return
-  await agent.renameSession(session.id, title)
-}
-
-const handleDeleteSession = async (session: Session) => {
-  if (hasExternalListener('onDeleteSession')) {
-    emit('delete-session', session)
-    return
-  }
-  if (!window.confirm(`确定删除对话「${session.name}」吗？删除后会从历史列表移除。`)) return
-  await agent.deleteSession(session.id)
-}
-
 onMounted(() => {
+  document.addEventListener('click', handleDocumentClick)
+  narrowViewportMedia = window.matchMedia('(max-width: 767px)')
+  handleNarrowViewportChange(narrowViewportMedia)
+  narrowViewportMedia.addEventListener('change', handleNarrowViewportChange)
   void agent.refreshSessions()
 })
 </script>
 
 <template>
+  <div
+    class="sidebar-rail-spacer flex-none transition-all duration-300"
+    :class="isNarrowViewport ? 'w-[52px]' : (isSidebarCollapsed ? 'w-[52px]' : 'w-[205px]')"
+    aria-hidden="true"
+  />
+  <button
+    v-if="isNarrowViewport && mobileExpanded"
+    class="sidebar-mobile-backdrop"
+    type="button"
+    aria-label="关闭导航栏"
+    @click="mobileExpanded = false"
+  />
   <aside
-    class="sidebar-notion bg-white dark:bg-slate-900 border-r border-slate-200 dark:border-slate-800 flex flex-col transition-all duration-300"
-    :class="isCollapsed ? 'w-[52px]' : 'w-[205px]'"
+    id="workspace-sidebar-navigation"
+    class="sidebar-notion fixed bottom-0 left-0 top-0 z-50 flex flex-col transition-all duration-300"
+    :class="isSidebarCollapsed ? 'w-[52px]' : 'w-[205px]'"
   >
-    <nav class="sidebar-scroll flex-1 overflow-y-auto pb-0 p-[12px] pt-[20px] space-y-[20px] overflow-x-hidden">
+    <div class="sidebar-brand-row" :class="{ 'is-collapsed': isSidebarCollapsed }">
+      <button
+        v-if="!isSidebarCollapsed"
+        class="sidebar-brand-button"
+        type="button"
+        aria-label="返回首页"
+        @click="handleLogoClick"
+      >
+        <img :src="logoSvg" alt="ANIFORCE" class="sidebar-brand-logo logo-blue" />
+      </button>
+      <button
+        class="sidebar-collapse flex items-center justify-center transition-colors"
+        type="button"
+        aria-controls="workspace-sidebar-navigation"
+        :aria-expanded="!isSidebarCollapsed"
+        :aria-label="isSidebarCollapsed ? '展开导航栏' : '收起导航栏'"
+        @click="toggleCollapse"
+      >
+        <span class="material-symbols-outlined">
+          {{ isSidebarCollapsed ? 'menu' : 'menu_open' }}
+        </span>
+      </button>
+    </div>
+
+    <nav class="sidebar-scroll flex-1 overflow-y-auto space-y-[20px] overflow-x-hidden">
       <div>
-        <div
-          class="sidebar-section-head mb-[6px]"
-          :class="isCollapsed ? '' : 'flex items-center justify-between px-[6px]'"
-        >
-          <span v-if="!isCollapsed" class="sidebar-section-title text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
-          <button
-            class="sidebar-collapse rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center justify-center"
-            :class="isCollapsed ? 'w-full py-[10px]' : 'p-[6px]'"
-            @click="toggleCollapse"
-          >
-            <span class="material-symbols-outlined text-slate-600 dark:text-slate-400 text-[15px]">
-              {{ isCollapsed ? 'menu' : 'menu_open' }}
-            </span>
-          </button>
+        <div class="sidebar-section-head mb-[6px]">
+          <span v-if="!isSidebarCollapsed" class="sidebar-section-title text-[11px] font-semibold text-slate-500 dark:text-slate-400">功能导航</span>
         </div>
         <ul class="sidebar-nav-list space-y-[12px]">
           <li
@@ -159,7 +269,7 @@ onMounted(() => {
             :key="item.id"
             class="sidebar-nav-item flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
-              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
+              isSidebarCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel(item.id)
                 ? 'sidebar-item-active'
                 : 'sidebar-item-idle'
@@ -167,10 +277,10 @@ onMounted(() => {
             @click="handleNavClick(item)"
           >
             <span class="material-symbols-outlined text-[15px]">{{ item.icon }}</span>
-            <span v-if="!isCollapsed" class="text-[11px]">{{ item.label }}</span>
+            <span v-if="!isSidebarCollapsed" class="text-[11px]">{{ item.label }}</span>
 
             <div
-              v-if="isCollapsed"
+              v-if="isSidebarCollapsed"
               class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
             >
               {{ item.label }}
@@ -181,7 +291,7 @@ onMounted(() => {
             v-if="isAdmin"
             class="sidebar-nav-item flex items-center rounded-lg cursor-pointer transition-all relative group"
             :class="[
-              isCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
+              isSidebarCollapsed ? 'justify-center px-[6px] py-[10px]' : 'gap-[10px] px-[10px] py-[6px]',
               isActivePanel('system-admin')
                 ? 'sidebar-item-active'
                 : 'sidebar-item-idle'
@@ -189,10 +299,10 @@ onMounted(() => {
             @click="handleNavClick({ id: 'system-admin', icon: 'admin_panel_settings', label: '系统管理', path: '/system-admin' })"
           >
             <span class="material-symbols-outlined text-[15px]">admin_panel_settings</span>
-            <span v-if="!isCollapsed" class="text-[11px]">系统管理</span>
+            <span v-if="!isSidebarCollapsed" class="text-[11px]">系统管理</span>
 
             <div
-              v-if="isCollapsed"
+              v-if="isSidebarCollapsed"
               class="absolute left-full ml-[6px] px-[10px] py-[6px] bg-slate-900 dark:bg-slate-700 text-white text-[11px] rounded-lg opacity-0 group-hover:opacity-100 pointer-events-none whitespace-nowrap z-50 transition-opacity"
             >
               系统管理
@@ -201,7 +311,7 @@ onMounted(() => {
         </ul>
       </div>
 
-      <div v-if="displaySessions.length > 0 && !isCollapsed" class="sidebar-session-group">
+      <div v-if="displaySessions.length > 0 && !isSidebarCollapsed" class="sidebar-session-group">
         <div class="sidebar-session-head mb-[6px] flex items-center justify-between px-[6px]">
           <span class="sidebar-section-title text-[10px] font-semibold text-slate-500 dark:text-slate-400">历史会话</span>
           <button
@@ -217,33 +327,78 @@ onMounted(() => {
           <li
             v-for="session in displaySessions"
             :key="session.id"
-            class="sidebar-session-item group flex min-w-0 items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
-            :class="session.active
-              ? 'sidebar-item-active'
-              : 'sidebar-item-idle'"
+            class="sidebar-session-item group flex items-center gap-[6px] px-[10px] py-[6px] rounded-lg cursor-pointer transition-all"
+            :class="[
+              session.active ? 'sidebar-item-active' : 'sidebar-item-idle',
+              { 'is-menu-open': openSessionMenuId === session.id }
+            ]"
             @click="handleSessionClick(session)"
+            @contextmenu.prevent.stop="openSessionMenu(session.id)"
           >
-            <span class="material-symbols-outlined shrink-0 text-[11px]">chat</span>
-            <span class="sidebar-session-name min-w-0 flex-1 truncate text-[11px]">{{ session.name }}</span>
+            <span class="material-symbols-outlined text-[11px]">chat</span>
+            <span class="min-w-0 flex-1 overflow-hidden whitespace-nowrap text-[11px]" :title="session.name">{{ truncateSessionName(session.name) }}</span>
             <div
               v-if="sessionActions"
-              class="sidebar-session-actions pointer-events-none flex shrink-0 items-center gap-[2px] opacity-0 transition-opacity group-hover:pointer-events-auto group-hover:opacity-100 group-focus-within:pointer-events-auto group-focus-within:opacity-100"
+              class="sidebar-session-actions flex items-center"
             >
-              <button class="sidebar-session-action-button" title="重命名" @click.stop="handleRenameSession(session)">
-                <span class="material-symbols-outlined">edit</span>
+              <button
+                class="sidebar-session-action-button hover:bg-slate-200 dark:hover:bg-slate-700"
+                type="button"
+                title="会话操作"
+                :aria-label="`${session.name}的会话操作`"
+                :aria-expanded="openSessionMenuId === session.id"
+                @click.stop="toggleSessionMenu(session.id)"
+              >
+                <span class="material-symbols-outlined">more_horiz</span>
               </button>
-              <button class="sidebar-session-action-button" title="删除" @click.stop="handleDeleteSession(session)">
+            </div>
+            <div v-if="openSessionMenuId === session.id" class="session-action-menu" role="menu" @click.stop>
+              <button type="button" role="menuitem" @click.stop="handleRenameSession(session)">
+                <span class="material-symbols-outlined">edit</span>
+                <span>重命名</span>
+              </button>
+              <button class="session-action-menu__danger" type="button" role="menuitem" @click.stop="handleDeleteSession(session)">
                 <span class="material-symbols-outlined">delete</span>
+                <span>删除</span>
               </button>
             </div>
           </li>
         </ul>
       </div>
     </nav>
+
+    <AccountControls variant="sidebar" :collapsed="isSidebarCollapsed" />
   </aside>
+
+  <SessionRenameDialog
+    v-model="localRenameValue"
+    :show="Boolean(localRenameDialog)"
+    @confirm="confirmLocalRename"
+    @close="localRenameDialog = null"
+  />
+
+  <ConfirmDialog
+    :show="Boolean(localDeleteDialog)"
+    title="删除对话"
+    :message="`确定删除对话「${localDeleteDialog?.name || ''}」吗？删除后将从历史会话中移除，且无法撤销。`"
+    confirm-text="删除"
+    tone="danger"
+    variant="notion"
+    @confirm="confirmLocalDelete"
+    @close="localDeleteDialog = null"
+  />
 </template>
 
 <style scoped>
+.sidebar-mobile-backdrop {
+  position: fixed;
+  z-index: 49;
+  inset: 0;
+  border: 0;
+  background: rgba(15, 15, 15, 0.2);
+  cursor: default;
+}
+
 .sidebar-notion {
   --sidebar-canvas: #f7f7f5;
   --sidebar-surface: #efefed;
@@ -253,14 +408,65 @@ onMounted(() => {
   --sidebar-charcoal: #37352f;
   --sidebar-slate: #5d5b54;
   --sidebar-steel: #787671;
-  border-color: var(--sidebar-line) !important;
+  border-right: 0 !important;
   background: var(--sidebar-canvas) !important;
   color: var(--sidebar-charcoal);
   font-family: "Notion Sans", "Avenir Next", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
+.sidebar-notion::after {
+  position: absolute;
+  z-index: 5;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 16px;
+  background: linear-gradient(90deg, rgba(55, 53, 47, 0) 0, rgba(55, 53, 47, 0.012) 34%, rgba(55, 53, 47, 0.032) 66%, rgba(55, 53, 47, 0.068) 100%);
+  content: '';
+  pointer-events: none;
+}
+
+.sidebar-brand-row {
+  position: relative;
+  z-index: 3;
+  display: flex;
+  height: 57px;
+  min-height: 57px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 8px 0 16px;
+}
+
+.sidebar-brand-row.is-collapsed {
+  justify-content: center;
+  padding: 0;
+}
+
+.sidebar-brand-button {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  cursor: pointer;
+}
+
+.sidebar-brand-logo {
+  width: auto;
+  height: 30px;
+  max-width: 94px;
+  object-fit: contain;
+}
+
+.logo-blue {
+  filter: brightness(0) saturate(100%) invert(45%) sepia(98%) saturate(1845%) hue-rotate(205deg) brightness(102%) contrast(98%);
+}
+
 .sidebar-scroll {
-  padding: 18px 8px 12px !important;
+  position: relative;
+  z-index: 1;
+  padding: 4px 8px 12px !important;
 }
 
 .sidebar-section-head,
@@ -272,7 +478,7 @@ onMounted(() => {
 
 .sidebar-section-title {
   color: var(--sidebar-steel) !important;
-  font-size: 10px !important;
+  font-size: 12px !important;
   font-weight: 600 !important;
   line-height: 1.4;
   letter-spacing: 0.01em;
@@ -309,31 +515,36 @@ onMounted(() => {
   gap: 2px;
 }
 
+.sidebar-session-list {
+  width: 100%;
+  min-width: 0;
+}
+
 .sidebar-nav-item,
 .sidebar-session-item {
-  min-height: 34px;
-  padding: 6px 8px !important;
+  min-height: 36px;
+  padding: 7px 9px !important;
   border-radius: 6px !important;
   font-weight: 400 !important;
   line-height: 1.35;
 }
 
 .sidebar-nav-item {
-  gap: 9px !important;
+  gap: 11px !important;
 }
 
 .sidebar-nav-item > .material-symbols-outlined {
-  width: 18px;
-  flex: 0 0 18px;
+  width: 20px;
+  flex: 0 0 20px;
   color: inherit;
-  font-size: 17px !important;
+  font-size: 19px !important;
   text-align: center;
 }
 
 .sidebar-nav-item > span:not(.material-symbols-outlined),
 .sidebar-session-item > span:last-of-type {
   color: inherit;
-  font-size: 11px !important;
+  font-size: 13px !important;
   font-weight: inherit;
 }
 
@@ -357,43 +568,126 @@ onMounted(() => {
 }
 
 .sidebar-session-item {
-  gap: 7px !important;
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  gap: 9px !important;
 }
 
-.sidebar-session-name {
+.sidebar-session-item > span[title] {
   min-width: 0;
+  max-width: 100%;
+}
+
+.sidebar-session-actions {
+  width: 24px;
+  min-width: 24px;
+  flex: 0 0 24px;
+  justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease;
+}
+
+.sidebar-session-item:hover .sidebar-session-actions,
+.sidebar-session-item:focus-within .sidebar-session-actions,
+.sidebar-session-item.sidebar-item-active .sidebar-session-actions,
+.sidebar-session-item.is-menu-open .sidebar-session-actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-session-list:has(.sidebar-session-item:hover)
+  .sidebar-session-item.sidebar-item-active:not(:hover):not(:focus-within):not(.is-menu-open)
+  .sidebar-session-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-session-action-button {
+  width: 24px;
+  height: 24px;
+  display: grid;
+  place-items: center;
+  padding: 0 !important;
+  border: 0;
+  background: transparent;
+}
+
+.sidebar-session-action-button .material-symbols-outlined {
+  font-size: 14px !important;
+}
+
+.sidebar-session-item.is-menu-open {
+  z-index: 8;
+}
+
+.session-action-menu {
+  position: absolute;
+  z-index: 20;
+  top: calc(100% + 5px);
+  right: 5px;
+  width: 150px;
+  padding: 5px;
+  border: 1px solid #deddd9;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 8px 24px rgb(15 15 15 / 14%), 0 1px 3px rgb(15 15 15 / 8%);
+}
+
+.session-action-menu > button {
+  display: flex;
+  width: 100%;
+  min-height: 34px;
+  align-items: center;
+  gap: 9px;
+  padding: 6px 9px;
+  border: 0;
+  border-radius: 5px !important;
+  background: transparent;
+  color: var(--sidebar-charcoal) !important;
+  cursor: pointer;
+  font-size: 11px;
+  text-align: left;
+}
+
+.session-action-menu > button:hover {
+  background: #f1f1ef !important;
+}
+
+.session-action-menu .material-symbols-outlined {
+  width: 16px;
+  flex: 0 0 16px;
+  font-size: 16px !important;
+}
+
+.session-action-menu > .session-action-menu__danger {
+  color: #d14343 !important;
+}
+
+.session-action-menu > .session-action-menu__danger:hover {
+  background: rgb(209 67 67 / 8%) !important;
+}
+
+:global(.dark) .session-action-menu {
+  border-color: #373737;
+  background: #202020;
+  box-shadow: 0 8px 28px rgb(0 0 0 / 38%);
+}
+
+:global(.dark) .session-action-menu > button {
+  color: #e6e6e5 !important;
+}
+
+:global(.dark) .session-action-menu > button:hover {
+  background: #2a2a2a !important;
 }
 
 .sidebar-session-item > .material-symbols-outlined {
   width: 16px;
   flex: 0 0 16px;
-  font-size: 15px !important;
-}
-
-.sidebar-session-actions {
-  width: 38px;
-  justify-content: flex-end;
-}
-
-.sidebar-session-action-button {
-  display: grid;
-  width: 18px;
-  height: 18px;
-  place-items: center;
-  border: 0;
-  border-radius: 4px !important;
-  background: transparent;
-  color: var(--sidebar-steel) !important;
-}
-
-.sidebar-session-action-button .material-symbols-outlined {
-  font-size: 12px !important;
-  line-height: 1;
-}
-
-.sidebar-session-action-button:hover {
-  background: rgba(55, 53, 47, 0.08) !important;
-  color: var(--sidebar-ink) !important;
+  font-size: 17px !important;
 }
 
 nav::-webkit-scrollbar {
@@ -405,5 +699,9 @@ nav::-webkit-scrollbar-thumb {
 }
 nav::-webkit-scrollbar-thumb:hover {
   background-color: #c8c4be;
+}
+
+:global(.dark) .sidebar-notion::after {
+  background: linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0.05) 34%, rgba(0, 0, 0, 0.12) 66%, rgba(0, 0, 0, 0.2) 100%);
 }
 </style>
