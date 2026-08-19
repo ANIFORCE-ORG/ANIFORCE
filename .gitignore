@@ -89,3 +89,5 @@ resources/
 *.bak
 *.tmp
 *.temp
+
+.agents/
