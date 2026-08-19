@@ -43,6 +43,23 @@ export interface SubAccountResponse {
   updated_at: string
 }
 
+export interface SubAccountSummary {
+  total: number
+  active: number
+  disabled: number
+  pending_review: number
+  other: number
+}
+
+export interface SubAccountPageResponse {
+  items: SubAccountResponse[]
+  page: number
+  page_size: number
+  total: number
+  has_more: boolean
+  summary: SubAccountSummary
+}
+
 export const platformApi = {
   saveMetaConfig: (data: MetaConfigRequest) =>
     http.post<PlatformConnectionResponse>('/platform-auth/meta/config', data),
@@ -81,8 +98,15 @@ export const platformApi = {
     http.get<{ authorize_url: string }>(`/platform-auth/google/authorize_url/${connectionId}`),
 
   // 子账号管理
-  getSubAccounts: (connectionId: string) =>
-    http.get<SubAccountResponse[]>(`/platform-auth/google/${connectionId}/sub-accounts`),
+  getSubAccounts: (connectionId: string, params: { page?: number; page_size?: number; search?: string; status?: string } = {}) => {
+    const query = new URLSearchParams()
+    if (params.page) query.set('page', String(params.page))
+    if (params.page_size) query.set('page_size', String(params.page_size))
+    if (params.search) query.set('search', params.search)
+    if (params.status) query.set('status', params.status)
+    const suffix = query.size ? `?${query.toString()}` : ''
+    return http.get<SubAccountPageResponse>(`/platform-auth/google/${connectionId}/sub-accounts${suffix}`)
+  },
 
   addSubAccount: (connectionId: string, data: SubAccountRequest) =>
     http.post<SubAccountResponse>(`/platform-auth/google/${connectionId}/sub-accounts`, data),

@@ -5,7 +5,7 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { navItems } from '@/config/navigation'
-import { platformApi, type PlatformConnectionResponse } from '@/api/platform'
+import { platformApi, type PlatformConnectionResponse, type SubAccountPageResponse } from '@/api/platform'
 import { useToast } from '@/composables/useToast'
 import '@/styles/settings-notion.css'
 
@@ -19,7 +19,7 @@ const deletingConnection = ref<PlatformConnectionResponse | null>(null)
 
 // 子账号管理
 const expandedAccounts = ref<Set<string>>(new Set())
-const subAccounts = ref<Record<string, any[]>>({})
+const subAccounts = ref<Record<string, SubAccountPageResponse>>({})
 const loadingSubAccounts = ref<Set<string>>(new Set())
 const showAddSubAccountDialog = ref(false)
 const currentParentConnectionId = ref<string | null>(null)
@@ -240,25 +240,25 @@ const getStatusClass = (status: string) => {
   return classMap[status] || classMap['unauthorized']
 }
 
-// 切换子账号展开/收起
 const toggleSubAccounts = async (connectionId: string) => {
   if (expandedAccounts.value.has(connectionId)) {
     expandedAccounts.value.delete(connectionId)
   } else {
     expandedAccounts.value.add(connectionId)
-    // 如果还没有加载子账号，则加载
     if (!subAccounts.value[connectionId]) {
       await loadSubAccounts(connectionId)
     }
   }
 }
 
-// 加载子账号列表
-const loadSubAccounts = async (connectionId: string) => {
+const loadSubAccounts = async (connectionId: string, page = 1, append = false) => {
   loadingSubAccounts.value.add(connectionId)
   try {
-    const accounts = await platformApi.getSubAccounts(connectionId)
-    subAccounts.value[connectionId] = accounts
+    const response = await platformApi.getSubAccounts(connectionId, { page, page_size: 50 })
+    const previous = subAccounts.value[connectionId]
+    subAccounts.value[connectionId] = append && previous
+      ? { ...response, items: [...previous.items, ...response.items] }
+      : response
   } catch (err: any) {
     console.error('加载子账号失败:', err)
     showError('加载子账号失败')
@@ -303,9 +303,18 @@ const handleAddSubAccount = async () => {
 
     // 更新本地数据
     if (!subAccounts.value[currentParentConnectionId.value]) {
-      subAccounts.value[currentParentConnectionId.value] = []
+      subAccounts.value[currentParentConnectionId.value] = {
+        items: [],
+        page: 1,
+        page_size: 50,
+        total: 0,
+        has_more: false,
+        summary: { total: 0, active: 0, disabled: 0, pending_review: 0, other: 0 },
+      }
     }
-    subAccounts.value[currentParentConnectionId.value].push(newSubAccount)
+    subAccounts.value[currentParentConnectionId.value].items.push(newSubAccount)
+    subAccounts.value[currentParentConnectionId.value].total += 1
+    subAccounts.value[currentParentConnectionId.value].summary.total += 1
 
     success('子账号添加成功')
     closeAddSubAccountDialog()
@@ -322,9 +331,11 @@ const handleDeleteSubAccount = async (connectionId: string, subAccountId: string
 
     // 更新本地数据
     if (subAccounts.value[connectionId]) {
-      subAccounts.value[connectionId] = subAccounts.value[connectionId].filter(
+      subAccounts.value[connectionId].items = subAccounts.value[connectionId].items.filter(
         (account) => account.id !== subAccountId
       )
+      subAccounts.value[connectionId].total -= 1
+      subAccounts.value[connectionId].summary.total -= 1
     }
 
     success('子账号已删除')
@@ -408,9 +419,13 @@ onMounted(() => {
                     <tr v-if="(activePlatform === 'meta' || activePlatform === 'google') && isExpanded(connection.id)" class="sn-detail-row">
                       <td :colspan="activePlatform === 'meta' ? 6 : 7">
                         <section class="sn-subaccount-section">
-                          <header class="sn-subaccount-head"><h3>子账号列表</h3><div><span>共 {{ subAccounts[connection.id]?.length || 0 }} 个子账号</span><button v-if="activePlatform === 'google'" class="sn-button primary" type="button" style="margin-left:8px" @click="openAddSubAccountDialog(connection.id)">添加子账号</button></div></header>
+                          <header class="sn-subaccount-head"><h3>子账号列表</h3><div v-if="subAccounts[connection.id]"><span>共 {{ subAccounts[connection.id].summary.total }} 个子账号，已加载 {{ subAccounts[connection.id].items.length }} 个</span><button v-if="activePlatform === 'google'" class="sn-button primary" type="button" style="margin-left:8px" @click="openAddSubAccountDialog(connection.id)">添加子账号</button></div></header>
                           <div v-if="loadingSubAccounts.has(connection.id)" class="sn-loading">加载子账号中...</div>
-                          <div v-else-if="subAccounts[connection.id]?.length" class="sn-table-wrap"><div class="sn-subaccount-list"><div class="sn-subaccount-grid sn-subaccount-columns"><span>子账号</span><span>Sub Account ID</span><span>更新时间</span><span style="text-align:right">操作</span></div><div v-for="subAccount in subAccounts[connection.id]" :key="subAccount.id" class="sn-subaccount-grid sn-subaccount-row"><div class="sn-subaccount-identity"><span class="sn-subaccount-name">{{ subAccount.name }}</span><span class="sn-connection-status">{{ getStatusText(subAccount.status) }}</span></div><span class="sn-subaccount-id">{{ subAccount.sub_account_id }}</span><span>{{ formatDate(subAccount.updated_at) }}</span><span class="sn-subaccount-action"><button class="sn-button danger" type="button" @click="handleDeleteSubAccount(connection.id, subAccount.id)">删除</button></span></div></div></div>
+                          <template v-else-if="subAccounts[connection.id]?.items.length">
+                            <div class="sn-subaccount-summary">活跃 {{ subAccounts[connection.id].summary.active }} · 已禁用 {{ subAccounts[connection.id].summary.disabled }} · 待审核 {{ subAccounts[connection.id].summary.pending_review }}</div>
+                            <div class="sn-table-wrap"><div class="sn-subaccount-list"><div class="sn-subaccount-grid sn-subaccount-columns"><span>子账号</span><span>Sub Account ID</span><span>更新时间</span><span style="text-align:right">操作</span></div><div v-for="subAccount in subAccounts[connection.id].items" :key="subAccount.id" class="sn-subaccount-grid sn-subaccount-row"><div class="sn-subaccount-identity"><span class="sn-subaccount-name">{{ subAccount.name }}</span><span class="sn-connection-status">{{ getStatusText(subAccount.status) }}</span></div><span class="sn-subaccount-id">{{ subAccount.sub_account_id }}</span><span>{{ formatDate(subAccount.updated_at) }}</span><span class="sn-subaccount-action"><button class="sn-button danger" type="button" @click="handleDeleteSubAccount(connection.id, subAccount.id)">删除</button></span></div></div></div>
+                            <button v-if="subAccounts[connection.id].has_more" class="sn-button" type="button" :disabled="loadingSubAccounts.has(connection.id)" @click="loadSubAccounts(connection.id, subAccounts[connection.id].page + 1, true)">加载更多</button>
+                          </template>
                           <div v-else class="sn-table-empty">暂无子账号</div>
                         </section>
                       </td>
@@ -674,11 +689,11 @@ onMounted(() => {
                           </div>
 
                           <!-- 子账号列表 -->
-                          <div v-else-if="subAccounts[connection.id] && subAccounts[connection.id].length > 0">
+                          <div v-else-if="subAccounts[connection.id] && subAccounts[connection.id].items.length > 0">
                             <div class="flex items-center justify-between mb-[9px]">
                               <h4 class="text-[10px] font-semibold text-slate-700 dark:text-slate-300">子账号列表</h4>
                               <div class="flex items-center gap-[9px]">
-                                <span class="text-[10px] text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].length }} 个子账号</span>
+                                <span class="text-[10px] text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].summary.total }} 个，已加载 {{ subAccounts[connection.id].items.length }} 个</span>
                                 <!-- Google 平台显示手动添加按钮 -->
                                 <button
                                   v-if="activePlatform === 'google'"
@@ -691,7 +706,7 @@ onMounted(() => {
                             </div>
                             <div class="space-y-[6px]">
                               <div
-                                v-for="subAccount in subAccounts[connection.id]"
+                                v-for="subAccount in subAccounts[connection.id].items"
                                 :key="subAccount.id"
                                 class="flex items-center justify-between p-[9px] rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600"
                               >
@@ -721,6 +736,7 @@ onMounted(() => {
                                 </div>
                               </div>
                             </div>
+                            <button v-if="subAccounts[connection.id].has_more" type="button" :disabled="loadingSubAccounts.has(connection.id)" @click="loadSubAccounts(connection.id, subAccounts[connection.id].page + 1, true)" class="mt-[9px] px-[9px] py-[6px] rounded text-[10px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">加载更多</button>
                           </div>
 
                           <!-- 无子账号 -->
