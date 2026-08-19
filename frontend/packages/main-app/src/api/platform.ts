@@ -60,6 +60,12 @@ export interface SubAccountPageResponse {
   summary: SubAccountSummary
 }
 
+export interface SyncAdAccountsResponse {
+  message: string
+  synced_count: number
+  duplicate_count?: number
+}
+
 export const platformApi = {
   saveMetaConfig: (data: MetaConfigRequest) =>
     http.post<PlatformConnectionResponse>('/platform-auth/meta/config', data),
@@ -83,10 +89,10 @@ export const platformApi = {
     http.post<{ authorize_url: string; connection_id: string }>('/platform-auth/google/start_oauth'),
 
   syncMetaAdAccounts: (connectionId: string) =>
-    http.post(`/platform-auth/meta/${connectionId}/sync-adaccounts`),
+    http.post<SyncAdAccountsResponse>(`/platform-auth/meta/${connectionId}/sync-adaccounts`),
 
   syncGoogleAdAccounts: (connectionId: string) =>
-    http.post(`/platform-auth/google/${connectionId}/sync-adaccounts`),
+    http.post<SyncAdAccountsResponse>(`/platform-auth/google/${connectionId}/sync-adaccounts`),
 
   saveGoogleConfig: (data: GoogleConfigRequest) =>
     http.post<PlatformConnectionResponse>('/platform-auth/google/config', data),

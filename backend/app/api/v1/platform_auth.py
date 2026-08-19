@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import func, or_, select, update
+from sqlalchemy import delete, func, or_, select, update
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import asyncio
@@ -1439,44 +1439,52 @@ async def sync_meta_ad_accounts(
                 9: "suspended"      # 暂停
             }
 
-            # 删除现有的子账号绑定（重新同步）
-            stmt = select(SubAccountBinding).where(
-                SubAccountBinding.parent_connection_id == connection_id
-            )
-            result = await db.execute(stmt)
-            existing_bindings = result.scalars().all()
-            for binding in existing_bindings:
-                await db.delete(binding)
-
-            # 创建新的子账号绑定
-            synced_count = 0
+            # Meta may return the same account through multiple business paths.
+            # Normalize by account identity before replacing the local snapshot.
+            unique_accounts: dict[str, dict] = {}
             for ad_account in accounts_list:
                 account_id = ad_account.get('id', '')
-                account_name = ad_account.get('name', '')
-                account_status = ad_account.get('account_status')
+                normalized_id = account_id.removeprefix("act_")
+                if normalized_id:
+                    unique_accounts[normalized_id] = {
+                        "account_id": account_id,
+                        "account_name": ad_account.get('name', ''),
+                        "status": status_mapping.get(ad_account.get('account_status'), "unknown"),
+                    }
 
-                # 映射状态（SDK 返回的是整数）
-                mapped_status = status_mapping.get(account_status, "unknown")
-
-                # 创建子账号绑定
-                binding = SubAccountBinding(
-                    parent_connection_id=connection_id,
-                    sub_account_name=account_name,
-                    sub_account_id=account_id,
-                    status=mapped_status
+            if not unique_accounts:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Meta 未返回任何广告账户，已保留现有子账号数据",
                 )
-                db.add(binding)
-                synced_count += 1
 
-                logger.info(f"Synced ad account: id={account_id}, name={account_name}, status={mapped_status}")
-
+            await db.execute(
+                delete(SubAccountBinding).where(
+                    SubAccountBinding.parent_connection_id == connection_id
+                )
+            )
+            db.add_all([
+                SubAccountBinding(
+                    parent_connection_id=connection_id,
+                    sub_account_name=account["account_name"],
+                    sub_account_id=account["account_id"],
+                    status=account["status"],
+                )
+                for account in unique_accounts.values()
+            ])
+            connection.last_sync_at = datetime.utcnow()
             await db.commit()
 
-            logger.info(f"Successfully synced {synced_count} ad accounts for connection: {connection_id}")
-
+            synced_count = len(unique_accounts)
+            duplicate_count = len(accounts_list) - synced_count
+            logger.info(
+                f"Successfully synced {synced_count} unique ad accounts for connection: "
+                f"{connection_id}; discarded_duplicates={duplicate_count}"
+            )
             return {
                 "message": f"成功同步 {synced_count} 个广告账户",
-                "synced_count": synced_count
+                "synced_count": synced_count,
+                "duplicate_count": duplicate_count,
             }
 
         except FacebookRequestError as e:

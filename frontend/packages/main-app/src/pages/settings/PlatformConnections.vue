@@ -21,6 +21,7 @@ const deletingConnection = ref<PlatformConnectionResponse | null>(null)
 const expandedAccounts = ref<Set<string>>(new Set())
 const subAccounts = ref<Record<string, SubAccountPageResponse>>({})
 const loadingSubAccounts = ref<Set<string>>(new Set())
+const syncingConnections = ref<Set<string>>(new Set())
 const showAddSubAccountDialog = ref(false)
 const currentParentConnectionId = ref<string | null>(null)
 const newSubAccountName = ref('')
@@ -100,28 +101,31 @@ const handleAddGoogleAccount = async () => {
 }
 
 const handleSyncAdAccounts = async (connection: PlatformConnectionResponse) => {
-  console.log('同步广告账户:', connection)
+  if (syncingConnections.value.has(connection.id)) return
+  syncingConnections.value.add(connection.id)
   try {
-    // 根据平台类型调用不同的同步接口
+    let response
     if (connection.platform === 'Meta') {
-      await platformApi.syncMetaAdAccounts(connection.id)
-      success('Meta 广告账户同步成功')
+      response = await platformApi.syncMetaAdAccounts(connection.id)
     } else if (connection.platform === 'Google') {
-      await platformApi.syncGoogleAdAccounts(connection.id)
-      success('Google 广告账户同步成功')
+      response = await platformApi.syncGoogleAdAccounts(connection.id)
     } else {
       showError('该平台暂不支持同步功能')
       return
     }
-    // 刷新连接列表
+    const duplicateText = response.duplicate_count
+      ? `，过滤 ${response.duplicate_count} 条重复记录`
+      : ''
+    success(`已同步 ${response.synced_count} 个广告账户${duplicateText}`)
     await loadConnections()
-    // 如果当前账户已展开，重新加载子账号
     if (isExpanded(connection.id)) {
       await loadSubAccounts(connection.id)
     }
   } catch (err: any) {
     console.error('同步广告账户失败:', err)
-    showError('同步广告账户失败，请重试')
+    showError(err.message || '同步广告账户失败，请重试')
+  } finally {
+    syncingConnections.value.delete(connection.id)
   }
 }
 
@@ -414,7 +418,7 @@ onMounted(() => {
                       <td><div class="sn-scope-list"><span v-for="scope in (connection.scopes || [])" :key="scope" class="sn-scope">{{ scope }}</span><span v-if="!connection.scopes?.length">-</span></div></td>
                       <td><span class="sn-status-dot" :class="{ warning: ['unauthorized','token_expired'].includes(getEffectiveStatus(connection)), danger: ['expired','revoked'].includes(getEffectiveStatus(connection)) }">{{ getStatusText(getEffectiveStatus(connection)) }}</span></td>
                       <td>{{ formatDate(connection.updated_at) }}</td>
-                      <td><div class="sn-platform-actions"><button v-if="activePlatform === 'meta' || activePlatform === 'google'" class="sn-button" type="button" :disabled="getEffectiveStatus(connection) !== 'active'" @click="handleSyncAdAccounts(connection)">同步广告账号</button><button class="sn-button" type="button" :disabled="getEffectiveStatus(connection) === 'active'" @click="handleAuthorize(connection)">授权</button><button class="sn-button danger" type="button" @click="handleDelete(connection)">删除</button></div></td>
+                      <td><div class="sn-platform-actions"><button v-if="activePlatform === 'meta' || activePlatform === 'google'" class="sn-button" type="button" :disabled="getEffectiveStatus(connection) !== 'active' || syncingConnections.has(connection.id)" @click="handleSyncAdAccounts(connection)">{{ syncingConnections.has(connection.id) ? '同步中...' : '同步广告账号' }}</button><button class="sn-button" type="button" :disabled="getEffectiveStatus(connection) === 'active'" @click="handleAuthorize(connection)">授权</button><button class="sn-button danger" type="button" @click="handleDelete(connection)">删除</button></div></td>
                     </tr>
                     <tr v-if="(activePlatform === 'meta' || activePlatform === 'google') && isExpanded(connection.id)" class="sn-detail-row">
                       <td :colspan="activePlatform === 'meta' ? 6 : 7">
@@ -653,10 +657,10 @@ onMounted(() => {
                           :class="getEffectiveStatus(connection) === 'active'
                             ? 'border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                             : 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'"
-                          :disabled="getEffectiveStatus(connection) !== 'active'"
+                          :disabled="getEffectiveStatus(connection) !== 'active' || syncingConnections.has(connection.id)"
                           @click="handleSyncAdAccounts(connection)"
                         >
-                          同步广告子账号
+                          {{ syncingConnections.has(connection.id) ? '同步中...' : '同步广告子账号' }}
                         </button>
                         <button
                           class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
