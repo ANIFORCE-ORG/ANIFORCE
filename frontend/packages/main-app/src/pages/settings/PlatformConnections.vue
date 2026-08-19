@@ -22,6 +22,9 @@ const expandedAccounts = ref<Set<string>>(new Set())
 const subAccounts = ref<Record<string, SubAccountPageResponse>>({})
 const loadingSubAccounts = ref<Set<string>>(new Set())
 const syncingConnections = ref<Set<string>>(new Set())
+const subAccountSearch = ref('')
+const subAccountStatus = ref('')
+const subAccountPageSize = ref(50)
 const showAddSubAccountDialog = ref(false)
 const currentParentConnectionId = ref<string | null>(null)
 const newSubAccountName = ref('')
@@ -255,20 +258,42 @@ const toggleSubAccounts = async (connectionId: string) => {
   }
 }
 
-const loadSubAccounts = async (connectionId: string, page = 1, append = false) => {
+const loadSubAccounts = async (connectionId: string, page = 1) => {
   loadingSubAccounts.value.add(connectionId)
   try {
-    const response = await platformApi.getSubAccounts(connectionId, { page, page_size: 50 })
-    const previous = subAccounts.value[connectionId]
-    subAccounts.value[connectionId] = append && previous
-      ? { ...response, items: [...previous.items, ...response.items] }
-      : response
+    subAccounts.value[connectionId] = await platformApi.getSubAccounts(connectionId, {
+      page,
+      page_size: subAccountPageSize.value,
+      search: subAccountSearch.value.trim() || undefined,
+      status: subAccountStatus.value || undefined,
+    })
   } catch (err: any) {
     console.error('加载子账号失败:', err)
     showError('加载子账号失败')
   } finally {
     loadingSubAccounts.value.delete(connectionId)
   }
+}
+
+const subAccountPageCount = (connectionId: string) => {
+  const result = subAccounts.value[connectionId]
+  return result ? Math.max(1, Math.ceil(result.total / result.page_size)) : 1
+}
+
+const subAccountPageNumbers = (connectionId: string) => {
+  const current = subAccounts.value[connectionId]?.page || 1
+  const last = subAccountPageCount(connectionId)
+  const start = Math.max(1, Math.min(current - 2, last - 4))
+  return Array.from({ length: Math.min(5, last) }, (_, index) => start + index)
+}
+
+const changeSubAccountPage = (connectionId: string, page: number) => {
+  if (page < 1 || page > subAccountPageCount(connectionId) || page === subAccounts.value[connectionId]?.page) return
+  loadSubAccounts(connectionId, page)
+}
+
+const changeSubAccountFilters = (connectionId: string) => {
+  if (isExpanded(connectionId)) loadSubAccounts(connectionId, 1)
 }
 
 // 检查账号是否展开
@@ -424,11 +449,31 @@ onMounted(() => {
                       <td :colspan="activePlatform === 'meta' ? 6 : 7">
                         <section class="sn-subaccount-section">
                           <header class="sn-subaccount-head"><h3>子账号列表</h3><div v-if="subAccounts[connection.id]"><span>共 {{ subAccounts[connection.id].summary.total }} 个子账号，已加载 {{ subAccounts[connection.id].items.length }} 个</span><button v-if="activePlatform === 'google'" class="sn-button primary" type="button" style="margin-left:8px" @click="openAddSubAccountDialog(connection.id)">添加子账号</button></div></header>
+                          <div class="sn-subaccount-filters">
+                            <input v-model="subAccountSearch" class="sn-subaccount-search" type="search" placeholder="搜索名称或账号 ID" @keyup.enter="changeSubAccountFilters(connection.id)" />
+                            <select v-model="subAccountStatus" class="sn-subaccount-status" aria-label="子账号状态" @change="changeSubAccountFilters(connection.id)">
+                              <option value="">全部状态</option>
+                              <option value="active">已激活</option>
+                              <option value="pending_review">待审核</option>
+                              <option value="disabled">已禁用</option>
+                            </select>
+                            <select v-model.number="subAccountPageSize" class="sn-subaccount-status" aria-label="每页数量" @change="changeSubAccountFilters(connection.id)">
+                              <option :value="50">50 / 页</option>
+                              <option :value="100">100 / 页</option>
+                              <option :value="200">200 / 页</option>
+                            </select>
+                            <button class="sn-button" type="button" @click="changeSubAccountFilters(connection.id)">查询</button>
+                          </div>
                           <div v-if="loadingSubAccounts.has(connection.id)" class="sn-loading">加载子账号中...</div>
                           <template v-else-if="subAccounts[connection.id]?.items.length">
                             <div class="sn-subaccount-summary">活跃 {{ subAccounts[connection.id].summary.active }} · 已禁用 {{ subAccounts[connection.id].summary.disabled }} · 待审核 {{ subAccounts[connection.id].summary.pending_review }}</div>
                             <div class="sn-table-wrap"><div class="sn-subaccount-list"><div class="sn-subaccount-grid sn-subaccount-columns"><span>子账号</span><span>Sub Account ID</span><span>更新时间</span><span style="text-align:right">操作</span></div><div v-for="subAccount in subAccounts[connection.id].items" :key="subAccount.id" class="sn-subaccount-grid sn-subaccount-row"><div class="sn-subaccount-identity"><span class="sn-subaccount-name">{{ subAccount.name }}</span><span class="sn-connection-status">{{ getStatusText(subAccount.status) }}</span></div><span class="sn-subaccount-id">{{ subAccount.sub_account_id }}</span><span>{{ formatDate(subAccount.updated_at) }}</span><span class="sn-subaccount-action"><button class="sn-button danger" type="button" @click="handleDeleteSubAccount(connection.id, subAccount.id)">删除</button></span></div></div></div>
-                            <button v-if="subAccounts[connection.id].has_more" class="sn-button" type="button" :disabled="loadingSubAccounts.has(connection.id)" @click="loadSubAccounts(connection.id, subAccounts[connection.id].page + 1, true)">加载更多</button>
+                            <div class="sn-subaccount-pagination">
+                              <button class="sn-button" type="button" :disabled="subAccounts[connection.id].page <= 1" @click="changeSubAccountPage(connection.id, subAccounts[connection.id].page - 1)">上一页</button>
+                              <button v-for="page in subAccountPageNumbers(connection.id)" :key="page" class="sn-button" :class="{ primary: page === subAccounts[connection.id].page }" type="button" @click="changeSubAccountPage(connection.id, page)">{{ page }}</button>
+                              <button class="sn-button" type="button" :disabled="!subAccounts[connection.id].has_more" @click="changeSubAccountPage(connection.id, subAccounts[connection.id].page + 1)">下一页</button>
+                              <span>第 {{ subAccounts[connection.id].page }} / {{ subAccountPageCount(connection.id) }} 页</span>
+                            </div>
                           </template>
                           <div v-else class="sn-table-empty">暂无子账号</div>
                         </section>
@@ -693,7 +738,12 @@ onMounted(() => {
                           </div>
 
                           <!-- 子账号列表 -->
-                          <div v-else-if="subAccounts[connection.id] && subAccounts[connection.id].items.length > 0">
+                          <div class="flex flex-wrap items-center gap-[6px] mb-[9px]">
+                            <input v-model="subAccountSearch" class="px-[9px] py-[6px] rounded border border-slate-200 text-[10px]" type="search" placeholder="搜索名称或账号 ID" @keyup.enter="changeSubAccountFilters(connection.id)" />
+                            <select v-model="subAccountStatus" class="px-[9px] py-[6px] rounded border border-slate-200 text-[10px]" aria-label="子账号状态" @change="changeSubAccountFilters(connection.id)"><option value="">全部状态</option><option value="active">已激活</option><option value="pending_review">待审核</option><option value="disabled">已禁用</option></select>
+                            <button type="button" class="px-[9px] py-[6px] rounded border border-slate-200 text-[10px]" @click="changeSubAccountFilters(connection.id)">查询</button>
+                          </div>
+                          <div v-if="subAccounts[connection.id] && subAccounts[connection.id].items.length > 0">
                             <div class="flex items-center justify-between mb-[9px]">
                               <h4 class="text-[10px] font-semibold text-slate-700 dark:text-slate-300">子账号列表</h4>
                               <div class="flex items-center gap-[9px]">
@@ -740,7 +790,12 @@ onMounted(() => {
                                 </div>
                               </div>
                             </div>
-                            <button v-if="subAccounts[connection.id].has_more" type="button" :disabled="loadingSubAccounts.has(connection.id)" @click="loadSubAccounts(connection.id, subAccounts[connection.id].page + 1, true)" class="mt-[9px] px-[9px] py-[6px] rounded text-[10px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 disabled:opacity-50">加载更多</button>
+                            <div class="flex items-center gap-[5px] mt-[9px]">
+                              <button type="button" :disabled="subAccounts[connection.id].page <= 1" @click="changeSubAccountPage(connection.id, subAccounts[connection.id].page - 1)" class="px-[9px] py-[6px] rounded text-[10px] border border-slate-200 disabled:opacity-50">上一页</button>
+                              <button v-for="page in subAccountPageNumbers(connection.id)" :key="page" type="button" @click="changeSubAccountPage(connection.id, page)" class="px-[9px] py-[6px] rounded text-[10px] border border-slate-200" :class="{ 'bg-primary text-white': page === subAccounts[connection.id].page }">{{ page }}</button>
+                              <button type="button" :disabled="!subAccounts[connection.id].has_more" @click="changeSubAccountPage(connection.id, subAccounts[connection.id].page + 1)" class="px-[9px] py-[6px] rounded text-[10px] border border-slate-200 disabled:opacity-50">下一页</button>
+                              <span class="ml-[4px] text-[10px] text-slate-500">第 {{ subAccounts[connection.id].page }} / {{ subAccountPageCount(connection.id) }} 页</span>
+                            </div>
                           </div>
 
                           <!-- 无子账号 -->

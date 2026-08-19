@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import delete, func, or_, select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import asyncio
@@ -1210,7 +1210,16 @@ async def get_sub_accounts(
         status_counts = {row[0]: row[1] for row in status_rows}
 
         result = await db.execute(
-            filtered.order_by(SubAccountBinding.created_at.desc())
+            filtered.order_by(
+                case(
+                    (SubAccountBinding.status == "active", 0),
+                    (SubAccountBinding.status == "pending_review", 1),
+                    (SubAccountBinding.status == "unknown", 2),
+                    else_=3,
+                ),
+                SubAccountBinding.created_at.desc(),
+                SubAccountBinding.id.desc(),
+            )
             .offset((page - 1) * page_size)
             .limit(page_size)
         )
