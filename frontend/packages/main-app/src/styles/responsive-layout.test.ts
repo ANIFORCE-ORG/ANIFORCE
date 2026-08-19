@@ -39,7 +39,7 @@ describe('application-wide responsive layout', () => {
   })
 
   it('turns the workspace sidebar into a mobile drawer', () => {
-    expect(sidebar).toContain("window.matchMedia('(max-width: 767px)')")
+    expect(sidebar).toContain("window.matchMedia('(max-width: 1023px)')")
     expect(sidebar).toContain('const isNarrowViewport = ref(false)')
     expect(sidebar).toContain('const mobileExpanded = ref(false)')
     expect(sidebar).toContain('class="sidebar-mobile-backdrop"')
@@ -49,14 +49,52 @@ describe('application-wide responsive layout', () => {
   it('forces every workspace content container to remain centered in the main column', () => {
     expect(globalCss).toContain('.workspace-page-canvas:has(> .sidebar-rail-spacer)')
     expect(globalCss).toContain('--workspace-sidebar-width: 240px;')
-    expect(globalCss).toContain('--workspace-content-max-width: 1440px;')
+    expect(globalCss).toContain('--workspace-content-max-width: 1920px;')
     expect(globalCss).toContain('width: min(100%, var(--workspace-content-max-width)) !important;')
     expect(globalCss).toContain('max-width: var(--workspace-content-max-width) !important;')
     expect(globalCss).toContain('margin-right: auto !important;')
     expect(globalCss).toContain('margin-left: auto !important;')
+    expect(globalCss).toMatch(/\.workspace-page-header \{[\s\S]*?padding-inline:\s*max\(/)
     expect(globalCss).toContain('padding-right: 0;')
     expect(globalCss).not.toContain('padding-right: var(--workspace-sidebar-width, 240px);')
     expect(home).toMatch(/\.landing-document \{[\s\S]*?margin: 0 auto;/)
+  })
+
+  it('clips the scaled application inside the real viewport', () => {
+    expect(globalCss).toMatch(/#app \{[^}]*width:\s*100%;[^}]*overflow-x:\s*hidden;/)
+    expect(globalCss).toMatch(/#app:has\(\.workspace-app-shell\) \{[^}]*height:\s*100dvh;[^}]*overflow:\s*hidden;/)
+    expect(globalCss).toMatch(/#app > div:first-child \{[^}]*width:\s*calc\(100% \+ 11\.111111%\);/)
+    expect(globalCss).toMatch(/#app > div:first-child \{[^}]*transform:\s*scale\(var\(--app-ui-scale\)\);/)
+    expect(globalCss).not.toMatch(/#app \{[^}]*width:\s*calc\(100% \+ 11\.111111%\);/)
+  })
+
+  it('switches the sidebar to its overlay rail before the content column becomes cramped', () => {
+    expect(sidebar).toContain("window.matchMedia('(max-width: 1023px)')")
+    expect(sidebar).not.toContain("window.matchMedia('(max-width: 767px)')")
+  })
+
+  it('uses a single subtle Notion hairline between the sidebar and content', () => {
+    expect(sidebar).toContain('--sidebar-divider: rgba(55, 53, 47, 0.08);')
+    expect(sidebar).toMatch(/\.sidebar-notion \{[\s\S]*?border-right: 1px solid var\(--sidebar-divider\) !important;/)
+    expect(sidebar).not.toContain('.sidebar-notion::after')
+    expect(sidebar).not.toContain('linear-gradient(90deg')
+  })
+
+  it('lets the desktop divider resize both workspace columns in sync', () => {
+    expect(sidebar).toContain("const SIDEBAR_WIDTH_KEY = 'animagus_sidebar_width'")
+    expect(sidebar).toContain('const SIDEBAR_MIN_WIDTH = 200')
+    expect(sidebar).toContain('const SIDEBAR_MAX_WIDTH = 420')
+    expect(sidebar).toContain('Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width))')
+    expect(sidebar).toContain('class="sidebar-resize-handle"')
+    expect(sidebar).toContain('v-if="!isNarrowViewport && !isSidebarCollapsed"')
+    expect(sidebar).toContain('role="separator"')
+    expect(sidebar).toContain('@pointerdown="startSidebarResize"')
+    expect(sidebar).toContain('@keydown="handleSidebarResizeKeydown"')
+    expect(sidebar).toContain(':style="{ width: layoutSidebarWidth }"')
+    expect(sidebar).toContain(':style="{ width: renderedSidebarWidth }"')
+    expect(sidebar).toContain("document.documentElement.style.setProperty('--workspace-sidebar-width', layoutSidebarWidth.value)")
+    expect(sidebar).toMatch(/\.sidebar-resize-handle \{[\s\S]*?cursor: col-resize;/)
+    expect(sidebar).toMatch(/\.sidebar-notion\.is-resizing[\s\S]*?transition: none !important;/)
   })
 
   it('keeps workspace scrollbars narrow, right-aligned and outside centering math', () => {

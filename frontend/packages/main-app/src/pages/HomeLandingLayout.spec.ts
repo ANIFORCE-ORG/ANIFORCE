@@ -60,8 +60,72 @@ describe('Home landing layout', () => {
     expect(source).toMatch(/\.composer\.composer--expanded \{[\s\S]*?grid-template-rows: auto 38px;[\s\S]*?row-gap: 8px;/)
     expect(source).toMatch(/\.composer\.composer--expanded textarea \{[\s\S]*?grid-column: 1 \/ -1;[\s\S]*?align-self: stretch;/)
     expect(source).toContain('.composer.composer--expanded > .composer__icon[aria-label="添加附件"]')
-    expect(source).toContain('.composer.composer--expanded > .composer__icon[aria-label="语音输入"]')
+    expect(source).toContain('.composer.composer--expanded > .composer__reference')
     expect(source).toContain('.composer.composer--expanded > .composer__send')
+  })
+
+  it('replaces voice input with an @ reference control in both composers', () => {
+    expect(source).not.toContain('aria-label="语音输入"')
+    expect(source).not.toContain('>mic</span>')
+    expect(source.match(/aria-label="引用系统内容或模块"/g)).toHaveLength(2)
+    expect(source).toContain('class="composer__reference-trigger"')
+    expect(source).toContain('@click="toggleReferencePicker"')
+  })
+
+  it('places attachment and @ together on the left and opens references for an @ typed anywhere before the caret', () => {
+    expect(source).toMatch(/\.composer \{[\s\S]*?grid-template-columns: 32px 32px minmax\(0, 1fr\) 38px;[\s\S]*?column-gap: 0;/)
+    expect(source).toMatch(/\.composer > \.composer__icon\[aria-label="添加附件"\] \{[\s\S]*?grid-column: 1;/)
+    expect(source).toMatch(/\.composer > \.composer__reference \{[\s\S]*?grid-column: 2;/)
+    expect(source).toMatch(/\.composer textarea \{[\s\S]*?grid-column: 3;/)
+    expect(source).toMatch(/@media \(max-width: 520px\) \{[\s\S]*?\.composer \{[\s\S]*?grid-template-columns: 32px 32px minmax\(0, 1fr\) 38px;/)
+    expect(source).toContain(String.raw`match(/@([^\s@]*)$/)`)
+  })
+
+  it('renders attachment and @ with the same icon system, color and stroke weight', () => {
+    expect(source.match(/>alternate_email<\/span>/g)).toHaveLength(2)
+    expect(source).not.toContain('<span aria-hidden="true">@</span>')
+    expect(source).toContain('.composer__icon .material-symbols-outlined,\n.composer__reference-trigger .material-symbols-outlined')
+    expect(source).toContain("font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;")
+  })
+
+  it('does not select the fixed @ trigger when typing @ opens the caret picker', () => {
+    expect(source.match(/:aria-expanded="referencePickerOpen && referencePickerOrigin === 'button'"/g)).toHaveLength(2)
+    expect(source).not.toContain(':aria-expanded="referencePickerOpen"')
+  })
+
+  it('keeps attachment and @ controls on the same compact hit area', () => {
+    expect(source).toMatch(/\.composer__icon,\n\.composer__reference-trigger \{[\s\S]*?box-sizing: border-box;[\s\S]*?width: 32px;[\s\S]*?height: 32px;[\s\S]*?padding: 0;[\s\S]*?border-radius: 8px;[\s\S]*?background: transparent;/)
+    expect(source).toMatch(/\.composer > \.composer__reference \{[\s\S]*?width: 32px;[\s\S]*?height: 32px;/)
+  })
+
+  it('narrows only the @ glyph while preserving the equal control width', () => {
+    expect(source).toMatch(/\.composer__reference-trigger \.material-symbols-outlined \{[\s\S]*?transform: scaleX\(0\.88\);[\s\S]*?transform-origin: center;/)
+    expect(source).toMatch(/\.composer__icon,\n\.composer__reference-trigger \{[\s\S]*?width: 32px;[\s\S]*?height: 32px;/)
+  })
+
+  it('anchors typed @ references at the caret instead of the bottom @ button', () => {
+    expect(source).toContain("type ReferencePickerOrigin = 'button' | 'caret'")
+    expect(source).toContain('function getTextareaCaretRect')
+    expect(source).toContain('function positionReferencePickerAtCaret')
+    expect(source).toContain('positionReferencePickerAtCaret(target)')
+    expect(source.match(/'reference-picker--caret': referencePickerOrigin === 'caret'/g)).toHaveLength(2)
+    expect(source.match(/:style="referencePickerStyle"/g)).toHaveLength(2)
+    expect(source.match(/<Teleport to="body" :disabled="referencePickerOrigin === 'button'">/g)).toHaveLength(2)
+    expect(source.match(/data-reference-picker-panel/g)).toHaveLength(2)
+    expect(source).toMatch(/\.reference-picker--caret \{[\s\S]*?position: fixed;/)
+  })
+
+  it('lets users search and insert references to system content and module components', () => {
+    expect(source).toContain("type ReferenceGroup = '系统内容' | '模块组件'")
+    expect(source).toContain("label: '数据概览'")
+    expect(source).toContain("label: '项目管理'")
+    expect(source).toContain("label: '创意素材'")
+    expect(source).toContain("label: '趋势图表'")
+    expect(source).toContain("label: '核心指标'")
+    expect(source).toContain('function selectReference')
+    expect(source).toContain('const token = `@${item.label}`')
+    expect(source).toContain('role="listbox"')
+    expect(source).toContain('placeholder="搜索系统内容或模块"')
   })
 
   it('restores a historical conversation instead of falling back to the new-task landing page', () => {

@@ -30,7 +30,37 @@ const renameValue = ref('')
 const deleteDialog = ref<{ id: string; name: string } | null>(null)
 const strategyExpanded = ref(false)
 const promptInputRef = ref<HTMLTextAreaElement | null>(null)
+const referencePickerOpen = ref(false)
+const referenceQuery = ref('')
+const referenceTriggerStart = ref<number | null>(null)
+const activeReferenceIndex = ref(0)
+const referencePickerOrigin = ref<ReferencePickerOrigin>('button')
+const referencePickerPosition = ref<{ left: number; top: number } | null>(null)
 let promptResizeObserver: ResizeObserver | null = null
+
+type ReferenceGroup = '系统内容' | '模块组件'
+type ReferencePickerOrigin = 'button' | 'caret'
+
+interface ReferenceItem {
+  id: string
+  group: ReferenceGroup
+  label: string
+  description: string
+  icon: string
+}
+
+const referenceGroups: ReferenceGroup[] = ['系统内容', '模块组件']
+const referenceItems: ReferenceItem[] = [
+  { id: 'dashboard', group: '系统内容', label: '数据概览', description: '账户指标与投放表现', icon: 'bar_chart' },
+  { id: 'projects', group: '系统内容', label: '项目管理', description: '项目、目标与执行进度', icon: 'folder_open' },
+  { id: 'campaigns', group: '系统内容', label: '广告计划', description: '计划结构与投放配置', icon: 'campaign' },
+  { id: 'materials', group: '系统内容', label: '创意素材', description: '图片、视频与素材表现', icon: 'video_library' },
+  { id: 'monitor', group: '系统内容', label: '投放监控', description: '异常信号与实时状态', icon: 'monitoring' },
+  { id: 'metrics', group: '模块组件', label: '核心指标', description: '消耗、转化、CPA 与 ROAS', icon: 'query_stats' },
+  { id: 'trend-chart', group: '模块组件', label: '趋势图表', description: '按时间查看指标变化', icon: 'show_chart' },
+  { id: 'campaign-table', group: '模块组件', label: '计划列表', description: '筛选并对比广告计划', icon: 'table_rows' },
+  { id: 'creative-analysis', group: '模块组件', label: '素材分析', description: '素材质量、疲劳与潜力', icon: 'auto_awesome' }
+]
 
 const intentModes: Array<{
   key: 'chat' | 'project'
@@ -127,6 +157,23 @@ const starterActions = [
 const visibleStarterActions = computed(() => (
   strategyExpanded.value ? starterActions : starterActions.slice(0, 4)
 ))
+const filteredReferenceItems = computed(() => {
+  const query = referenceQuery.value.trim().toLocaleLowerCase()
+  if (!query) return referenceItems
+  return referenceItems.filter(item => (
+    `${item.label} ${item.description} ${item.group}`.toLocaleLowerCase().includes(query)
+  ))
+})
+const visibleReferenceGroups = computed(() => referenceGroups
+  .map(group => ({ group, items: filteredReferenceItems.value.filter(item => item.group === group) }))
+  .filter(section => section.items.length > 0))
+const referencePickerStyle = computed(() => {
+  if (referencePickerOrigin.value !== 'caret' || !referencePickerPosition.value) return undefined
+  return {
+    left: `${referencePickerPosition.value.left}px`,
+    top: `${referencePickerPosition.value.top}px`
+  }
+})
 const isPromptExpanded = computed(() => (
   Array.from(inputText.value).length > 72 || inputText.value.includes('\n')
 ))
@@ -324,11 +371,189 @@ function observePromptInput() {
   promptResizeObserver.observe(target)
 }
 
+function closeReferencePicker() {
+  referencePickerOpen.value = false
+  referenceQuery.value = ''
+  referenceTriggerStart.value = null
+  activeReferenceIndex.value = 0
+  referencePickerPosition.value = null
+}
+
+function openReferencePicker(fromTrigger = false) {
+  referencePickerOpen.value = true
+  activeReferenceIndex.value = 0
+  if (fromTrigger) {
+    referencePickerOrigin.value = 'button'
+    referencePickerPosition.value = null
+    referenceQuery.value = ''
+    referenceTriggerStart.value = null
+    void nextTick(() => document.querySelector<HTMLInputElement>('[data-reference-search]')?.focus())
+  }
+}
+
+function toggleReferencePicker() {
+  if (referencePickerOpen.value) {
+    closeReferencePicker()
+    void nextTick(() => promptInputRef.value?.focus())
+    return
+  }
+  openReferencePicker(true)
+}
+
+function getTextareaCaretRect(target: HTMLTextAreaElement, position: number) {
+  const targetRect = target.getBoundingClientRect()
+  const computedStyle = window.getComputedStyle(target)
+  const mirror = document.createElement('div')
+  const copiedProperties = [
+    'box-sizing', 'width', 'height',
+    'border-top-width', 'border-right-width', 'border-bottom-width', 'border-left-width',
+    'padding-top', 'padding-right', 'padding-bottom', 'padding-left',
+    'font-family', 'font-size', 'font-style', 'font-weight', 'letter-spacing', 'line-height',
+    'text-align', 'text-indent', 'text-transform', 'word-spacing', 'tab-size'
+  ]
+
+  for (const property of copiedProperties) {
+    mirror.style.setProperty(property, computedStyle.getPropertyValue(property))
+  }
+  Object.assign(mirror.style, {
+    position: 'fixed',
+    top: '0',
+    left: '-9999px',
+    visibility: 'hidden',
+    whiteSpace: 'pre-wrap',
+    overflowWrap: 'break-word',
+    overflow: 'hidden'
+  })
+
+  mirror.textContent = target.value.slice(0, position)
+  const marker = document.createElement('span')
+  marker.textContent = target.value.slice(position, position + 1) || '\u200b'
+  mirror.appendChild(marker)
+  document.body.appendChild(mirror)
+
+  const lineHeight = Number.parseFloat(computedStyle.lineHeight) || Number.parseFloat(computedStyle.fontSize) * 1.5
+  const rect = {
+    left: targetRect.left + marker.offsetLeft - target.scrollLeft,
+    top: targetRect.top + marker.offsetTop - target.scrollTop,
+    bottom: targetRect.top + marker.offsetTop - target.scrollTop + lineHeight
+  }
+  mirror.remove()
+  return rect
+}
+
+async function positionReferencePickerAtCaret(target: HTMLTextAreaElement) {
+  const triggerPosition = (referenceTriggerStart.value ?? target.selectionStart ?? 0) + 1
+  const caretRect = getTextareaCaretRect(target, triggerPosition)
+  await nextTick()
+
+  const picker = document.querySelector<HTMLElement>('.reference-picker')
+  if (!picker) return
+  const pickerRect = picker.getBoundingClientRect()
+  const viewportGap = 12
+  const anchorGap = 8
+  const left = Math.min(
+    Math.max(caretRect.left, viewportGap),
+    Math.max(viewportGap, window.innerWidth - pickerRect.width - viewportGap)
+  )
+  const spaceAbove = caretRect.top - viewportGap
+  const top = spaceAbove >= pickerRect.height + anchorGap
+    ? caretRect.top - pickerRect.height - anchorGap
+    : Math.min(caretRect.bottom + anchorGap, window.innerHeight - pickerRect.height - viewportGap)
+
+  referencePickerPosition.value = { left, top: Math.max(viewportGap, top) }
+}
+
 function handlePromptInput(event: Event) {
-  resizePromptInput(event.currentTarget as HTMLTextAreaElement)
+  const target = event.currentTarget as HTMLTextAreaElement
+  resizePromptInput(target)
+
+  const caret = target.selectionStart ?? inputText.value.length
+  const match = inputText.value.slice(0, caret).match(/@([^\s@]*)$/)
+  if (!match) {
+    if (referenceTriggerStart.value !== null) closeReferencePicker()
+    return
+  }
+
+  referenceQuery.value = match[1]
+  referenceTriggerStart.value = caret - match[1].length - 1
+  referencePickerOrigin.value = 'caret'
+  openReferencePicker()
+  void positionReferencePickerAtCaret(target)
+}
+
+function moveReferenceSelection(direction: 1 | -1) {
+  const total = filteredReferenceItems.value.length
+  if (!total) return
+  activeReferenceIndex.value = (activeReferenceIndex.value + direction + total) % total
+}
+
+function selectReference(item: ReferenceItem) {
+  const token = `@${item.label}`
+  const target = promptInputRef.value
+  let nextValue = ''
+  let caret = 0
+
+  if (referenceTriggerStart.value !== null) {
+    const selectionEnd = target?.selectionStart ?? inputText.value.length
+    nextValue = `${inputText.value.slice(0, referenceTriggerStart.value)}${token} ${inputText.value.slice(selectionEnd)}`
+    caret = referenceTriggerStart.value + token.length + 1
+  } else {
+    const separator = inputText.value && !/\s$/.test(inputText.value) ? ' ' : ''
+    nextValue = `${inputText.value}${separator}${token} `
+    caret = nextValue.length
+  }
+
+  inputText.value = nextValue
+  closeReferencePicker()
+  void nextTick(() => {
+    resizePromptInput(target)
+    target?.focus()
+    target?.setSelectionRange(caret, caret)
+  })
+}
+
+function handleReferenceSearchKeydown(event: KeyboardEvent) {
+  if (event.key === 'Escape') {
+    event.preventDefault()
+    closeReferencePicker()
+    void nextTick(() => promptInputRef.value?.focus())
+    return
+  }
+  if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+    event.preventDefault()
+    moveReferenceSelection(event.key === 'ArrowDown' ? 1 : -1)
+    return
+  }
+  if (event.key === 'Enter' && filteredReferenceItems.value.length) {
+    event.preventDefault()
+    selectReference(filteredReferenceItems.value[activeReferenceIndex.value] || filteredReferenceItems.value[0])
+  }
+}
+
+function handleDocumentPointerDown(event: PointerEvent) {
+  const target = event.target as HTMLElement | null
+  if (target?.closest('[data-reference-picker]')) return
+  closeReferencePicker()
 }
 
 function handlePromptKeydown(event: KeyboardEvent) {
+  if (referencePickerOpen.value) {
+    if (event.key === 'Escape') {
+      event.preventDefault()
+      closeReferencePicker()
+      return
+    }
+    if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+      event.preventDefault()
+      moveReferenceSelection(event.key === 'ArrowDown' ? 1 : -1)
+      return
+    }
+    if (event.key === 'Enter' && filteredReferenceItems.value.length) {
+      event.preventDefault()
+      selectReference(filteredReferenceItems.value[activeReferenceIndex.value] || filteredReferenceItems.value[0])
+      return
+    }
+  }
   if (event.key !== 'Enter' || event.shiftKey || event.isComposing) return
   event.preventDefault()
   void handleSubmit()
@@ -395,6 +620,7 @@ async function handleSubmit() {
   if (!message || agent.loading.value || agent.agentRunning.value) return
   hasInteracted.value = true
   inputText.value = ''
+  closeReferencePicker()
   scrollToBottom()
   await agent.send(message, undefined, activeRoute.value)
   scrollToBottom()
@@ -560,6 +786,7 @@ onMounted(async () => {
   workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   observePromptInput()
   await Promise.all([agent.refreshModels(), agent.refreshSessions()])
@@ -571,6 +798,7 @@ onActivated(() => {
   workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
+  document.addEventListener('pointerdown', handleDocumentPointerDown)
   document.addEventListener('visibilitychange', handleVisibilityChange)
   agent.resumeTypewriter?.()
   void nextTick(() => observePromptInput())
@@ -581,6 +809,7 @@ onActivated(() => {
 onBeforeUnmount(() => {
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   promptResizeObserver?.disconnect()
   promptResizeObserver = null
@@ -589,6 +818,7 @@ onBeforeUnmount(() => {
 onDeactivated(() => {
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
+  document.removeEventListener('pointerdown', handleDocumentPointerDown)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
   promptResizeObserver?.disconnect()
   promptResizeObserver = null
@@ -605,6 +835,10 @@ watch(
 
 watch(inputText, () => {
   void nextTick(() => resizePromptInput())
+})
+
+watch(referenceQuery, () => {
+  activeReferenceIndex.value = 0
 })
 
 watch(hasContent, () => {
@@ -683,9 +917,69 @@ watch(hasContent, () => {
                 @input="handlePromptInput"
                 @keydown="handlePromptKeydown"
               />
-              <button class="composer__icon" type="button" aria-label="语音输入">
-                <span class="material-symbols-outlined">mic</span>
-              </button>
+              <div class="composer__reference" data-reference-picker>
+                <button
+                  class="composer__reference-trigger"
+                  type="button"
+                  aria-label="引用系统内容或模块"
+                  :aria-expanded="referencePickerOpen && referencePickerOrigin === 'button'"
+                  @click="toggleReferencePicker"
+                >
+                  <span class="material-symbols-outlined" aria-hidden="true">alternate_email</span>
+                </button>
+                <Teleport to="body" :disabled="referencePickerOrigin === 'button'">
+                  <div
+                    v-if="referencePickerOpen"
+                    class="reference-picker"
+                    :class="{ 'reference-picker--caret': referencePickerOrigin === 'caret' }"
+                    :style="referencePickerStyle"
+                    data-reference-picker
+                    data-reference-picker-panel
+                    role="dialog"
+                    aria-label="选择引用内容"
+                  >
+                  <header class="reference-picker__header">
+                    <strong>引用内容</strong>
+                    <span>输入 @ 也可唤起</span>
+                  </header>
+                  <label class="reference-picker__search">
+                    <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                    <input
+                      v-model="referenceQuery"
+                      data-reference-search
+                      type="search"
+                      placeholder="搜索系统内容或模块"
+                      aria-label="搜索引用内容"
+                      @keydown="handleReferenceSearchKeydown"
+                    />
+                  </label>
+                  <div class="reference-picker__list" role="listbox" aria-label="可引用内容">
+                    <template v-for="section in visibleReferenceGroups" :key="section.group">
+                      <p class="reference-picker__group">{{ section.group }}</p>
+                      <button
+                        v-for="item in section.items"
+                        :key="item.id"
+                        class="reference-picker__item"
+                        :class="{ active: filteredReferenceItems[activeReferenceIndex]?.id === item.id }"
+                        type="button"
+                        role="option"
+                        :aria-selected="filteredReferenceItems[activeReferenceIndex]?.id === item.id"
+                        @mouseenter="activeReferenceIndex = filteredReferenceItems.findIndex(candidate => candidate.id === item.id)"
+                        @click="selectReference(item)"
+                      >
+                        <span class="reference-picker__item-icon material-symbols-outlined" aria-hidden="true">{{ item.icon }}</span>
+                        <span class="reference-picker__item-copy">
+                          <strong>{{ item.label }}</strong>
+                          <small>{{ item.description }}</small>
+                        </span>
+                        <span class="reference-picker__insert" aria-hidden="true">@</span>
+                      </button>
+                    </template>
+                    <p v-if="!filteredReferenceItems.length" class="reference-picker__empty">没有匹配的内容</p>
+                  </div>
+                  </div>
+                </Teleport>
+              </div>
               <button
                 class="composer__send"
                 type="button"
@@ -756,9 +1050,69 @@ watch(hasContent, () => {
             @input="handlePromptInput"
             @keydown="handlePromptKeydown"
           />
-          <button class="composer__icon" type="button" aria-label="语音输入">
-            <span class="material-symbols-outlined">mic</span>
-          </button>
+          <div class="composer__reference" data-reference-picker>
+            <button
+              class="composer__reference-trigger"
+              type="button"
+              aria-label="引用系统内容或模块"
+              :aria-expanded="referencePickerOpen && referencePickerOrigin === 'button'"
+              @click="toggleReferencePicker"
+            >
+              <span class="material-symbols-outlined" aria-hidden="true">alternate_email</span>
+            </button>
+            <Teleport to="body" :disabled="referencePickerOrigin === 'button'">
+              <div
+                v-if="referencePickerOpen"
+                class="reference-picker"
+                :class="{ 'reference-picker--caret': referencePickerOrigin === 'caret' }"
+                :style="referencePickerStyle"
+                data-reference-picker
+                data-reference-picker-panel
+                role="dialog"
+                aria-label="选择引用内容"
+              >
+              <header class="reference-picker__header">
+                <strong>引用内容</strong>
+                <span>输入 @ 也可唤起</span>
+              </header>
+              <label class="reference-picker__search">
+                <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                <input
+                  v-model="referenceQuery"
+                  data-reference-search
+                  type="search"
+                  placeholder="搜索系统内容或模块"
+                  aria-label="搜索引用内容"
+                  @keydown="handleReferenceSearchKeydown"
+                />
+              </label>
+              <div class="reference-picker__list" role="listbox" aria-label="可引用内容">
+                <template v-for="section in visibleReferenceGroups" :key="section.group">
+                  <p class="reference-picker__group">{{ section.group }}</p>
+                  <button
+                    v-for="item in section.items"
+                    :key="item.id"
+                    class="reference-picker__item"
+                    :class="{ active: filteredReferenceItems[activeReferenceIndex]?.id === item.id }"
+                    type="button"
+                    role="option"
+                    :aria-selected="filteredReferenceItems[activeReferenceIndex]?.id === item.id"
+                    @mouseenter="activeReferenceIndex = filteredReferenceItems.findIndex(candidate => candidate.id === item.id)"
+                    @click="selectReference(item)"
+                  >
+                    <span class="reference-picker__item-icon material-symbols-outlined" aria-hidden="true">{{ item.icon }}</span>
+                    <span class="reference-picker__item-copy">
+                      <strong>{{ item.label }}</strong>
+                      <small>{{ item.description }}</small>
+                    </span>
+                    <span class="reference-picker__insert" aria-hidden="true">@</span>
+                  </button>
+                </template>
+                <p v-if="!filteredReferenceItems.length" class="reference-picker__empty">没有匹配的内容</p>
+              </div>
+              </div>
+            </Teleport>
+          </div>
           <button
             class="composer__send"
             type="button"
@@ -911,11 +1265,13 @@ watch(hasContent, () => {
 }
 
 .composer {
+  position: relative;
   display: grid;
   width: 100%;
   min-height: 60px;
-  grid-template-columns: 36px minmax(0, 1fr) 36px 38px;
+  grid-template-columns: 32px 32px minmax(0, 1fr) 38px;
   grid-template-rows: auto;
+  column-gap: 0;
   align-items: center;
   padding: 8px 10px;
   border: 1px solid var(--notion-line-strong);
@@ -932,7 +1288,7 @@ watch(hasContent, () => {
 
 .composer textarea {
   grid-row: 1;
-  grid-column: 2;
+  grid-column: 3;
   min-width: 0;
   width: 100%;
   min-height: 24px;
@@ -968,6 +1324,7 @@ watch(hasContent, () => {
 }
 
 .composer__icon,
+.composer__reference-trigger,
 .composer__send {
   display: grid;
   place-items: center;
@@ -975,9 +1332,12 @@ watch(hasContent, () => {
   cursor: pointer;
 }
 
-.composer__icon {
+.composer__icon,
+.composer__reference-trigger {
+  box-sizing: border-box;
   width: 32px;
   height: 32px;
+  padding: 0;
   border-radius: 8px;
   background: transparent;
   color: var(--notion-steel);
@@ -988,26 +1348,210 @@ watch(hasContent, () => {
   grid-column: 1;
 }
 
-.composer > .composer__icon[aria-label="语音输入"] {
+.composer > .composer__reference {
+  position: relative;
+  z-index: 12;
+  display: grid;
+  width: 32px;
+  height: 32px;
+  place-items: center;
   grid-row: 1;
-  grid-column: 3;
+  grid-column: 2;
 }
 
 .composer.composer--expanded > .composer__icon[aria-label="添加附件"] {
   grid-row: 2;
 }
 
-.composer.composer--expanded > .composer__icon[aria-label="语音输入"] {
+.composer.composer--expanded > .composer__reference {
   grid-row: 2;
 }
 
-.composer__icon:hover {
+.composer__icon:hover,
+.composer__reference-trigger:hover,
+.composer__reference-trigger[aria-expanded="true"] {
   background: rgba(55, 53, 47, 0.06);
   color: var(--notion-ink);
 }
 
-.composer__icon .material-symbols-outlined {
-  font-size: 19px;
+.composer__icon .material-symbols-outlined,
+.composer__reference-trigger .material-symbols-outlined {
+  font-size: 20px;
+  font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+}
+
+.composer__reference-trigger .material-symbols-outlined {
+  display: inline-block;
+  transform: scaleX(0.88);
+  transform-origin: center;
+}
+
+.reference-picker {
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 12px);
+  width: min(360px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid rgba(55, 53, 47, 0.16);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.98);
+  box-shadow: rgba(15, 15, 15, 0.14) 0 14px 38px, rgba(15, 15, 15, 0.06) 0 2px 8px;
+  color: var(--notion-charcoal);
+  backdrop-filter: blur(12px);
+}
+
+.reference-picker--caret {
+  position: fixed;
+  right: auto;
+  bottom: auto;
+}
+
+.reference-picker__header {
+  display: flex;
+  min-height: 45px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--notion-line);
+}
+
+.reference-picker__header strong {
+  color: var(--notion-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.reference-picker__header span {
+  color: var(--notion-stone);
+  font-size: 11px;
+}
+
+.reference-picker__search {
+  display: flex;
+  height: 38px;
+  align-items: center;
+  gap: 7px;
+  margin: 10px;
+  padding: 0 10px;
+  border: 1px solid var(--notion-line-strong);
+  border-radius: 8px;
+  background: var(--notion-canvas);
+}
+
+.reference-picker__search:focus-within {
+  border-color: #a9a7a2;
+  box-shadow: rgba(35, 131, 226, 0.12) 0 0 0 2px;
+}
+
+.reference-picker__search .material-symbols-outlined {
+  flex: 0 0 auto;
+  color: var(--notion-stone);
+  font-size: 17px;
+}
+
+.reference-picker__search input {
+  min-width: 0;
+  width: 100%;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--notion-ink);
+  font: inherit;
+  font-size: 13px;
+}
+
+.reference-picker__search input::placeholder {
+  color: var(--notion-stone);
+}
+
+.reference-picker__list {
+  max-height: min(360px, 48vh);
+  overflow-y: auto;
+  padding: 0 6px 7px;
+}
+
+.reference-picker__group {
+  margin: 0;
+  padding: 8px 8px 5px;
+  color: var(--notion-stone);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+}
+
+.reference-picker__item {
+  display: grid;
+  width: 100%;
+  grid-template-columns: 30px minmax(0, 1fr) 24px;
+  align-items: center;
+  gap: 8px;
+  min-height: 52px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--notion-charcoal);
+  cursor: pointer;
+  text-align: left;
+}
+
+.reference-picker__item:hover,
+.reference-picker__item.active {
+  background: rgba(55, 53, 47, 0.06);
+}
+
+.reference-picker__item-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--notion-surface-soft);
+  color: var(--notion-slate);
+  font-size: 18px;
+}
+
+.reference-picker__item-copy {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.reference-picker__item-copy strong {
+  overflow: hidden;
+  color: var(--notion-ink);
+  font-size: 13px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-picker__item-copy small {
+  overflow: hidden;
+  color: var(--notion-stone);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.reference-picker__insert {
+  color: var(--notion-stone);
+  font-size: 15px;
+  font-weight: 600;
+  text-align: center;
+}
+
+.reference-picker__item.active .reference-picker__insert {
+  color: var(--notion-blue);
+}
+
+.reference-picker__empty {
+  margin: 0;
+  padding: 24px 12px 28px;
+  color: var(--notion-stone);
+  font-size: 12px;
+  text-align: center;
 }
 
 .composer__send {
@@ -1439,7 +1983,7 @@ watch(hasContent, () => {
 
   .composer {
     min-height: 60px;
-    grid-template-columns: 34px minmax(0, 1fr) 34px 38px;
+    grid-template-columns: 32px 32px minmax(0, 1fr) 38px;
     padding: 8px;
     border-radius: 12px;
   }

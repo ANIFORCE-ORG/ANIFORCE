@@ -124,13 +124,38 @@ const handleDocumentClick = () => {
 }
 
 const SIDEBAR_COLLAPSED_KEY = 'animagus_sidebar_collapsed'
+const SIDEBAR_WIDTH_KEY = 'animagus_sidebar_width'
+const SIDEBAR_DEFAULT_WIDTH = 240
+const SIDEBAR_MIN_WIDTH = 200
+const SIDEBAR_MAX_WIDTH = 420
+const SIDEBAR_KEYBOARD_STEP = 8
+
+const clampSidebarWidth = (width: number) =>
+  Math.min(SIDEBAR_MAX_WIDTH, Math.max(SIDEBAR_MIN_WIDTH, width))
+
+const storedSidebarWidth = Number.parseFloat(localStorage.getItem(SIDEBAR_WIDTH_KEY) || '')
 const isCollapsed = ref(localStorage.getItem(SIDEBAR_COLLAPSED_KEY) === 'true')
+const expandedSidebarWidth = ref(
+  Number.isFinite(storedSidebarWidth)
+    ? clampSidebarWidth(storedSidebarWidth)
+    : SIDEBAR_DEFAULT_WIDTH
+)
 const isNarrowViewport = ref(false)
 const mobileExpanded = ref(false)
+const isSidebarResizing = ref(false)
+const sidebarElement = ref<HTMLElement | null>(null)
 const isSidebarCollapsed = computed(() => isNarrowViewport.value ? !mobileExpanded.value : isCollapsed.value)
-const sidebarWidth = computed(() => isSidebarCollapsed.value ? '52px' : '240px')
-const layoutSidebarWidth = computed(() => isNarrowViewport.value ? '52px' : sidebarWidth.value)
+const renderedSidebarWidth = computed(() => {
+  if (isNarrowViewport.value) {
+    return isSidebarCollapsed.value ? '52px' : `${SIDEBAR_DEFAULT_WIDTH}px`
+  }
+  return isSidebarCollapsed.value ? '52px' : `${expandedSidebarWidth.value}px`
+})
+const layoutSidebarWidth = computed(() => isNarrowViewport.value ? '52px' : renderedSidebarWidth.value)
 let narrowViewportMedia: MediaQueryList | null = null
+let resizeStartX = 0
+let resizeStartWidth = SIDEBAR_DEFAULT_WIDTH
+let resizeScale = 1
 
 const syncSidebarWidth = () => {
   document.documentElement.style.setProperty('--workspace-sidebar-width', layoutSidebarWidth.value)
@@ -139,15 +164,72 @@ const syncSidebarWidth = () => {
 syncSidebarWidth()
 watch(layoutSidebarWidth, syncSidebarWidth)
 
+const setExpandedSidebarWidth = (width: number, persist = false) => {
+  expandedSidebarWidth.value = Math.round(clampSidebarWidth(width))
+  if (persist) {
+    localStorage.setItem(SIDEBAR_WIDTH_KEY, String(expandedSidebarWidth.value))
+  }
+}
+
+const getSidebarScale = () => {
+  const sidebar = sidebarElement.value
+  if (!sidebar?.offsetWidth) return 1
+  return sidebar.getBoundingClientRect().width / sidebar.offsetWidth || 1
+}
+
+function handleSidebarPointerMove(event: PointerEvent) {
+  if (!isSidebarResizing.value) return
+  event.preventDefault()
+  const pointerDelta = (event.clientX - resizeStartX) / Math.max(resizeScale, 0.01)
+  setExpandedSidebarWidth(resizeStartWidth + pointerDelta)
+}
+
+function stopSidebarResize() {
+  if (!isSidebarResizing.value) return
+  isSidebarResizing.value = false
+  localStorage.setItem(SIDEBAR_WIDTH_KEY, String(expandedSidebarWidth.value))
+  document.documentElement.classList.remove('is-sidebar-resizing')
+  window.removeEventListener('pointermove', handleSidebarPointerMove)
+  window.removeEventListener('pointerup', stopSidebarResize)
+  window.removeEventListener('pointercancel', stopSidebarResize)
+}
+
+function startSidebarResize(event: PointerEvent) {
+  if (isNarrowViewport.value || isSidebarCollapsed.value) return
+  event.preventDefault()
+  resizeStartX = event.clientX
+  resizeStartWidth = expandedSidebarWidth.value
+  resizeScale = getSidebarScale()
+  isSidebarResizing.value = true
+  document.documentElement.classList.add('is-sidebar-resizing')
+  window.addEventListener('pointermove', handleSidebarPointerMove)
+  window.addEventListener('pointerup', stopSidebarResize)
+  window.addEventListener('pointercancel', stopSidebarResize)
+}
+
+function handleSidebarResizeKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  event.preventDefault()
+  const direction = event.key === 'ArrowRight' ? 1 : -1
+  const step = event.shiftKey ? SIDEBAR_KEYBOARD_STEP * 3 : SIDEBAR_KEYBOARD_STEP
+  setExpandedSidebarWidth(expandedSidebarWidth.value + direction * step, true)
+}
+
 const handleNarrowViewportChange = (event: MediaQueryListEvent | MediaQueryList) => {
+  if (event.matches) stopSidebarResize()
   isNarrowViewport.value = event.matches
   if (!event.matches) mobileExpanded.value = false
 }
 
 onBeforeUnmount(() => {
+  stopSidebarResize()
   document.documentElement.style.removeProperty('--workspace-sidebar-width')
+  document.documentElement.classList.remove('is-sidebar-resizing')
   document.removeEventListener('click', handleDocumentClick)
   narrowViewportMedia?.removeEventListener('change', handleNarrowViewportChange)
+  window.removeEventListener('pointermove', handleSidebarPointerMove)
+  window.removeEventListener('pointerup', stopSidebarResize)
+  window.removeEventListener('pointercancel', stopSidebarResize)
 })
 
 const toggleCollapse = () => {
@@ -201,7 +283,7 @@ const handleCreateSession = () => {
 
 onMounted(() => {
   document.addEventListener('click', handleDocumentClick)
-  narrowViewportMedia = window.matchMedia('(max-width: 767px)')
+  narrowViewportMedia = window.matchMedia('(max-width: 1023px)')
   handleNarrowViewportChange(narrowViewportMedia)
   narrowViewportMedia.addEventListener('change', handleNarrowViewportChange)
   void agent.refreshSessions()
@@ -211,7 +293,8 @@ onMounted(() => {
 <template>
   <div
     class="sidebar-rail-spacer flex-none transition-all duration-300"
-    :class="isNarrowViewport ? 'w-[52px]' : (isSidebarCollapsed ? 'w-[52px]' : 'w-[240px]')"
+    :class="{ 'is-resizing': isSidebarResizing }"
+    :style="{ width: layoutSidebarWidth }"
     aria-hidden="true"
   />
   <button
@@ -222,10 +305,25 @@ onMounted(() => {
     @click="mobileExpanded = false"
   />
   <aside
+    ref="sidebarElement"
     id="workspace-sidebar-navigation"
     class="sidebar-notion fixed bottom-0 left-0 top-0 z-50 flex flex-col transition-all duration-300"
-    :class="isSidebarCollapsed ? 'w-[52px]' : 'w-[240px]'"
+    :class="{ 'is-resizing': isSidebarResizing }"
+    :style="{ width: renderedSidebarWidth }"
   >
+    <div
+      v-if="!isNarrowViewport && !isSidebarCollapsed"
+      class="sidebar-resize-handle"
+      role="separator"
+      tabindex="0"
+      aria-label="调整导航栏宽度"
+      aria-orientation="vertical"
+      :aria-valuemin="SIDEBAR_MIN_WIDTH"
+      :aria-valuemax="SIDEBAR_MAX_WIDTH"
+      :aria-valuenow="expandedSidebarWidth"
+      @pointerdown="startSidebarResize"
+      @keydown="handleSidebarResizeKeydown"
+    />
     <div class="sidebar-brand-row" :class="{ 'is-collapsed': isSidebarCollapsed }">
       <button
         v-if="!isSidebarCollapsed"
@@ -406,22 +504,52 @@ onMounted(() => {
   --sidebar-charcoal: #37352f;
   --sidebar-slate: #5d5b54;
   --sidebar-steel: #787671;
-  border-right: 0 !important;
+  --sidebar-divider: rgba(55, 53, 47, 0.08);
+  border-right: 1px solid var(--sidebar-divider) !important;
   background: var(--sidebar-canvas) !important;
   color: var(--sidebar-charcoal);
   font-family: "Notion Sans", "Avenir Next", Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
 }
 
-.sidebar-notion::after {
+.sidebar-rail-spacer.is-resizing,
+.sidebar-notion.is-resizing {
+  transition: none !important;
+}
+
+.sidebar-resize-handle {
   position: absolute;
-  z-index: 5;
+  z-index: 40;
   top: 0;
-  right: 0;
+  right: -4px;
   bottom: 0;
-  width: 16px;
-  background: linear-gradient(90deg, rgba(55, 53, 47, 0) 0, rgba(55, 53, 47, 0.012) 34%, rgba(55, 53, 47, 0.032) 66%, rgba(55, 53, 47, 0.068) 100%);
+  width: 8px;
+  cursor: col-resize;
+  touch-action: none;
+  outline: none;
+}
+
+.sidebar-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 50%;
+  width: 1px;
+  background: transparent;
   content: '';
-  pointer-events: none;
+  transform: translateX(-50%);
+  transition: background-color 120ms ease;
+}
+
+.sidebar-resize-handle:hover::after,
+.sidebar-resize-handle:focus-visible::after,
+.sidebar-notion.is-resizing .sidebar-resize-handle::after {
+  background: rgba(35, 131, 226, 0.55);
+}
+
+:global(html.is-sidebar-resizing),
+:global(html.is-sidebar-resizing *) {
+  cursor: col-resize !important;
+  user-select: none !important;
 }
 
 .sidebar-brand-row {
@@ -765,7 +893,7 @@ nav::-webkit-scrollbar-thumb:hover {
   background-color: #c8c4be;
 }
 
-:global(.dark) .sidebar-notion::after {
-  background: linear-gradient(90deg, rgba(0, 0, 0, 0) 0, rgba(0, 0, 0, 0.05) 34%, rgba(0, 0, 0, 0.12) 66%, rgba(0, 0, 0, 0.2) 100%);
+:global(.dark) .sidebar-notion {
+  --sidebar-divider: rgba(255, 255, 255, 0.1);
 }
 </style>

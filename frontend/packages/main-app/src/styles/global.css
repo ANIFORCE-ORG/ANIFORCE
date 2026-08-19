@@ -63,10 +63,23 @@ body:has(.workspace-app-shell) {
 }
 
 #app {
-  width: calc(100% + 11.111111%);
-  min-height: calc(100dvh + 11.111111dvh);
+  width: 100%;
+  min-height: 100dvh;
+  overflow-x: hidden;
   padding-left: env(safe-area-inset-left);
   padding-right: env(safe-area-inset-right);
+}
+
+#app:has(.workspace-app-shell) {
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* Keep the compact 90% product scale, but contain its enlarged layout box inside
+   the real viewport so it cannot create a phantom horizontal page. */
+#app > div:first-child {
+  width: calc(100% + 11.111111%);
+  min-height: calc(100dvh + 11.111111dvh);
   transform: scale(var(--app-ui-scale));
   transform-origin: top left;
 }
@@ -97,7 +110,8 @@ canvas {
   --workspace-canvas: #ffffff;
   --workspace-page-header-height: 57px;
   --workspace-page-gutter: clamp(24px, 3vw, 48px);
-  --workspace-content-max-width: 1440px;
+  --workspace-content-max-width: 1920px;
+  --workspace-content-half-max-width: 960px;
   --workspace-font-family: 'Notion Sans', 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Helvetica, Arial, sans-serif;
   --workspace-content-surface: #ffffff;
   --workspace-metric-surface: #f6f5f4;
@@ -168,8 +182,10 @@ canvas {
   height: var(--workspace-page-header-height);
   min-height: var(--workspace-page-header-height);
   flex: 0 0 var(--workspace-page-header-height);
-  padding-right: var(--workspace-page-gutter) !important;
-  padding-left: var(--workspace-page-gutter) !important;
+  padding-inline: max(
+    var(--workspace-page-gutter),
+    calc(50% - var(--workspace-content-half-max-width) + var(--workspace-page-gutter))
+  ) !important;
   border-color: var(--workspace-hairline) !important;
   background: rgba(255, 255, 255, 0.96) !important;
 }
@@ -243,6 +259,7 @@ canvas {
 .workspace-page-content {
   width: min(100%, var(--workspace-content-max-width)) !important;
   max-width: var(--workspace-content-max-width) !important;
+  min-width: 0;
   margin-right: auto !important;
   margin-left: auto !important;
   padding-right: var(--workspace-page-gutter) !important;
