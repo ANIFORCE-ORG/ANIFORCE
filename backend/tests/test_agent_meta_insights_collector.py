@@ -6,11 +6,14 @@ from app.services.meta_insights_collector import MetaInsightsCollector
 
 
 class FakeAdapter:
-    def __init__(self):
+    def __init__(self, empty=False):
         self.calls = []
+        self.empty = empty
 
     async def get_account_daily_insights(self, account_id, date_range, level, *, max_pages):
         self.calls.append((account_id, date_range, level, max_pages))
+        if self.empty:
+            return []
         id_fields = {
             "campaign": {"campaign_id": "c1", "campaign_name": "Campaign"},
             "adset": {"campaign_id": "c1", "adset_id": "s1", "adset_name": "Ad Set"},
@@ -45,6 +48,23 @@ def test_collector_is_whitelist_bound_and_collects_three_levels_serially():
     assert [call[2] for call in adapter.calls] == ["campaign", "adset", "ad"]
     assert all(call[3] == 3 for call in adapter.calls)
     assert [row["level"] for row in repository.rows] == ["campaign", "adset", "ad"]
+
+
+def test_collector_persists_account_status_when_api_returns_no_rows():
+    repository = FakeRepository()
+    collector = MetaInsightsCollector(FakeAdapter(empty=True), repository, ["123"])
+
+    result = asyncio.run(collector.collect_account(
+        connection_id="connection-1",
+        account_id="123",
+        since="2026-08-10",
+        until="2026-08-16",
+    ))
+
+    assert result == {"campaign": 0, "adset": 0, "ad": 0}
+    assert len(repository.rows) == 1
+    assert repository.rows[0]["level"] == "account"
+    assert repository.rows[0]["status"] == "accessible_with_no_rows"
 
 
 def test_collector_rejects_accounts_outside_whitelist_before_network_call():

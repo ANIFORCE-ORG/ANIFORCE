@@ -36,6 +36,7 @@ class MetaInsightsCollector:
             raise ValueError("since must not be after until")
 
         counts: dict[str, int] = {}
+        total_rows = 0
         for level in self.LEVELS:
             payloads = await self.adapter.get_account_daily_insights(
                 normalized_account_id,
@@ -51,8 +52,30 @@ class MetaInsightsCollector:
                     business_manager_id=business_manager_id,
                     account_timezone=account_timezone,
                     sync_run_id=sync_run_id,
+                    status=(
+                        "accessible_with_rows"
+                        if any(float(payload.get(field) or 0) > 0 for field in ("spend", "impressions", "clicks"))
+                        else "accessible_with_zero_delivery"
+                    ),
                 )
                 for payload in payloads
             ]
             counts[level] = await self.repository.upsert_many(rows)
+            total_rows += len(rows)
+
+        if total_rows == 0:
+            status_row = normalize_meta_fact(
+                {
+                    "account_id": normalized_account_id,
+                    "date_start": until,
+                    "date_stop": until,
+                },
+                connection_id=connection_id,
+                level="account",
+                business_manager_id=business_manager_id,
+                account_timezone=account_timezone,
+                sync_run_id=sync_run_id,
+                status="accessible_with_no_rows",
+            )
+            await self.repository.upsert_many([status_row])
         return counts
