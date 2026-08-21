@@ -9,8 +9,8 @@ describe('Dashboard real Meta data contract', () => {
     expect(dashboard).toContain('getMetaDashboardOverview')
     expect(dashboardApi).toContain('/dashboard/meta-overview?')
     expect(dashboardApi).toContain("'/meta-facts/sync'")
-    expect(dashboard).toContain('syncMetaAdSetFacts')
-    expect(dashboard).toContain('同步当前账号最近七天 AdSet 数据')
+    expect(dashboard).toContain('DataSyncDialog')
+    expect(dashboard).toContain('配置数据同步')
     expect(dashboard).toContain('刷新视图只读取本地事实，不会请求 Meta 官方接口。')
   })
 
@@ -30,6 +30,7 @@ describe('Dashboard real Meta data contract', () => {
     expect(dashboard).toContain('尚未采集 Breakdown')
     expect(dashboard).toContain('accessible_with_no_rows')
     expect(dashboard).not.toContain('平台健康度')
+    expect(readFileSync(new URL('../components/dashboard/DataSyncDialog.vue', import.meta.url), 'utf8')).toContain('固定同步 <strong>AdSet 日级数据</strong>')
     expect(dashboard).not.toContain('平均 ROAS')
   })
 

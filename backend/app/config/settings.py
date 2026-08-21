@@ -56,6 +56,11 @@ class Settings(BaseSettings):
     META_SCOPES: str = ""
     META_REQUEST_TIMEOUT_SECONDS: float = 10.0
     META_MATERIAL_LIST_TIMEOUT_SECONDS: float = 30.0
+    # Experimental local tuning: roughly 10 page requests/second for batch sync.
+    META_INSIGHTS_BATCH_MIN_INTERVAL_SECONDS: float = 0.1
+    META_INSIGHTS_BATCH_MAX_PAGES_PER_ACCOUNT: int = 100
+    META_INSIGHTS_BATCH_CONCURRENCY: int = 3
+    META_INSIGHTS_REQUEST_TIMEOUT_SECONDS: float = 90.0
 
     # Google OAuth 配置
     GOOGLE_CLIENT_ID: str = ""

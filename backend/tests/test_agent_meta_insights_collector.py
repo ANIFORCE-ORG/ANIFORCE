@@ -22,6 +22,21 @@ class FakeAdapter:
         return [{"account_id": account_id, "date_start": "2026-08-10", **id_fields[level]}]
 
 
+class FakePagedAdapter:
+    async def iter_account_daily_insight_pages(
+        self, account_id, date_range, level, *, max_pages, before_request=None
+    ):
+        for index in range(2):
+            if before_request:
+                await before_request()
+            yield [{
+                "account_id": account_id,
+                "campaign_id": "c1",
+                "adset_id": f"s{index + 1}",
+                "date_start": f"2026-08-{10 + index}",
+            }]
+
+
 class FakeRepository:
     def __init__(self):
         self.rows = []
@@ -66,6 +81,34 @@ def test_collector_can_collect_only_adset_level():
     assert result == {"adset": 1}
     assert [call[2] for call in adapter.calls] == ["adset"]
     assert [row["level"] for row in repository.rows] == ["adset"]
+
+
+def test_collector_ingests_each_page_through_the_shared_batch_gate():
+    repository = FakeRepository()
+    collector = MetaInsightsCollector(FakePagedAdapter(), repository, ["123"])
+    gate_calls = []
+    page_calls = []
+
+    async def wait_turn():
+        gate_calls.append("request")
+
+    async def on_page(level, page, rows_written):
+        page_calls.append((level, page, rows_written))
+
+    result = asyncio.run(collector.collect_account(
+        connection_id="connection-1",
+        account_id="123",
+        since="2026-08-10",
+        until="2026-08-16",
+        levels=("adset",),
+        before_page_request=wait_turn,
+        on_page=on_page,
+    ))
+
+    assert result == {"adset": 2}
+    assert gate_calls == ["request", "request"]
+    assert page_calls == [("adset", 1, 1), ("adset", 2, 1)]
+    assert len(repository.rows) == 2
 
 
 def test_collector_persists_account_status_when_api_returns_no_rows():

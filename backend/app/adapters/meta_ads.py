@@ -4,6 +4,7 @@ Meta (Facebook/Instagram) Ads 适配器
 """
 
 import aiohttp
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import json
@@ -589,7 +590,24 @@ class MetaAdsAdapter(BaseAdapter):
         *,
         max_pages: int = 10,
     ) -> List[Dict[str, Any]]:
-        """Read paginated daily Insights for one explicitly selected account."""
+        """Read all daily Insights pages for one explicitly selected account."""
+        rows: List[Dict[str, Any]] = []
+        async for page in self.iter_account_daily_insight_pages(
+            account_id, date_range, level, max_pages=max_pages
+        ):
+            rows.extend(page)
+        return rows
+
+    async def iter_account_daily_insight_pages(
+        self,
+        account_id: str,
+        date_range: Dict[str, str],
+        level: str,
+        *,
+        max_pages: int = 10,
+        before_request: Callable[[], Awaitable[None]] | None = None,
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Yield one Meta Insights page at a time for controlled batch ingestion."""
         self._ensure_authenticated()
         if level not in {"campaign", "adset", "ad"}:
             raise ValueError(f"Unsupported Meta Insights level: {level}")
@@ -618,25 +636,25 @@ class MetaAdsAdapter(BaseAdapter):
             "level": level,
             "limit": 100,
         }
-        rows: List[Dict[str, Any]] = []
         timeout = aiohttp.ClientTimeout(total=30)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             for _ in range(max_pages):
                 if not url:
                     break
+                if before_request is not None:
+                    await before_request()
                 async with session.get(url, params=params) as response:
                     payload = await response.json()
                     if response.status != 200:
                         error = payload.get("error", payload)
                         raise Exception(f"Meta Insights read failed: {error}")
-                    rows.extend(payload.get("data") or [])
+                    yield payload.get("data") or []
                     url = (payload.get("paging") or {}).get("next")
                     params = None
         if url:
             raise RuntimeError(
                 f"Meta Insights pagination exceeded the {max_pages}-page safety limit"
             )
-        return rows
 
     async def get_campaign_insights(self, campaign_id: str, date_range: Dict[str, str]) -> Dict[str, Any]:
         """

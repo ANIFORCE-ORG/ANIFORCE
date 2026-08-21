@@ -2,8 +2,9 @@
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
+import DataSyncDialog from '@/components/dashboard/DataSyncDialog.vue'
 import { navItems } from '@/config/navigation'
-import { getMetaDashboardOverview, syncMetaAdSetFacts, type MetaDashboardOverview } from '@/api/dashboard'
+import { getMetaDashboardOverview, type MetaAdSetSyncResponse, type MetaDashboardOverview } from '@/api/dashboard'
 import { platformApi, type PlatformConnectionResponse, type SubAccountResponse } from '@/api/platform'
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
@@ -18,6 +19,7 @@ const overview = ref<MetaDashboardOverview | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
 const syncing = ref(false)
+const syncDialogOpen = ref(false)
 const errorMessage = ref('')
 const toastMessage = ref('')
 const toastVisible = ref(false)
@@ -47,7 +49,6 @@ const windowForDays = (days: number) => {
   return { since: iso(since), until: iso(until) }
 }
 const dateWindow = computed(() => windowForDays(Number(period.value)))
-const syncWindow = computed(() => windowForDays(7))
 
 const numberValue = (value: number | null | undefined) => value == null ? null : Number(value)
 const formatNumber = (value: number | null | undefined, maximumFractionDigits = 0) => {
@@ -206,28 +207,15 @@ const changePeriod = () => loadOverview()
 const changeConnection = async () => { await loadAccounts(); await loadOverview() }
 const changeAccount = () => loadOverview()
 const handleRefresh = () => loadOverview(true)
-const handleSync = async () => {
-  if (!connectionId.value || !accountId.value || syncing.value) return
-  syncing.value = true
-  try {
-    const result = await syncMetaAdSetFacts({
-      connection_id: connectionId.value,
-      account_ids: [accountId.value],
-      since: syncWindow.value.since,
-      until: syncWindow.value.until,
-    })
-    const account = result.accounts[0]
-    if (!account || account.status === 'failed') {
-      showToast(account?.message || 'AdSet 同步失败，请稍后重试')
-      return
-    }
-    showToast(`AdSet 同步完成，写入 ${account.rows_written} 条日级事实`)
-    await loadOverview()
-  } catch (error) {
-    showToast(error instanceof Error ? error.message : 'AdSet 同步失败')
-  } finally {
-    syncing.value = false
-  }
+const handleSync = () => {
+  if (!connectionId.value || syncing.value) return
+  syncDialogOpen.value = true
+}
+const handleSyncCompleted = async (result: MetaAdSetSyncResponse) => {
+  const failed = result.accounts.filter(item => item.status === 'failed').length
+  const rows = result.accounts.reduce((sum, item) => sum + item.rows_written, 0)
+  showToast(failed ? `${result.accounts.length - failed} 个账号成功，${failed} 个失败` : `数据同步完成，写入 ${rows} 条 AdSet 日级事实`)
+  await loadOverview()
 }
 
 onMounted(initialize)
@@ -272,8 +260,8 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               <option v-for="item in accounts" :key="item.id" :value="item.sub_account_id.replace(/^act_/, '')">{{ item.name }}</option>
             </select>
           </label>
-          <button class="sync-button" :class="{ syncing }" type="button" aria-label="同步当前账号最近七天 AdSet 数据" :disabled="loading || syncing || !connectionId || !accountId" @click="handleSync">
-            <span class="icon material-symbols-outlined" aria-hidden="true">{{ syncing ? 'progress_activity' : 'cloud_sync' }}</span><span class="sync-label">{{ syncing ? '同步中' : '同步账号' }}</span>
+          <button class="sync-button" :class="{ syncing }" type="button" aria-label="配置数据同步" :disabled="loading || syncing || !connectionId || !accounts.length" @click="handleSync">
+            <span class="icon material-symbols-outlined" aria-hidden="true">{{ syncing ? 'progress_activity' : 'cloud_sync' }}</span><span class="sync-label">{{ syncing ? '同步中' : '数据同步' }}</span>
           </button>
           <button class="refresh-button" :class="{ refreshing }" type="button" aria-label="刷新本地数据视图" :disabled="loading || syncing || !connectionId" @click="handleRefresh">
             <span class="icon material-symbols-outlined" aria-hidden="true">refresh</span><span class="refresh-label">刷新视图</span>
@@ -390,6 +378,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
       </div>
     </main>
 
+    <DataSyncDialog :show="syncDialogOpen" :connection-id="connectionId" :accounts="accounts" :current-account-id="accountId || undefined" @close="syncDialogOpen = false" @completed="handleSyncCompleted" />
     <div class="toast" :class="{ show: toastVisible }" role="status" aria-live="polite">{{ toastMessage }}</div>
   </div>
 </template>

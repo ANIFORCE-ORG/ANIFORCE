@@ -68,6 +68,16 @@ export interface MetaAdSetSyncResponse {
   accounts: MetaAdSetSyncAccountResult[]
 }
 
+export interface MetaAdSetSyncProgress {
+  total: number
+  completed: number
+  succeeded: number
+  failed: number
+  running: number
+  rows_written: number
+  percent: number
+}
+
 export interface MetaDashboardOverviewParams {
   connectionId: string
   accountId?: string
@@ -77,8 +87,24 @@ export interface MetaDashboardOverviewParams {
   clickType?: DashboardClickType
 }
 
-export function syncMetaAdSetFacts(request: MetaAdSetSyncRequest) {
+export function syncMetaAdSetFacts(request: MetaAdSetSyncRequest, signal?: AbortSignal) {
   return http.post<MetaAdSetSyncResponse>('/meta-facts/sync', {
+    ...request,
+    account_ids: request.account_ids.map(id => id.replace(/^act_/, '')),
+    level: 'adset',
+  }, { signal })
+}
+
+export function cancelMetaAdSetSync(request: MetaAdSetSyncRequest) {
+  return http.post<{ cancelled: number }>('/meta-facts/sync/cancel', {
+    ...request,
+    account_ids: request.account_ids.map(id => id.replace(/^act_/, '')),
+    level: 'adset',
+  })
+}
+
+export function getMetaAdSetSyncProgress(request: MetaAdSetSyncRequest) {
+  return http.post<MetaAdSetSyncProgress>('/meta-facts/sync/progress', {
     ...request,
     account_ids: request.account_ids.map(id => id.replace(/^act_/, '')),
     level: 'adset',

@@ -10,19 +10,19 @@ from app.api.v1.meta_facts import (
 )
 
 
-def test_sync_request_limits_account_count_without_network_access():
+def test_sync_request_supports_all_active_accounts_with_a_hard_safety_limit():
     MetaFactsSyncRequest(
         connection_id="c1",
-        account_ids=["1", "2", "3", "4", "5"],
+        account_ids=[str(index) for index in range(200)],
         since=date(2026, 8, 1),
-        until=date(2026, 8, 2),
+        until=date(2026, 8, 30),
     )
     with pytest.raises(ValidationError):
         MetaFactsSyncRequest(
             connection_id="c1",
-            account_ids=["1", "2", "3", "4", "5", "6"],
+            account_ids=[str(index) for index in range(201)],
             since=date(2026, 8, 1),
-            until=date(2026, 8, 2),
+            until=date(2026, 8, 30),
         )
 
 
