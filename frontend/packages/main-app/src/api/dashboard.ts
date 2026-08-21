@@ -43,6 +43,31 @@ export interface MetaDashboardOverview {
   }
 }
 
+export interface MetaAdSetSyncRequest {
+  connection_id: string
+  account_ids: string[]
+  since: string
+  until: string
+  level?: 'adset'
+}
+
+export interface MetaAdSetSyncAccountResult {
+  account_id: string
+  account_name: string | null
+  sync_run_id: string
+  status: 'succeeded' | 'failed'
+  rows_written: number
+  error_code?: string
+  message?: string
+}
+
+export interface MetaAdSetSyncResponse {
+  connection_id: string
+  level: 'adset'
+  window: { since: string; until: string }
+  accounts: MetaAdSetSyncAccountResult[]
+}
+
 export interface MetaDashboardOverviewParams {
   connectionId: string
   accountId?: string
@@ -50,6 +75,14 @@ export interface MetaDashboardOverviewParams {
   until: string
   resultActionType?: MetaResultActionType
   clickType?: DashboardClickType
+}
+
+export function syncMetaAdSetFacts(request: MetaAdSetSyncRequest) {
+  return http.post<MetaAdSetSyncResponse>('/meta-facts/sync', {
+    ...request,
+    account_ids: request.account_ids.map(id => id.replace(/^act_/, '')),
+    level: 'adset',
+  })
 }
 
 export function getMetaDashboardOverview(params: MetaDashboardOverviewParams) {

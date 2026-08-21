@@ -5,10 +5,12 @@ const dashboard = readFileSync(new URL('./Dashboard.vue', import.meta.url), 'utf
 const dashboardApi = readFileSync(new URL('../api/dashboard.ts', import.meta.url), 'utf8')
 
 describe('Dashboard real Meta data contract', () => {
-  it('reads the local overview and never invokes Meta synchronization', () => {
+  it('keeps local refresh separate from explicit AdSet synchronization', () => {
     expect(dashboard).toContain('getMetaDashboardOverview')
     expect(dashboardApi).toContain('/dashboard/meta-overview?')
-    expect(dashboard).not.toContain('/meta-facts/sync')
+    expect(dashboardApi).toContain("'/meta-facts/sync'")
+    expect(dashboard).toContain('syncMetaAdSetFacts')
+    expect(dashboard).toContain('同步当前账号最近七天 AdSet 数据')
     expect(dashboard).toContain('刷新视图只读取本地事实，不会请求 Meta 官方接口。')
   })
 

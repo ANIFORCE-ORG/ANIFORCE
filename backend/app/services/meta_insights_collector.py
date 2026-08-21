@@ -28,6 +28,7 @@ class MetaInsightsCollector:
         account_timezone: str | None = None,
         sync_run_id: str | None = None,
         max_pages: int = 10,
+        levels: Iterable[str] | None = None,
     ) -> dict[str, int]:
         normalized_account_id = normalize_account_id(account_id)
         if normalized_account_id not in self.allowed_account_ids:
@@ -35,9 +36,16 @@ class MetaInsightsCollector:
         if since > until:
             raise ValueError("since must not be after until")
 
+        requested_levels = tuple(levels or self.LEVELS)
+        unsupported = [level for level in requested_levels if level not in self.LEVELS]
+        if unsupported:
+            raise ValueError(f"Unsupported Meta Insights levels: {unsupported}")
+        if not requested_levels:
+            raise ValueError("At least one Meta Insights level is required")
+
         counts: dict[str, int] = {}
         total_rows = 0
-        for level in self.LEVELS:
+        for level in requested_levels:
             payloads = await self.adapter.get_account_daily_insights(
                 normalized_account_id,
                 {"since": since, "until": until},

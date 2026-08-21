@@ -225,6 +225,20 @@ async function handleMockRequest(url: URL, init?: RequestInit): Promise<Response
     { account_id: 'act_10240002', account_name: 'RPG LiveOps · Meta', channel: 'Meta', connection_id: 'conn-meta-001' },
     { account_id: '652-310-9921', account_name: 'ANIFORCE · Google Ads', channel: 'Google', connection_id: 'conn-google-001' },
   ].filter(item => !url.searchParams.get('channel') || item.channel === url.searchParams.get('channel')))
+  if (path === '/meta-facts/sync' && method === 'POST') {
+    return jsonResponse({
+      connection_id: body.connection_id,
+      level: 'adset',
+      window: { since: body.since, until: body.until },
+      accounts: (body.account_ids || []).map((accountId: string) => ({
+        account_id: accountId,
+        account_name: accountId,
+        sync_run_id: `sync-${Date.now()}`,
+        status: 'succeeded',
+        rows_written: 0,
+      })),
+    })
+  }
   if (path === '/dashboard/meta-overview' && method === 'GET') {
     return jsonResponse({
       window: {

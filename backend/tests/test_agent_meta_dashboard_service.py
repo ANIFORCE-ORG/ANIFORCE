@@ -16,7 +16,7 @@ class FakeRepository:
         return self.rows
 
 
-def test_overview_reads_campaign_facts_and_exposes_metric_definition():
+def test_overview_reads_adset_facts_and_exposes_metric_definition():
     repository = FakeRepository([
         SimpleNamespace(
             metric_date=date(2026, 8, 10), spend=Decimal("20"), impressions=1000,
@@ -33,7 +33,7 @@ def test_overview_reads_campaign_facts_and_exposes_metric_definition():
         result_action_type="lead", use_link_clicks=True,
     ))
 
-    assert repository.query["level"] == "campaign"
+    assert repository.query["level"] == "adset"
     assert repository.query["account_id"] == "123"
     assert view["kpis"]["conversions"] == 4
     assert view["kpis"]["clicks"] == 20

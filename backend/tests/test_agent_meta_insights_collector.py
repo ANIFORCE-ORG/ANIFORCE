@@ -50,6 +50,24 @@ def test_collector_is_whitelist_bound_and_collects_three_levels_serially():
     assert [row["level"] for row in repository.rows] == ["campaign", "adset", "ad"]
 
 
+def test_collector_can_collect_only_adset_level():
+    adapter = FakeAdapter()
+    repository = FakeRepository()
+    collector = MetaInsightsCollector(adapter, repository, ["123"])
+
+    result = asyncio.run(collector.collect_account(
+        connection_id="connection-1",
+        account_id="123",
+        since="2026-08-10",
+        until="2026-08-16",
+        levels=("adset",),
+    ))
+
+    assert result == {"adset": 1}
+    assert [call[2] for call in adapter.calls] == ["adset"]
+    assert [row["level"] for row in repository.rows] == ["adset"]
+
+
 def test_collector_persists_account_status_when_api_returns_no_rows():
     repository = FakeRepository()
     collector = MetaInsightsCollector(FakeAdapter(empty=True), repository, ["123"])

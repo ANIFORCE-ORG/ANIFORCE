@@ -1,4 +1,4 @@
-"""Build the Dashboard view model from campaign-level meta_facts."""
+"""Build the Dashboard view model from AdSet-level meta_facts."""
 
 from __future__ import annotations
 
@@ -46,7 +46,7 @@ class MetaDashboardService:
             account_id=normalized_account_id,
             since=since,
             until=until,
-            level="campaign",
+            level="adset",
         )
         facts = [
             DailyFact(

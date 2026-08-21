@@ -25,6 +25,7 @@ from app.models.agent_artifact import AgentArtifact
 from app.models.agent_session_lease import AgentSessionLease
 from app.models.idempotency import IdempotencyRecord
 from app.models.meta_fact import MetaFact
+from app.models.meta_insights_sync_run import MetaInsightsSyncRun
 
 __all__ = [
     "User",
@@ -59,4 +60,5 @@ __all__ = [
     "AgentSessionLease",
     "IdempotencyRecord",
     "MetaFact",
+    "MetaInsightsSyncRun",
 ]

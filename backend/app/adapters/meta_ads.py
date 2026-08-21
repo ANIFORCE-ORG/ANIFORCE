@@ -599,7 +599,7 @@ class MetaAdsAdapter(BaseAdapter):
         normalized_account_id = str(account_id).removeprefix("act_")
         level_fields = {
             "campaign": ["campaign_id", "campaign_name", "objective"],
-            "adset": ["campaign_id", "campaign_name", "adset_id", "adset_name", "optimization_goal"],
+            "adset": ["campaign_id", "campaign_name", "adset_id", "adset_name", "objective", "optimization_goal"],
             "ad": ["campaign_id", "campaign_name", "adset_id", "adset_name", "ad_id", "ad_name"],
         }
         fields = [
@@ -632,6 +632,10 @@ class MetaAdsAdapter(BaseAdapter):
                     rows.extend(payload.get("data") or [])
                     url = (payload.get("paging") or {}).get("next")
                     params = None
+        if url:
+            raise RuntimeError(
+                f"Meta Insights pagination exceeded the {max_pages}-page safety limit"
+            )
         return rows
 
     async def get_campaign_insights(self, campaign_id: str, date_range: Dict[str, str]) -> Dict[str, Any]:

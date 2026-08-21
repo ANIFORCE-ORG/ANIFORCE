@@ -3,7 +3,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import { navItems } from '@/config/navigation'
-import { getMetaDashboardOverview, type MetaDashboardOverview } from '@/api/dashboard'
+import { getMetaDashboardOverview, syncMetaAdSetFacts, type MetaDashboardOverview } from '@/api/dashboard'
 import { platformApi, type PlatformConnectionResponse, type SubAccountResponse } from '@/api/platform'
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
@@ -17,6 +17,7 @@ const accounts = ref<SubAccountResponse[]>([])
 const overview = ref<MetaDashboardOverview | null>(null)
 const loading = ref(true)
 const refreshing = ref(false)
+const syncing = ref(false)
 const errorMessage = ref('')
 const toastMessage = ref('')
 const toastVisible = ref(false)
@@ -38,13 +39,15 @@ const statusLabel = computed(() => ({
   partial_error: '部分数据异常',
 }[metricStatus.value]))
 
-const dateWindow = computed(() => {
+const windowForDays = (days: number) => {
   const until = new Date()
   const since = new Date(until)
-  since.setDate(since.getDate() - Number(period.value) + 1)
+  since.setDate(since.getDate() - days + 1)
   const iso = (value: Date) => value.toISOString().slice(0, 10)
   return { since: iso(since), until: iso(until) }
-})
+}
+const dateWindow = computed(() => windowForDays(Number(period.value)))
+const syncWindow = computed(() => windowForDays(7))
 
 const numberValue = (value: number | null | undefined) => value == null ? null : Number(value)
 const formatNumber = (value: number | null | undefined, maximumFractionDigits = 0) => {
@@ -203,6 +206,29 @@ const changePeriod = () => loadOverview()
 const changeConnection = async () => { await loadAccounts(); await loadOverview() }
 const changeAccount = () => loadOverview()
 const handleRefresh = () => loadOverview(true)
+const handleSync = async () => {
+  if (!connectionId.value || !accountId.value || syncing.value) return
+  syncing.value = true
+  try {
+    const result = await syncMetaAdSetFacts({
+      connection_id: connectionId.value,
+      account_ids: [accountId.value],
+      since: syncWindow.value.since,
+      until: syncWindow.value.until,
+    })
+    const account = result.accounts[0]
+    if (!account || account.status === 'failed') {
+      showToast(account?.message || 'AdSet 同步失败，请稍后重试')
+      return
+    }
+    showToast(`AdSet 同步完成，写入 ${account.rows_written} 条日级事实`)
+    await loadOverview()
+  } catch (error) {
+    showToast(error instanceof Error ? error.message : 'AdSet 同步失败')
+  } finally {
+    syncing.value = false
+  }
+}
 
 onMounted(initialize)
 onBeforeUnmount(() => window.clearTimeout(toastTimer))
@@ -246,7 +272,10 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               <option v-for="item in accounts" :key="item.id" :value="item.sub_account_id.replace(/^act_/, '')">{{ item.name }}</option>
             </select>
           </label>
-          <button class="refresh-button" :class="{ refreshing }" type="button" aria-label="刷新本地数据视图" :disabled="loading || !connectionId" @click="handleRefresh">
+          <button class="sync-button" :class="{ syncing }" type="button" aria-label="同步当前账号最近七天 AdSet 数据" :disabled="loading || syncing || !connectionId || !accountId" @click="handleSync">
+            <span class="icon material-symbols-outlined" aria-hidden="true">{{ syncing ? 'progress_activity' : 'cloud_sync' }}</span><span class="sync-label">{{ syncing ? '同步中' : '同步账号' }}</span>
+          </button>
+          <button class="refresh-button" :class="{ refreshing }" type="button" aria-label="刷新本地数据视图" :disabled="loading || syncing || !connectionId" @click="handleRefresh">
             <span class="icon material-symbols-outlined" aria-hidden="true">refresh</span><span class="refresh-label">刷新视图</span>
           </button>
         </div>
@@ -399,6 +428,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 }
 
 .dashboard-shell.embedded .filter-field .period-select,
+.dashboard-shell.embedded .sync-button,
 .dashboard-shell.embedded .refresh-button {
   width: 100%;
   min-width: 0;
@@ -497,11 +527,14 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 .replay-actions { gap: 8px; }
 .filter-field { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
 .filter-field .period-select { min-width: 92px; }
-.refresh-button { height: 34px; min-width: 116px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--workspace-action-primary,#137fec); border-radius: 8px; background: var(--workspace-action-primary,#137fec); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color .16s ease,border-color .16s ease; }
+.sync-button,.refresh-button { height: 34px; min-width: 116px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color .16s ease,border-color .16s ease; }
+.sync-button { border: 1px solid var(--hairline-strong); background: #fff; color: var(--charcoal); }
+.sync-button:hover { border-color: var(--workspace-action-primary,#137fec); color: var(--workspace-action-primary,#137fec); background: #f7fbff; }
+.refresh-button { border: 1px solid var(--workspace-action-primary,#137fec); background: var(--workspace-action-primary,#137fec); color: #fff; }
 .refresh-button:hover { border-color: var(--workspace-action-primary-hover,#0f6fcf); background: var(--workspace-action-primary-hover,#0f6fcf); }
-.refresh-button:disabled { border-color: var(--hairline); background: var(--hairline); color: var(--stone); cursor: not-allowed; }
-.refresh-button .icon { font-size: 15px; }
-.refreshing .icon { animation: spin .65s ease; }
+.sync-button:disabled,.refresh-button:disabled { border-color: var(--hairline); background: var(--hairline); color: var(--stone); cursor: not-allowed; }
+.sync-button .icon,.refresh-button .icon { font-size: 15px; }
+.sync-button.syncing .icon,.refreshing .icon { animation: spin .65s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .replay-content { width: 100%; max-width: none; margin: 0; padding-top: 24px; padding-bottom: 64px; }
@@ -601,13 +634,13 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
   .platform-grid { grid-template-columns: 1fr; }.platform-card { display: grid; grid-template-columns: 310px minmax(0,1fr); align-items: start; }.platform-card .platform-top { border-right: 1px solid var(--hairline-soft); }.platform-card .daily-table { margin: 8px; }
 }
 @media (max-width: 900px) {
-  .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
+  .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
   .trend-grid,.replay-split { grid-template-columns: 1fr; }.chart-summary { width: 100%; height: auto; grid-template-columns: repeat(3,1fr); grid-template-rows: 1fr; }.summary-box { border-right: 1px solid var(--hairline-soft); border-bottom: 0; }.summary-box:last-child { border-right: 0; }
   .platform-card { display: block; }.platform-card .platform-top { border-right: 0; }
 }
 @media (max-width: 620px) {
   .replay-content { padding: 12px 12px 52px; }.replay-kpis { grid-template-columns: repeat(2,1fr); }.replay-kpi { border-bottom: 1px solid #f3f2f0; }.replay-kpi:nth-child(3)::after { display: block; }.replay-kpi:nth-child(2n)::after { display: none; }.replay-kpi:nth-last-child(-n+2) { border-bottom: 0; }
-  .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }.dashboard-shell:not(.embedded) .refresh-button { width: 31px; min-width: 31px; padding: 0; }.dashboard-shell:not(.embedded) .refresh-label { display: none; }
+  .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { width: 31px; min-width: 31px; padding: 0; }.dashboard-shell:not(.embedded) .sync-label,.dashboard-shell:not(.embedded) .refresh-label { display: none; }
   .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }

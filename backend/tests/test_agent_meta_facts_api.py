@@ -36,3 +36,21 @@ def test_sync_window_is_bounded_and_ordered():
 
 def test_requested_accounts_are_normalized_and_deduplicated():
     assert normalize_requested_accounts(["act_123", "123", "act_456"]) == ["123", "456"]
+
+
+def test_sync_request_is_adset_only():
+    request = MetaFactsSyncRequest(
+        connection_id="c1",
+        account_ids=["123"],
+        since=date(2026, 8, 1),
+        until=date(2026, 8, 7),
+    )
+    assert request.level == "adset"
+    with pytest.raises(ValidationError):
+        MetaFactsSyncRequest(
+            connection_id="c1",
+            account_ids=["123"],
+            since=date(2026, 8, 1),
+            until=date(2026, 8, 7),
+            level="ad",
+        )
