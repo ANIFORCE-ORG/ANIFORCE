@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import date, datetime
 from typing import Any, Iterable
 
+from sqlalchemy import select
 from sqlalchemy.dialects.sqlite import insert as sqlite_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -47,3 +48,25 @@ class SqliteMetaFactRepository:
         )
         await self.session.execute(statement)
         return len(values)
+
+    async def list_daily_facts(
+        self,
+        *,
+        connection_id: str,
+        since: date,
+        until: date,
+        level: str = "campaign",
+        account_id: str | None = None,
+    ) -> list[MetaFact]:
+        statement = (
+            select(MetaFact)
+            .where(MetaFact.connection_id == connection_id)
+            .where(MetaFact.level == level)
+            .where(MetaFact.metric_date >= since)
+            .where(MetaFact.metric_date <= until)
+            .order_by(MetaFact.metric_date.asc(), MetaFact.entity_id.asc())
+        )
+        if account_id is not None:
+            statement = statement.where(MetaFact.account_id == account_id)
+        result = await self.session.execute(statement)
+        return list(result.scalars().all())
