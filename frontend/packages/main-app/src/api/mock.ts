@@ -225,6 +225,37 @@ async function handleMockRequest(url: URL, init?: RequestInit): Promise<Response
     { account_id: 'act_10240002', account_name: 'RPG LiveOps · Meta', channel: 'Meta', connection_id: 'conn-meta-001' },
     { account_id: '652-310-9921', account_name: 'ANIFORCE · Google Ads', channel: 'Google', connection_id: 'conn-google-001' },
   ].filter(item => !url.searchParams.get('channel') || item.channel === url.searchParams.get('channel')))
+  if (path === '/dashboard/meta-overview' && method === 'GET') {
+    return jsonResponse({
+      window: {
+        since: url.searchParams.get('since'),
+        until: url.searchParams.get('until'),
+        currency: null,
+        timezone: null,
+        mixed_currency: false,
+        mixed_timezone: false,
+      },
+      metric_definition: {
+        result_type: 'lead',
+        result_action_type: 'lead',
+        result_cost_label: 'CPL',
+        roas_available: false,
+      },
+      kpis: {
+        spend: null,
+        impressions: null,
+        clicks: null,
+        conversions: null,
+        conversion_value: null,
+        ctr: null,
+        result_cost: null,
+        roas: null,
+      },
+      trend: [],
+      data_quality: { status: 'accessible_with_no_rows', row_count: 0 },
+    })
+  }
+
   if (path === '/platform-auth/connections') return jsonResponse(connections)
   if (path === '/platform-auth/meta/config') return jsonResponse(connections.find(item => item.platform === 'Meta') || null)
   if (path === '/platform-auth/google/config') return jsonResponse(connections.find(item => item.platform === 'Google') || null)

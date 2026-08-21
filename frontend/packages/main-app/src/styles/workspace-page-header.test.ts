@@ -578,10 +578,10 @@ describe('Dashboard workspace page contract', () => {
       '<select v-model="period" class="period-select" aria-label="时间范围" @change="changePeriod">',
     )
     expect(dashboard).toContain(
-      '<select v-model="platform" class="period-select" aria-label="平台" @change="changePlatform">',
+      '<select v-model="connectionId" class="period-select" aria-label="Meta 连接" @change="changeConnection">',
     )
     expect(dashboard).toContain(
-      '<select v-model="project" class="period-select" aria-label="项目" @change="changeProject">',
+      '<select v-model="accountId" class="period-select" aria-label="广告账号" @change="changeAccount">',
     )
   })
 
@@ -598,19 +598,19 @@ describe('Dashboard workspace page contract', () => {
     expect(dashboard).toContain('stroke="#4f8fe8" stroke-width="1.4"')
     expect(dashboard).toContain('stroke="#dd7d00" stroke-width="1.35"')
     expect(dashboard).toMatch(
-      /<g fill="#4f8fe8" stroke="#fff" stroke-width="1">[\s\S]*?<circle cx="91" cy="106" r="2\.1"/,
+      /<g fill="#4f8fe8" stroke="#fff" stroke-width="1"><circle v-for="point in trendPoints"/,
     )
     expect(dashboard).toMatch(
-      /<g fill="#dd7d00" stroke="#fff" stroke-width="1">[\s\S]*?<circle cx="91" cy="138" r="2\.1"/,
+      /<g fill="#dd7d00" stroke="#fff" stroke-width="1"><circle v-for="point in trendPoints"/,
     )
     expect(dashboard).toContain(
       '<rect :x="activeTrendPoint.x - 10" :y="activeTrendPoint.barY" width="20" :height="activeTrendPoint.barHeight" rx="3" />',
     )
     expect(dashboard).toContain(
-      '<circle class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />',
+      '<circle v-if="activeTrendPoint.spendY != null" class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />',
     )
     expect(dashboard).toContain(
-      '<circle class="roas" :cx="activeTrendPoint.x" :cy="activeTrendPoint.roasY" r="3.5" />',
+      '<circle v-if="activeTrendPoint.costY != null" class="roas" :cx="activeTrendPoint.x" :cy="activeTrendPoint.costY" r="3.5" />',
     )
     expect(dashboard).toMatch(/\.legend-dot\s*\{[^}]*\bwidth:\s*5px;[^}]*\bheight:\s*5px;/s)
     expect(dashboard).toMatch(/\.chart-active-markers line\s*\{[^}]*\bstroke-width:\s*\.75;/s)
@@ -628,9 +628,9 @@ describe('Dashboard workspace page contract', () => {
 
   it('keeps the standalone Dashboard header fixed-height and responsive', () => {
     expectRuleNotToDeclareMinHeight(dashboard, '.replay-bar')
-    expect(dashboard).toContain('<span class="refresh-label">刷新</span>')
+    expect(dashboard).toContain('<span class="refresh-label">刷新视图</span>')
     expect(dashboard).toMatch(
-      /<button class="refresh-button"[^>]*\baria-label="刷新数据"[^>]*>/,
+      /<button class="refresh-button"[^>]*\baria-label="刷新本地数据视图"[^>]*>/,
     )
     expect(dashboard).toMatch(/\.filter-field\s*\{[^}]*\bdisplay:\s*flex;/s)
     expect(dashboard).not.toMatch(/\.refresh-button\s*\{[^}]*\balign-self:\s*end;/s)
