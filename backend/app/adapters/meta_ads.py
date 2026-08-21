@@ -581,6 +581,59 @@ class MetaAdsAdapter(BaseAdapter):
 
     # ==================== 数据获取 ====================
 
+    async def get_account_daily_insights(
+        self,
+        account_id: str,
+        date_range: Dict[str, str],
+        level: str,
+        *,
+        max_pages: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Read paginated daily Insights for one explicitly selected account."""
+        self._ensure_authenticated()
+        if level not in {"campaign", "adset", "ad"}:
+            raise ValueError(f"Unsupported Meta Insights level: {level}")
+        if max_pages < 1:
+            raise ValueError("max_pages must be positive")
+
+        normalized_account_id = str(account_id).removeprefix("act_")
+        level_fields = {
+            "campaign": ["campaign_id", "campaign_name", "objective"],
+            "adset": ["campaign_id", "campaign_name", "adset_id", "adset_name", "optimization_goal"],
+            "ad": ["campaign_id", "campaign_name", "adset_id", "adset_name", "ad_id", "ad_name"],
+        }
+        fields = [
+            "account_id", "account_name", *level_fields[level],
+            "impressions", "reach", "frequency", "clicks", "inline_link_clicks",
+            "spend", "ctr", "cpc", "cpm", "actions", "action_values",
+            "cost_per_action_type", "account_currency", "attribution_setting",
+            "date_start", "date_stop",
+        ]
+        url: str | None = f"{self.base_url}/act_{normalized_account_id}/insights"
+        params: Dict[str, Any] | None = {
+            "access_token": self.access_token,
+            "time_range": json.dumps(date_range),
+            "time_increment": 1,
+            "fields": ",".join(fields),
+            "level": level,
+            "limit": 100,
+        }
+        rows: List[Dict[str, Any]] = []
+        timeout = aiohttp.ClientTimeout(total=30)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            for _ in range(max_pages):
+                if not url:
+                    break
+                async with session.get(url, params=params) as response:
+                    payload = await response.json()
+                    if response.status != 200:
+                        error = payload.get("error", payload)
+                        raise Exception(f"Meta Insights read failed: {error}")
+                    rows.extend(payload.get("data") or [])
+                    url = (payload.get("paging") or {}).get("next")
+                    params = None
+        return rows
+
     async def get_campaign_insights(self, campaign_id: str, date_range: Dict[str, str]) -> Dict[str, Any]:
         """
         获取广告系列数据洞察
