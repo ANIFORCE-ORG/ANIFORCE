@@ -24,6 +24,7 @@ from app.models.agent_tool_call import AgentToolCall
 from app.models.agent_artifact import AgentArtifact
 from app.models.agent_session_lease import AgentSessionLease
 from app.models.idempotency import IdempotencyRecord
+from app.models.meta_fact import MetaFact
 
 __all__ = [
     "User",
@@ -57,4 +58,5 @@ __all__ = [
     "AgentArtifact",
     "AgentSessionLease",
     "IdempotencyRecord",
+    "MetaFact",
 ]
