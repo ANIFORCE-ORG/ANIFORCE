@@ -396,6 +396,8 @@ async def get_meta_dashboard_overview(
         select(MetaInsightsSyncRun).where(
             MetaInsightsSyncRun.connection_id == connection_id,
             MetaInsightsSyncRun.level == "adset",
+            MetaInsightsSyncRun.requested_since == since,
+            MetaInsightsSyncRun.requested_until == until,
             MetaInsightsSyncRun.account_id.in_(expected_ids),
         ).order_by(MetaInsightsSyncRun.started_at.desc())
     )
