@@ -31,6 +31,20 @@ router = APIRouter(tags=["meta-facts"])
 logger = logging.getLogger(__name__)
 
 
+def classify_meta_sync_error(exc: Exception) -> tuple[str, str]:
+    """Map low-level failures to an actionable, non-sensitive sync reason."""
+    message = str(exc).lower()
+    error_type = type(exc).__name__.lower()
+    if isinstance(exc, (asyncio.TimeoutError, TimeoutError)) or "timeout" in error_type or "timeout" in message:
+        return "META_INSIGHTS_TIMEOUT", "Meta Insights 请求超时。"
+    if "database is locked" in message or "operationalerror" in error_type and "locked" in message:
+        return "META_INSIGHTS_DATABASE_LOCKED", "本地数据库写入繁忙，未能保存该账号结果。"
+    status = getattr(exc, "status", None)
+    if status == 429 or "rate limit" in message or "too many requests" in message:
+        return "META_INSIGHTS_RATE_LIMITED", "Meta API 请求频率受限。"
+    return "META_INSIGHTS_API_ERROR", "Meta Insights 读取失败。"
+
+
 class MetaFactsSyncRequest(BaseModel):
     connection_id: str
     account_ids: list[str] = Field(min_length=1, max_length=200)
@@ -265,18 +279,19 @@ async def sync_meta_facts(
                         )
                         persisted = await worker_db.get(MetaInsightsSyncRun, run_id)
 
+                    error_code, error_message = classify_meta_sync_error(exc)
                     if persisted and persisted.status == "running":
                         persisted.status = "failed"
-                        persisted.error_code = "META_INSIGHTS_READ_FAILED"
-                        persisted.error_message = "Meta Insights 同步失败，请稍后重试。"
+                        persisted.error_code = error_code
+                        persisted.error_message = error_message
                         persisted.finished_at = datetime.utcnow()
                     async with write_lock:
                         await worker_db.commit()
                     return {
                         "account_id": account_id, "account_name": binding["account_name"],
                         "sync_run_id": run_id, "status": "failed", "rows_written": 0,
-                        "error_code": "META_INSIGHTS_READ_FAILED",
-                        "message": "Meta Insights 同步失败，请稍后重试。",
+                        "error_code": error_code,
+                        "message": error_message,
                     }
 
     accounts = await asyncio.gather(*(sync_one(account_id) for account_id in account_ids))

@@ -7,6 +7,7 @@ from app.api.v1.meta_facts import (
     MetaFactsSyncRequest,
     normalize_requested_accounts,
     validate_sync_window,
+    classify_meta_sync_error,
 )
 
 
@@ -36,6 +37,12 @@ def test_sync_window_is_bounded_and_ordered():
 
 def test_requested_accounts_are_normalized_and_deduplicated():
     assert normalize_requested_accounts(["act_123", "123", "act_456"]) == ["123", "456"]
+
+
+def test_meta_sync_error_classification_preserves_actionable_categories():
+    assert classify_meta_sync_error(TimeoutError())[0] == "META_INSIGHTS_TIMEOUT"
+    assert classify_meta_sync_error(Exception("sqlite3.OperationalError: database is locked"))[0] == "META_INSIGHTS_DATABASE_LOCKED"
+    assert classify_meta_sync_error(Exception("unexpected Meta response"))[0] == "META_INSIGHTS_API_ERROR"
 
 
 def test_sync_request_is_adset_only():

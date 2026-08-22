@@ -27,7 +27,8 @@ describe('Dashboard real Meta data contract', () => {
     for (const label of ['总消耗', 'Leads', 'CPL', 'Link CTR', 'Link Clicks', 'Impressions']) {
       expect(dashboard).toContain(`label: '${label}'`)
     }
-    expect(dashboard).toContain('同步状态与事实状态分开显示')
+    expect(dashboard).toContain('Active 账号覆盖')
+    expect(dashboard).toContain('Meta 返回 0 行')
     expect(dashboard).toContain('AdSet × 日期')
     expect(dashboard).toContain('accessible_with_no_rows')
     expect(dashboard).not.toContain('平台健康度')
