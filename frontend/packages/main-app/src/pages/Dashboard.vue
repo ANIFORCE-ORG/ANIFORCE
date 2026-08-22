@@ -34,8 +34,10 @@ const sessions = ref([
 
 const selectedAccount = computed(() => accounts.value.find(item => item.sub_account_id.replace(/^act_/, '') === accountId.value))
 const accountRows = computed<MetaDashboardAccount[]>(() => [...(overview.value?.accounts ?? [])].sort((a, b) => (b.spend ?? -1) - (a.spend ?? -1)))
-const coverageLabel = computed(() => { const quality = overview.value?.data_quality; if (!quality?.accounts_expected) return '暂无账号覆盖信息'; return `${quality.accounts_with_rows ?? 0} / ${quality.accounts_expected} 个 active 账号已采集` })
-const accountStatusLabel = (status: string) => status === 'accessible_with_rows' ? '已采集' : '未采集'
+const coverageLabel = computed(() => { const quality = overview.value?.data_quality; if (!quality?.accounts_expected) return '暂无账号覆盖信息'; return `${quality.accounts_with_rows ?? 0} / ${quality.accounts_expected} 个 active 账号在当前窗口有事实` })
+const accountSyncLabel = (status: string) => ({ succeeded: '同步成功', failed: '同步失败', cancelled: '已取消', running: '同步中', never_synced: '未同步' }[status] ?? status)
+const accountDataLabel = (status: string) => ({ with_delivery: '有投放事实', no_delivery: '已同步，无投放', no_facts: '当前窗口无事实' }[status] ?? status)
+const accountNeedsAttention = (row: MetaDashboardAccount) => row.sync_status === 'failed' || (numberValue(row.spend) ?? 0) > 0 && (row.conversions == null || row.conversions === 0)
 const metricStatus = computed(() => overview.value?.data_quality.status ?? 'accessible_with_no_rows')
 const statusLabel = computed(() => ({
   accessible_with_rows: '数据正常',
@@ -275,7 +277,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
       <div class="content replay-content workspace-page-content">
         <div v-if="errorMessage" class="dashboard-feedback error" role="alert">{{ errorMessage }} · 已保留最近一次成功数据</div>
         <div v-else-if="loading" class="dashboard-feedback" role="status">正在读取本地 Meta 数据…</div>
-        <div v-else class="dashboard-feedback" :class="{ warning: (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) }" role="status"><strong>{{ metricStatus === 'accessible_with_rows' ? '数据可用' : statusLabel }}</strong><span>{{ coverageLabel }} · {{ overview?.window.since }} 至 {{ overview?.window.until }} · 首页统一按 AdSet 日级事实聚合</span><span v-if="overview?.window.mixed_currency">金额存在多币种，未做隐式合计。</span></div>
+        <div v-else class="dashboard-feedback" :class="{ warning: (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) }" role="status"><strong>{{ (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) ? '部分可用' : '数据完整' }}</strong><span>{{ coverageLabel }} · {{ overview?.window.since }} 至 {{ overview?.window.until }} · 基础事实：{{ overview?.data_quality.facts_scope ?? 'AdSet × 日期' }}</span><span v-if="overview?.window.mixed_currency">金额存在多币种，未做隐式合计。</span></div>
 
         <section class="replay-kpis" aria-label="核心指标" :aria-busy="loading">
           <article v-for="kpi in kpis" :key="kpi.label" class="replay-kpi">
@@ -286,23 +288,20 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
 
         <section class="replay-card">
-          <div class="replay-card-head"><div><h2>趋势监控</h2><p>消耗、Lead 与 CPL 随时间变化</p></div><span class="soft-chip">近 {{ period }} 天 · {{ overview?.trend.length ?? 0 }} 个数据日</span></div>
+          <div class="replay-card-head"><div><h2>趋势监控</h2><p>先看哪一天发生变化，再判断是消耗、Lead 还是成本变化；每天标注事实覆盖账号数</p></div><span class="soft-chip">近 {{ period }} 天 · {{ overview?.trend.length ?? 0 }} 个有事实日</span></div>
           <div class="trend-grid">
             <div class="chart-panel">
-              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>消耗</span><span class="legend-item"><i class="legend-dot conversions"></i>Lead</span><span class="legend-item"><i class="legend-dot roas"></i>CPL</span></div>
+              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>Spend</span><span class="legend-item"><i class="legend-dot conversions"></i>Lead</span><span class="trend-explanation">CPL 在右侧按总 Spend / Lead 解释，不与数量共用坐标</span></div>
               <div v-if="!trendPoints.length" class="chart-empty">所选窗口暂无日级投放数据</div>
-              <svg v-else viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天消耗、Lead 和 CPL 趋势图`">
+              <svg v-else viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天 Spend 与 Lead 趋势图，CPL 在右侧汇总`">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
                 <g fill="#20a464" opacity=".8"><rect v-for="point in trendPoints" :key="`bar-${point.date}`" :x="point.x - 11" :y="point.barY" width="22" :height="point.barHeight" rx="3" /></g>
                 <path v-if="spendPath" :d="spendPath" fill="none" stroke="#4f8fe8" stroke-width="1.4" />
-                <path v-if="costPath" :d="costPath" fill="none" stroke="#dd7d00" stroke-width="1.35" />
-                <g fill="#4f8fe8" stroke="#fff" stroke-width="1"><circle v-for="point in trendPoints" v-show="point.spendY != null" :key="`spend-${point.date}`" :cx="point.x" :cy="point.spendY ?? 0" r="2.1" /></g>
-                <g fill="#dd7d00" stroke="#fff" stroke-width="1"><circle v-for="point in trendPoints" v-show="point.costY != null" :key="`cost-${point.date}`" :cx="point.x" :cy="point.costY ?? 0" r="2.1" /></g>
-                <g v-if="activeTrendPoint" class="chart-active-markers" aria-hidden="true">
+                                <g fill="#4f8fe8" stroke="#fff" stroke-width="1"><circle v-for="point in trendPoints" v-show="point.spendY != null" :key="`spend-${point.date}`" :cx="point.x" :cy="point.spendY ?? 0" r="2.1" /></g>
+                                <g v-if="activeTrendPoint" class="chart-active-markers" aria-hidden="true">
                   <line :x1="activeTrendPoint.x" :x2="activeTrendPoint.x" y1="24" y2="155" />
                   <rect :x="activeTrendPoint.x - 10" :y="activeTrendPoint.barY" width="20" :height="activeTrendPoint.barHeight" rx="3" />
                   <circle v-if="activeTrendPoint.spendY != null" class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />
-                  <circle v-if="activeTrendPoint.costY != null" class="roas" :cx="activeTrendPoint.x" :cy="activeTrendPoint.costY" r="3.5" />
                 </g>
                 <rect
                   v-for="(point, index) in trendPoints"
@@ -329,7 +328,8 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
                 <strong>{{ activeTrendPoint.date }}</strong>
                 <div><span><i class="legend-dot spend"></i>消耗</span><b>{{ activeTrendPoint.spendText }}</b></div>
                 <div><span><i class="legend-dot conversions"></i>Lead</span><b>{{ activeTrendPoint.leadsText }}</b></div>
-                <div><span><i class="legend-dot roas"></i>CPL</span><b>{{ activeTrendPoint.costText }}</b></div>
+                <div><span>CPL</span><b>{{ activeTrendPoint.costText }}</b></div>
+                <div><span>事实账号</span><b>{{ activeTrendPoint.accounts_with_facts }} / {{ activeTrendPoint.accounts_expected }}</b></div>
               </div>
               <div v-if="trendPoints.length" class="chart-axis-labels" aria-hidden="true">
                 <button v-for="(point, index) in trendPoints" :key="point.date" type="button" :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }" @mouseenter="hoveredTrendIndex = index" @mouseleave="hoveredTrendIndex = null" @focus="hoveredTrendIndex = index" @blur="hoveredTrendIndex = null" @click="toggleTrendSelection(index)">{{ point.label }}</button>
@@ -344,25 +344,11 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
 
         <section class="replay-card account-overview-card">
-          <div class="replay-card-head"><div><h2>账号表现</h2><p>按 Spend 优先查看影响最大的账号；点击上方账号筛选可下钻</p></div><span class="soft-chip">{{ accountRows.length }} 个 active 账号</span></div>
-          <div class="account-table" role="table" aria-label="Meta 广告账号表现比较"><div class="account-table-head" role="row"><span>账号</span><span>状态</span><span>Spend</span><span>Lead</span><span>CPL</span><span>CTR</span></div><div v-if="!accountRows.length" class="account-empty">所选窗口暂无账号事实</div><div v-for="row in accountRows" :key="row.account_id" class="account-table-row" role="row"><span class="account-name"><strong>{{ row.account_name }}</strong><small>{{ row.account_id }}</small></span><span><em class="account-status" :class="{ missing: row.status !== 'accessible_with_rows' }">{{ accountStatusLabel(row.status) }}</em></span><strong>{{ formatMoney(row.spend) }}</strong><span>{{ formatNumber(row.conversions) }}</span><span>{{ formatMoney(row.result_cost) }}</span><span>{{ formatPercent(row.ctr) }}</span></div></div>
+          <div class="replay-card-head"><div><h2>账号诊断</h2><p>回答“钱花在哪里、结果来自哪里、哪些账号需要排查”；同步状态与事实状态分开显示</p></div><span class="soft-chip">{{ accountRows.length }} 个 active 账号</span></div>
+          <div class="account-table" role="table" aria-label="Meta 广告账号诊断"><div class="account-table-head" role="row"><span>账号</span><span>同步状态</span><span>当前窗口事实</span><span>Spend</span><span>Lead</span><span>CPL</span><span>处理信号</span></div><div v-if="!accountRows.length" class="account-empty">所选窗口暂无账号事实</div><div v-for="row in accountRows" :key="row.account_id" class="account-table-row" role="row"><span class="account-name"><strong>{{ row.account_name }}</strong><small>{{ row.account_id }}</small></span><span><em class="account-status" :class="{ missing: row.sync_status !== 'succeeded' }">{{ accountSyncLabel(row.sync_status) }}</em></span><span class="account-fact-status">{{ accountDataLabel(row.data_status) }}</span><strong>{{ formatMoney(row.spend) }}</strong><span>{{ formatNumber(row.conversions) }}</span><span>{{ formatMoney(row.result_cost) }}</span><span><em v-if="accountNeedsAttention(row)" class="attention-label">需要排查</em><span v-else class="muted-label">—</span></span></div></div>
         </section>
 
-        <div class="replay-split">
-          <section class="replay-card">
-            <div class="replay-card-head"><div><h2>归因转化路径</h2><p>Meta 归因事件计数，不代表跨阶段用户去重</p></div><span class="soft-chip">Lead</span></div>
-            <div class="compact-body funnel-list">
-              <div v-for="item in funnel" :key="item.label" class="funnel-row"><strong>{{ item.label }}</strong><span class="funnel-track"><i :style="{ width: `${item.width}%` }"></i></span><strong>{{ item.value }}</strong><small>{{ item.rate }}</small></div>
-            </div>
-          </section>
-          <section class="replay-card">
-            <div class="replay-card-head"><div><h2>分群表现</h2><p>国家 / 设备 / 版位效率对比</p></div><span class="soft-chip">待采集</span></div>
-            <div class="compact-body segment-empty">
-              <span class="material-symbols-outlined" aria-hidden="true">data_info_alert</span>
-              <div><strong>尚未采集 Breakdown</strong><small>当前基础事实不包含国家、设备和版位，页面不会使用模拟分群数据。</small></div>
-            </div>
-          </section>
-        </div>
+        <section class="replay-card meaning-card"><div class="replay-card-head"><div><h2>这组数字代表什么</h2><p>页面只把 Meta 返回的 AdSet × 日期事实汇总，不把缺失事实当成 0</p></div><span class="soft-chip">Lead 口径</span></div><div class="meaning-grid"><div><strong>Lead</strong><span>只统计 canonical action：lead</span></div><div><strong>CPL</strong><span>当前范围总 Spend ÷ 总 Lead，不平均账号成本</span></div><div><strong>覆盖率</strong><span>当前窗口有事实的账号 ÷ active 账号</span></div><div><strong>空白</strong><span>代表没有事实或不可计算，不代表真实零值</span></div></div></section>
 
         <section class="replay-card">
           <div class="replay-card-head"><div><h2>平台表现</h2><p>当前 Meta 广告账号的真实日级表现</p></div><span class="soft-chip">Meta Account</span></div>
@@ -558,7 +544,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .trend-grid { display: grid; grid-template-columns: minmax(0,1fr) 180px; align-items: start; gap: 8px; padding: 8px; }
 .chart-panel { position: relative; min-width: 0; height: 252px; min-height: 0; padding: 7px 2px 0; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fcfcfb; }
 .chart-empty { height: 208px; display: grid; place-items: center; color: var(--stone); font-size: 12px; }
-.chart-legend { display: flex; align-items: center; gap: 14px; padding-left: 8px; color: var(--steel); font-size: 12px; }
+.chart-legend { display: flex; align-items: center; gap: 14px; padding-left: 8px; color: var(--steel); font-size: 12px; }.trend-explanation{margin-left:auto;color:var(--stone);font-size:11px}
 .legend-item { display: inline-flex; align-items: center; gap: 4px; }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
 .legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }.legend-dot.roas { background: #dd7d00; }
@@ -587,7 +573,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .summary-box strong { display: block; margin: 5px 0 2px; color: var(--ink); font-size: 20px; line-height: 1.1; }
 .summary-box small { color: var(--steel); font-size: 11px; }
 
-.account-overview-card{overflow:visible}.account-table{overflow:auto}.account-table-head,.account-table-row{display:grid;grid-template-columns:minmax(180px,1.8fr) 82px 120px 82px 100px 82px;align-items:center;gap:12px;min-width:700px;padding:0 16px}.account-table-head{min-height:34px;background:var(--surface-soft);border-bottom:1px solid var(--hairline-soft);color:var(--steel);font-size:11px;font-weight:600}.account-table-row{min-height:53px;border-bottom:1px solid var(--hairline-soft);color:var(--slate);font-size:12px}.account-table-row:last-child{border-bottom:0}.account-table-row:hover{background:#fcfcfb}.account-name strong,.account-name small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account-name strong{color:var(--ink);font-size:12px}.account-name small{margin-top:3px;color:var(--stone);font-size:10px}.account-status{display:inline-flex;padding:3px 6px;border-radius:4px;background:#edf8f0;color:#16804a;font-size:10px;font-style:normal}.account-status.missing{background:#fff6e4;color:#946200}.account-empty{min-height:72px;display:grid;place-items:center;color:var(--stone);font-size:12px}.replay-split { display: grid; grid-template-columns: .86fr 1.14fr; align-items: stretch; gap: 12px; }
+.account-overview-card{overflow:visible}.account-table{overflow:auto}.account-table-head,.account-table-row{display:grid;grid-template-columns:minmax(180px,1.8fr) 90px 125px 110px 70px 95px 90px;align-items:center;gap:12px;min-width:900px;padding:0 16px}.account-table-head{min-height:34px;background:var(--surface-soft);border-bottom:1px solid var(--hairline-soft);color:var(--steel);font-size:11px;font-weight:600}.account-table-row{min-height:53px;border-bottom:1px solid var(--hairline-soft);color:var(--slate);font-size:12px}.account-table-row:last-child{border-bottom:0}.account-table-row:hover{background:#fcfcfb}.account-name strong,.account-name small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account-name strong{color:var(--ink);font-size:12px}.account-name small{margin-top:3px;color:var(--stone);font-size:10px}.account-status{display:inline-flex;padding:3px 6px;border-radius:4px;background:#edf8f0;color:#16804a;font-size:10px;font-style:normal}.account-status.missing{background:#fff6e4;color:#946200}.account-fact-status{color:var(--steel);font-size:11px}.attention-label{display:inline-flex;padding:3px 6px;border-radius:4px;background:#fff0ee;color:#b84635;font-size:10px;font-style:normal}.muted-label{color:var(--stone)}.account-empty{min-height:72px;display:grid;place-items:center;color:var(--stone);font-size:12px}.meaning-card{overflow:visible}.meaning-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:12px 16px}.meaning-grid>div{padding:4px 14px;border-right:1px solid var(--hairline-soft)}.meaning-grid>div:first-child{padding-left:0}.meaning-grid>div:last-child{border-right:0}.meaning-grid strong,.meaning-grid span{display:block}.meaning-grid strong{color:var(--ink);font-size:12px}.meaning-grid span{margin-top:4px;color:var(--steel);font-size:11px;line-height:1.45}
 .replay-split > .replay-card { align-self: stretch; }
 .compact-body { padding: 10px 12px 12px; }
 .funnel-list { display: grid; gap: 11px; }
@@ -638,7 +624,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 @media (max-width: 620px) {
   .replay-content { padding: 12px 12px 52px; }.replay-kpis { grid-template-columns: repeat(2,1fr); }.replay-kpi { border-bottom: 1px solid #f3f2f0; }.replay-kpi:nth-child(3)::after { display: block; }.replay-kpi:nth-child(2n)::after { display: none; }.replay-kpi:nth-last-child(-n+2) { border-bottom: 0; }
   .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { width: 31px; min-width: 31px; padding: 0; }.dashboard-shell:not(.embedded) .sync-label,.dashboard-shell:not(.embedded) .refresh-label { display: none; }
-  .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }.account-table-head,.account-table-row{grid-template-columns:minmax(150px,1.8fr) 72px 100px 65px 85px 72px;padding:0 10px;gap:8px}
+  .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }.account-table-head,.account-table-row{grid-template-columns:minmax(150px,1.8fr) 82px 110px 92px 60px 82px 78px;padding:0 10px;gap:8px}.meaning-grid{grid-template-columns:repeat(2,1fr);gap:8px}.meaning-grid>div{border-right:0;padding:6px 0}
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 </style>

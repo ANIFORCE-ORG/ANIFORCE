@@ -391,6 +391,24 @@ async def get_meta_dashboard_overview(
         }
         for binding in binding_result.scalars().all()
     ]
+    expected_ids = [item["account_id"] for item in expected_accounts]
+    latest_result = await db.execute(
+        select(MetaInsightsSyncRun).where(
+            MetaInsightsSyncRun.connection_id == connection_id,
+            MetaInsightsSyncRun.level == "adset",
+            MetaInsightsSyncRun.account_id.in_(expected_ids),
+        ).order_by(MetaInsightsSyncRun.started_at.desc())
+    )
+    sync_accounts: dict[str, dict] = {}
+    for run in latest_result.scalars().all():
+        normalized_id = normalize_account_id(run.account_id)
+        if normalized_id not in sync_accounts:
+            sync_accounts[normalized_id] = {
+                "status": run.status,
+                "finished_at": run.finished_at.isoformat() if run.finished_at else None,
+                "error_code": run.error_code,
+                "error_message": run.error_message,
+            }
     return await MetaDashboardService(SqliteMetaFactRepository(db)).overview(
         connection_id=connection_id,
         account_id=account_id,
@@ -399,4 +417,5 @@ async def get_meta_dashboard_overview(
         result_action_type=result_action_type,
         use_link_clicks=click_type == "inline_link_clicks",
         expected_accounts=expected_accounts if account_id is None else None,
+        sync_accounts=sync_accounts if account_id is None else None,
     )

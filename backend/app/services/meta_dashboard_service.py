@@ -38,6 +38,7 @@ class MetaDashboardService:
         account_id: str | None = None,
         use_link_clicks: bool = False,
         expected_accounts: list[dict[str, str]] | None = None,
+        sync_accounts: dict[str, dict[str, Any]] | None = None,
     ) -> dict[str, Any]:
         if since > until:
             raise ValueError("since must not be after until")
@@ -87,20 +88,34 @@ class MetaDashboardService:
                 result_action_type=result_action_type,
                 use_link_clicks=use_link_clicks,
             )
+            sync = (sync_accounts or {}).get(current_id, {})
+            data_status = "with_delivery" if account_facts and any(fact.spend not in (None, 0) for fact in account_facts) else "no_delivery" if account_facts else "no_facts"
             account_views.append({
                 "account_id": current_id,
                 "account_name": account.get("account_name") or current_id,
-                "status": "accessible_with_rows" if account_facts else "not_synced",
+                "sync_status": sync.get("status", "never_synced"),
+                "data_status": data_status,
+                "last_synced_at": sync.get("finished_at"),
+                "error_code": sync.get("error_code"),
+                "error_message": sync.get("error_message"),
                 **account_view["kpis"],
             })
         currencies = sorted({row.account_currency for row in rows if row.account_currency})
         timezones = sorted({row.account_timezone for row in rows if row.account_timezone})
         present_accounts = {fact.account_id for fact in facts if fact.account_id}
+        daily_accounts: dict[str, set[str]] = {}
+        for fact in facts:
+            if fact.account_id:
+                daily_accounts.setdefault(fact.metric_date, set()).add(fact.account_id)
+        for trend_row in view["trend"]:
+            trend_row["accounts_with_facts"] = len(daily_accounts.get(trend_row["date"], set()))
+            trend_row["accounts_expected"] = len(expected)
         view["accounts"] = account_views
         view["data_quality"].update({
             "accounts_with_rows": len(present_accounts),
             "accounts_expected": len(expected),
             "coverage_percent": round(len(present_accounts) / len(expected) * 100, 2) if expected else 0,
+            "facts_scope": "AdSet × 日期",
         })
         view["window"] = {
             "since": since.isoformat(),

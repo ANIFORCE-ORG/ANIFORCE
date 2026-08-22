@@ -23,12 +23,18 @@ export interface DashboardMetrics {
 
 export interface DashboardTrendPoint extends DashboardMetrics {
   date: string
+  accounts_with_facts?: number
+  accounts_expected?: number
 }
 
 export interface MetaDashboardAccount {
   account_id: string
   account_name: string
-  status: 'accessible_with_rows' | 'not_synced' | string
+  sync_status: 'succeeded' | 'failed' | 'cancelled' | 'running' | 'never_synced' | string
+  data_status: 'with_delivery' | 'no_delivery' | 'no_facts' | string
+  last_synced_at: string | null
+  error_code: string | null
+  error_message: string | null
   spend: number | null
   impressions: number | null
   clicks: number | null
@@ -57,6 +63,7 @@ export interface MetaDashboardOverview {
     accounts_with_rows?: number
     accounts_expected?: number
     coverage_percent?: number
+    facts_scope?: string
   }
 }
 
