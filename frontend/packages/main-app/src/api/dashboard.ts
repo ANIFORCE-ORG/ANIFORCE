@@ -25,6 +25,19 @@ export interface DashboardTrendPoint extends DashboardMetrics {
   date: string
 }
 
+export interface MetaDashboardAccount {
+  account_id: string
+  account_name: string
+  status: 'accessible_with_rows' | 'not_synced' | string
+  spend: number | null
+  impressions: number | null
+  clicks: number | null
+  conversions: number | null
+  ctr: number | null
+  result_cost: number | null
+  roas: number | null
+}
+
 export interface MetaDashboardOverview {
   window: {
     since: string
@@ -37,9 +50,13 @@ export interface MetaDashboardOverview {
   metric_definition: DashboardMetricDefinition
   kpis: DashboardMetrics
   trend: DashboardTrendPoint[]
+  accounts: MetaDashboardAccount[]
   data_quality: {
     status: 'accessible_with_rows' | 'accessible_with_no_rows' | 'accessible_with_zero_delivery' | 'partial_error'
     row_count: number
+    accounts_with_rows?: number
+    accounts_expected?: number
+    coverage_percent?: number
   }
 }
 

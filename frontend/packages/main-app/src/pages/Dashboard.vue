@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import DataSyncDialog from '@/components/dashboard/DataSyncDialog.vue'
 import { navItems } from '@/config/navigation'
-import { getMetaDashboardOverview, type MetaAdSetSyncResponse, type MetaDashboardOverview } from '@/api/dashboard'
+import { getMetaDashboardOverview, type MetaAdSetSyncResponse, type MetaDashboardAccount, type MetaDashboardOverview } from '@/api/dashboard'
 import { platformApi, type PlatformConnectionResponse, type SubAccountResponse } from '@/api/platform'
 
 const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
@@ -33,6 +33,9 @@ const sessions = ref([
 ])
 
 const selectedAccount = computed(() => accounts.value.find(item => item.sub_account_id.replace(/^act_/, '') === accountId.value))
+const accountRows = computed<MetaDashboardAccount[]>(() => [...(overview.value?.accounts ?? [])].sort((a, b) => (b.spend ?? -1) - (a.spend ?? -1)))
+const coverageLabel = computed(() => { const quality = overview.value?.data_quality; if (!quality?.accounts_expected) return '暂无账号覆盖信息'; return `${quality.accounts_with_rows ?? 0} / ${quality.accounts_expected} 个 active 账号已采集` })
+const accountStatusLabel = (status: string) => status === 'accessible_with_rows' ? '已采集' : '未采集'
 const metricStatus = computed(() => overview.value?.data_quality.status ?? 'accessible_with_no_rows')
 const statusLabel = computed(() => ({
   accessible_with_rows: '数据正常',
@@ -184,7 +187,7 @@ const loadAccounts = async () => {
   const response = await platformApi.getSubAccounts(connectionId.value, { page: 1, page_size: 200, status: 'active' })
   const items = Array.isArray(response) ? response : response.items
   accounts.value = items
-  accountId.value = items[0]?.sub_account_id.replace(/^act_/, '') ?? ''
+  accountId.value = ''
 }
 
 const initialize = async () => {
@@ -256,7 +259,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           </label>
           <label class="filter-field">
             <select v-model="accountId" class="period-select" aria-label="广告账号" @change="changeAccount">
-              <option v-if="!accounts.length" value="">暂无活跃账号</option>
+              <option value="">全部 active 账号</option><option v-if="!accounts.length" value="">暂无活跃账号</option>
               <option v-for="item in accounts" :key="item.id" :value="item.sub_account_id.replace(/^act_/, '')">{{ item.name }}</option>
             </select>
           </label>
@@ -272,7 +275,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
       <div class="content replay-content workspace-page-content">
         <div v-if="errorMessage" class="dashboard-feedback error" role="alert">{{ errorMessage }} · 已保留最近一次成功数据</div>
         <div v-else-if="loading" class="dashboard-feedback" role="status">正在读取本地 Meta 数据…</div>
-        <div v-else-if="metricStatus !== 'accessible_with_rows'" class="dashboard-feedback" role="status">{{ statusLabel }}，所选窗口不会用 0 替代缺失数据。</div>
+        <div v-else class="dashboard-feedback" :class="{ warning: (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) }" role="status"><strong>{{ metricStatus === 'accessible_with_rows' ? '数据可用' : statusLabel }}</strong><span>{{ coverageLabel }} · {{ overview?.window.since }} 至 {{ overview?.window.until }} · 首页统一按 AdSet 日级事实聚合</span><span v-if="overview?.window.mixed_currency">金额存在多币种，未做隐式合计。</span></div>
 
         <section class="replay-kpis" aria-label="核心指标" :aria-busy="loading">
           <article v-for="kpi in kpis" :key="kpi.label" class="replay-kpi">
@@ -338,6 +341,11 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               <div class="summary-box"><span>CPL</span><strong>{{ formatMoney(overview?.kpis.result_cost) }}</strong><small>总消耗 / Lead</small></div>
             </aside>
           </div>
+        </section>
+
+        <section class="replay-card account-overview-card">
+          <div class="replay-card-head"><div><h2>账号表现</h2><p>按 Spend 优先查看影响最大的账号；点击上方账号筛选可下钻</p></div><span class="soft-chip">{{ accountRows.length }} 个 active 账号</span></div>
+          <div class="account-table" role="table" aria-label="Meta 广告账号表现比较"><div class="account-table-head" role="row"><span>账号</span><span>状态</span><span>Spend</span><span>Lead</span><span>CPL</span><span>CTR</span></div><div v-if="!accountRows.length" class="account-empty">所选窗口暂无账号事实</div><div v-for="row in accountRows" :key="row.account_id" class="account-table-row" role="row"><span class="account-name"><strong>{{ row.account_name }}</strong><small>{{ row.account_id }}</small></span><span><em class="account-status" :class="{ missing: row.status !== 'accessible_with_rows' }">{{ accountStatusLabel(row.status) }}</em></span><strong>{{ formatMoney(row.spend) }}</strong><span>{{ formatNumber(row.conversions) }}</span><span>{{ formatMoney(row.result_cost) }}</span><span>{{ formatPercent(row.ctr) }}</span></div></div>
         </section>
 
         <div class="replay-split">
@@ -527,7 +535,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .replay-content { width: 100%; max-width: none; margin: 0; padding-top: 24px; padding-bottom: 64px; }
-.dashboard-feedback { margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-soft); color: var(--slate); font-size: 12px; }
+.dashboard-feedback { display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-soft); color: var(--slate); font-size: 12px; }.dashboard-feedback strong{color:var(--charcoal)}.dashboard-feedback.warning{border-color:#f0d8a8;background:#fffaf0}.dashboard-feedback.warning strong{color:#946200}
 .dashboard-feedback.error { border-color: #f0c9c9; background: #fff5f5; color: #a33a3a; }
 .quiet-badge { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border: 1px solid var(--hairline); border-radius: 999px; background: #fff; color: var(--steel); font-size: 11px; font-weight: 600; white-space: nowrap; }
 button.quiet-badge { cursor: pointer; font-family: inherit; }
@@ -579,7 +587,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .summary-box strong { display: block; margin: 5px 0 2px; color: var(--ink); font-size: 20px; line-height: 1.1; }
 .summary-box small { color: var(--steel); font-size: 11px; }
 
-.replay-split { display: grid; grid-template-columns: .86fr 1.14fr; align-items: stretch; gap: 12px; }
+.account-overview-card{overflow:visible}.account-table{overflow:auto}.account-table-head,.account-table-row{display:grid;grid-template-columns:minmax(180px,1.8fr) 82px 120px 82px 100px 82px;align-items:center;gap:12px;min-width:700px;padding:0 16px}.account-table-head{min-height:34px;background:var(--surface-soft);border-bottom:1px solid var(--hairline-soft);color:var(--steel);font-size:11px;font-weight:600}.account-table-row{min-height:53px;border-bottom:1px solid var(--hairline-soft);color:var(--slate);font-size:12px}.account-table-row:last-child{border-bottom:0}.account-table-row:hover{background:#fcfcfb}.account-name strong,.account-name small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account-name strong{color:var(--ink);font-size:12px}.account-name small{margin-top:3px;color:var(--stone);font-size:10px}.account-status{display:inline-flex;padding:3px 6px;border-radius:4px;background:#edf8f0;color:#16804a;font-size:10px;font-style:normal}.account-status.missing{background:#fff6e4;color:#946200}.account-empty{min-height:72px;display:grid;place-items:center;color:var(--stone);font-size:12px}.replay-split { display: grid; grid-template-columns: .86fr 1.14fr; align-items: stretch; gap: 12px; }
 .replay-split > .replay-card { align-self: stretch; }
 .compact-body { padding: 10px 12px 12px; }
 .funnel-list { display: grid; gap: 11px; }
@@ -630,7 +638,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 @media (max-width: 620px) {
   .replay-content { padding: 12px 12px 52px; }.replay-kpis { grid-template-columns: repeat(2,1fr); }.replay-kpi { border-bottom: 1px solid #f3f2f0; }.replay-kpi:nth-child(3)::after { display: block; }.replay-kpi:nth-child(2n)::after { display: none; }.replay-kpi:nth-last-child(-n+2) { border-bottom: 0; }
   .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { width: 31px; min-width: 31px; padding: 0; }.dashboard-shell:not(.embedded) .sync-label,.dashboard-shell:not(.embedded) .refresh-label { display: none; }
-  .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }
+  .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }.account-table-head,.account-table-row{grid-template-columns:minmax(150px,1.8fr) 72px 100px 65px 85px 72px;padding:0 10px;gap:8px}
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 </style>

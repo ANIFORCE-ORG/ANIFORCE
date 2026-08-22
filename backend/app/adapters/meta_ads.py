@@ -34,6 +34,7 @@ class MetaAdsAdapter(BaseAdapter):
         self.base_url = f"https://graph.facebook.com/{self.api_version}"
         self.app_id = config['app_id']
         self.app_secret = config['app_secret']
+        self.insights_request_timeout_seconds = float(config.get('insights_request_timeout_seconds', 30.0))
 
     # ==================== 认证模块 ====================
 
@@ -636,7 +637,7 @@ class MetaAdsAdapter(BaseAdapter):
             "level": level,
             "limit": 100,
         }
-        timeout = aiohttp.ClientTimeout(total=30)
+        timeout = aiohttp.ClientTimeout(total=self.insights_request_timeout_seconds)
         async with aiohttp.ClientSession(timeout=timeout) as session:
             for _ in range(max_pages):
                 if not url:

@@ -206,6 +206,7 @@ async def sync_meta_facts(
                         "app_id": settings.META_APP_ID,
                         "app_secret": settings.META_APP_SECRET,
                         "api_version": "v19.0",
+                        "insights_request_timeout_seconds": settings.META_INSIGHTS_REQUEST_TIMEOUT_SECONDS,
                     })
                     adapter.set_access_token(access_token)
                     repository = SqliteMetaFactRepository(worker_db)
@@ -376,7 +377,20 @@ async def get_meta_dashboard_overview(
         validate_sync_window(since, until, max_days=90)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    await owned_meta_connection(db, connection_id, current_user["id"])
+    connection = await owned_meta_connection(db, connection_id, current_user["id"])
+    binding_result = await db.execute(
+        select(SubAccountBinding).where(
+            SubAccountBinding.parent_connection_id == connection.id,
+            SubAccountBinding.status == "active",
+        )
+    )
+    expected_accounts = [
+        {
+            "account_id": normalize_account_id(binding.sub_account_id),
+            "account_name": binding.sub_account_name or normalize_account_id(binding.sub_account_id),
+        }
+        for binding in binding_result.scalars().all()
+    ]
     return await MetaDashboardService(SqliteMetaFactRepository(db)).overview(
         connection_id=connection_id,
         account_id=account_id,
@@ -384,4 +398,5 @@ async def get_meta_dashboard_overview(
         until=until,
         result_action_type=result_action_type,
         use_link_clicks=click_type == "inline_link_clicks",
+        expected_accounts=expected_accounts if account_id is None else None,
     )
