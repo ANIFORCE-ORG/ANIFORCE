@@ -44,6 +44,9 @@ export type WorkspaceSurface =
   | 'material.list'
   | 'material.detail'
   | 'material.image'
+  | 'performance.overview'
+  | 'performance.accounts'
+  | 'performance.campaigns'
   | 'approval.review'
 
 export type WorkspaceProjectionMode =
@@ -424,6 +427,26 @@ export const workspaceResultProjectionRegistry: Record<string, WorkspaceResultPr
     surface: 'material.list',
     mode: 'readonly',
     resultToPayload: transformLocalFilesToMaterialsPayload,
+  },
+  get_meta_account_performance: {
+    surface: 'performance.overview',
+    mode: 'readonly',
+    resultToPayload: result => result as Record<string, unknown>,
+  },
+  get_meta_performance_trend: {
+    surface: 'performance.overview',
+    mode: 'readonly',
+    resultToPayload: result => result as Record<string, unknown>,
+  },
+  list_meta_ad_accounts_with_spend: {
+    surface: 'performance.accounts',
+    mode: 'readonly',
+    resultToPayload: result => result as Record<string, unknown>,
+  },
+  get_meta_campaign_performance: {
+    surface: 'performance.campaigns',
+    mode: 'readonly',
+    resultToPayload: result => result as Record<string, unknown>,
   },
 }
 

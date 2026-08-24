@@ -450,6 +450,23 @@ function handleMaterialRowSelect(row: MaterialRow): void {
       />
     </div>
 
+    <div v-else-if="projection?.surface === 'performance.overview' || projection?.surface === 'performance.accounts' || projection?.surface === 'performance.campaigns'" class="p-[16px]">
+      <div class="mb-[10px] flex items-center justify-between">
+        <p class="text-[10px] text-slate-500 dark:text-slate-400">{{ projection.surface === 'performance.accounts' ? 'Meta 账号消耗' : projection.surface === 'performance.campaigns' ? 'Meta Campaign / AdSet 表现' : 'Meta 投放表现' }}</p>
+        <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-600">数据有更新</span>
+      </div>
+      <div v-if="projection.mode === 'loading'" class="flex items-center justify-center py-[40px]">
+        <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
+      </div>
+      <div v-else class="space-y-[10px]">
+        <div class="grid grid-cols-2 gap-[8px]">
+          <div class="rounded-md border border-slate-200 p-[10px] dark:border-slate-700"><small class="block text-[10px] text-slate-500">花费</small><strong class="text-[16px]">{{ (projection.payload.kpis as any)?.spend ?? '—' }}</strong></div>
+          <div class="rounded-md border border-slate-200 p-[10px] dark:border-slate-700"><small class="block text-[10px] text-slate-500">结果</small><strong class="text-[16px]">{{ (projection.payload.kpis as any)?.conversions ?? '—' }}</strong></div>
+        </div>
+        <pre class="max-h-[420px] overflow-auto rounded-md bg-slate-50 p-[10px] text-[10px] leading-relaxed text-slate-600 dark:bg-slate-900 dark:text-slate-300">{{ JSON.stringify(projection.payload, null, 2) }}</pre>
+      </div>
+    </div>
+
     <div v-else-if="projection?.surface === 'material.image'" class="p-[16px]">
       <p class="mb-[10px] text-[10px] text-slate-500 dark:text-slate-400">{{ projection.mode === 'loading' ? '正在查询...' : '预览资源' }}</p>
       <div v-if="projection.mode === 'loading'" class="flex items-center justify-center py-[40px]">
