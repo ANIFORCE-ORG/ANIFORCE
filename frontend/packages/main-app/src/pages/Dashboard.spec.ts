@@ -11,7 +11,7 @@ describe('Dashboard real Meta data contract', () => {
     expect(dashboardApi).toContain("'/meta-facts/sync'")
     expect(dashboard).toContain('DataSyncDialog')
     expect(dashboard).toContain('配置数据同步')
-    expect(dashboard).toContain('刷新视图只读取本地事实，不会请求 Meta 官方接口。')
+    expect(dashboard).toContain('刷新本地数据视图')
   })
 
   it('uses active connection and account filters instead of unsupported project/platform mocks', () => {
@@ -27,8 +27,8 @@ describe('Dashboard real Meta data contract', () => {
     for (const label of ['总消耗', 'Leads', 'CPL', 'Link CTR', 'Link Clicks', 'Impressions']) {
       expect(dashboard).toContain(`label: '${label}'`)
     }
-    expect(dashboard).toContain('Active 账号覆盖')
-    expect(dashboard).toContain('Meta 返回 0 行')
+    expect(dashboard).toContain('机会与风险')
+    expect(dashboard).toContain('Meta 投放组合')
     expect(dashboard).toContain('AdSet × 日期')
     expect(dashboard).toContain('accessible_with_no_rows')
     expect(dashboard).not.toContain('平台健康度')

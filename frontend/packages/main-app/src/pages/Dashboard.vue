@@ -49,6 +49,20 @@ const accountSyncLabel = (status: string) => ({ succeeded: '同步成功', faile
 const accountDataLabel = (status: string) => ({ with_delivery: '有投放事实', no_delivery: '有事实但 Spend=0', no_facts: 'Meta 返回 0 行' }[status] ?? status)
 const accountErrorLabel = (code: string | null) => ({ META_INSIGHTS_TIMEOUT: '请求超时', META_INSIGHTS_DATABASE_LOCKED: '本地写入繁忙', META_INSIGHTS_RATE_LIMITED: '请求频率受限', META_INSIGHTS_API_ERROR: 'Meta API 读取失败' }[code ?? ''] ?? code ?? '读取失败')
 const accountNeedsAttention = (row: MetaDashboardAccount) => row.sync_status === 'failed' || (numberValue(row.spend) ?? 0) > 0 && (row.conversions == null || row.conversions === 0)
+const totalSpend = computed(() => numberValue(overview.value?.kpis.spend) ?? 0)
+const deliveryAccounts = computed(() => accountRows.value.filter(row => (numberValue(row.spend) ?? 0) > 0))
+const zeroLeadSpend = computed(() => deliveryAccounts.value.filter(row => (numberValue(row.conversions) ?? 0) === 0).reduce((sum, row) => sum + (numberValue(row.spend) ?? 0), 0))
+const topSpendShare = computed(() => totalSpend.value ? deliveryAccounts.value.slice(0, 3).reduce((sum, row) => sum + (numberValue(row.spend) ?? 0), 0) / totalSpend.value : null)
+const highCostAccounts = computed(() => {
+  const overallCost = numberValue(overview.value?.kpis.result_cost)
+  return overallCost ? deliveryAccounts.value.filter(row => (numberValue(row.result_cost) ?? 0) > overallCost * 1.5) : []
+})
+const topLeadAccounts = computed(() => [...deliveryAccounts.value].sort((a, b) => (b.conversions ?? -1) - (a.conversions ?? -1)).slice(0, 3))
+const opportunityCards = computed(() => [
+  { tone: 'neutral', value: formatPercent(topSpendShare.value), title: '消耗集中在少数账号', detail: topSpendShare.value == null ? '当前窗口暂无可比较 Spend' : `前 3 个账号贡献 ${formatPercent(topSpendShare.value)} 的 Spend`, action: '查看贡献账号' },
+  { tone: zeroLeadSpend.value > 0 ? 'danger' : 'neutral', value: formatMoney(zeroLeadSpend.value || null), title: '有消耗但没有 Lead', detail: zeroLeadSpend.value > 0 ? '这些账号需要优先检查投放或转化链路' : '当前窗口没有发现该类账号', action: '查看零结果账号' },
+  { tone: highCostAccounts.value.length ? 'warning' : 'neutral', value: formatNumber(highCostAccounts.value.length), title: '成本高于组合均值 50%', detail: highCostAccounts.value.length ? '按当前 Lead 口径识别成本异常账号' : '当前窗口没有发现明显成本异常', action: '查看高成本账号' },
+])
 const metricStatus = computed(() => overview.value?.data_quality.status ?? 'accessible_with_no_rows')
 const statusLabel = computed(() => ({
   accessible_with_rows: '数据正常',
@@ -354,34 +368,15 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           </div>
         </section>
 
-        <section class="replay-card account-overview-card">
-          <div class="replay-card-head"><div><h2>Active 账号覆盖</h2><p>先看 98 个 active 账号当前窗口的真实回流结果；点击分类查看账号明细</p></div><span class="soft-chip">{{ accountRows.length }} 个 active 账号</span></div>
-          <div class="account-summary-grid" aria-label="Active 账号数据状态汇总">
-            <button v-for="bucket in (['with_delivery', 'facts_zero_spend', 'empty_result', 'failed'] as const)" :key="bucket" type="button" class="account-summary-item" :class="{ selected: accountDetailBucket === bucket, danger: bucket === 'failed', muted: bucket === 'empty_result' }" @click="toggleAccountBucket(bucket)"><strong>{{ accountBuckets[bucket].length }}</strong><span>{{ accountBucketLabels[bucket] }}</span><small>{{ bucket === 'with_delivery' ? '当前窗口有 Spend 的 AdSet facts' : bucket === 'facts_zero_spend' ? 'Meta 返回事实行，但 Spend 为 0' : bucket === 'empty_result' ? '同步请求成功，但 Meta 没有返回行' : '未完成当前窗口读取' }}</small></button>
-          </div>
-          <div v-if="accountDetailBucket" class="account-detail-panel"><div class="account-detail-head"><strong>{{ accountBucketLabels[accountDetailBucket] }}</strong><button type="button" class="detail-close" aria-label="关闭账号明细" @click="accountDetailBucket = null"><span class="material-symbols-outlined">close</span></button></div><div v-if="!visibleAccountRows.length" class="account-empty">当前分类没有账号</div><div v-for="row in visibleAccountRows" :key="row.account_id" class="account-detail-row"><span class="account-name"><strong>{{ row.account_name }}</strong><small>{{ row.account_id }}</small></span><span>{{ formatMoney(row.spend) }}</span><span>Lead {{ formatNumber(row.conversions) }}</span><span v-if="row.sync_status === 'failed'" class="attention-label">{{ accountErrorLabel(row.error_code) }}</span><span v-else class="account-fact-status">{{ accountDataLabel(row.data_status) }}</span></div></div>
+        <section class="replay-card opportunity-card">
+          <div class="replay-card-head"><div><h2>机会与风险</h2><p>从当前 Meta AdSet 日事实中提炼预算决策，不展示账号同步过程</p></div><span class="soft-chip">{{ deliveryAccounts.length }} 个有消耗账号</span></div>
+          <div class="opportunity-grid"><article v-for="item in opportunityCards" :key="item.title" class="opportunity-item" :class="item.tone"><strong>{{ item.value }}</strong><h3>{{ item.title }}</h3><p>{{ item.detail }}</p></article></div>
         </section>
 
-        <section class="replay-card meaning-card"><div class="replay-card-head"><div><h2>这组数字代表什么</h2><p>页面只把 Meta 返回的 AdSet × 日期事实汇总，不把缺失事实当成 0</p></div><span class="soft-chip">Lead 口径</span></div><div class="meaning-grid"><div><strong>Lead</strong><span>只统计 canonical action：lead</span></div><div><strong>CPL</strong><span>当前范围总 Spend ÷ 总 Lead，不平均账号成本</span></div><div><strong>覆盖率</strong><span>当前窗口有事实的账号 ÷ active 账号</span></div><div><strong>空白</strong><span>代表没有事实或不可计算，不代表真实零值</span></div></div></section>
-
-        <section class="replay-card">
-          <div class="replay-card-head"><div><h2>平台表现</h2><p>当前 Meta 广告账号的真实日级表现</p></div><span class="soft-chip">Meta Account</span></div>
-          <div class="platform-grid single">
-            <article class="platform-card">
-              <div class="platform-top">
-                <div class="platform-heading"><div><h3>Meta</h3><p>{{ selectedAccount?.name || '未选择广告账号' }}</p></div><span class="soft-chip" :class="{ 'status-warning': metricStatus !== 'accessible_with_rows' }">{{ statusLabel }}</span></div>
-                <div class="platform-status"><span class="material-symbols-outlined" aria-hidden="true">{{ metricStatus === 'accessible_with_rows' ? 'check_circle' : 'info' }}</span><div><strong>{{ statusLabel }}</strong><small>刷新视图只读取本地事实，不会请求 Meta 官方接口。</small></div></div>
-                <div class="platform-metrics">
-                  <div class="platform-metric"><span>Spend</span><strong>{{ formatMoney(overview?.kpis.spend) }}</strong></div><div class="platform-metric"><span>Lead</span><strong>{{ formatNumber(overview?.kpis.conversions) }}</strong></div><div class="platform-metric"><span>CPL</span><strong>{{ formatMoney(overview?.kpis.result_cost) }}</strong></div><div class="platform-metric"><span>Link CTR</span><strong>{{ formatPercent(overview?.kpis.ctr) }}</strong></div>
-                </div>
-              </div>
-              <div class="daily-table" role="table" aria-label="Meta 账号分天表现">
-                <div class="daily-table-head" role="row"><span>日期</span><span>消耗</span><span>Lead</span><span>CPL</span></div>
-                <div v-if="!dailyRows.length" class="daily-empty">所选窗口暂无日级数据</div>
-                <div v-for="row in dailyRows" :key="row.date" class="daily-table-row workspace-data-row" role="row"><span>{{ row.date }}</span><strong>{{ row.spend }}</strong><span>{{ row.leads }}</span><span class="daily-roas">{{ row.cost }}</span></div>
-              </div>
-            </article>
-          </div>
+        <section class="replay-card platform-composition-card">
+          <div class="replay-card-head"><div><h2>Meta 投放组合</h2><p>当前结果基于 Meta AdSet × 日期事实；账号状态只在异常时进入下钻</p></div><span class="soft-chip">Lead 口径</span></div>
+          <div class="composition-metrics"><div><span>有消耗账号</span><strong>{{ deliveryAccounts.length }}</strong><small>/ {{ overview?.data_quality.accounts_expected ?? 0 }} 个 active 账号</small></div><div><span>Top Lead 账号</span><strong>{{ topLeadAccounts[0]?.account_name || '—' }}</strong><small>{{ formatNumber(topLeadAccounts[0]?.conversions) }} Lead</small></div><div><span>当前覆盖</span><strong>{{ coverageLabel }}</strong><small>只有存在 facts 的账号进入 KPI 汇总</small></div></div>
+          <div class="composition-note"><span class="material-symbols-outlined">info</span><span>Meta 返回 0 行或同步失败的账号不会被填充为 0；它们不参与当前组合 KPI。</span></div>
         </section>
       </div>
     </main>
@@ -587,7 +582,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .summary-box strong { display: block; margin: 5px 0 2px; color: var(--ink); font-size: 20px; line-height: 1.1; }
 .summary-box small { color: var(--steel); font-size: 11px; }
 
-.account-overview-card{overflow:visible}.account-summary-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:8px;padding:10px}.account-summary-item{min-width:0;min-height:102px;padding:13px 14px;border:1px solid var(--hairline-soft);border-radius:8px;background:#fff;text-align:left;color:var(--charcoal);cursor:pointer;transition:border-color .15s ease,background-color .15s ease}.account-summary-item:hover,.account-summary-item.selected{border-color:#8db8ed;background:#f7fbff}.account-summary-item.danger{background:#fffafa}.account-summary-item.muted{background:#fafaf9}.account-summary-item strong,.account-summary-item span,.account-summary-item small{display:block}.account-summary-item strong{color:var(--ink);font-size:24px;line-height:1.1}.account-summary-item span{margin-top:7px;color:var(--charcoal);font-size:12px;font-weight:600}.account-summary-item small{margin-top:4px;color:var(--steel);font-size:10px;line-height:1.35}.account-summary-item.danger strong,.account-summary-item.danger span{color:#b84635}.account-detail-panel{border-top:1px solid var(--hairline-soft);background:var(--surface-soft)}.account-detail-head{display:flex;align-items:center;justify-content:space-between;padding:9px 12px;color:var(--charcoal);font-size:12px}.detail-close{display:grid;place-items:center;width:25px;height:25px;padding:0;border:0;border-radius:5px;background:transparent;color:var(--steel);cursor:pointer}.detail-close:hover{background:#fff;color:var(--ink)}.detail-close .material-symbols-outlined{font-size:16px}.account-detail-row{display:grid;grid-template-columns:minmax(180px,1fr) 110px 90px 130px;align-items:center;gap:12px;min-height:42px;padding:0 12px;border-top:1px solid var(--hairline-soft);color:var(--slate);font-size:11px}.account-detail-row:hover{background:#fff}.account-name strong,.account-name small{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}.account-name strong{color:var(--ink);font-size:12px}.account-name small{margin-top:3px;color:var(--stone);font-size:10px}.account-fact-status{color:var(--steel);font-size:11px}.attention-label{display:inline-flex;width:max-content;padding:3px 6px;border-radius:4px;background:#fff0ee;color:#b84635;font-size:10px;font-style:normal}.account-empty{min-height:72px;display:grid;place-items:center;color:var(--stone);font-size:12px}.meaning-card{overflow:visible}.meaning-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:0;padding:12px 16px}.meaning-grid>div{padding:4px 14px;border-right:1px solid var(--hairline-soft)}.meaning-grid>div:first-child{padding-left:0}.meaning-grid>div:last-child{border-right:0}.meaning-grid strong,.meaning-grid span{display:block}.meaning-grid strong{color:var(--ink);font-size:12px}.meaning-grid span{margin-top:4px;color:var(--steel);font-size:11px;line-height:1.45}
+.opportunity-card,.platform-composition-card{overflow:visible}.opportunity-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px}.opportunity-item{min-height:136px;padding:14px;border:1px solid var(--hairline-soft);border-radius:8px;background:#fff}.opportunity-item.danger{border-color:#f0d1cc;background:#fffafa}.opportunity-item.warning{border-color:#f1dfb9;background:#fffdf7}.opportunity-item>strong{display:block;color:var(--ink);font-size:25px;line-height:1.1}.opportunity-item.danger>strong{color:#b84635}.opportunity-item h3{margin:9px 0 0;color:var(--charcoal);font-size:13px}.opportunity-item p{margin:5px 0 0;color:var(--steel);font-size:11px;line-height:1.45}.composition-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin:10px;border:1px solid var(--hairline-soft);border-radius:8px;overflow:hidden;background:var(--surface-soft)}.composition-metrics>div{min-width:0;padding:13px;border-right:1px solid var(--hairline-soft)}.composition-metrics>div:last-child{border-right:0}.composition-metrics span,.composition-metrics small{display:block;color:var(--steel);font-size:11px}.composition-metrics strong{display:block;margin:6px 0 3px;overflow:hidden;color:var(--ink);font-size:18px;text-overflow:ellipsis;white-space:nowrap}.composition-note{display:flex;align-items:center;gap:6px;margin:0 10px 10px;padding:8px 10px;border-radius:6px;background:#fafaf9;color:var(--steel);font-size:11px}.composition-note .material-symbols-outlined{font-size:15px;color:#8b8983}
 .replay-split > .replay-card { align-self: stretch; }
 .compact-body { padding: 10px 12px 12px; }
 .funnel-list { display: grid; gap: 11px; }
