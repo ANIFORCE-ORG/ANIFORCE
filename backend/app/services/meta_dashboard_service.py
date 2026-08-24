@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import date
+from datetime import date, timedelta
 from decimal import Decimal, InvalidOperation
 from typing import Any
 
@@ -69,6 +69,66 @@ class MetaDashboardService:
             result_action_type=result_action_type,
             use_link_clicks=use_link_clicks,
         )
+        grouped_adsets: dict[tuple[str, str], list[DailyFact]] = {}
+        adset_meta: dict[tuple[str, str], dict[str, Any]] = {}
+        for fact, row in zip(facts, rows):
+            if not fact.account_id:
+                continue
+            key = (fact.account_id, getattr(row, "entity_id", "") or "")
+            grouped_adsets.setdefault(key, []).append(fact)
+            adset_meta[key] = {
+                "account_id": fact.account_id,
+                "account_name": getattr(row, "account_name", None) or fact.account_id,
+                "adset_id": key[1],
+                "adset_name": getattr(row, "entity_name", None) or key[1],
+                "campaign_name": getattr(row, "parent_entity_name", None),
+            }
+        adset_views = [
+            {
+                **adset_meta[key],
+                **aggregate_dashboard_facts(
+                    items,
+                    result_action_type=result_action_type,
+                    use_link_clicks=use_link_clicks,
+                )["kpis"],
+            }
+            for key, items in grouped_adsets.items()
+        ]
+        adset_views.sort(key=lambda item: (item["spend"] is None, -(item["spend"] or 0)))
+        view["adsets"] = adset_views
+        days = (until - since).days + 1
+        previous_until = since - timedelta(days=1)
+        previous_since = previous_until - timedelta(days=days - 1)
+        previous_rows = await self.repository.list_daily_facts(
+            connection_id=connection_id,
+            account_id=normalized_account_id,
+            since=previous_since,
+            until=previous_until,
+            level="adset",
+        )
+        previous_facts = [
+            DailyFact(
+                metric_date=row.metric_date.isoformat(),
+                spend=row.spend,
+                impressions=row.impressions,
+                clicks=row.clicks,
+                inline_link_clicks=row.inline_link_clicks,
+                actions=_action_map(row.actions_json),
+                action_values=_action_map(row.action_values_json, decimal=True),
+                status=row.status,
+                account_id=row.account_id,
+            )
+            for row in previous_rows
+        ]
+        previous_view = aggregate_dashboard_facts(
+            previous_facts,
+            result_action_type=result_action_type,
+            use_link_clicks=use_link_clicks,
+        )
+        view["previous"] = {
+            "window": {"since": previous_since.isoformat(), "until": previous_until.isoformat()},
+            "kpis": previous_view["kpis"],
+        }
         grouped_accounts: dict[str, list[DailyFact]] = {}
         account_names: dict[str, str] = {}
         for fact, row in zip(facts, rows):

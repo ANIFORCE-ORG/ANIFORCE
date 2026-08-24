@@ -18,20 +18,21 @@ describe('Dashboard real Meta data contract', () => {
     expect(dashboard).toContain('v-model="connectionId"')
     expect(dashboard).toContain('v-model="accountId"')
     expect(dashboard).toContain("status: 'active'")
-    expect(dashboard).not.toContain('CANDY BLASTER')
+    expect(dashboard).not.toContain('CANDY BLAST')
     expect(dashboard).not.toContain('<option>Google</option>')
     expect(dashboard).not.toContain('<option>TikTok</option>')
   })
 
-  it('shows the supported Lead metrics and honest unavailable states', () => {
-    for (const label of ['总消耗', 'Leads', 'CPL', 'Link CTR', 'Link Clicks', 'Impressions']) {
-      expect(dashboard).toContain(`label: '${label}'`)
+  it('organizes the page around real user questions with honest unavailable states', () => {
+    for (const label of ['结果总览', '每日趋势', '日明细', '账号排行', 'AdSet 明细']) {
+      expect(dashboard).toContain(label)
     }
-    expect(dashboard).toContain('机会与风险')
-    expect(dashboard).toContain('Meta 投放组合')
-    expect(dashboard).toContain('AdSet × 日期')
+    expect(dashboard).toContain('上周期')
+    expect(dashboard).toContain('无转化')
+    expect(dashboard).toContain('CPL 偏高')
     expect(dashboard).toContain('accessible_with_no_rows')
     expect(dashboard).not.toContain('平台健康度')
+    expect(dashboard).not.toContain('指标分组')
     expect(readFileSync(new URL('../components/dashboard/DataSyncDialog.vue', import.meta.url), 'utf8')).toContain('固定同步 <strong>AdSet 日级数据</strong>')
     expect(dashboard).not.toContain('平均 ROAS')
   })

@@ -596,7 +596,7 @@ describe('Dashboard workspace page contract', () => {
   it('uses the compact Dashboard chart geometry and marker weights', () => {
     expect(dashboard).toContain('preserveAspectRatio="xMidYMid meet"')
     expect(dashboard).toContain('stroke="#4f8fe8" stroke-width="1.4"')
-    expect(dashboard).toContain('CPL 在右侧按总 Spend / Lead 解释，不与数量共用坐标')
+    expect(dashboard).not.toContain('CPL 在右侧按总 Spend / Lead 解释，不与数量共用坐标')
     expect(dashboard).toMatch(
       /<g fill="#4f8fe8" stroke="#fff" stroke-width="1"><circle v-for="point in trendPoints"/,
     )
@@ -607,7 +607,7 @@ describe('Dashboard workspace page contract', () => {
     expect(dashboard).toContain(
       '<circle v-if="activeTrendPoint.spendY != null" class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />',
     )
-    expect(dashboard).toContain('Canonical lead，不叠加派生事件')
+    expect(dashboard).toContain('<p>Spend / Lead / CPL</p>')
     expect(dashboard).toMatch(/\.legend-dot\s*\{[^}]*\bwidth:\s*5px;[^}]*\bheight:\s*5px;/s)
     expect(dashboard).toMatch(/\.chart-active-markers line\s*\{[^}]*\bstroke-width:\s*\.75;/s)
     expect(dashboard).toMatch(/\.chart-active-markers rect\s*\{[^}]*\bstroke-width:\s*1\.2;/s)

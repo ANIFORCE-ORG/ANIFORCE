@@ -32,44 +32,7 @@ const sessions = ref([
   { id: 'sess-d001', name: 'DramaBox 新剧推广', active: false },
 ])
 
-const selectedAccount = computed(() => accounts.value.find(item => item.sub_account_id.replace(/^act_/, '') === accountId.value))
 const accountRows = computed<MetaDashboardAccount[]>(() => [...(overview.value?.accounts ?? [])].sort((a, b) => (b.spend ?? -1) - (a.spend ?? -1)))
-const accountDetailBucket = ref<'with_delivery' | 'facts_zero_spend' | 'empty_result' | 'failed' | null>(null)
-const accountBuckets = computed(() => ({
-  with_delivery: accountRows.value.filter(row => row.sync_status !== 'failed' && row.data_status === 'with_delivery'),
-  facts_zero_spend: accountRows.value.filter(row => row.sync_status !== 'failed' && row.data_status === 'no_delivery'),
-  empty_result: accountRows.value.filter(row => row.sync_status === 'succeeded' && row.data_status === 'no_facts'),
-  failed: accountRows.value.filter(row => row.sync_status === 'failed'),
-}))
-const visibleAccountRows = computed(() => accountDetailBucket.value ? accountBuckets.value[accountDetailBucket.value] : [])
-const accountBucketLabels = { with_delivery: '有投放事实', facts_zero_spend: '有事实但 Spend=0', empty_result: 'Meta 返回 0 行', failed: '同步失败' } as const
-const toggleAccountBucket = (bucket: keyof typeof accountBucketLabels) => { accountDetailBucket.value = accountDetailBucket.value === bucket ? null : bucket }
-const coverageLabel = computed(() => { const quality = overview.value?.data_quality; if (!quality?.accounts_expected) return '暂无账号覆盖信息'; return `${quality.accounts_with_rows ?? 0} / ${quality.accounts_expected} 个 active 账号在当前窗口有事实` })
-const accountSyncLabel = (status: string) => ({ succeeded: '同步成功', failed: '同步失败', cancelled: '已取消', running: '同步中', never_synced: '未同步' }[status] ?? status)
-const accountDataLabel = (status: string) => ({ with_delivery: '有投放事实', no_delivery: '有事实但 Spend=0', no_facts: 'Meta 返回 0 行' }[status] ?? status)
-const accountErrorLabel = (code: string | null) => ({ META_INSIGHTS_TIMEOUT: '请求超时', META_INSIGHTS_DATABASE_LOCKED: '本地写入繁忙', META_INSIGHTS_RATE_LIMITED: '请求频率受限', META_INSIGHTS_API_ERROR: 'Meta API 读取失败' }[code ?? ''] ?? code ?? '读取失败')
-const accountNeedsAttention = (row: MetaDashboardAccount) => row.sync_status === 'failed' || (numberValue(row.spend) ?? 0) > 0 && (row.conversions == null || row.conversions === 0)
-const totalSpend = computed(() => numberValue(overview.value?.kpis.spend) ?? 0)
-const deliveryAccounts = computed(() => accountRows.value.filter(row => (numberValue(row.spend) ?? 0) > 0))
-const zeroLeadSpend = computed(() => deliveryAccounts.value.filter(row => (numberValue(row.conversions) ?? 0) === 0).reduce((sum, row) => sum + (numberValue(row.spend) ?? 0), 0))
-const topSpendShare = computed(() => totalSpend.value ? deliveryAccounts.value.slice(0, 3).reduce((sum, row) => sum + (numberValue(row.spend) ?? 0), 0) / totalSpend.value : null)
-const highCostAccounts = computed(() => {
-  const overallCost = numberValue(overview.value?.kpis.result_cost)
-  return overallCost ? deliveryAccounts.value.filter(row => (numberValue(row.result_cost) ?? 0) > overallCost * 1.5) : []
-})
-const topLeadAccounts = computed(() => [...deliveryAccounts.value].sort((a, b) => (b.conversions ?? -1) - (a.conversions ?? -1)).slice(0, 3))
-const opportunityCards = computed(() => [
-  { tone: 'neutral', value: formatPercent(topSpendShare.value), title: '消耗集中在少数账号', detail: topSpendShare.value == null ? '当前窗口暂无可比较 Spend' : `前 3 个账号贡献 ${formatPercent(topSpendShare.value)} 的 Spend`, action: '查看贡献账号' },
-  { tone: zeroLeadSpend.value > 0 ? 'danger' : 'neutral', value: formatMoney(zeroLeadSpend.value || null), title: '有消耗但没有 Lead', detail: zeroLeadSpend.value > 0 ? '这些账号需要优先检查投放或转化链路' : '当前窗口没有发现该类账号', action: '查看零结果账号' },
-  { tone: highCostAccounts.value.length ? 'warning' : 'neutral', value: formatNumber(highCostAccounts.value.length), title: '成本高于组合均值 50%', detail: highCostAccounts.value.length ? '按当前 Lead 口径识别成本异常账号' : '当前窗口没有发现明显成本异常', action: '查看高成本账号' },
-])
-const metricStatus = computed(() => overview.value?.data_quality.status ?? 'accessible_with_no_rows')
-const statusLabel = computed(() => ({
-  accessible_with_rows: '数据正常',
-  accessible_with_no_rows: '当前窗口无数据',
-  accessible_with_zero_delivery: '当前窗口零投放',
-  partial_error: '部分数据异常',
-}[metricStatus.value]))
 
 const windowForDays = (days: number) => {
   const until = new Date()
@@ -98,17 +61,71 @@ const formatPercent = (value: number | null | undefined) => {
 }
 const formatDate = (value: string) => value.slice(5)
 
-const kpis = computed(() => {
-  const metrics = overview.value?.kpis
+const previousKpis = computed(() => overview.value?.previous?.kpis ?? null)
+type DeltaTone = 'good' | 'bad' | 'neutral' | 'none'
+const deltaOf = (current: number | null, previous: number | null, mode: 'spend' | 'leads' | 'cpl'): { text: string; tone: DeltaTone } => {
+  if (current == null) return { text: '', tone: 'none' }
+  if (previous == null) return { text: '上周期无数据', tone: 'none' }
+  if (previous === 0) return current === 0 ? { text: '持平', tone: 'neutral' } : { text: '新增', tone: mode === 'cpl' ? 'bad' : 'good' }
+  const pct = (current - previous) / previous * 100
+  const arrow = pct >= 0 ? '▲' : '▼'
+  const text = `${arrow} ${Math.abs(pct).toFixed(1)}%`
+  const up = pct >= 0
+  if (mode === 'spend') return { text, tone: 'neutral' }
+  if (mode === 'leads') return { text, tone: up ? 'good' : 'bad' }
+  return { text, tone: up ? 'bad' : 'good' }
+}
+
+const heroStats = computed(() => {
+  const k = overview.value?.kpis
+  const p = previousKpis.value
   return [
-    { label: '总消耗', value: formatMoney(metrics?.spend), note: overview.value?.window.currency ?? '金额', icon: 'account_balance_wallet' },
-    { label: 'Leads', value: formatNumber(metrics?.conversions), note: 'Canonical lead', icon: 'target' },
-    { label: 'CPL', value: formatMoney(metrics?.result_cost), note: '单个 Lead 成本', icon: 'attach_money' },
-    { label: 'Link CTR', value: formatPercent(metrics?.ctr), note: '链接点击 / 曝光', icon: 'ads_click' },
-    { label: 'Link Clicks', value: formatNumber(metrics?.clicks), note: '链接点击', icon: 'touch_app' },
-    { label: 'Impressions', value: formatNumber(metrics?.impressions), note: `${overview.value?.trend.length ?? 0} 个数据日`, icon: 'visibility' },
+    { label: '消耗', value: formatMoney(k?.spend), delta: deltaOf(numberValue(k?.spend), numberValue(p?.spend), 'spend') },
+    { label: 'Leads', value: formatNumber(k?.conversions), delta: deltaOf(numberValue(k?.conversions), numberValue(p?.conversions), 'leads') },
+    { label: 'CPL', value: formatMoney(k?.result_cost), delta: deltaOf(numberValue(k?.result_cost), numberValue(p?.result_cost), 'cpl') },
   ]
 })
+const secondaryMetrics = computed(() => {
+  const k = overview.value?.kpis
+  const spend = numberValue(k?.spend)
+  const clicks = numberValue(k?.clicks)
+  return [
+    { label: '曝光', value: formatNumber(k?.impressions) },
+    { label: '点击', value: formatNumber(k?.clicks) },
+    { label: 'CTR', value: formatPercent(k?.ctr) },
+    { label: 'CPC', value: clicks && spend != null ? formatMoney(spend / clicks) : '—' },
+  ]
+})
+
+const totalSpend = computed(() => numberValue(overview.value?.kpis.spend) ?? 0)
+const overallCpl = computed(() => numberValue(overview.value?.kpis.result_cost))
+const rankingRows = computed(() => {
+  const total = totalSpend.value
+  return accountRows.value.map(row => {
+    const spend = numberValue(row.spend) ?? 0
+    const leads = numberValue(row.conversions)
+    const cpl = numberValue(row.result_cost)
+    let status: { label: string; tone: 'warn' | 'bad' | 'ok' | 'muted' } = { label: '', tone: 'muted' }
+    if (spend > 0) {
+      if (leads == null || leads === 0) status = { label: '无转化', tone: 'warn' }
+      else if (cpl != null && overallCpl.value != null && cpl > overallCpl.value * 1.5) status = { label: 'CPL 偏高', tone: 'bad' }
+      else status = { label: '', tone: 'ok' }
+    }
+    return { ...row, spendShare: total ? spend / total : null, status }
+  })
+})
+
+const selectedAdsetAccountId = ref('')
+const selectedAdsetAccountName = computed(() => accountRows.value.find(row => row.account_id === selectedAdsetAccountId.value)?.account_name ?? selectedAdsetAccountId.value)
+const adsetRows = computed(() => {
+  const id = selectedAdsetAccountId.value
+  if (!id) return []
+  return (overview.value?.adsets ?? [])
+    .filter(a => a.account_id === id)
+    .map(a => ({ ...a }))
+    .sort((a, b) => (numberValue(b.spend) ?? -1) - (numberValue(a.spend) ?? -1))
+})
+const selectAdsetAccount = (id: string) => { selectedAdsetAccountId.value = selectedAdsetAccountId.value === id ? '' : id }
 
 const scaleY = (value: number | null, values: Array<number | null>, top = 48, bottom = 138) => {
   if (value == null) return null
@@ -120,7 +137,6 @@ const trendPoints = computed(() => {
   const rows = overview.value?.trend ?? []
   const spendValues = rows.map(row => numberValue(row.spend))
   const leadValues = rows.map(row => numberValue(row.conversions))
-  const costValues = rows.map(row => numberValue(row.result_cost))
   return rows.map((row, index) => {
     const x = rows.length <= 1 ? 475 : 91 + index * (768 / (rows.length - 1))
     const leads = numberValue(row.conversions)
@@ -132,9 +148,11 @@ const trendPoints = computed(() => {
       spendText: formatMoney(row.spend),
       leadsText: formatNumber(row.conversions),
       costText: formatMoney(row.result_cost),
+      impressionsText: formatNumber(row.impressions),
+      clicksText: formatNumber(row.clicks),
+      ctrText: formatPercent(row.ctr),
       x,
       spendY: scaleY(numberValue(row.spend), spendValues),
-      costY: scaleY(numberValue(row.result_cost), costValues),
       barY: 155 - barHeight,
       barHeight,
       tooltipLeft: rows.length <= 1 ? 50 : 5 + index * (90 / (rows.length - 1)),
@@ -142,33 +160,26 @@ const trendPoints = computed(() => {
     }
   })
 })
-const linePath = (field: 'spendY' | 'costY') => trendPoints.value
+const linePath = (field: 'spendY') => trendPoints.value
   .filter(point => point[field] != null)
   .map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point[field]}`)
   .join('')
 const spendPath = computed(() => linePath('spendY'))
-const costPath = computed(() => linePath('costY'))
 const hoveredTrendIndex = ref<number | null>(null)
 const selectedTrendIndex = ref<number | null>(null)
 const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
 const toggleTrendSelection = (index: number) => { selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index }
 
-const funnel = computed(() => {
-  const metrics = overview.value?.kpis
-  const impressions = numberValue(metrics?.impressions)
-  const clicks = numberValue(metrics?.clicks)
-  const leads = numberValue(metrics?.conversions)
-  const width = (value: number | null) => !impressions || value == null ? 0 : Math.min(100, Math.max(value > 0 ? 6 : 0, value / impressions * 100))
-  const rate = (value: number | null, base: number | null) => !base || value == null ? '—' : `${(value / base * 100).toFixed(2)}%`
-  return [
-    { label: '曝光', value: formatNumber(impressions), rate: impressions == null ? '—' : '100%', width: impressions == null ? 0 : 100 },
-    { label: '链接点击', value: formatNumber(clicks), rate: rate(clicks, impressions), width: width(clicks) },
-    { label: 'Lead', value: formatNumber(leads), rate: rate(leads, clicks), width: width(leads) },
-  ]
-})
-
-const dailyRows = computed(() => trendPoints.value.map(point => ({ date: point.label, spend: point.spendText, leads: point.leadsText, cost: point.costText })))
+const dailyDetailRows = computed(() => trendPoints.value.map(point => ({
+  date: point.label,
+  spend: point.spendText,
+  impressions: point.impressionsText,
+  clicks: point.clicksText,
+  ctr: point.ctrText,
+  leads: point.leadsText,
+  cpl: point.costText,
+})))
 
 const showToast = (message: string) => {
   window.clearTimeout(toastTimer)
@@ -197,6 +208,7 @@ const loadOverview = async (isRefresh = false) => {
       clickType: 'inline_link_clicks',
     })
     selectedTrendIndex.value = null
+    selectedAdsetAccountId.value = ''
     if (isRefresh) showToast('已刷新本地数据视图')
   } catch (error) {
     errorMessage.value = error instanceof Error ? error.message : '数据加载失败'
@@ -302,21 +314,26 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
       <div class="content replay-content workspace-page-content">
         <div v-if="errorMessage" class="dashboard-feedback error" role="alert">{{ errorMessage }} · 已保留最近一次成功数据</div>
         <div v-else-if="loading" class="dashboard-feedback" role="status">正在读取本地 Meta 数据…</div>
-        <div v-else class="dashboard-feedback" :class="{ warning: (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) }" role="status"><strong>{{ (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) ? '部分可用' : '数据完整' }}</strong><span>{{ coverageLabel }} · {{ overview?.window.since }} 至 {{ overview?.window.until }} · 基础事实：{{ overview?.data_quality.facts_scope ?? 'AdSet × 日期' }}</span><span v-if="overview?.window.mixed_currency">金额存在多币种，未做隐式合计。</span></div>
+        <div v-else class="dashboard-feedback" :class="{ warning: (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) }" role="status"><strong>{{ (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) ? '部分数据' : '数据完整' }}</strong><span>{{ overview?.window.since }} 至 {{ overview?.window.until }}</span><span v-if="overview?.data_quality.status === 'accessible_with_no_rows'">当前窗口无投放事实</span><span v-else-if="overview?.window.mixed_currency">多币种金额未合计</span></div>
 
-        <section class="replay-kpis" aria-label="核心指标" :aria-busy="loading">
-          <article v-for="kpi in kpis" :key="kpi.label" class="replay-kpi">
-            <div class="kpi-head"><span>{{ kpi.label }}</span><span class="icon material-symbols-outlined" aria-hidden="true">{{ kpi.icon }}</span></div>
-            <div class="kpi-value">{{ kpi.value }}</div>
-            <span class="kpi-delta">{{ kpi.note }}</span>
-          </article>
+        <section class="replay-card hero" aria-label="结果总览">
+          <div class="hero-stats">
+            <article v-for="stat in heroStats" :key="stat.label" class="hero-stat">
+              <span class="hero-label">{{ stat.label }}</span>
+              <div class="hero-value">{{ stat.value }}</div>
+              <span class="hero-delta" :class="stat.delta.tone">{{ stat.delta.text || '—' }}</span>
+            </article>
+          </div>
+          <div class="hero-secondary">
+            <span v-for="metric in secondaryMetrics" :key="metric.label" class="hero-secondary-item"><small>{{ metric.label }}</small><b>{{ metric.value }}</b></span>
+          </div>
         </section>
 
         <section class="replay-card">
-          <div class="replay-card-head"><div><h2>趋势监控</h2><p>先看哪一天发生变化，再判断是消耗、Lead 还是成本变化；每天标注事实覆盖账号数</p></div><span class="soft-chip">近 {{ period }} 天 · {{ overview?.trend.length ?? 0 }} 个有事实日</span></div>
+          <div class="replay-card-head"><div><h2>每日趋势</h2><p>Spend / Lead / CPL</p></div><span class="soft-chip">近 {{ period }} 天</span></div>
           <div class="trend-grid">
             <div class="chart-panel">
-              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>Spend</span><span class="legend-item"><i class="legend-dot conversions"></i>Lead</span><span class="trend-explanation">CPL 在右侧按总 Spend / Lead 解释，不与数量共用坐标</span></div>
+              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>Spend</span><span class="legend-item"><i class="legend-dot conversions"></i>Lead</span></div>
               <div v-if="!trendPoints.length" class="chart-empty">所选窗口暂无日级投放数据</div>
               <svg v-else viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天 Spend 与 Lead 趋势图，CPL 在右侧汇总`">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
@@ -354,30 +371,73 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
                 <div><span><i class="legend-dot spend"></i>消耗</span><b>{{ activeTrendPoint.spendText }}</b></div>
                 <div><span><i class="legend-dot conversions"></i>Lead</span><b>{{ activeTrendPoint.leadsText }}</b></div>
                 <div><span>CPL</span><b>{{ activeTrendPoint.costText }}</b></div>
-                <div><span>事实账号</span><b>{{ activeTrendPoint.accounts_with_facts }} / {{ activeTrendPoint.accounts_expected }}</b></div>
               </div>
               <div v-if="trendPoints.length" class="chart-axis-labels" aria-hidden="true">
                 <button v-for="(point, index) in trendPoints" :key="point.date" type="button" :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }" @mouseenter="hoveredTrendIndex = index" @mouseleave="hoveredTrendIndex = null" @focus="hoveredTrendIndex = index" @blur="hoveredTrendIndex = null" @click="toggleTrendSelection(index)">{{ point.label }}</button>
               </div>
             </div>
-            <aside class="chart-summary">
-              <div class="summary-box"><span>筛选消耗</span><strong>{{ formatMoney(overview?.kpis.spend) }}</strong><small>{{ selectedAccount?.name || '当前账号' }}</small></div>
-              <div class="summary-box"><span>Lead</span><strong>{{ formatNumber(overview?.kpis.conversions) }}</strong><small>Canonical lead，不叠加派生事件</small></div>
-              <div class="summary-box"><span>CPL</span><strong>{{ formatMoney(overview?.kpis.result_cost) }}</strong><small>总消耗 / Lead</small></div>
-            </aside>
           </div>
         </section>
 
-        <section class="replay-card opportunity-card">
-          <div class="replay-card-head"><div><h2>机会与风险</h2><p>从当前 Meta AdSet 日事实中提炼预算决策，不展示账号同步过程</p></div><span class="soft-chip">{{ deliveryAccounts.length }} 个有消耗账号</span></div>
-          <div class="opportunity-grid"><article v-for="item in opportunityCards" :key="item.title" class="opportunity-item" :class="item.tone"><strong>{{ item.value }}</strong><h3>{{ item.title }}</h3><p>{{ item.detail }}</p></article></div>
+        <section class="replay-card">
+          <div class="replay-card-head"><div><h2>日明细</h2><p>逐日定位消耗与 Lead 的变化</p></div><span class="soft-chip">{{ dailyDetailRows.length }} 天</span></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>日期</th><th>消耗</th><th>曝光</th><th>点击</th><th>CTR</th><th>Lead</th><th>CPL</th></tr></thead>
+              <tbody>
+                <tr v-if="!dailyDetailRows.length"><td colspan="7" class="data-empty">所选窗口暂无日级投放数据</td></tr>
+                <tr v-for="row in dailyDetailRows" :key="row.date" :class="{ active: selectedTrendIndex === dailyDetailRows.indexOf(row) }">
+                  <td>{{ row.date }}</td><td>{{ row.spend }}</td><td>{{ row.impressions }}</td><td>{{ row.clicks }}</td><td>{{ row.ctr }}</td><td>{{ row.leads }}</td><td>{{ row.cpl }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
         </section>
 
-        <section class="replay-card platform-composition-card">
-          <div class="replay-card-head"><div><h2>Meta 投放组合</h2><p>当前结果基于 Meta AdSet × 日期事实；账号状态只在异常时进入下钻</p></div><span class="soft-chip">Lead 口径</span></div>
-          <div class="composition-metrics"><div><span>有消耗账号</span><strong>{{ deliveryAccounts.length }}</strong><small>/ {{ overview?.data_quality.accounts_expected ?? 0 }} 个 active 账号</small></div><div><span>Top Lead 账号</span><strong>{{ topLeadAccounts[0]?.account_name || '—' }}</strong><small>{{ formatNumber(topLeadAccounts[0]?.conversions) }} Lead</small></div><div><span>当前覆盖</span><strong>{{ coverageLabel }}</strong><small>只有存在 facts 的账号进入 KPI 汇总</small></div></div>
-          <div class="composition-note"><span class="material-symbols-outlined">info</span><span>Meta 返回 0 行或同步失败的账号不会被填充为 0；它们不参与当前组合 KPI。</span></div>
+        <section class="replay-card">
+          <div class="replay-card-head"><div><h2>账号排行</h2><p>按消耗排序，标记无转化或 CPL 偏高的账号</p></div><span class="soft-chip">{{ rankingRows.length }} 个账号</span></div>
+          <div class="table-wrap">
+            <table class="data-table ranking-table">
+              <thead><tr><th>账号</th><th>消耗</th><th>占比</th><th>Lead</th><th>CPL</th><th>点击</th><th>CTR</th><th>状态</th></tr></thead>
+              <tbody>
+                <tr v-if="!rankingRows.length"><td colspan="8" class="data-empty">当前窗口没有可展示的账号</td></tr>
+                <tr v-for="row in rankingRows" :key="row.account_id" :class="{ selected: selectedAdsetAccountId === row.account_id }" @click="selectAdsetAccount(row.account_id)">
+                  <td><strong>{{ row.account_name }}</strong><small>{{ row.account_id }}</small></td>
+                  <td>{{ formatMoney(row.spend) }}</td>
+                  <td><span class="share-track"><i :style="{ width: `${(row.spendShare ?? 0) * 100}%` }"></i></span><small>{{ row.spendShare != null ? formatPercent(row.spendShare) : '—' }}</small></td>
+                  <td>{{ formatNumber(row.conversions) }}</td>
+                  <td>{{ formatMoney(row.result_cost) }}</td>
+                  <td>{{ formatNumber(row.clicks) }}</td>
+                  <td>{{ formatPercent(row.ctr) }}</td>
+                  <td><span v-if="row.status.label" class="quiet-badge" :class="row.status.tone">{{ row.status.label }}</span><span v-else class="row-dot" :class="row.status.tone"></span></td>
+                </tr>
+              </tbody>
+              <tfoot><tr><td>合计</td><td>{{ formatMoney(overview?.kpis.spend) }}</td><td>100%</td><td>{{ formatNumber(overview?.kpis.conversions) }}</td><td>{{ formatMoney(overview?.kpis.result_cost) }}</td><td>{{ formatNumber(overview?.kpis.clicks) }}</td><td>{{ formatPercent(overview?.kpis.ctr) }}</td><td></td></tr></tfoot>
+            </table>
+          </div>
         </section>
+
+        <section v-if="selectedAdsetAccountId" class="replay-card">
+          <div class="replay-card-head"><div><h2>AdSet 明细</h2><p>{{ selectedAdsetAccountName }} · 当前窗口</p></div><button type="button" class="back-button" @click="selectedAdsetAccountId = ''"><span class="material-symbols-outlined">arrow_back</span>返回全部账号</button></div>
+          <div class="table-wrap">
+            <table class="data-table">
+              <thead><tr><th>AdSet</th><th>Campaign</th><th>消耗</th><th>Lead</th><th>CPL</th><th>点击</th><th>CTR</th></tr></thead>
+              <tbody>
+                <tr v-if="!adsetRows.length"><td colspan="7" class="data-empty">该账号在当前窗口没有 AdSet 事实</td></tr>
+                <tr v-for="row in adsetRows" :key="row.adset_id">
+                  <td><strong>{{ row.adset_name }}</strong><small>{{ row.adset_id }}</small></td>
+                  <td>{{ row.campaign_name || '—' }}</td>
+                  <td>{{ formatMoney(row.spend) }}</td>
+                  <td>{{ formatNumber(row.conversions) }}</td>
+                  <td>{{ formatMoney(row.result_cost) }}</td>
+                  <td>{{ formatNumber(row.clicks) }}</td>
+                  <td>{{ formatPercent(row.ctr) }}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
       </div>
     </main>
 
@@ -387,123 +447,26 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 </template>
 
 <style scoped>
-.dashboard-shell {
-  height: 100vh;
-  width: 100%;
-  display: flex;
-  overflow: hidden;
-  background: #fff;
-}
-
-.dashboard-shell.embedded {
-  height: 100%;
-  min-height: 0;
-}
-
-.dashboard-shell.embedded .replay-page {
-  min-width: 0;
-}
-
-.dashboard-shell.embedded .replay-bar {
-  align-items: flex-start;
-  flex-direction: column;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-
-.dashboard-shell.embedded .replay-actions {
-  display: grid;
-  width: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  overflow: visible;
-  padding-bottom: 2px;
-}
-
+.dashboard-shell { height: 100vh; width: 100%; display: flex; overflow: hidden; background: #fff; }
+.dashboard-shell.embedded { height: 100%; min-height: 0; }
+.dashboard-shell.embedded .replay-page { min-width: 0; }
+.dashboard-shell.embedded .replay-bar { align-items: flex-start; flex-direction: column; padding-top: 10px; padding-bottom: 10px; }
+.dashboard-shell.embedded .replay-actions { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; padding-bottom: 2px; }
 .dashboard-shell.embedded .filter-field .period-select,
 .dashboard-shell.embedded .sync-button,
-.dashboard-shell.embedded .refresh-button {
-  width: 100%;
-  min-width: 0;
-}
-
-.dashboard-shell.embedded .replay-content {
-  padding: 12px 12px 52px;
-}
-
-.dashboard-shell.embedded .replay-kpis {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.dashboard-shell.embedded .replay-kpi {
-  border-bottom: 1px solid #f3f2f0;
-}
-
-.dashboard-shell.embedded .replay-kpi:nth-child(2n)::after {
-  display: none;
-}
-
-.dashboard-shell.embedded .replay-kpi:nth-last-child(-n + 2) {
-  border-bottom: 0;
-}
-
-.dashboard-shell.embedded .trend-grid,
-.dashboard-shell.embedded .replay-split {
-  grid-template-columns: 1fr;
-}
-
-.dashboard-shell.embedded .chart-summary {
-  width: 100%;
-  height: auto;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: 1fr;
-}
-
-.dashboard-shell.embedded .summary-box {
-  border-right: 1px solid var(--hairline-soft);
-  border-bottom: 0;
-}
-
-.dashboard-shell.embedded .summary-box:last-child {
-  border-right: 0;
-}
-
-.dashboard-shell.embedded .segment-grid,
-.dashboard-shell.embedded .platform-grid {
-  grid-template-columns: 1fr;
-}
-
-.dashboard-shell.embedded .platform-card {
-  display: block;
-}
-
-.dashboard-shell.embedded .platform-card .platform-top {
-  border-right: 0;
-}
+.dashboard-shell.embedded .refresh-button { width: 100%; min-width: 0; }
+.dashboard-shell.embedded .replay-content { padding: 12px 12px 52px; }
+.dashboard-shell.embedded .hero-stats { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.dashboard-shell.embedded .trend-grid { grid-template-columns: 1fr; }
 
 .replay-page {
   --canvas: var(--workspace-canvas);
-  --surface: #f6f5f4;
-  --surface-soft: #fafaf9;
-  --hairline: #e5e3df;
-  --hairline-soft: #ede9e4;
-  --hairline-strong: #c8c4be;
-  --ink: #1a1a1a;
-  --charcoal: #37352f;
-  --slate: #5d5b54;
-  --steel: #787671;
-  --stone: #a4a097;
-  --green-soft: #d9f3e1;
-  min-width: 0;
-  flex: 1;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--hairline-strong) transparent;
-  scrollbar-width: thin;
-  background: var(--canvas);
-  color: var(--charcoal);
+  --surface: #f6f5f4; --surface-soft: #fafaf9; --hairline: #e5e3df; --hairline-soft: #ede9e4; --hairline-strong: #c8c4be;
+  --ink: #1a1a1a; --charcoal: #37352f; --slate: #5d5b54; --steel: #787671; --stone: #a4a097;
+  min-width: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-color: var(--hairline-strong) transparent; scrollbar-width: thin; background: var(--canvas); color: var(--charcoal);
 }
 
-.page-bar { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 clamp(24px,3vw,48px); border-bottom: 1px solid var(--hairline); background: rgba(255,255,255,.86); }
+.page-bar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 clamp(24px,3vw,48px); border-bottom: 1px solid var(--hairline); background: rgba(255,255,255,.86); }
 .page-title { display: flex; align-items: center; gap: 12px; }
 .page-title .page-icon { width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 6px; }
 .page-title .page-icon .material-symbols-outlined { display: block; width: 16px; height: 16px; font-size: 16px; line-height: 16px; }
@@ -530,19 +493,13 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .replay-content { width: 100%; max-width: none; margin: 0; padding-top: 24px; padding-bottom: 64px; }
-.dashboard-feedback { display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-soft); color: var(--slate); font-size: 12px; }.dashboard-feedback strong{color:var(--charcoal)}.dashboard-feedback.warning{border-color:#f0d8a8;background:#fffaf0}.dashboard-feedback.warning strong{color:#946200}
+.dashboard-feedback { display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-soft); color: var(--slate); font-size: 12px; }
+.dashboard-feedback strong{color:var(--charcoal)}
+.dashboard-feedback.warning{border-color:#f0d8a8;background:#fffaf0}
+.dashboard-feedback.warning strong{color:#946200}
 .dashboard-feedback.error { border-color: #f0c9c9; background: #fff5f5; color: #a33a3a; }
-.quiet-badge { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border: 1px solid var(--hairline); border-radius: 999px; background: #fff; color: var(--steel); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.quiet-badge { display: inline-flex; align-items: center; min-height: 24px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; background: #fff; color: var(--steel); font-size: 11px; font-weight: 600; white-space: nowrap; }
 button.quiet-badge { cursor: pointer; font-family: inherit; }
-
-.replay-kpis { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 0; margin-top: 0; border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; background: #fff; }
-.replay-kpi { position: relative; min-width: 0; padding: 18px 20px; border: 0; border-radius: 0; background: #fff; }
-.replay-kpi:not(:last-child)::after { content: ""; position: absolute; top: 20%; right: 0; bottom: 20%; width: 1px; background: #f0efed; }
-.kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--steel); font-size: 13px; font-weight: 600; }
-.kpi-head .icon { color: var(--steel); font-size: 18px; font-weight: 400; }
-.kpi-value { margin-top: 9px; color: var(--ink); font-size: 26px; line-height: 1.1; font-weight: 650; letter-spacing: -.45px; }
-.kpi-delta { width: fit-content; display: inline-flex; align-items: center; margin-top: 9px; padding: 3px 7px; border-radius: 4px; background: #edf8f0; color: #16804a; font-size: 11px; font-weight: 600; }
-.kpi-delta.warn { background: #fff6e4; color: #9a6700; }
 
 .replay-card { margin-top: 16px; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; overflow: hidden; }
 .replay-card-head { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--hairline-soft); }
@@ -550,13 +507,30 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .replay-card-head p { margin: 3px 0 0; color: var(--steel); font-size: 12px; }
 .soft-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border-radius: 6px; background: var(--surface); color: var(--slate); font-size: 11px; font-weight: 600; }
 
-.trend-grid { display: grid; grid-template-columns: minmax(0,1fr) 180px; align-items: start; gap: 8px; padding: 8px; }
+.hero { padding: 0; }
+.hero-stats { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 0; }
+.hero-stat { position: relative; padding: 22px 24px; }
+.hero-stat:not(:last-child)::after { content: ""; position: absolute; top: 20%; right: 0; bottom: 20%; width: 1px; background: #f0efed; }
+.hero-label { color: var(--steel); font-size: 13px; font-weight: 600; }
+.hero-value { margin-top: 8px; color: var(--ink); font-size: 30px; line-height: 1.1; font-weight: 650; letter-spacing: -.5px; }
+.hero-delta { display: inline-flex; align-items: center; margin-top: 10px; padding: 3px 8px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.hero-delta.good { background: #edf8f0; color: #16804a; }
+.hero-delta.bad { background: #fdecec; color: #b4402e; }
+.hero-delta.neutral { background: #f0efed; color: var(--slate); }
+.hero-delta.none { background: transparent; color: var(--stone); padding-left: 0; }
+.hero-secondary { display: flex; flex-wrap: wrap; gap: 0; padding: 12px 24px; border-top: 1px solid var(--hairline-soft); background: var(--surface-soft); }
+.hero-secondary-item { display: inline-flex; align-items: baseline; gap: 6px; padding-right: 18px; }
+.hero-secondary-item:not(:last-child) { border-right: 1px solid var(--hairline-soft); margin-right: 18px; padding-right: 18px; }
+.hero-secondary-item small { color: var(--steel); font-size: 11px; }
+.hero-secondary-item b { color: var(--charcoal); font-size: 13px; font-weight: 600; }
+
+.trend-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 8px; padding: 8px; }
 .chart-panel { position: relative; min-width: 0; height: 252px; min-height: 0; padding: 7px 2px 0; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fcfcfb; }
 .chart-empty { height: 208px; display: grid; place-items: center; color: var(--stone); font-size: 12px; }
-.chart-legend { display: flex; align-items: center; gap: 14px; padding-left: 8px; color: var(--steel); font-size: 12px; }.trend-explanation{margin-left:auto;color:var(--stone);font-size:11px}
+.chart-legend { display: flex; align-items: center; gap: 14px; padding-left: 8px; color: var(--steel); font-size: 12px; }
 .legend-item { display: inline-flex; align-items: center; gap: 4px; }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
-.legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }.legend-dot.roas { background: #dd7d00; }
+.legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }
 .chart-panel svg { display: block; width: 100%; height: 202px; margin-top: -2px; overflow: visible; }
 .chart-axis-labels { display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 3.7%; color: var(--stone); font-size: 11px; line-height: 1; }
 .chart-axis-labels button { padding: 3px 2px; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; line-height: inherit; }
@@ -569,71 +543,63 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .chart-active-markers rect { fill: none; stroke: #20a464; stroke-width: 1.2; }
 .chart-active-markers circle { fill: #ffffff; stroke-width: 1.5; }
 .chart-active-markers circle.spend { stroke: #4f8fe8; }
-.chart-active-markers circle.roas { stroke: #dd7d00; }
 .chart-tooltip { position: absolute; z-index: 4; top: 28px; width: 146px; padding: 8px 9px; border: 1px solid var(--hairline); border-radius: 7px; background: rgb(255 255 255 / 96%); box-shadow: rgba(15,15,15,.12) 0 8px 24px; color: var(--charcoal); pointer-events: none; transform: translateX(-50%); }
 .chart-tooltip > strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 12px; }
 .chart-tooltip > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 19px; color: var(--steel); font-size: 11px; }
 .chart-tooltip span { display: inline-flex; align-items: center; gap: 4px; }
 .chart-tooltip b { color: var(--charcoal); font-size: 12px; font-weight: 600; }
-.chart-summary { height: 252px; display: grid; grid-template-rows: repeat(3,1fr); gap: 0; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; background: var(--surface); }
-.summary-box { min-height: 0; display: flex; flex-direction: column; justify-content: center; padding: 10px 12px; border-bottom: 1px solid #f0efed; }
-.summary-box:last-child { border-bottom: 0; }
-.summary-box span { color: var(--steel); font-size: 12px; }
-.summary-box strong { display: block; margin: 5px 0 2px; color: var(--ink); font-size: 20px; line-height: 1.1; }
-.summary-box small { color: var(--steel); font-size: 11px; }
 
-.opportunity-card,.platform-composition-card{overflow:visible}.opportunity-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;padding:10px}.opportunity-item{min-height:136px;padding:14px;border:1px solid var(--hairline-soft);border-radius:8px;background:#fff}.opportunity-item.danger{border-color:#f0d1cc;background:#fffafa}.opportunity-item.warning{border-color:#f1dfb9;background:#fffdf7}.opportunity-item>strong{display:block;color:var(--ink);font-size:25px;line-height:1.1}.opportunity-item.danger>strong{color:#b84635}.opportunity-item h3{margin:9px 0 0;color:var(--charcoal);font-size:13px}.opportunity-item p{margin:5px 0 0;color:var(--steel);font-size:11px;line-height:1.45}.composition-metrics{display:grid;grid-template-columns:repeat(3,1fr);gap:0;margin:10px;border:1px solid var(--hairline-soft);border-radius:8px;overflow:hidden;background:var(--surface-soft)}.composition-metrics>div{min-width:0;padding:13px;border-right:1px solid var(--hairline-soft)}.composition-metrics>div:last-child{border-right:0}.composition-metrics span,.composition-metrics small{display:block;color:var(--steel);font-size:11px}.composition-metrics strong{display:block;margin:6px 0 3px;overflow:hidden;color:var(--ink);font-size:18px;text-overflow:ellipsis;white-space:nowrap}.composition-note{display:flex;align-items:center;gap:6px;margin:0 10px 10px;padding:8px 10px;border-radius:6px;background:#fafaf9;color:var(--steel);font-size:11px}.composition-note .material-symbols-outlined{font-size:15px;color:#8b8983}
-.replay-split > .replay-card { align-self: stretch; }
-.compact-body { padding: 10px 12px 12px; }
-.funnel-list { display: grid; gap: 11px; }
-.funnel-row { display: grid; grid-template-columns: 52px minmax(0,1fr) 72px 46px; align-items: center; gap: 10px; font-size: 12px; }
-.funnel-track { height: 6px; border-radius: 999px; background: #efefed; overflow: hidden; }
-.funnel-track i { display: block; height: 100%; border-radius: inherit; background: #4f8fe8; }
-.funnel-row strong { font-size: 12px; }.funnel-row small { color: var(--steel); font-size: 11px; }
-.segment-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
-.segment-row { min-height: 58px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fff; }
-.segment-row strong { display: block; color: var(--ink); font-size: 13px; }.segment-row small { display: block; margin-top: 3px; color: var(--steel); font-size: 12px; }
-.segment-empty { min-height: 126px; display: flex; align-items: center; justify-content: center; gap: 12px; color: var(--stone); text-align: left; }
-.segment-empty > .material-symbols-outlined { font-size: 24px; }.segment-empty strong { display: block; color: var(--slate); font-size: 13px; }.segment-empty small { display: block; max-width: 340px; margin-top: 4px; color: var(--steel); font-size: 12px; line-height: 1.45; }
+.table-wrap { overflow-x: auto; }
+.data-table { width: 100%; min-width: 720px; border-collapse: collapse; font-size: 12px; }
+.data-table th,.data-table td { height: 42px; padding: 0 12px; border-bottom: 1px solid var(--hairline-soft); text-align: right; white-space: nowrap; }
+.data-table th:first-child,.data-table td:first-child { text-align: left; }
+.data-table th { height: 36px; color: var(--steel); font-size: 11px; font-weight: 600; background: var(--surface-soft); }
+.data-table tbody tr { transition: background-color .12s ease; }
+.data-table tbody tr:hover { background: #fafaf9; }
+.data-table tbody tr.active { background: #f7fbff; }
+.data-table td strong { display: block; color: var(--ink); font-size: 12px; }
+.data-table td small { display: block; margin-top: 2px; color: var(--stone); font-size: 10px; }
+.data-table tfoot td { height: 42px; border-top: 1px solid var(--hairline-strong); border-bottom: 0; color: var(--ink); font-weight: 600; }
+.data-empty { text-align: center!important; color: var(--stone); }
+
+.ranking-table tbody tr { cursor: pointer; }
+.ranking-table tbody tr:hover,.ranking-table tbody tr.selected { background: #f7fbff; }
+.share-track { display: inline-block; width: 56px; height: 5px; border-radius: 999px; background: var(--hairline-soft); overflow: hidden; vertical-align: middle; margin-right: 6px; }
+.share-track i { display: block; height: 100%; border-radius: inherit; background: #4f8fe8; }
+.row-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--stone); }
+.row-dot.ok { background: #16804a; }
+.row-dot.muted { background: var(--stone); }
+.quiet-badge.warn { background: #fff6e4; color: #9a6700; border-color: #f0d8a8; }
+.quiet-badge.bad { background: #fdecec; color: #b4402e; border-color: #f0c9c9; }
+
+.back-button { display: inline-flex; align-items: center; gap: 4px; height: 30px; padding: 0 10px; border: 1px solid var(--hairline-strong); border-radius: 6px; background: #fff; color: var(--charcoal); font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.back-button:hover { border-color: #8db8ed; background: #f7fbff; }
+.back-button .material-symbols-outlined { font-size: 14px; }
 
 .platform-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; gap: 8px; padding: 10px; }
-.platform-grid.single { grid-template-columns: minmax(0,1fr); }
 .platform-card { --accent: #4f8fe8; min-width: 0; align-self: stretch; border: 1px solid var(--hairline); border-radius: 9px; overflow: hidden; background: #fff; }
-.platform-card.google { --accent: #dd7d00; }.platform-card.tiktok { --accent: #16a05d; }
-.platform-top { padding: 10px; }
-.platform-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.platform-heading h3 { margin: 0; color: var(--ink); font-size: 14px; }.platform-heading p { margin: 3px 0 0; color: var(--steel); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.platform-status { display: flex; align-items: center; gap: 9px; margin-top: 9px; padding: 9px 10px; border-radius: 7px; background: var(--surface-soft); color: var(--steel); }
-.platform-status > .material-symbols-outlined { color: #16804a; font-size: 20px; }.platform-status strong { display: block; color: var(--charcoal); font-size: 12px; }.platform-status small { display: block; margin-top: 2px; font-size: 11px; }.soft-chip.status-warning { background: #fff6e4; color: #9a6700; }
-.platform-health { display: grid; grid-template-columns: 50px 1fr; align-items: center; gap: 9px; margin-top: 9px; }
-.gauge { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--score)*1%),var(--hairline) 0); position: relative; }
-.gauge::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: #fff; }.gauge strong { position: relative; z-index: 1; font-size: 12px; }
-.health-copy { min-width: 0; color: var(--steel); font-size: 11px; }.health-bar { height: 5px; margin-top: 6px; border-radius: 999px; background: var(--hairline-soft); overflow: hidden; }.health-bar i { display: block; width: calc(var(--score)*1%); height: 100%; border-radius: inherit; background: var(--accent); }
-.platform-metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 0; margin-top: 9px; border: 1px solid var(--hairline-soft); border-radius: 6px; overflow: hidden; background: var(--surface-soft); }
-.platform-metric { position: relative; padding: 7px 8px; }.platform-metric:not(:last-child)::after { content: ""; position: absolute; top: 22%; right: 0; bottom: 22%; width: 1px; background: #f0efed; }
-.platform-metric span { display: block; color: var(--steel); font-size: 11px; }.platform-metric strong { display: block; margin-top: 3px; color: var(--ink); font-size: 13px; }
-.daily-table { margin: 0 8px 8px; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 7px; background: #fff; }
-.daily-table-head,.daily-table-row { display: grid; grid-template-columns: .8fr 1.15fr .9fr .8fr; align-items: center; gap: 8px; min-height: 30px; padding: 0 10px; }
-.daily-table-head { min-height: 34px; background: var(--surface-soft); color: var(--steel); font-size: 11px; font-weight: 600; }.daily-table-row { min-height: 38px; border-top: 1px solid #f1f0ee; background: #fff; color: var(--slate); font-size: 12px; }.daily-table-row:hover { background: #fafaf9; }.daily-table-row strong { color: var(--ink); font-size: 12px; font-weight: 600; }
-.daily-empty { min-height: 72px; display: grid; place-items: center; border-top: 1px solid var(--hairline-soft); color: var(--stone); font-size: 12px; }
-.daily-roas { display: inline-flex; align-items: center; gap: 5px; color: var(--ink); font-weight: 600; }.daily-roas::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 
 .toast { position: fixed; z-index: 90; left: 50%; bottom: 52px; max-width: calc(100vw - 32px); padding: 10px 13px; border: 1px solid var(--hairline,#e5e3df); border-radius: 8px; background: #fff; color: #37352f; font-size: 12px; box-shadow: rgba(15,15,15,.16) 0 16px 44px -10px; opacity: 0; pointer-events: none; transform: translate(-50%,8px); transition: opacity .16s ease,transform .16s ease; }
 .toast.show { opacity: 1; transform: translate(-50%,0); }
 
 @media (max-width: 1220px) {
-  .replay-kpis { grid-template-columns: repeat(3,1fr); }.replay-kpi:nth-child(3)::after,.replay-kpi:nth-child(6)::after { display: none; }.replay-kpi:nth-child(-n+3) { border-bottom: 1px solid #f3f2f0; }
-  .platform-grid { grid-template-columns: 1fr; }.platform-card { display: grid; grid-template-columns: 310px minmax(0,1fr); align-items: start; }.platform-card .platform-top { border-right: 1px solid var(--hairline-soft); }.platform-card .daily-table { margin: 8px; }
+  .hero-stats { grid-template-columns: repeat(3,1fr); }
+  .platform-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
   .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
-  .trend-grid,.replay-split { grid-template-columns: 1fr; }.chart-summary { width: 100%; height: auto; grid-template-columns: repeat(3,1fr); grid-template-rows: 1fr; }.summary-box { border-right: 1px solid var(--hairline-soft); border-bottom: 0; }.summary-box:last-child { border-right: 0; }
-  .platform-card { display: block; }.platform-card .platform-top { border-right: 0; }
+  .trend-grid { grid-template-columns: 1fr; }
+  .hero-stats { grid-template-columns: repeat(3,1fr); }
 }
 @media (max-width: 620px) {
-  .replay-content { padding: 12px 12px 52px; }.replay-kpis { grid-template-columns: repeat(2,1fr); }.replay-kpi { border-bottom: 1px solid #f3f2f0; }.replay-kpi:nth-child(3)::after { display: block; }.replay-kpi:nth-child(2n)::after { display: none; }.replay-kpi:nth-last-child(-n+2) { border-bottom: 0; }
-  .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { width: 31px; min-width: 31px; padding: 0; }.dashboard-shell:not(.embedded) .sync-label,.dashboard-shell:not(.embedded) .refresh-label { display: none; }
-  .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }.account-summary-grid{grid-template-columns:repeat(2,1fr);padding:8px}.account-summary-item{min-height:94px;padding:11px}.account-detail-row{grid-template-columns:minmax(150px,1fr) 85px 70px 105px;gap:7px;padding:0 9px}.meaning-grid{grid-template-columns:repeat(2,1fr);gap:8px}.meaning-grid>div{border-right:0;padding:6px 0}
+  .replay-content { padding: 12px 12px 52px; }
+  .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { width: 34px; min-width: 34px; padding: 0; }
+  .dashboard-shell:not(.embedded) .sync-label,.dashboard-shell:not(.embedded) .refresh-label { display: none; }
+  .hero-stats { grid-template-columns: repeat(3,1fr); }
+  .hero-stat { padding: 14px 12px; }
+  .hero-value { font-size: 22px; }
+  .hero-secondary { padding: 10px 12px; }
 }
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 </style>

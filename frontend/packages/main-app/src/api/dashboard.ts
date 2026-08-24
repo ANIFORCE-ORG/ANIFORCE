@@ -44,6 +44,21 @@ export interface MetaDashboardAccount {
   roas: number | null
 }
 
+export interface MetaDashboardAdSet {
+  account_id: string
+  account_name: string
+  adset_id: string
+  adset_name: string
+  campaign_name: string | null
+  spend: number | null
+  impressions: number | null
+  clicks: number | null
+  conversions: number | null
+  ctr: number | null
+  result_cost: number | null
+  roas: number | null
+}
+
 export interface MetaDashboardOverview {
   window: {
     since: string
@@ -55,8 +70,13 @@ export interface MetaDashboardOverview {
   }
   metric_definition: DashboardMetricDefinition
   kpis: DashboardMetrics
+  previous?: {
+    window: { since: string; until: string }
+    kpis: DashboardMetrics
+  }
   trend: DashboardTrendPoint[]
   accounts: MetaDashboardAccount[]
+  adsets?: MetaDashboardAdSet[]
   data_quality: {
     status: 'accessible_with_rows' | 'accessible_with_no_rows' | 'accessible_with_zero_delivery' | 'partial_error'
     row_count: number
