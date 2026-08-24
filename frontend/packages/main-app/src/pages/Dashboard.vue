@@ -7,7 +7,7 @@ import { navItems } from '@/config/navigation'
 import { getMetaDashboardOverview, type DashboardMetrics, type MetaAdSetSyncResponse, type MetaDashboardOverview } from '@/api/dashboard'
 import { platformApi, type PlatformConnectionResponse, type SubAccountResponse } from '@/api/platform'
 
-const props = withDefaults(defineProps<{ embedded?: boolean }>(), { embedded: false })
+const props = withDefaults(defineProps<{ embedded?: boolean; workspaceOverview?: MetaDashboardOverview | null }>(), { embedded: false, workspaceOverview: null })
 const router = useRouter()
 const activeSession = ref('sess-g001')
 const period = ref('7')
@@ -16,7 +16,7 @@ const accountId = ref('')
 const objective = ref('')
 const connections = ref<PlatformConnectionResponse[]>([])
 const accounts = ref<SubAccountResponse[]>([])
-const overview = ref<MetaDashboardOverview | null>(null)
+const overview = ref<MetaDashboardOverview | null>(props.workspaceOverview)
 const loading = ref(true)
 const refreshing = ref(false)
 const syncing = ref(false)
@@ -373,6 +373,12 @@ const loadAccounts = async () => {
 }
 
 const initialize = async () => {
+  if (props.workspaceOverview) {
+    overview.value = props.workspaceOverview
+    objective.value = props.workspaceOverview.scope?.objective || OBJECTIVE_SALES
+    loading.value = false
+    return
+  }
   loading.value = true
   try {
     connections.value = (await platformApi.getAllConnections()).filter(item => item.platform === 'Meta' && item.status === 'active')
@@ -411,6 +417,12 @@ const handleSyncCompleted = async (result: MetaAdSetSyncResponse) => {
 watch([objective, accountId, period], () => { goToLevel('account'); search.value = '' })
 
 onMounted(initialize)
+watch(() => props.workspaceOverview, value => {
+  if (!value) return
+  overview.value = value
+  objective.value = value.scope?.objective || OBJECTIVE_SALES
+  loading.value = false
+})
 onBeforeUnmount(() => window.clearTimeout(toastTimer))
 </script>
 

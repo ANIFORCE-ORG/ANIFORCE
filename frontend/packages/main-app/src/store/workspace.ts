@@ -44,6 +44,7 @@ export type WorkspaceSurface =
   | 'material.list'
   | 'material.detail'
   | 'material.image'
+  | 'dashboard'
   | 'performance.overview'
   | 'performance.accounts'
   | 'performance.campaigns'
@@ -429,12 +430,12 @@ export const workspaceResultProjectionRegistry: Record<string, WorkspaceResultPr
     resultToPayload: transformLocalFilesToMaterialsPayload,
   },
   get_meta_account_performance: {
-    surface: 'performance.overview',
+    surface: 'dashboard',
     mode: 'readonly',
-    resultToPayload: result => result as Record<string, unknown>,
+    resultToPayload: result => ({ overview: (result as Record<string, unknown>).overview ?? result }),
   },
   get_meta_performance_trend: {
-    surface: 'performance.overview',
+    surface: 'dashboard',
     mode: 'readonly',
     resultToPayload: result => result as Record<string, unknown>,
   },

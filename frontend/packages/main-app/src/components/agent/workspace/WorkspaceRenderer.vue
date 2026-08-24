@@ -7,6 +7,7 @@ import { computed, ref, watch } from 'vue'
 import ProjectCollectionView from '@/components/projects/ProjectCollectionView.vue'
 import CampaignCollectionView from '@/components/campaigns/CampaignCollectionView.vue'
 import MaterialLibraryView from '@/components/materials/MaterialLibraryView.vue'
+import Dashboard from '@/pages/Dashboard.vue'
 import WorkspaceProjectCreate from './WorkspaceProjectCreate.vue'
 import CreateProjectForm from '@/components/projects/CreateProjectForm.vue'
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
@@ -384,8 +385,14 @@ function handleMaterialRowSelect(row: MaterialRow): void {
 
 <template>
   <div class="h-full overflow-y-auto">
+    <Dashboard
+      v-if="projection?.surface === 'dashboard'"
+      embedded
+      :workspace-overview="(projection.payload.overview as any) || null"
+    />
+
     <!-- 项目列表（查询类工具，无需审批） -->
-    <div v-if="projection?.surface === 'project.list' || projection?.surface === 'project.detail'" class="p-[16px]">
+    <div v-else-if="projection?.surface === 'project.list' || projection?.surface === 'project.detail'" class="p-[16px]">
       <div class="mb-[10px] flex items-center justify-between">
         <p class="text-[10px] text-slate-500 dark:text-slate-400">
           {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'project.detail' ? '1 个项目' : `共 ${projects.length} 个项目` }}
