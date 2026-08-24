@@ -123,7 +123,7 @@ const resultStats = computed(() => {
       { label: 'ROAS', value: formatRoas(now.roas), delta: deltaOf(now.roas, before.roas, 'higher_is_better'), primary: true },
       { label: '订单', value: formatNumber(now.results), delta: deltaOf(now.results, before.results, 'higher_is_better'), primary: false },
       { label: '客单价', value: formatMoney(now.aov), delta: deltaOf(now.aov, before.aov, 'higher_is_better'), primary: false },
-      { label: '单次获客成本', value: formatMoney(now.cost), delta: deltaOf(now.cost, before.cost, 'lower_is_better'), primary: false },
+      { label: '每单成本', value: formatMoney(now.cost), delta: deltaOf(now.cost, before.cost, 'lower_is_better'), primary: false }
     ]
   }
   return [
@@ -467,20 +467,26 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         <div v-else class="dashboard-feedback" :class="{ warning: (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) }" role="status"><strong>{{ (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) ? '部分数据' : '数据完整' }}</strong><span>{{ overview?.window.since }} 至 {{ overview?.window.until }}</span><span v-if="overview?.data_quality.status === 'accessible_with_no_rows'">当前窗口无投放事实</span><span v-else-if="overview?.window.mixed_currency">多币种金额未合计</span></div>
 
         <nav v-if="objectives.length" class="objective-switch" aria-label="投放目标">
-          <button
-            v-for="item in objectives"
-            :key="item.objective ?? 'none'"
-            type="button"
-            class="objective-tab"
-            :class="{ active: objective === item.objective, unsupported: !item.supported }"
-            :disabled="!item.supported"
-            :title="item.supported ? undefined : '该目标尚未确定可用的结果指标，仅作为消耗参考'"
-            @click="selectObjective(item.objective)"
-          >
+          <div class="objective-switch-title"><span class="material-symbols-outlined" aria-hidden="true">tune</span><span>分析视图</span></div>
+          <div class="objective-tabs">
+            <button
+              v-for="item in objectives.filter(item => item.supported)"
+              :key="item.objective ?? 'supported'"
+              type="button"
+              class="objective-tab"
+              :class="{ active: objective === item.objective }"
+              @click="selectObjective(item.objective)"
+            >
+              <span class="objective-name">{{ item.label }}</span>
+              <span class="objective-spend">{{ formatMoney(item.spend) }}</span>
+              <span class="objective-share">{{ formatPercent(item.spend_share, 0) }} · {{ item.adsets }} 个 AdSet</span>
+            </button>
+          </div>
+          <div v-for="item in objectives.filter(item => !item.supported)" :key="item.objective ?? 'unsupported'" class="objective-reference" title="该目标尚未确定统一的结果指标">
             <span class="objective-name">{{ item.label }}</span>
             <span class="objective-spend">{{ formatMoney(item.spend) }}</span>
-            <span class="objective-share">{{ formatPercent(item.spend_share, 0) }}</span>
-          </button>
+            <span class="objective-share">{{ formatPercent(item.spend_share, 0) }} · 参考</span>
+          </div>
         </nav>
 
         <p v-if="!supportedObjective" class="scope-note">当前目标没有经过验证的结果指标，只展示消耗与流量。</p>
@@ -499,8 +505,9 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           </div>
         </section>
 
+        <div class="diagnostic-grid">
         <section v-if="isSales && funnelSteps.length" class="replay-card">
-          <div class="replay-card-head"><div><h2>转化漏斗</h2><p>定位哪一环流失最多</p></div><span v-if="biggestDropStep" class="soft-chip warn">流失最大：{{ biggestDropStep.label }} {{ biggestDropStep.fromPreviousText }}</span></div>
+          <div class="replay-card-head"><div><h2>事件漏斗</h2><p>Meta 归因事件，不是去重用户</p></div><span v-if="biggestDropStep" class="soft-chip warn">流失最大：{{ biggestDropStep.label }} {{ biggestDropStep.fromPreviousText }}</span></div>
           <div class="funnel-body">
             <div v-for="step in funnelSteps" :key="step.key" class="funnel-row">
               <span class="funnel-label">{{ step.label }}</span>
@@ -560,6 +567,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
             </div>
           </div>
         </section>
+        </div>
 
         <section class="replay-card">
           <div class="replay-card-head">
@@ -711,26 +719,38 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 .quiet-badge.bad { border-color: #f0c9c9; background: #fdecec; color: #b4402e; }
 button.quiet-badge { cursor: pointer; font-family: inherit; }
 
-.objective-switch { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-.objective-tab { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; min-width: 132px; padding: 9px 13px; border: 1px solid var(--hairline); border-radius: 9px; background: #fff; color: var(--slate); font: inherit; text-align: left; cursor: pointer; transition: border-color .14s ease, background-color .14s ease; }
-.objective-tab:hover:not(:disabled) { border-color: #8db8ed; background: #f7fbff; }
-.objective-tab.active { border-color: var(--workspace-action-primary,#137fec); background: #f2f8ff; box-shadow: inset 0 0 0 1px var(--workspace-action-primary,#137fec); }
-.objective-tab.unsupported { color: var(--stone); cursor: not-allowed; }
-.objective-name { color: var(--ink); font-size: 13px; font-weight: 600; }
-.objective-tab.unsupported .objective-name { color: var(--steel); }
-.objective-spend { color: var(--charcoal); font-size: 13px; font-weight: 650; }
-.objective-share { color: var(--steel); font-size: 11px; }
+.objective-switch { display: flex; align-items: stretch; gap: 20px; margin-bottom: 18px; padding: 0 2px 12px; border-bottom: 1px solid var(--hairline); }
+.objective-switch-title { display: inline-flex; align-items: center; gap: 6px; min-width: 84px; color: var(--steel); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.objective-switch-title .material-symbols-outlined { font-size: 16px; }
+.objective-tabs { display: flex; align-items: stretch; gap: 4px; min-width: 0; }
+.objective-tab { position: relative; display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: baseline; min-width: 150px; padding: 2px 16px 0; border: 0; border-radius: 0; background: transparent; color: var(--slate); font: inherit; text-align: left; cursor: pointer; }
+.objective-tab::after { content: ""; position: absolute; right: 16px; bottom: -13px; left: 16px; height: 2px; background: transparent; }
+.objective-tab:hover { color: var(--ink); }
+.objective-tab.active { color: var(--ink); }
+.objective-tab.active::after { background: var(--workspace-action-primary,#137fec); }
+.objective-name { grid-row: 1; color: inherit; font-size: 13px; font-weight: 600; }
+.objective-spend { grid-row: 1; color: var(--ink); font-size: 13px; font-weight: 650; }
+.objective-share { grid-column: 1 / -1; color: var(--steel); font-size: 11px; }
+.objective-reference { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: baseline; min-width: 150px; padding: 2px 16px 0; border-left: 1px solid var(--hairline-soft); color: var(--stone); opacity: .82; }
+.objective-reference .objective-name { color: var(--steel); }
+.objective-reference .objective-spend { color: var(--slate); }
+.objective-reference .objective-share { grid-column: 1 / -1; color: var(--stone); }
 .scope-note { margin: 0 0 12px; color: #946200; font-size: 12px; }
 
-.replay-card { margin-top: 16px; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; overflow: hidden; }
-.replay-card-head { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--hairline-soft); }
+.replay-card { margin-top: 20px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; overflow: hidden; }
+.replay-card-head { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--hairline-soft); }
+.diagnostic-grid { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.6fr); align-items: stretch; gap: 20px; margin-top: 20px; }
+.diagnostic-grid > .replay-card { min-width: 0; margin-top: 0; }
+.diagnostic-grid .replay-card-head { min-height: 62px; }
+.diagnostic-grid .trend-grid { height: calc(100% - 63px); }
+.diagnostic-grid .chart-panel { height: 252px; }
 .replay-card-head h2 { margin: 0; color: var(--ink); font-size: 15px; font-weight: 600; }
 .replay-card-head p { margin: 3px 0 0; color: var(--steel); font-size: 12px; }
 .soft-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border-radius: 6px; background: var(--surface); color: var(--slate); font-size: 11px; font-weight: 600; white-space: nowrap; }
 .soft-chip.warn { background: #fff6e4; color: #9a6700; }
 
 .result-card { margin-top: 0; }
-.result-stats { display: grid; grid-template-columns: repeat(6, minmax(0,1fr)); }
+.result-stats { display: grid; grid-template-columns: 1.1fr 1.35fr 1.2fr repeat(3, minmax(0,1fr)); }
 .result-stat { position: relative; padding: 18px 20px; }
 .result-stat:not(:last-child)::after { content: ""; position: absolute; top: 20%; right: 0; bottom: 20%; width: 1px; background: #f0efed; }
 .result-stat.primary { background: #fcfdff; }
@@ -830,7 +850,8 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 }
 @media (max-width: 900px) {
   .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
-  .trend-grid { grid-template-columns: 1fr; }
+  .trend-grid,.diagnostic-grid { grid-template-columns: 1fr; }
+  .diagnostic-grid { gap: 16px; }
   .replay-card-head { flex-wrap: wrap; }
   .table-controls { width: 100%; justify-content: space-between; }
   .table-search { width: 100%; }
@@ -840,6 +861,12 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
   .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { width: 34px; min-width: 34px; padding: 0; }
   .dashboard-shell:not(.embedded) .sync-label,.dashboard-shell:not(.embedded) .refresh-label { display: none; }
+  .objective-switch { align-items: flex-start; flex-direction: column; gap: 8px; margin-bottom: 14px; padding-bottom: 10px; }
+  .objective-switch-title { min-width: 0; }
+  .objective-tabs { width: 100%; overflow-x: auto; }
+  .objective-tab { min-width: 142px; padding-right: 12px; padding-left: 12px; }
+  .objective-tab::after { right: 12px; bottom: -11px; left: 12px; }
+  .objective-reference { min-width: 142px; padding-right: 12px; padding-left: 12px; border-top: 1px solid var(--hairline-soft); border-left: 0; padding-top: 8px; }
   .result-stats { grid-template-columns: repeat(2,1fr); }
   .result-stat { padding: 14px 12px; }
   .result-stat:nth-child(2n)::after { display: none; }
@@ -848,5 +875,6 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
   .funnel-row { grid-template-columns: 56px minmax(0,1fr) 66px 52px; gap: 8px; }
   .traffic-item:not(:last-child) { margin-right: 12px; padding-right: 12px; }
 }
+
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 </style>
