@@ -212,6 +212,11 @@ class SqliteMaterialRepository:
 
         allowed_fields = {
             "name",
+            "url",
+            "original_filename",
+            "storage_object_key",
+            "mime_type",
+            "checksum_sha256",
             "status",
             "lifecycle_status",
             "processing_status",

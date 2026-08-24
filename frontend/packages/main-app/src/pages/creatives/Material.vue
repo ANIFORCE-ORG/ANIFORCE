@@ -15,7 +15,9 @@ import {
   publishMaterialToMeta,
   refreshMaterialPlatformAsset,
   updateMaterial,
-  uploadMaterialWithMetadata,
+  initializeMaterialUpload,
+  cancelInitializedMaterialUpload,
+  uploadInitializedMaterial,
   type Material,
   type MaterialSyncRun,
   type MetaAdAccountOption,
@@ -65,6 +67,7 @@ const uploadForm = ref({
 const isDragging = ref(false)
 const uploading = ref(false)
 const uploadAbortController = ref<AbortController | null>(null)
+const activeUploadMaterialId = ref<string | null>(null)
 const uploadProgress = ref<Map<string, number>>(new Map())
 
 const showMetaSyncModal = ref(false)
@@ -376,8 +379,11 @@ const openUploadModal = () => {
 }
 
 const closeUploadModal = () => {
+  const materialId = activeUploadMaterialId.value
+  if (materialId) void cancelInitializedMaterialUpload(materialId).catch(() => undefined)
   uploadAbortController.value?.abort()
   uploadAbortController.value = null
+  activeUploadMaterialId.value = null
   uploading.value = false
   uploadProgress.value.clear()
   showUploadModal.value = false
@@ -584,8 +590,9 @@ const completeUpload = async () => {
       const isFirst = index === 0
       const mediaKind = file.type.startsWith('video/') ? 'video' : 'image'
       const name = uploadFiles.value.length > 1 ? `${baseName}_${String(index + 1).padStart(2, '0')}` : baseName
-      await uploadMaterialWithMetadata(file, {
+      const uploadRecord = await initializeMaterialUpload({
         name,
+        original_filename: file.name,
         tags,
         duration: isFirst && uploadForm.value.duration ? Number(uploadForm.value.duration) : undefined,
         width: isFirst && uploadForm.value.width ? Number(uploadForm.value.width) : undefined,
@@ -594,7 +601,12 @@ const completeUpload = async () => {
         format: file.name.split('.').pop()?.toUpperCase() || uploadForm.value.format || undefined,
         media_kind: mediaKind,
         source: 'oss_upload',
-      }, isFirst ? uploadPoster.value || undefined : undefined, uploadAbortController.value.signal)
+      })
+      activeUploadMaterialId.value = uploadRecord.id
+      materials.value = [uploadRecord, ...materials.value.filter(item => item.id !== uploadRecord.id)]
+      const completed = await uploadInitializedMaterial(uploadRecord.id, file, isFirst ? uploadPoster.value || undefined : undefined, uploadAbortController.value.signal)
+      materials.value = materials.value.map(item => item.id === completed.id ? completed : item)
+      activeUploadMaterialId.value = null
       uploadProgress.value.set(file.name, 100)
     }
 
@@ -606,6 +618,7 @@ const completeUpload = async () => {
   } finally {
     uploading.value = false
     uploadAbortController.value = null
+    activeUploadMaterialId.value = null
     uploadProgress.value.clear()
   }
 }
