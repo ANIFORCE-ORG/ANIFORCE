@@ -27,7 +27,7 @@ export interface DashboardTrendPoint extends DashboardMetrics {
   accounts_expected?: number
 }
 
-export interface MetaDashboardAccount {
+export interface MetaDashboardAccount extends DashboardMetrics {
   account_id: string
   account_name: string
   sync_status: 'succeeded' | 'failed' | 'cancelled' | 'running' | 'never_synced' | string
@@ -35,28 +35,46 @@ export interface MetaDashboardAccount {
   last_synced_at: string | null
   error_code: string | null
   error_message: string | null
-  spend: number | null
-  impressions: number | null
-  clicks: number | null
-  conversions: number | null
-  ctr: number | null
-  result_cost: number | null
-  roas: number | null
+  previous?: DashboardMetrics | null
 }
 
-export interface MetaDashboardAdSet {
+export interface MetaDashboardObjectiveSummary {
+  objective: string | null
+  label: string
+  spend: number | null
+  spend_share: number | null
+  accounts: number
+  adsets: number
+  supported: boolean
+  result_action_type: MetaResultActionType | null
+}
+
+export interface MetaDashboardFunnelStep {
+  key: string
+  label: string
+  value: number | null
+  rate_from_previous: number | null
+  rate_from_top: number | null
+}
+
+export interface MetaDashboardEntityBase extends DashboardMetrics {
   account_id: string
   account_name: string
+  objective?: string | null
+  previous?: DashboardMetrics | null
+}
+
+export interface MetaDashboardCampaign extends MetaDashboardEntityBase {
+  campaign_id: string
+  campaign_name: string
+}
+
+export interface MetaDashboardAdSet extends MetaDashboardEntityBase {
   adset_id: string
   adset_name: string
+  campaign_id: string | null
   campaign_name: string | null
-  spend: number | null
-  impressions: number | null
-  clicks: number | null
-  conversions: number | null
-  ctr: number | null
-  result_cost: number | null
-  roas: number | null
+  optimization_goal?: string | null
 }
 
 export interface MetaDashboardOverview {
@@ -70,12 +88,25 @@ export interface MetaDashboardOverview {
   }
   metric_definition: DashboardMetricDefinition
   kpis: DashboardMetrics
+  aov?: number | null
+  scope?: {
+    objective: string | null
+    objective_label: string
+    result_action_type: MetaResultActionType | string
+    supported: boolean
+    mixed_objectives: boolean
+    funnel_available: boolean
+  }
+  objectives?: MetaDashboardObjectiveSummary[]
+  funnel?: MetaDashboardFunnelStep[]
   previous?: {
     window: { since: string; until: string }
     kpis: DashboardMetrics
+    aov?: number | null
   }
   trend: DashboardTrendPoint[]
   accounts: MetaDashboardAccount[]
+  campaigns?: MetaDashboardCampaign[]
   adsets?: MetaDashboardAdSet[]
   data_quality: {
     status: 'accessible_with_rows' | 'accessible_with_no_rows' | 'accessible_with_zero_delivery' | 'partial_error'
@@ -129,6 +160,7 @@ export interface MetaDashboardOverviewParams {
   until: string
   resultActionType?: MetaResultActionType
   clickType?: DashboardClickType
+  objective?: string
 }
 
 export function syncMetaAdSetFacts(request: MetaAdSetSyncRequest, signal?: AbortSignal) {
@@ -164,5 +196,6 @@ export function getMetaDashboardOverview(params: MetaDashboardOverviewParams) {
     click_type: params.clickType ?? 'inline_link_clicks',
   })
   if (params.accountId) query.set('account_id', params.accountId.replace(/^act_/, ''))
+  if (params.objective) query.set('objective', params.objective)
   return http.get<MetaDashboardOverview>(`/dashboard/meta-overview?${query.toString()}`)
 }

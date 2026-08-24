@@ -23,18 +23,22 @@ describe('Dashboard real Meta data contract', () => {
     expect(dashboard).not.toContain('<option>TikTok</option>')
   })
 
-  it('organizes the page around real user questions with honest unavailable states', () => {
-    for (const label of ['结果总览', '每日趋势', '日明细', '账号排行', 'AdSet 明细']) {
+  it('organizes by objective because success is a different metric per objective', () => {
+    for (const label of ['OUTCOME_SALES', 'OUTCOME_LEADS', 'objective-switch', 'selectObjective']) {
       expect(dashboard).toContain(label)
     }
-    expect(dashboard).toContain('上周期')
-    expect(dashboard).toContain('无转化')
-    expect(dashboard).toContain('CPL 偏高')
+    expect(dashboard).toContain('isSales')
+    expect(dashboard).toContain('formatRoas')
+    expect(dashboard).toContain('客单价')
+    expect(dashboard).toContain('funnel')
+    expect(dashboard).toContain('ROAS')
+    expect(dashboard).toContain('转化漏斗')
+    expect(dashboard).toContain('投放单元')
+    expect(dashboard).toContain('drillInto')
+    expect(dashboard).toContain('breadcrumb')
     expect(dashboard).toContain('accessible_with_no_rows')
     expect(dashboard).not.toContain('平台健康度')
-    expect(dashboard).not.toContain('指标分组')
     expect(readFileSync(new URL('../components/dashboard/DataSyncDialog.vue', import.meta.url), 'utf8')).toContain('固定同步 <strong>AdSet 日级数据</strong>')
-    expect(dashboard).not.toContain('平均 ROAS')
   })
 
   it('does not retain the previous fabricated business values', () => {

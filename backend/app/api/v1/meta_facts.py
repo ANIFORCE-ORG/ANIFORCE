@@ -384,6 +384,7 @@ async def get_meta_dashboard_overview(
     until: date,
     result_action_type: Literal["lead", "purchase", "mobile_app_install"] = "lead",
     account_id: str | None = None,
+    objective: str | None = Query(default=None),
     click_type: Literal["clicks", "inline_link_clicks"] = Query(default="inline_link_clicks"),
     current_user: dict = Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
@@ -435,4 +436,5 @@ async def get_meta_dashboard_overview(
         use_link_clicks=click_type == "inline_link_clicks",
         expected_accounts=expected_accounts if account_id is None else None,
         sync_accounts=sync_accounts if account_id is None else None,
+        objective=objective,
     )
