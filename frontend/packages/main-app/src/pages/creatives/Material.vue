@@ -64,6 +64,7 @@ const uploadForm = ref({
 })
 const isDragging = ref(false)
 const uploading = ref(false)
+const uploadAbortController = ref<AbortController | null>(null)
 const uploadProgress = ref<Map<string, number>>(new Map())
 
 const showMetaSyncModal = ref(false)
@@ -375,6 +376,10 @@ const openUploadModal = () => {
 }
 
 const closeUploadModal = () => {
+  uploadAbortController.value?.abort()
+  uploadAbortController.value = null
+  uploading.value = false
+  uploadProgress.value.clear()
   showUploadModal.value = false
   uploadFiles.value = []
   resetUploadForm()
@@ -566,6 +571,7 @@ const completeUpload = async () => {
   }
 
   uploading.value = true
+  uploadAbortController.value = new AbortController()
   uploadProgress.value.clear()
   try {
     const baseName = uploadForm.value.name.trim()
@@ -588,7 +594,7 @@ const completeUpload = async () => {
         format: file.name.split('.').pop()?.toUpperCase() || uploadForm.value.format || undefined,
         media_kind: mediaKind,
         source: 'oss_upload',
-      }, isFirst ? uploadPoster.value || undefined : undefined)
+      }, isFirst ? uploadPoster.value || undefined : undefined, uploadAbortController.value.signal)
       uploadProgress.value.set(file.name, 100)
     }
 
@@ -596,9 +602,10 @@ const completeUpload = async () => {
     closeUploadModal()
     await loadPageData()
   } catch (err: any) {
-    showError(err.message || '上传失败，请稍后重试')
+    if (err?.name !== 'AbortError') showError(err.message || '上传失败，请稍后重试')
   } finally {
     uploading.value = false
+    uploadAbortController.value = null
     uploadProgress.value.clear()
   }
 }

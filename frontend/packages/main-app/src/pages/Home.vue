@@ -24,6 +24,7 @@ const router = useRouter()
 const route = useRoute()
 const agent = useAgentSession()
 const inputText = ref('')
+const conversationScroll = ref<HTMLElement | null>(null)
 const hasInteracted = ref(false)
 const modelMenuOpen = ref(false)
 const activeIntentMode = ref<'chat' | 'project'>('chat')
@@ -328,7 +329,9 @@ const showMentionPanel = computed(() => mentionQuery.value !== null && filteredM
 
 function scrollToBottom() {
   nextTick(() => {
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+    const container = conversationScroll.value
+    if (!container) return
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
   })
 }
 
@@ -765,7 +768,7 @@ watch(
     />
 
     <main class="home-main">
-      <div class="home-main__scroll">
+      <div ref="conversationScroll" class="home-main__scroll">
         <section v-if="!hasContent" class="landing-document">
           <img class="landing-visual" :src="aniforceWorkflowHero" alt="" aria-hidden="true" />
           <header class="landing-hero">

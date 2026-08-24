@@ -268,7 +268,8 @@ export async function uploadMaterials(files: File[]): Promise<Material[]> {
 export async function uploadMaterialWithMetadata(
   file: File,
   metadata: UploadMaterialMetadata,
-  poster?: Blob
+  poster?: Blob,
+  signal?: AbortSignal
 ): Promise<Material> {
   const token = localStorage.getItem('animagus_token')
   const formData = new FormData()
@@ -292,6 +293,7 @@ export async function uploadMaterialWithMetadata(
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: formData,
+    signal,
   })
 
   if (!response.ok) {
