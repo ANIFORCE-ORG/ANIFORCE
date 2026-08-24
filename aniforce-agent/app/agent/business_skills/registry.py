@@ -12,6 +12,7 @@ MCP_TOOL_NAMES = frozenset({
     "update_campaign_status", "get_campaign_materials", "add_material_to_campaign", "remove_material_from_campaign", "delete_campaign",
     "list_materials", "create_material", "get_material_detail", "get_material_image", "list_available_images", "update_material",
     "add_material_to_project", "remove_material_from_project", "delete_material",
+    "list_meta_ad_accounts_with_spend", "get_meta_account_performance", "get_meta_campaign_performance", "get_meta_performance_trend",
 })
 
 

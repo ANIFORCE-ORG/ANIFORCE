@@ -116,6 +116,43 @@ class BackendClient:
     async def list_projects(self, token: str, limit: int = 20) -> dict:
         return await self._request("GET", "/api/v1/projects", token=token, params={"limit": limit})
 
+    # ---- Meta facts / dashboard ----
+
+    async def list_meta_ad_accounts(self, token: str) -> list[dict]:
+        result = await self._request(
+            "GET",
+            "/api/v1/platform-auth/ad-accounts",
+            token=token,
+            params={"channel": "Meta"},
+        )
+        return result if isinstance(result, list) else result.get("items", [])
+
+    async def get_meta_dashboard_overview(
+        self,
+        token: str,
+        connection_id: str,
+        since: str,
+        until: str,
+        account_id: str | None = None,
+        objective: str | None = None,
+    ) -> dict:
+        params = {
+            "connection_id": connection_id,
+            "since": since,
+            "until": until,
+            "click_type": "inline_link_clicks",
+        }
+        if account_id:
+            params["account_id"] = account_id
+        if objective:
+            params["objective"] = objective
+        return await self._request(
+            "GET",
+            "/api/v1/dashboard/meta-overview",
+            token=token,
+            params=params,
+        )
+
     async def get_project(self, token: str, project_id: str) -> dict:
         return await self._request("GET", f"/api/v1/projects/{project_id}", token=token)
 
