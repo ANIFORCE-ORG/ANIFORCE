@@ -23,138 +23,108 @@ def _window(since: str, until: str) -> tuple[str, str]:
     return start.isoformat(), end.isoformat()
 
 
+def _objective(value: str) -> str | None:
+    normalized = value.strip().upper()
+    aliases = {
+        "SALES": "OUTCOME_SALES",
+        "SALE": "OUTCOME_SALES",
+        "PURCHASE": "OUTCOME_SALES",
+        "LEADS": "OUTCOME_LEADS",
+        "LEAD": "OUTCOME_LEADS",
+    }
+    return aliases.get(normalized, normalized or None)
+
+
+async def _overview(
+    ctx: Context,
+    *,
+    connection_id: str = "",
+    account_id: str = "",
+    since: str = "",
+    until: str = "",
+    objective: str = "",
+) -> dict:
+    window_since, window_until = _window(since, until)
+    return await backend_client.get_meta_dashboard_overview(
+        _get_token(ctx),
+        connection_id=connection_id or None,
+        account_id=account_id.removeprefix("act_") or None,
+        since=window_since,
+        until=window_until,
+        objective=_objective(objective),
+    )
+
+
 @mcp.tool()
 async def list_meta_ad_accounts_with_spend(
     ctx: Context,
     since: str = "",
     until: str = "",
+    objective: str = "",
 ) -> dict:
-    """列出当前用户 Meta 广告账号及本地已同步窗口内的消耗。
+    """一次查询当前用户全部 Meta 连接的账号消耗与完整 Dashboard 数据。
 
-    数据来自 ANIFORCE backend 的 meta_facts，不直接请求 Meta。没有事实不等于消耗为 0，返回中会保留数据质量和同步状态。
+    数据来自本地 meta_facts。宽泛的账号、Sales 或 Leads 表现查询只需调用本工具一次；
+    不要再逐账号调用其他 performance 工具。没有事实不等于消耗为 0。
     """
-    token = _get_token(ctx)
-    window_since, window_until = _window(since, until)
-    accounts = await backend_client.list_meta_ad_accounts(token)
-    grouped: dict[str, dict] = {}
-    for account in accounts:
-        connection_id = str(account.get("connection_id") or "")
-        if not connection_id:
-            continue
-        row = grouped.setdefault(
-            connection_id,
-            {"connection_id": connection_id, "connection_name": account.get("connection_name"), "accounts": []},
-        )
-        account_id = str(account.get("account_id") or account.get("sub_account_id") or "")
-        if not account_id:
-            continue
-        try:
-            overview = await backend_client.get_meta_dashboard_overview(
-                token,
-                connection_id=connection_id,
-                since=window_since,
-                until=window_until,
-                account_id=account_id.removeprefix("act_"),
-            )
-            kpis = overview.get("kpis") or {}
-            quality = overview.get("data_quality") or {}
-            spend = kpis.get("spend")
-        except Exception as exc:
-            row["accounts"].append({
-                "account_id": account_id,
-                "account_name": account.get("account_name") or account.get("name") or account_id,
-                "status": "query_failed",
-                "error": str(exc),
-            })
-            continue
-        row["accounts"].append({
-            "account_id": account_id,
-            "account_name": account.get("account_name") or account.get("name") or account_id,
-            "spend": spend,
-            "currency": (overview.get("window") or {}).get("currency"),
-            "status": (quality.get("status") or "unknown"),
-            "data_quality": quality,
-        })
-    return {"window": {"since": window_since, "until": window_until}, "connections": list(grouped.values())}
+    return await _overview(ctx, since=since, until=until, objective=objective)
 
 
 @mcp.tool()
 async def get_meta_account_performance(
     ctx: Context,
-    connection_id: str,
     account_id: str,
+    connection_id: str = "",
     since: str = "",
     until: str = "",
     objective: str = "",
 ) -> dict:
-    """查询指定 Meta 广告账号的本地事实表现，可按 Sales 或 Leads Objective 隔离。"""
-    token = _get_token(ctx)
-    window_since, window_until = _window(since, until)
-    return await backend_client.get_meta_dashboard_overview(
-        token,
+    """一次查询指定 Meta 广告账号的完整 Dashboard 数据，可按 Objective 隔离。"""
+    return await _overview(
+        ctx,
         connection_id=connection_id,
-        account_id=account_id.removeprefix("act_"),
-        since=window_since,
-        until=window_until,
-        objective=objective or None,
+        account_id=account_id,
+        since=since,
+        until=until,
+        objective=objective,
     )
 
 
 @mcp.tool()
 async def get_meta_campaign_performance(
     ctx: Context,
-    connection_id: str,
+    connection_id: str = "",
     since: str = "",
     until: str = "",
     account_id: str = "",
     objective: str = "",
 ) -> dict:
-    """查询 Meta Campaign 和 AdSet 三级表现，来源为本地 meta_facts 聚合结果。"""
-    token = _get_token(ctx)
-    window_since, window_until = _window(since, until)
-    overview = await backend_client.get_meta_dashboard_overview(
-        token,
+    """一次查询 Meta Campaign、AdSet 与完整 Dashboard 数据，来源为本地 meta_facts。"""
+    return await _overview(
+        ctx,
         connection_id=connection_id,
-        account_id=account_id.removeprefix("act_") or None,
-        since=window_since,
-        until=window_until,
-        objective=objective or None,
+        account_id=account_id,
+        since=since,
+        until=until,
+        objective=objective,
     )
-    return {
-        "window": overview.get("window"),
-        "scope": overview.get("scope"),
-        "objectives": overview.get("objectives", []),
-        "campaigns": overview.get("campaigns", []),
-        "adsets": overview.get("adsets", []),
-        "data_quality": overview.get("data_quality"),
-    }
 
 
 @mcp.tool()
 async def get_meta_performance_trend(
     ctx: Context,
-    connection_id: str,
+    connection_id: str = "",
     since: str = "",
     until: str = "",
     account_id: str = "",
     objective: str = "",
 ) -> dict:
-    """查询 Meta 本地事实的逐日花费与结果趋势。"""
-    token = _get_token(ctx)
-    window_since, window_until = _window(since, until)
-    overview = await backend_client.get_meta_dashboard_overview(
-        token,
+    """一次查询 Meta 逐日趋势与完整 Dashboard 数据，来源为本地 meta_facts。"""
+    return await _overview(
+        ctx,
         connection_id=connection_id,
-        account_id=account_id.removeprefix("act_") or None,
-        since=window_since,
-        until=window_until,
-        objective=objective or None,
+        account_id=account_id,
+        since=since,
+        until=until,
+        objective=objective,
     )
-    return {
-        "window": overview.get("window"),
-        "scope": overview.get("scope"),
-        "trend": overview.get("trend", []),
-        "kpis": overview.get("kpis"),
-        "previous": overview.get("previous"),
-        "data_quality": overview.get("data_quality"),
-    }

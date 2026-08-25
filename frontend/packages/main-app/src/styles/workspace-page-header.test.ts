@@ -607,7 +607,7 @@ describe('Dashboard workspace page contract', () => {
     expect(dashboard).toContain(
       '<circle v-if="activeTrendPoint.spendY != null" class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />',
     )
-    expect(dashboard).toContain('<p>Spend / Lead / CPL</p>')
+    expect(dashboard).toContain("<p>{{ isSales ? '花费 / 收入 / ROAS' : '花费 / Lead / CPL' }}</p>")
     expect(dashboard).toMatch(/\.legend-dot\s*\{[^}]*\bwidth:\s*5px;[^}]*\bheight:\s*5px;/s)
     expect(dashboard).toMatch(/\.chart-active-markers line\s*\{[^}]*\bstroke-width:\s*\.75;/s)
     expect(dashboard).toMatch(/\.chart-active-markers rect\s*\{[^}]*\bstroke-width:\s*1\.2;/s)

@@ -1043,18 +1043,30 @@ export function useAgentSessionController() {
     const config = workspaceResultProjectionRegistry[toolName]
     if (!config) return
     const payload = config.resultToPayload(result)
-    recentWorkspaceToolOutputs.value = [
-      ...recentWorkspaceToolOutputs.value,
-      {
-        id: toolCallId || `${toolName}_${Date.now()}`,
-        runId: store.currentRunId || undefined,
-        toolName,
-        surface: config.surface,
-        payload,
-        mode: config.mode,
-      },
-    ].slice(-12)
-    projectRecentWorkspaceToolOutput(sessionId, config.surface)
+    const output = {
+      id: toolCallId || `${toolName}_${Date.now()}`,
+      runId: store.currentRunId || undefined,
+      toolName,
+      surface: config.surface,
+      payload,
+      mode: config.mode,
+    }
+    recentWorkspaceToolOutputs.value = [...recentWorkspaceToolOutputs.value, output].slice(-12)
+    if (config.surface === 'dashboard') {
+      workspace.upsertProjection(sessionId, {
+        id: `proj_${output.id}`,
+        sessionId,
+        runId: store.currentRunId || '',
+        surface: output.surface,
+        mode: output.mode,
+        sourceToolName: output.toolName,
+        sourceToolCallId: output.id,
+        payload: output.payload,
+        updatedAt: Date.now(),
+      })
+    } else {
+      projectRecentWorkspaceToolOutput(sessionId, config.surface)
+    }
   }
 
   function parseWorkspaceProjectionRequest(result: unknown): { surface: WorkspaceSurface; reason?: string } | null {
@@ -1082,6 +1094,7 @@ export function useAgentSessionController() {
       || value === 'material.list'
       || value === 'material.detail'
       || value === 'material.image'
+      || value === 'dashboard'
   }
 
   function projectRecentWorkspaceToolOutput(sessionId: string, surface: WorkspaceSurface): void {

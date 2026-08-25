@@ -130,18 +130,19 @@ class BackendClient:
     async def get_meta_dashboard_overview(
         self,
         token: str,
-        connection_id: str,
+        connection_id: str | None,
         since: str,
         until: str,
         account_id: str | None = None,
         objective: str | None = None,
     ) -> dict:
         params = {
-            "connection_id": connection_id,
             "since": since,
             "until": until,
             "click_type": "inline_link_clicks",
         }
+        if connection_id:
+            params["connection_id"] = connection_id
         if account_id:
             params["account_id"] = account_id
         if objective:
@@ -155,14 +156,6 @@ class BackendClient:
 
     async def get_project(self, token: str, project_id: str) -> dict:
         return await self._request("GET", f"/api/v1/projects/{project_id}", token=token)
-
-    async def get_project_performance(self, token: str, project_id: str, hours: int = 168) -> dict:
-        return await self._request(
-            "GET",
-            f"/api/v1/projects/{project_id}/performance",
-            token=token,
-            params={"hours": hours},
-        )
 
     async def create_project(self, token: str, data: dict, extra_headers: dict | None = None) -> dict:
         return await self._request("POST", "/api/v1/projects", token=token, json=data, extra_headers=extra_headers)
@@ -185,14 +178,6 @@ class BackendClient:
 
     async def get_campaign(self, token: str, campaign_id: str) -> dict:
         return await self._request("GET", f"/api/v1/campaigns/{campaign_id}", token=token)
-
-    async def get_campaign_performance(self, token: str, campaign_id: str, hours: int = 168) -> dict:
-        return await self._request(
-            "GET",
-            f"/api/v1/campaigns/{campaign_id}/performance",
-            token=token,
-            params={"hours": hours},
-        )
 
     async def create_campaign(self, token: str, data: dict, extra_headers: dict | None = None) -> dict:
         return await self._request("POST", "/api/v1/campaigns", token=token, json=data, extra_headers=extra_headers)

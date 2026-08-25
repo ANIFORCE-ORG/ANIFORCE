@@ -52,7 +52,7 @@ class SqliteMetaFactRepository:
     async def list_daily_facts(
         self,
         *,
-        connection_id: str,
+        connection_id: str | list[str],
         since: date,
         until: date,
         level: str = "campaign",
@@ -60,7 +60,7 @@ class SqliteMetaFactRepository:
     ) -> list[MetaFact]:
         statement = (
             select(MetaFact)
-            .where(MetaFact.connection_id == connection_id)
+            .where(MetaFact.connection_id.in_(connection_id) if isinstance(connection_id, list) else MetaFact.connection_id == connection_id)
             .where(MetaFact.level == level)
             .where(MetaFact.metric_date >= since)
             .where(MetaFact.metric_date <= until)

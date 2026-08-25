@@ -43,9 +43,9 @@ const formatNumber = (value: number | null | undefined, maximumFractionDigits = 
 }
 const formatMoney = (value: number | null | undefined) => {
   const numeric = numberValue(value)
-  if (overview.value?.window.mixed_currency) return '多币种'
+  if (overview.value?.window?.mixed_currency) return '多币种'
   if (numeric == null) return '—'
-  const currency = overview.value?.window.currency
+  const currency = overview.value?.window?.currency
   if (!currency) return formatNumber(numeric, 2)
   return new Intl.NumberFormat('zh-CN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(numeric)
 }
@@ -399,7 +399,7 @@ const changeConnection = async () => { await loadAccounts(); await loadOverview(
 const changeAccount = () => loadOverview()
 const handleRefresh = () => loadOverview(true)
 const selectObjective = (value: string | null) => {
-  if (!value || objective.value === value) return
+  if (props.workspaceOverview || !value || objective.value === value) return
   objective.value = value
   loadOverview()
 }
@@ -446,7 +446,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
             <h1>数据概览</h1>
           </div>
         </div>
-        <div class="page-actions replay-actions">
+        <div v-if="!props.workspaceOverview" class="page-actions replay-actions">
           <label class="filter-field">
             <select v-model="period" class="period-select" aria-label="时间范围" @change="changePeriod">
               <option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option>
@@ -487,6 +487,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               type="button"
               class="objective-tab"
               :class="{ active: objective === item.objective }"
+              :disabled="Boolean(props.workspaceOverview)"
               @click="selectObjective(item.objective)"
             >
               <span class="objective-name">{{ item.label }}</span>
@@ -531,7 +532,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
 
         <section class="replay-card">
-          <div class="replay-card-head"><div><h2>每日趋势</h2><p>Spend / Lead / CPL</p></div><span class="soft-chip">近 {{ period }} 天</span></div>
+          <div class="replay-card-head"><div><h2>每日趋势</h2><p>{{ isSales ? '花费 / 收入 / ROAS' : '花费 / Lead / CPL' }}</p></div><span class="soft-chip">近 {{ period }} 天</span></div>
           <div class="trend-grid">
             <div class="chart-panel">
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ isSales ? '收入' : 'Lead' }}</span></div>

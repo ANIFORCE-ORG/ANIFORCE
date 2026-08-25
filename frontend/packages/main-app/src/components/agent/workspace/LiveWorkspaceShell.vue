@@ -46,9 +46,7 @@ const surfaceTitle = computed(() => {
     'material.list': '素材库',
     'material.detail': '素材详情',
     'material.image': '素材预览',
-    'performance.overview': 'Meta 投放表现',
-    'performance.accounts': 'Meta 账号消耗',
-    'performance.campaigns': 'Meta Campaign / AdSet',
+    'dashboard': 'Meta 投放表现',
     'approval.review': '操作确认',
   }
   return labels[props.projection?.surface || ''] || '任务空间'

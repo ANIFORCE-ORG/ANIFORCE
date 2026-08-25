@@ -98,7 +98,7 @@ class MetaDashboardService:
     async def overview(
         self,
         *,
-        connection_id: str,
+        connection_id: str | list[str],
         since: date,
         until: date,
         result_action_type: str,

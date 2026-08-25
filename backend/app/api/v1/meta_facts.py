@@ -379,9 +379,9 @@ async def get_meta_facts_sync_progress(
 
 @router.get("/dashboard/meta-overview")
 async def get_meta_dashboard_overview(
-    connection_id: str,
     since: date,
     until: date,
+    connection_id: str | None = None,
     result_action_type: Literal["lead", "purchase", "mobile_app_install"] = "lead",
     account_id: str | None = None,
     objective: str | None = Query(default=None),
@@ -393,10 +393,23 @@ async def get_meta_dashboard_overview(
         validate_sync_window(since, until, max_days=90)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    connection = await owned_meta_connection(db, connection_id, current_user["id"])
+    if connection_id:
+        connections = [await owned_meta_connection(db, connection_id, current_user["id"])]
+    else:
+        connection_result = await db.execute(
+            select(PlatformConnection).where(
+                PlatformConnection.user_id == current_user["id"],
+                PlatformConnection.platform == "Meta",
+                PlatformConnection.status == "active",
+            )
+        )
+        connections = list(connection_result.scalars().all())
+        if not connections:
+            raise HTTPException(status_code=404, detail="Active Meta connection not found")
+    connection_ids = [connection.id for connection in connections]
     binding_result = await db.execute(
         select(SubAccountBinding).where(
-            SubAccountBinding.parent_connection_id == connection.id,
+            SubAccountBinding.parent_connection_id.in_(connection_ids),
             SubAccountBinding.status == "active",
         )
     )
@@ -410,7 +423,7 @@ async def get_meta_dashboard_overview(
     expected_ids = [item["account_id"] for item in expected_accounts]
     latest_result = await db.execute(
         select(MetaInsightsSyncRun).where(
-            MetaInsightsSyncRun.connection_id == connection_id,
+            MetaInsightsSyncRun.connection_id.in_(connection_ids),
             MetaInsightsSyncRun.level == "adset",
             MetaInsightsSyncRun.requested_since == since,
             MetaInsightsSyncRun.requested_until == until,
@@ -428,7 +441,7 @@ async def get_meta_dashboard_overview(
                 "error_message": run.error_message,
             }
     return await MetaDashboardService(SqliteMetaFactRepository(db)).overview(
-        connection_id=connection_id,
+        connection_id=connection_ids if len(connection_ids) > 1 else connection_ids[0],
         account_id=account_id,
         since=since,
         until=until,

@@ -45,9 +45,6 @@ export type WorkspaceSurface =
   | 'material.detail'
   | 'material.image'
   | 'dashboard'
-  | 'performance.overview'
-  | 'performance.accounts'
-  | 'performance.campaigns'
   | 'approval.review'
 
 export type WorkspaceProjectionMode =
@@ -429,26 +426,14 @@ export const workspaceResultProjectionRegistry: Record<string, WorkspaceResultPr
     mode: 'readonly',
     resultToPayload: transformLocalFilesToMaterialsPayload,
   },
-  get_meta_account_performance: {
-    surface: 'dashboard',
-    mode: 'readonly',
-    resultToPayload: result => ({ overview: (result as Record<string, unknown>).overview ?? result }),
-  },
-  get_meta_performance_trend: {
-    surface: 'dashboard',
-    mode: 'readonly',
-    resultToPayload: result => result as Record<string, unknown>,
-  },
-  list_meta_ad_accounts_with_spend: {
-    surface: 'performance.accounts',
-    mode: 'readonly',
-    resultToPayload: result => result as Record<string, unknown>,
-  },
-  get_meta_campaign_performance: {
-    surface: 'performance.campaigns',
-    mode: 'readonly',
-    resultToPayload: result => result as Record<string, unknown>,
-  },
+  get_meta_account_performance: { surface: 'dashboard', mode: 'readonly', resultToPayload: dashboardResultToPayload },
+  get_meta_performance_trend: { surface: 'dashboard', mode: 'readonly', resultToPayload: dashboardResultToPayload },
+  list_meta_ad_accounts_with_spend: { surface: 'dashboard', mode: 'readonly', resultToPayload: dashboardResultToPayload },
+  get_meta_campaign_performance: { surface: 'dashboard', mode: 'readonly', resultToPayload: dashboardResultToPayload },
+}
+
+function dashboardResultToPayload(result: unknown): Record<string, unknown> {
+  return { overview: parseJsonLikeResult(result) }
 }
 
 function parseProjectsResult(result: unknown): Record<string, unknown> {
