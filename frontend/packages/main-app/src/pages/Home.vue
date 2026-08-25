@@ -731,8 +731,9 @@ watch(
   ([sessionId, projectionId], previous) => {
     if (!projectionId) return
     if (previous && sessionId === previous[0] && projectionId === previous[1]) return
-    if (!workspaceManuallyCollapsed.value) workspaceCollapsed.value = false
-    if (!workspaceCollapsed.value && isDesktopWorkspaceViewport.value) {
+    workspaceManuallyCollapsed.value = false
+    workspaceCollapsed.value = false
+    if (isDesktopWorkspaceViewport.value) {
       markWorkspaceProjectionSeen()
     }
     persistWorkspaceState()

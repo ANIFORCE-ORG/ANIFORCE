@@ -15,6 +15,12 @@ describe('Home landing layout', () => {
     expect(source).toContain('padding-top: 48px;')
   })
 
+  it('opens the workspace whenever a new projection arrives', () => {
+    expect(source).toContain('workspaceManuallyCollapsed.value = false')
+    expect(source).toContain('workspaceCollapsed.value = false')
+    expect(source).not.toContain('if (!workspaceManuallyCollapsed.value) workspaceCollapsed.value = false')
+  })
+
   it('restores server history without treating stale browser caches as authoritative', () => {
     expect(source).toContain('agent.hasAnyRunningRun.value')
     expect(controllerSource).toContain('store.setMessages(session.id, snapshot.messages)')
