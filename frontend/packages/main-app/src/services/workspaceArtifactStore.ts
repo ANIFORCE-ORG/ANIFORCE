@@ -30,10 +30,12 @@ export function hydrateWorkspaceSnapshot(
   snapshot: AgentSessionSnapshot,
 ): void {
   workspace.clearSession(sessionId)
+  let hasDashboardArtifact = false
   for (const artifact of snapshot.artifacts) {
     const payload = record(artifact.payload)
     const surface = String(artifact.surface || payload.surface || '') as WorkspaceSurface
     if (!surface) continue
+    if (surface === 'dashboard') hasDashboardArtifact = true
     workspace.upsertProjection(sessionId, {
       id: String(artifact.artifact_id),
       sessionId,
@@ -44,6 +46,37 @@ export function hydrateWorkspaceSnapshot(
       payload,
       updatedAt: Date.parse(String(artifact.updated_at || '')) || Date.now(),
     })
+  }
+
+  // Older runs persisted Meta results as tool calls before dashboard artifacts existed.
+  // Rebuild the latest dashboard projection so navigation and refresh do not lose it.
+  if (!hasDashboardArtifact) {
+    const metaToolNames = new Set([
+      'list_meta_ad_accounts_with_spend',
+      'get_meta_account_performance',
+      'get_meta_campaign_performance',
+      'get_meta_performance_trend',
+    ])
+    const toolCall = [...snapshot.tool_calls]
+      .reverse()
+      .find(item => metaToolNames.has(String(item.tool_name || '')) && String(item.status || '') === 'completed')
+    if (toolCall) {
+      const result = parsePersistedToolResult(toolCall.result_json ?? toolCall.result)
+      const overview = findDashboardOverview(result)
+      if (overview) {
+        workspace.upsertProjection(sessionId, {
+          id: `proj_restored_${String(toolCall.tool_call_id || toolCall.run_id || Date.now())}`,
+          sessionId,
+          runId: String(toolCall.run_id || ''),
+          sourceToolName: String(toolCall.tool_name),
+          sourceToolCallId: toolCall.tool_call_id ? String(toolCall.tool_call_id) : undefined,
+          surface: 'dashboard',
+          mode: 'readonly',
+          payload: { overview },
+          updatedAt: Date.parse(String(toolCall.completed_at || '')) || Date.now(),
+        })
+      }
+    }
   }
   const approval = snapshot.pending_approval || snapshot.approvals[snapshot.approvals.length - 1]
   if (!approval) return
@@ -70,6 +103,36 @@ export function hydrateWorkspaceSnapshot(
     },
     updatedAt: Date.parse(String(approval.resolved_at || approval.created_at || '')) || Date.now(),
   })
+}
+
+function parsePersistedToolResult(value: unknown): unknown {
+  if (typeof value === 'string') {
+    const trimmed = value.trim()
+    if (!trimmed) return value
+    try {
+      return parsePersistedToolResult(JSON.parse(trimmed))
+    } catch {
+      return value
+    }
+  }
+  if (Array.isArray(value)) return value.map(parsePersistedToolResult)
+  if (!value || typeof value !== 'object') return value
+  const object = value as Record<string, unknown>
+  for (const key of ['text', 'output', 'content', 'result']) {
+    if (object[key] !== undefined) return parsePersistedToolResult(object[key])
+  }
+  return value
+}
+
+function findDashboardOverview(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null
+  const object = value as Record<string, unknown>
+  if (object.window && object.kpis) return object
+  for (const key of ['data', 'output', 'content', 'result']) {
+    const nested = findDashboardOverview(object[key])
+    if (nested) return nested
+  }
+  return null
 }
 
 function approvalDraftStatus(

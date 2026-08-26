@@ -66,7 +66,9 @@ const processHasError = computed(() => processToolBlocks.value.some(block => too
 const processLiveLabel = computed(() => {
   const current = processBlocks.value[processBlocks.value.length - 1]
   if (!current) return '正在分析你的问题'
-  if (current.type === 'thinking') return continuationLabel(blocks.value.indexOf(current))
+  const index = blocks.value.indexOf(current)
+  if (current.type === 'thinking') return continuationLabel(index)
+  if (toolState(current) === 'completed') return toolContinuationLabel(current)
   return processToolPresentation(current).title
 })
 const processSummary = computed(() => {
@@ -132,12 +134,14 @@ const runActivity = computed<RunActivityPresentation | null>(() => {
   return { icon: 'psychology', label: '正在分析你的问题', mode: 'thinking' }
 })
 
+function toolContinuationLabel(block: Record<string, unknown>): string {
+  const category = toolPresentation(block).category
+  return category === 'write' || category === 'link' ? '正在核对执行结果' : '正在整理查询结果'
+}
+
 function continuationLabel(index: number): string {
-  const earlierTools = blocks.value.slice(0, index).filter(block => block.type === 'toolCall')
-  if (earlierTools.some(block => {
-    const category = toolPresentation(block).category
-    return category === 'write' || category === 'link'
-  })) return '正在核对执行结果'
+  const earlierTools = blocks.value.slice(0, index < 0 ? blocks.value.length : index).filter(block => block.type === 'toolCall')
+  if (earlierTools.some(block => toolContinuationLabel(block) === '正在核对执行结果')) return '正在核对执行结果'
   if (earlierTools.length > 0) return '正在整理查询结果'
   return '正在分析你的问题'
 }
@@ -392,6 +396,7 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
           <span class="material-symbols-outlined process-chevron" aria-hidden="true">chevron_right</span>
           <span class="material-symbols-outlined process-glyph" aria-hidden="true">psychology</span>
           <span class="process-summary">{{ processSummary }}</span>
+          <span v-if="processIsActive" class="process-live-dots" aria-hidden="true"><i></i><i></i><i></i></span>
         </button>
 
         <Transition name="process-reveal">
@@ -662,6 +667,23 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   white-space: nowrap;
 }
 
+.process-live-dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+.process-live-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent, #1a73e8);
+  opacity: 0.24;
+  animation: process-dot-step 1.2s ease-in-out infinite;
+}
+.process-live-dots i:nth-child(2) { animation-delay: 160ms; }
+.process-live-dots i:nth-child(3) { animation-delay: 320ms; }
+
 .process-panel {
   position: relative;
   margin: 3px 0 8px 8px;
@@ -778,6 +800,10 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
 @keyframes thought-cursor {
   0%, 100% { opacity: 0.2; }
   50% { opacity: 0.75; }
+}
+@keyframes process-dot-step {
+  0%, 65%, 100% { opacity: 0.24; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-1px); }
 }
 
 /* Markdown Body - 对齐 CustomPiAgent: 14px/1.7，紧凑间距 */
@@ -1123,7 +1149,8 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
     transition: none;
   }
 
-  .run-activity__dots i {
+  .run-activity__dots i,
+  .process-live-dots i {
     animation: none;
     opacity: 0.55;
   }

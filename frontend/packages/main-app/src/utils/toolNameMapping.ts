@@ -36,6 +36,39 @@ function collectionSummary(keys: string[], noun: string) {
   }
 }
 
+type MetaSummaryKind = 'overview' | 'account' | 'campaign' | 'trend'
+
+function metaDashboardSummary(kind: MetaSummaryKind) {
+  return (result: unknown): string => {
+    const overview = findDashboardOverview(result)
+    if (!overview) return ''
+
+    const accounts = Array.isArray(overview.accounts) ? overview.accounts : []
+    const campaigns = Array.isArray(overview.campaigns) ? overview.campaigns : []
+    const adsets = Array.isArray(overview.adsets) ? overview.adsets : []
+    const trend = Array.isArray(overview.trend) ? overview.trend : []
+    const window = isRecord(overview.window) ? overview.window : {}
+
+    if (kind === 'account') {
+      const account = accounts.length === 1 && isRecord(accounts[0]) ? accounts[0] : null
+      const name = account && String(account.account_name || account.account_id || '').trim()
+      return name ? `${name} · ${trend.length || 0} 天` : `${trend.length || 0} 天数据`
+    }
+    if (kind === 'campaign') return `${campaigns.length} 个 Campaign · ${adsets.length} 个 AdSet`
+    if (kind === 'trend') {
+      const since = compactDate(window.since)
+      const until = compactDate(window.until)
+      return since && until ? `${trend.length} 天 · ${since} 至 ${until}` : `${trend.length} 天数据`
+    }
+
+    const quality = isRecord(overview.data_quality) ? overview.data_quality : {}
+    const covered = Number(quality.accounts_with_rows)
+    const expected = Number(quality.accounts_expected)
+    if (Number.isFinite(covered) && Number.isFinite(expected)) return `${covered} / ${expected} 个账号有数据`
+    return `${accounts.length} 个广告账号`
+  }
+}
+
 const TOOL_PRESENTATION_REGISTRY: Record<string, ToolPresentationDefinition> = {
   // Project management
   get_project_detail: tool('read', 'description', '读取项目详情'),
@@ -61,6 +94,32 @@ const TOOL_PRESENTATION_REGISTRY: Record<string, ToolPresentationDefinition> = {
   delete_material: tool('write', 'delete', '删除素材'),
   get_material_image: tool('read', 'image', '读取素材图片'),
   list_available_images: tool('read', 'photo_library', '读取可用素材', collectionSummary(['files', 'images', 'items', 'list'], '素材')),
+
+  // Meta performance
+  list_meta_ad_accounts_with_spend: tool(
+    'read',
+    'monitoring',
+    '汇总 Meta 投放数据',
+    metaDashboardSummary('overview'),
+  ),
+  get_meta_account_performance: tool(
+    'read',
+    'account_balance',
+    '读取广告账号表现',
+    metaDashboardSummary('account'),
+  ),
+  get_meta_campaign_performance: tool(
+    'read',
+    'campaign',
+    '比较 Campaign 与 AdSet',
+    metaDashboardSummary('campaign'),
+  ),
+  get_meta_performance_trend: tool(
+    'read',
+    'show_chart',
+    '生成投放趋势',
+    metaDashboardSummary('trend'),
+  ),
 
   // Relationships
   add_material_to_campaign: tool('link', 'link', '关联素材与广告计划'),
@@ -103,6 +162,10 @@ const fallbackCopy: Record<ToolPresentationState, string> = {
   running: '正在处理任务',
   completed: '已完成一项处理',
   error: '任务处理失败',
+}
+
+export function hasToolPresentationDefinition(toolName: string): boolean {
+  return Boolean(TOOL_PRESENTATION_REGISTRY[normalizeToolName(toolName)])
 }
 
 export function getToolPresentation(
@@ -187,6 +250,27 @@ function collectionCount(result: unknown, keys: string[], noun: string): number 
     return match ? Number(match[1]) : null
   }
   return null
+}
+
+function findDashboardOverview(result: unknown): Record<string, unknown> | null {
+  const parsed = parseJsonLike(result)
+  if (!isRecord(parsed)) return null
+  if (isRecord(parsed.window) && isRecord(parsed.kpis)) return parsed
+  for (const key of ['data', 'result', 'output', 'content']) {
+    if (parsed[key] === undefined) continue
+    const nested = findDashboardOverview(parsed[key])
+    if (nested) return nested
+  }
+  return null
+}
+
+function compactDate(value: unknown): string {
+  const text = String(value || '')
+  return /^\d{4}-\d{2}-\d{2}$/.test(text) ? text.slice(5) : ''
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return Boolean(value && typeof value === 'object' && !Array.isArray(value))
 }
 
 function parseJsonLike(result: unknown): unknown {
