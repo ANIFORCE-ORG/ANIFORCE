@@ -549,15 +549,11 @@ cd "$FRONTEND_DIR"
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ]; then
   warn "--only=$ONLY : 跳过前端依赖安装"
 elif [ "$SKIP_INSTALL" -eq 1 ]; then
-  warn "已启用 --skip-install, 跳过前端依赖安装"
+  warn "已启用 --skip-install, 跳过前端依赖完整性校验与安装"
 else
-  if [ ! -d "node_modules" ] || [ ! -f "node_modules/.pnpm/lock.yaml" ]; then
-    info "安装前端依赖 (pnpm install)..."
-    pnpm install --frozen-lockfile 2>/dev/null || pnpm install
-    ok "前端依赖安装完成"
-  else
-    ok "前端依赖已存在,跳过安装"
-  fi
+  info "校正前端依赖 (pnpm install --frozen-lockfile)..."
+  pnpm install --frozen-lockfile || fail "前端依赖安装或完整性校正失败"
+  ok "前端依赖已校正"
 fi
 
 # ============================================================
