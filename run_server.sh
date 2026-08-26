@@ -549,9 +549,14 @@ cd "$FRONTEND_DIR"
 if [ "$ONLY" = "agent" ] || [ "$ONLY" = "backend" ]; then
   warn "--only=$ONLY : 跳过前端依赖安装"
 elif [ "$SKIP_INSTALL" -eq 1 ]; then
+  if [ ! -e "packages/main-app/node_modules/@fontsource/inter" ] || [ ! -e "packages/main-app/node_modules/@fontsource/poppins" ]; then
+    fail "前端依赖不完整：缺少 @fontsource/inter 或 @fontsource/poppins，请不要使用 --skip-install，重新执行 pnpm install"
+  fi
   warn "已启用 --skip-install, 跳过前端依赖安装"
 else
-  if [ ! -d "node_modules" ] || [ ! -f "node_modules/.pnpm/lock.yaml" ]; then
+  if [ ! -d "node_modules" ] || [ ! -f "node_modules/.pnpm/lock.yaml" ] \
+    || [ ! -e "packages/main-app/node_modules/@fontsource/inter" ] \
+    || [ ! -e "packages/main-app/node_modules/@fontsource/poppins" ]; then
     info "安装前端依赖 (pnpm install)..."
     pnpm install --frozen-lockfile 2>/dev/null || pnpm install
     ok "前端依赖安装完成"
