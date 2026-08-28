@@ -143,7 +143,11 @@ watch(() => props.visible, visible => {
     </Teleport>
   </template>
 
-  <aside v-else class="hidden shrink-0 border-l border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 xl:flex">
+  <aside
+    v-else
+    class="workspace-shell hidden shrink-0 border-l border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-950 xl:flex"
+    :class="{ 'is-collapsed': collapsed }"
+  >
     <div v-if="collapsed" class="workspace-rail">
       <button
         class="workspace-rail__open"
@@ -154,12 +158,10 @@ watch(() => props.visible, visible => {
         :title="canExpand === false ? '工作台将在有任务内容时展开' : (attentionLabel || '展开工作台')"
         @click="canExpand !== false && emit('toggleCollapse')"
       >
-        <span class="material-symbols-outlined">{{ canExpand === false ? 'dashboard_customize' : 'left_panel_open' }}</span>
+        <span class="material-symbols-outlined" :class="{ spinning: attention === 'updating' || attention === 'executing' }">dashboard_customize</span>
         <i v-if="attention === 'new' || attention === 'approval' || attention === 'error'"></i>
+        <span class="workspace-rail__tooltip" role="tooltip">{{ attentionLabel || '打开工作台' }}</span>
       </button>
-      <div class="workspace-rail__divider"></div>
-      <span class="material-symbols-outlined workspace-rail__status" :class="{ spinning: attention === 'updating' || attention === 'executing' }">{{ attentionIcon }}</span>
-      <div class="writing-vertical workspace-rail__label">{{ statusLabel || '工作台' }}</div>
     </div>
 
     <div v-else class="flex h-full w-full flex-col overflow-hidden">
@@ -204,18 +206,45 @@ watch(() => props.visible, visible => {
 </template>
 
 <style scoped>
-.writing-vertical { writing-mode: vertical-rl; }
+/* Hallmark · pre-emit critique: P5 H5 E4 S5 R5 V4 */
+/* Hallmark · component: workspace trigger · genre: modern-minimal · theme: project Notion system
+ * states: default · hover · focus · active · disabled · loading · error · success
+ * contrast: project-token aligned
+ */
+.workspace-shell,
+.workspace-mobile-trigger,
+.workspace-mobile-layer {
+  --workspace-trigger-canvas: var(--workspace-content-surface);
+  --workspace-trigger-surface: var(--workspace-metric-surface);
+  --workspace-trigger-line: var(--workspace-hairline);
+  --workspace-trigger-ink: var(--workspace-muted);
+  --workspace-trigger-active: var(--workspace-action-primary);
+  --workspace-trigger-warning: #dd5b00;
+  --workspace-trigger-error: #e03131;
+  --workspace-trigger-shadow: rgba(15, 15, 15, 0.08) 0 4px 14px;
+  --workspace-trigger-ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+}
 
 .spinning { animation: workspace-spin 1s linear infinite; }
 
+.workspace-shell.is-collapsed {
+  position: fixed;
+  z-index: 35;
+  top: 20px;
+  right: 20px;
+  width: 44px !important;
+  height: 44px !important;
+  overflow: visible;
+  border: 0 !important;
+  background: transparent !important;
+}
+
 .workspace-rail {
   display: flex;
-  width: 100%;
-  height: 100%;
-  flex-direction: column;
+  width: 44px;
+  height: 44px;
   align-items: center;
-  gap: 12px;
-  padding: 14px 0;
+  justify-content: center;
 }
 
 .workspace-rail__open,
@@ -226,25 +255,52 @@ watch(() => props.visible, visible => {
   height: 34px;
   position: relative;
   place-items: center;
-  border: 1px solid #e2e8f0;
-  border-radius: 6px;
-  background: #ffffff;
-  color: #64748b;
+  border: 1px solid var(--workspace-trigger-line);
+  border-radius: 8px;
+  background: var(--workspace-trigger-canvas);
+  color: var(--workspace-trigger-ink);
   cursor: pointer;
 }
 
-.workspace-rail__open:hover:not(:disabled),
+.workspace-rail__open {
+  width: 44px;
+  height: 44px;
+  box-shadow: var(--workspace-trigger-shadow);
+  transition: background-color 180ms var(--workspace-trigger-ease-out), color 180ms var(--workspace-trigger-ease-out), transform 120ms var(--workspace-trigger-ease-out), box-shadow 180ms var(--workspace-trigger-ease-out);
+}
+
+.workspace-rail__open > .material-symbols-outlined {
+  font-size: 20px;
+}
+
+.workspace-rail__open:hover:not(:disabled) {
+  background: var(--workspace-trigger-surface);
+  color: var(--workspace-trigger-active);
+  transform: translateX(-2px);
+}
+
 .workspace-desktop-actions button:hover,
 .workspace-mobile-header__actions button:hover {
-  background: #f8fafc;
-  color: #1d4ed8;
+  background: var(--workspace-trigger-surface);
+  color: var(--workspace-trigger-active);
+}
+
+.workspace-rail__open:active:not(:disabled) {
+  transform: translateX(0);
+}
+
+.workspace-rail__open:focus-visible {
+  outline: 2px solid var(--workspace-trigger-active);
+  outline-offset: 3px;
 }
 
 .workspace-rail__open:disabled {
-  border-color: transparent;
-  background: transparent;
-  color: #94a3b8;
-  cursor: default;
+  border-color: var(--workspace-trigger-line);
+  background: var(--workspace-trigger-surface);
+  color: var(--workspace-trigger-ink);
+  box-shadow: none;
+  cursor: not-allowed;
+  opacity: 0.55;
 }
 
 .workspace-rail__open i,
@@ -252,20 +308,56 @@ watch(() => props.visible, visible => {
   position: absolute;
   width: 8px;
   height: 8px;
-  border: 2px solid #ffffff;
+  border: 2px solid var(--workspace-trigger-canvas);
   border-radius: 50%;
-  background: #2563eb;
+  background: var(--workspace-trigger-active);
 }
 
 .workspace-rail__open i { top: -2px; right: -2px; }
+.workspace-rail__open[data-attention="new"] i::after {
+  position: absolute;
+  inset: -4px;
+  border: 1px solid var(--workspace-trigger-active);
+  border-radius: 50%;
+  animation: workspace-notice 1.2s var(--workspace-trigger-ease-out) 1;
+  content: '';
+}
 .workspace-rail__open[data-attention="approval"] i,
-.workspace-mobile-trigger[data-attention="approval"] i { background: #d97706; }
+.workspace-mobile-trigger[data-attention="approval"] i { background: var(--workspace-trigger-warning); }
 .workspace-rail__open[data-attention="error"] i,
-.workspace-mobile-trigger[data-attention="error"] i { background: #dc2626; }
+.workspace-mobile-trigger[data-attention="error"] i { background: var(--workspace-trigger-error); }
 
-.workspace-rail__divider { width: 30px; height: 1px; background: #e2e8f0; }
-.workspace-rail__status { color: #94a3b8; font-size: 18px; }
-.workspace-rail__label { color: #94a3b8; font-size: 11px; font-weight: 600; }
+.workspace-rail__tooltip {
+  position: absolute;
+  top: 50%;
+  right: calc(100% + 10px);
+  padding: 6px 9px;
+  border: 1px solid var(--workspace-trigger-line);
+  border-radius: 6px;
+  background: var(--workspace-trigger-canvas);
+  color: var(--workspace-ink);
+  font-size: 12px;
+  font-weight: 500;
+  line-height: 1;
+  white-space: nowrap;
+  opacity: 0;
+  box-shadow: var(--workspace-trigger-shadow);
+  pointer-events: none;
+  transform: translate(4px, -50%);
+  transition: opacity 150ms var(--workspace-trigger-ease-out), transform 150ms var(--workspace-trigger-ease-out);
+}
+
+.workspace-rail__open:hover .workspace-rail__tooltip {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition-delay: 800ms;
+}
+
+.workspace-rail__open:focus-visible .workspace-rail__tooltip {
+  opacity: 1;
+  transform: translate(0, -50%);
+  transition-delay: 0ms;
+}
 
 .workspace-desktop-header,
 .workspace-mobile-header {
@@ -356,6 +448,10 @@ watch(() => props.visible, visible => {
 .workspace-mobile-content { min-height: 0; flex: 1; overflow: auto; }
 
 @keyframes workspace-spin { to { transform: rotate(360deg); } }
+@keyframes workspace-notice {
+  from { opacity: 0.65; transform: scale(0.75); }
+  to { opacity: 0; transform: scale(1.5); }
+}
 
 @media (min-width: 1280px) {
   .workspace-mobile-trigger,
@@ -364,5 +460,8 @@ watch(() => props.visible, visible => {
 
 @media (prefers-reduced-motion: reduce) {
   .spinning { animation-duration: 1.8s; }
+  .workspace-rail__open,
+  .workspace-rail__tooltip { transition-duration: 0.01ms; }
+  .workspace-rail__open[data-attention="new"] i::after { animation: none; }
 }
 </style>

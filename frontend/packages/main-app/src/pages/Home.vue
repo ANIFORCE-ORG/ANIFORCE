@@ -28,9 +28,8 @@ const conversationScroll = ref<HTMLElement | null>(null)
 const hasInteracted = ref(false)
 const modelMenuOpen = ref(false)
 const activeIntentMode = ref<'chat' | 'project'>('chat')
-const initialWorkspaceCollapsed = localStorage.getItem('aniforce.workspace.collapsed') === '1'
-const workspaceCollapsed = ref(initialWorkspaceCollapsed)
-const workspaceManuallyCollapsed = ref(initialWorkspaceCollapsed)
+const workspaceCollapsed = ref(true)
+const workspaceManuallyCollapsed = ref(false)
 const workspaceWidth = ref(Number(localStorage.getItem('aniforce.workspace.width') || 470))
 const isDesktopWorkspaceViewport = ref(window.matchMedia('(min-width: 1280px)').matches)
 const seenWorkspaceProjectionBySession = ref<Record<string, string>>({})
@@ -149,9 +148,6 @@ const workspaceAttention = computed<'idle' | 'updating' | 'new' | 'approval' | '
   if (workspaceHasNewResult.value) return 'new'
   return 'idle'
 })
-const workspaceHasDisplayContent = computed(() => Boolean(
-  workspaceProjection.value || workspaceApprovalDraft.value
-))
 const workspaceStatusLabel = computed(() => ({
   idle: '',
   updating: workspaceProjection.value ? '更新中' : '准备中',
@@ -160,15 +156,13 @@ const workspaceStatusLabel = computed(() => ({
   executing: '执行中',
   error: '未完成',
 })[workspaceAttention.value])
-const workspaceEffectiveCollapsed = computed(() => (
-  workspaceCollapsed.value || !workspaceHasDisplayContent.value
-))
+const workspaceEffectiveCollapsed = computed(() => workspaceCollapsed.value)
 const taskStateVisible = computed(() => Boolean(currentTask.value || agent.commandStatus.value))
 const taskStatusMeta = computed(() => taskStatusPresentation[taskStatus.value])
 const taskStatusLabel = computed(() => taskStatusMeta.value.label)
 const runningSession = computed(() => agent.sessions.value.find(session => session.id === agent.activeRunSessionId.value) || null)
 const workspaceStyle = computed(() => ({
-  width: workspaceEffectiveCollapsed.value ? '56px' : `${workspaceWidth.value}px`
+  width: workspaceEffectiveCollapsed.value ? '0px' : `${workspaceWidth.value}px`
 }))
 const taskStatus = computed<TaskPanelStatus>(() => {
   if (currentTask.value?.status) return normalizeTaskPanelStatus(currentTask.value.status)
@@ -376,7 +370,6 @@ function markWorkspaceProjectionSeen(): void {
 }
 
 function toggleWorkspaceCollapsed() {
-  if (!workspaceHasDisplayContent.value) return
   workspaceCollapsed.value = !workspaceCollapsed.value
   workspaceManuallyCollapsed.value = workspaceCollapsed.value
   if (!workspaceCollapsed.value) markWorkspaceProjectionSeen()
@@ -561,7 +554,7 @@ async function createSessionForActiveMode() {
   }
   hasInteracted.value = false
   inputText.value = ''
-  workspaceCollapsed.value = false
+  workspaceCollapsed.value = true
   workspaceManuallyCollapsed.value = false
   persistWorkspaceState()
   if (route.path !== '/home' || route.query.session_id) await router.push('/home')
@@ -618,6 +611,9 @@ function showNewConversationHome(): boolean {
   }
   hasInteracted.value = false
   inputText.value = ''
+  workspaceCollapsed.value = true
+  workspaceManuallyCollapsed.value = false
+  persistWorkspaceState()
   return true
 }
 
@@ -1025,7 +1021,7 @@ watch(
         class="home-workspace"
         visible
         :collapsed="workspaceEffectiveCollapsed"
-        :can-expand="workspaceHasDisplayContent"
+        :can-expand="true"
         :session-id="agent.activeSession.value?.id"
         :projection="workspaceProjection"
         :approval-draft="workspaceApprovalDraft"
@@ -1050,7 +1046,7 @@ watch(
       v-if="!isDesktopWorkspaceViewport"
       mobile
       visible
-      :can-expand="workspaceHasDisplayContent"
+      :can-expand="true"
       :session-id="agent.activeSession.value?.id"
       :projection="workspaceProjection"
       :approval-draft="workspaceApprovalDraft"
@@ -1137,7 +1133,7 @@ watch(
   width: min(100%, 1080px);
   min-height: 100%;
   margin: 0 auto;
-  padding: clamp(260px, 38vh, 720px) 36px 48px;
+  padding: clamp(32px, 8vh, 96px) 36px 24px;
   box-sizing: border-box;
   align-items: center;
   flex-direction: column;
@@ -1306,13 +1302,13 @@ watch(
 
 .landing-input-dock {
   width: min(100%, 860px);
-  margin: auto auto 0;
-  padding-top: 32px;
+  margin-top: clamp(20px, 4vh, 32px);
+  padding-top: 0;
 }
 
 .quick-start {
   width: min(100%, 860px);
-  margin: 60px auto 0;
+  margin: clamp(24px, 5vh, 60px) auto 0;
 }
 
 .quick-grid {
@@ -1909,7 +1905,9 @@ watch(
 }
 
 .workspace-column.collapsed {
-  min-width: 56px;
+  min-width: 0;
+  border-left: 0;
+  background: transparent;
 }
 
 .workspace-resize-handle {
@@ -2011,7 +2009,7 @@ watch(
   }
 
   .landing-input-dock {
-    padding-top: 24px;
+    margin-top: 20px;
   }
 
   .composer {
