@@ -10,9 +10,8 @@ import SessionRenameDialog from '@/components/layout/SessionRenameDialog.vue'
 import MessageView from '@/components/agent/MessageView.vue'
 import LiveWorkspaceShell from '@/components/agent/workspace/LiveWorkspaceShell.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
-import type { TaskPanelAction, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { resolveHomeSessionState, shouldApplyHomeSessionState } from '@/agent/homeSessionState'
-import { normalizeTaskPanelStatus, taskStatusPresentation } from '@/agent/taskPresentation'
+import { normalizeTaskPanelStatus, type TaskPresentationStatus } from '@/agent/taskPresentation'
 import { getHiddenToolActivity, getToolPresentation } from '@/utils/toolNameMapping'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
@@ -28,6 +27,9 @@ const conversationScroll = ref<HTMLElement | null>(null)
 const hasInteracted = ref(false)
 const modelMenuOpen = ref(false)
 const activeIntentMode = ref<'chat' | 'project'>('chat')
+const selectedStarterAction = ref<string | null>(null)
+const composerInput = ref<HTMLTextAreaElement | null>(null)
+const composerIsComposing = ref(false)
 const workspaceCollapsed = ref(true)
 const workspaceManuallyCollapsed = ref(false)
 const workspaceWidth = ref(Number(localStorage.getItem('aniforce.workspace.width') || 470))
@@ -39,6 +41,7 @@ const renameValue = ref('')
 const deleteDialog = ref<{ id: string; name: string } | null>(null)
 const sessionsReady = ref(false)
 let skippedRouteSessionId: string | null = null
+let composerCompositionEndedAt = 0
 
 type MentionEntity = { type: 'project' | 'campaign' | 'material'; id: string; name?: string }
 
@@ -86,8 +89,8 @@ const starterActions = [
   {
     icon: 'launch',
     label: '启动增长项目',
-    description: '从目标、市场和预算出发，创建清晰的投放草稿。',
-    prompt: '帮我启动一个新的增长项目，先根据目标、市场和预算整理投放草稿。',
+    description: '描述投放方向，在工作台完善项目草稿。',
+    prompt: '我想启动一个新的增长项目，请在工作台生成一份可编辑草稿。',
     mode: 'project' as const
   },
   {
@@ -115,14 +118,19 @@ const sidebarSessions = computed(() => agent.sessions.value.map(session => ({
 })))
 const sidebarActivePanel = computed(() => agent.activeSession.value ? '__session__' : 'new-task')
 const activeMode = computed(() => intentModes.find(item => item.key === activeIntentMode.value) || intentModes[0])
+const starterActionHint = computed(() => {
+  if (!selectedStarterAction.value) return ''
+  if (activeIntentMode.value === 'project') {
+    return '可继续补充产品、市场或预算；结构化字段将在工作台中编辑。'
+  }
+  return '任务描述已填入，可以修改后发送。'
+})
 const activeRoute = computed(() => {
   const { titlePrefix: _titlePrefix, ...route } = activeMode.value.route
   return route
 })
 const activeSessionId = computed(() => agent.activeSession.value?.id || '')
 const currentTask = computed(() => agent.currentTask.value)
-const hasBusinessTask = computed(() => Boolean(currentTask.value?.task_type && currentTask.value.task_type !== 'conversation' && currentTask.value.task_type !== 'data_query'))
-const hasWorkspaceToolResults = computed(() => Boolean(agent.workspaceProjection.value) || agent.workspaceToolResults.value.length > 0)
 const workspaceProjection = computed(() => agent.workspaceProjection.value)
 const workspaceApprovalDraft = computed(() => agent.workspaceApprovalDraft.value)
 const workspaceUpdating = computed(() => {
@@ -157,14 +165,11 @@ const workspaceStatusLabel = computed(() => ({
   error: '未完成',
 })[workspaceAttention.value])
 const workspaceEffectiveCollapsed = computed(() => workspaceCollapsed.value)
-const taskStateVisible = computed(() => Boolean(currentTask.value || agent.commandStatus.value))
-const taskStatusMeta = computed(() => taskStatusPresentation[taskStatus.value])
-const taskStatusLabel = computed(() => taskStatusMeta.value.label)
 const runningSession = computed(() => agent.sessions.value.find(session => session.id === agent.activeRunSessionId.value) || null)
 const workspaceStyle = computed(() => ({
   width: workspaceEffectiveCollapsed.value ? '0px' : `${workspaceWidth.value}px`
 }))
-const taskStatus = computed<TaskPanelStatus>(() => {
+const taskStatus = computed<TaskPresentationStatus>(() => {
   if (currentTask.value?.status) return normalizeTaskPanelStatus(currentTask.value.status)
   if (agent.error.value) return 'failed'
   if (agent.agentRunning.value) return agent.agentPhase.value?.kind === 'running_tools' ? 'running' : 'running'
@@ -188,92 +193,6 @@ const approvalNoticeVisible = computed(() => {
   const draft = agent.workspaceApprovalDraft.value
   return draft ? draft.status === 'pending' : taskStatus.value === 'waiting_approval'
 })
-const taskSummary = computed(() => {
-  if (currentTask.value?.summary) return currentTask.value.summary
-  if (currentTask.value?.goal) return currentTask.value.goal
-  if (agent.error.value) return agent.error.value
-  if (agent.agentRunning.value) return phaseLabel(agent.agentPhase.value)
-  if (taskStatus.value === 'completed') return hasWorkspaceToolResults.value ? '业务结果已保留在工作台。' : '本轮回复已完成。'
-  if (hasInteracted.value) return '任务已创建，描述你的投放目标后 Agent 会继续推进。'
-  return '等待输入任务目标。'
-})
-const taskSteps = computed<TaskPanelStep[]>(() => {
-  const definition = currentTask.value?.task_definition
-  if (definition?.phases?.length) {
-    const currentPhase = currentTask.value?.phase
-    let activeSeen = false
-    return definition.phases.map(phase => {
-      if (currentTask.value?.status === 'completed') return { key: phase.key, label: phase.label, status: 'done' }
-      if (currentTask.value?.status === 'failed') return { key: phase.key, label: phase.label, status: phase.key === currentPhase ? 'error' : 'pending' }
-      if (phase.key === currentPhase) {
-        activeSeen = true
-        return { key: phase.key, label: phase.label, status: 'active' }
-      }
-      return { key: phase.key, label: phase.label, status: activeSeen ? 'pending' : 'done' }
-    })
-  }
-  const status = taskStatus.value
-  const active = agent.agentPhase.value?.kind === 'running_tools' ? 'data' : 'goal'
-  const base = [
-    { key: 'goal', label: '确认目标与对象' },
-    { key: 'data', label: '查询业务证据' },
-    { key: 'analysis', label: '形成判断' },
-    { key: 'approval', label: '等待业务确认' },
-    { key: 'apply', label: '执行业务变更' },
-    { key: 'done', label: '验证实际结果' }
-  ]
-  if (status === 'failed') {
-    return base.map((step, index) => ({ ...step, status: index === 0 ? 'error' : 'pending' }))
-  }
-  if (status === 'completed') {
-    return base.map(step => ({ ...step, status: 'done' }))
-  }
-  if (status === 'created') {
-    return base.map((step, index) => ({ ...step, status: index === 0 ? 'active' : 'pending' }))
-  }
-  return base.map(step => {
-    if (active === 'data') {
-      if (step.key === 'goal') return { ...step, status: 'done' }
-      if (step.key === 'data') return { ...step, status: 'active' }
-      return { ...step, status: 'pending' }
-    }
-    if (step.key === 'goal') return { ...step, status: 'active' }
-    return { ...step, status: 'pending' }
-  })
-})
-const taskActions = computed<TaskPanelAction[]>(() => {
-  const pending = currentTask.value?.pending_actions || []
-  if (pending.length) {
-    return pending.flatMap(action => {
-      const options = action.options?.length ? action.options : [{ value: action.action_type, label: action.title }]
-      return options.map(option => ({
-        key: `${action.id}:${option.value || action.action_type}`,
-        label: option.label || action.title,
-        icon: action.action_type === 'approval' ? 'check' : 'tune',
-        tone: action.action_type === 'approval' ? 'primary' : 'neutral'
-      }))
-    })
-  }
-  if (agent.agentRunning.value) return [{ key: 'abort', label: '停止任务', icon: 'stop', tone: 'danger' }]
-  if (taskStatus.value === 'waiting_user_input') return [{ key: 'focus', label: '补充所需信息', icon: 'edit_note', tone: 'primary' }]
-  if (taskStatus.value === 'waiting_approval') return [{ key: 'open_approval', label: '查看并确认', icon: 'approval_delegation', tone: 'primary' }]
-  if (taskStatus.value === 'applying' || taskStatus.value === 'canceled') return []
-  if (agent.error.value) return [{ key: 'retry', label: '重新发送', icon: 'refresh', tone: 'primary' }]
-  if (taskStatus.value === 'completed' && !hasWorkspaceToolResults.value) {
-    return [
-      { key: 'continue', label: '继续追问', icon: 'chat', tone: 'neutral' },
-      { key: 'material', label: '开始创建素材', icon: 'auto_awesome', tone: 'primary' }
-    ]
-  }
-  if (hasWorkspaceToolResults.value) return []
-  return [{ key: 'focus', label: '补充任务目标', icon: 'edit_note', tone: 'primary' }]
-})
-const taskTags = computed(() => {
-  const tags: string[] = []
-  if (currentTask.value?.task_definition?.label) tags.push(currentTask.value.task_definition.label)
-  if (taskPhaseLabel.value) tags.push(taskPhaseLabel.value)
-  return Array.from(new Set(tags)).slice(0, 4)
-})
 const currentModel = computed(() => {
   const selected = agent.selectedModel.value
   if (!selected) return agent.models.value[0] || null
@@ -285,13 +204,6 @@ const toolResults = computed(() => {
     if (msg.role === 'toolResult' && typeof msg.toolCallId === 'string') map.set(msg.toolCallId, msg)
   }
   return map
-})
-const taskTypeLabel = computed(() => currentTask.value?.task_definition?.label || undefined)
-const taskPhaseLabel = computed(() => {
-  const phase = currentTask.value?.phase
-  const definition = currentTask.value?.task_definition
-  if (!phase || !definition?.phases) return phase || undefined
-  return definition.phases.find(item => item.key === phase)?.label || phase
 })
 const selectedContextEntities = computed(() => agent.workspaceSelectedEntities.value)
 const projectionContextEntities = computed<MentionEntity[]>(() => {
@@ -321,11 +233,13 @@ const filteredMentionCandidates = computed(() => {
 })
 const showMentionPanel = computed(() => mentionQuery.value !== null && filteredMentionCandidates.value.length > 0)
 
-function scrollToBottom() {
+function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   nextTick(() => {
-    const container = conversationScroll.value
-    if (!container) return
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' })
+    window.requestAnimationFrame(() => {
+      const container = conversationScroll.value
+      if (!container) return
+      container.scrollTo({ top: container.scrollHeight, behavior })
+    })
   })
 }
 
@@ -396,9 +310,37 @@ function startWorkspaceResize(event: PointerEvent) {
   event.preventDefault()
 }
 
+function resizeComposer(target: HTMLTextAreaElement | null = composerInput.value): void {
+  if (!target) return
+  target.style.height = 'auto'
+  const nextHeight = Math.min(target.scrollHeight, 112)
+  target.style.height = `${Math.max(nextHeight, 42)}px`
+  target.style.overflowY = target.scrollHeight > 112 ? 'auto' : 'hidden'
+}
+
+function handleComposerInput(event: Event): void {
+  resizeComposer(event.currentTarget as HTMLTextAreaElement)
+}
+
+function handleComposerCompositionStart(): void {
+  composerIsComposing.value = true
+}
+
+function handleComposerCompositionEnd(): void {
+  composerIsComposing.value = false
+  composerCompositionEndedAt = Date.now()
+}
+
+function handleComposerKeydown(event: KeyboardEvent): void {
+  const justConfirmedComposition = Date.now() - composerCompositionEndedAt < 120
+  if (composerIsComposing.value || event.isComposing || event.keyCode === 229 || justConfirmedComposition || event.shiftKey) return
+  event.preventDefault()
+  void handleSubmit()
+}
+
 async function handleSubmit() {
   const message = inputText.value.trim()
-  if (!message || agent.loading.value || agent.hasAnyRunningRun.value) return
+  if (composerIsComposing.value || !message || agent.loading.value || agent.hasAnyRunningRun.value) return
   if (!agent.activeSession.value) {
     await agent.createSession(activeRoute.value)
     const sessionId = activeSessionId.value
@@ -407,7 +349,10 @@ async function handleSubmit() {
     await router.replace({ path: '/home', query: { session_id: sessionId } })
   }
   hasInteracted.value = true
+  selectedStarterAction.value = null
   inputText.value = ''
+  await nextTick()
+  resizeComposer()
   scrollToBottom()
   await agent.send(message, undefined, activeRoute.value)
   scrollToBottom()
@@ -415,9 +360,12 @@ async function handleSubmit() {
 
 async function runStarterAction(action: typeof starterActions[number]) {
   activeIntentMode.value = action.mode
+  selectedStarterAction.value = action.label
   inputText.value = action.prompt
   await nextTick()
-  await handleSubmit()
+  resizeComposer()
+  composerInput.value?.focus()
+  composerInput.value?.setSelectionRange(inputText.value.length, inputText.value.length)
 }
 
 function navigateTo(path: string) {
@@ -448,7 +396,7 @@ function editProject(projectId: string): void {
 
 function createProjectTask(projectId: string): void {
   if (!projectId) return
-  navigateTo(`/campaigns/create?projectId=${encodeURIComponent(projectId)}`)
+  void router.push({ path: '/projects', query: { createCampaignFor: projectId } })
 }
 
 function viewProjectTasks(projectId: string): void {
@@ -487,7 +435,11 @@ function appendMentionToInput(entity: MentionEntity): void {
   } else if (!inputText.value.includes(mention)) {
     inputText.value = `${inputText.value.trimEnd()} ${mention} `
   }
-  nextTick(() => document.querySelector<HTMLInputElement>('[data-agent-input="home"]')?.focus())
+  nextTick(() => {
+    const input = document.querySelector<HTMLTextAreaElement>('[data-agent-input="home"]')
+    resizeComposer(input)
+    input?.focus()
+  })
 }
 
 function removeContextEntity(entity: MentionEntity): void {
@@ -500,41 +452,15 @@ function removeContextEntity(entity: MentionEntity): void {
     .trimStart()
 }
 
-function handleTaskAction(action: string) {
-  if (action.includes(':')) {
-    window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
-      input?.focus()
-    })
-    return
-  }
+function handleTaskAction(action: 'abort' | 'open_approval') {
   if (action === 'abort') {
     void agent.abort()
     return
   }
-  if (action === 'open_approval') {
-    workspaceCollapsed.value = false
-    workspaceManuallyCollapsed.value = false
-    markWorkspaceProjectionSeen()
-    persistWorkspaceState()
-    return
-  }
-  if (action === 'material' || action === 'open_material') {
-    navigateTo('/material')
-    return
-  }
-  if (action === 'retry' || action === 'continue' || action === 'focus') {
-    window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
-      input?.focus()
-    })
-  }
-  if (action === 'approve_campaign' || action === 'revise_campaign' || action === 'cancel_campaign' || action === 'edit_brief') {
-    window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
-      input?.focus()
-    })
-  }
+  workspaceCollapsed.value = false
+  workspaceManuallyCollapsed.value = false
+  markWorkspaceProjectionSeen()
+  persistWorkspaceState()
 }
 
 const switchPanel = (item: any) => {
@@ -553,6 +479,7 @@ async function createSessionForActiveMode() {
     return
   }
   hasInteracted.value = false
+  selectedStarterAction.value = null
   inputText.value = ''
   workspaceCollapsed.value = true
   workspaceManuallyCollapsed.value = false
@@ -579,6 +506,7 @@ const switchSession = (session: any) => {
 async function selectSessionTarget(target: typeof agent.sessions.value[number]): Promise<void> {
   hasInteracted.value = true
   await agent.selectSession(target)
+  scrollToBottom('auto')
 }
 
 async function applyHomeSessionState(): Promise<void> {
@@ -610,6 +538,7 @@ function showNewConversationHome(): boolean {
     return false
   }
   hasInteracted.value = false
+  selectedStarterAction.value = null
   inputText.value = ''
   workspaceCollapsed.value = true
   workspaceManuallyCollapsed.value = false
@@ -779,6 +708,7 @@ watch(
                 v-for="action in starterActions"
                 :key="action.label"
                 class="quick-card"
+                :class="{ 'is-selected': selectedStarterAction === action.label }"
                 type="button"
                 @click="runStarterAction(action)"
               >
@@ -811,17 +741,27 @@ watch(
           </section>
 
           <div class="landing-input-dock">
+            <div v-if="starterActionHint" class="composer-intent-hint" role="status">
+              <span class="material-symbols-outlined" aria-hidden="true">{{ activeMode.icon }}</span>
+              <strong>{{ activeMode.label }}</strong>
+              <span>{{ starterActionHint }}</span>
+            </div>
             <div class="composer" role="search">
               <button class="composer__icon" type="button" aria-label="添加附件">
                 <span class="material-symbols-outlined">attach_file</span>
               </button>
-              <input
+              <textarea
+                ref="composerInput"
                 v-model="inputText"
                 data-agent-input="home"
+                rows="1"
+                aria-label="任务描述"
                 placeholder="继续输入任务或补充信息..."
-                type="text"
-                @keydown.enter="handleSubmit"
-              />
+                @input="handleComposerInput"
+                @compositionstart="handleComposerCompositionStart"
+                @compositionend="handleComposerCompositionEnd"
+                @keydown.enter="handleComposerKeydown"
+              ></textarea>
               <button class="composer__icon" type="button" aria-label="语音输入">
                 <span class="material-symbols-outlined">mic</span>
               </button>
@@ -850,81 +790,42 @@ watch(
               <button type="button" @click="openRunningSession">查看任务</button>
             </section>
 
-            <section v-if="taskStateVisible" class="task-state" :data-status="taskStatus">
-              <div class="task-state__header">
-                <span class="task-state__status">
-                  <span class="material-symbols-outlined" :class="{ spinning: taskStatus === 'running' || taskStatus === 'applying' }">{{ taskStatusMeta.icon }}</span>
-                  {{ taskStatusLabel }}
-                </span>
-                <span v-if="taskPhaseLabel" class="task-state__phase">{{ taskPhaseLabel }}</span>
-              </div>
-              <h2 v-if="currentTask">{{ currentTask.title }}</h2>
-              <p>{{ agent.commandStatus.value || taskSummary }}</p>
-              <div v-if="taskTags.length" class="task-state__tags">
-                <span v-for="tag in taskTags" :key="tag">{{ tag }}</span>
-              </div>
-              <div v-if="currentTask && taskSteps.length" class="task-state__steps" aria-label="任务进度">
-                <span v-for="step in taskSteps" :key="step.key" :data-step-status="step.status">
-                  <i></i>{{ step.label }}
-                </span>
-              </div>
-              <div v-if="taskActions.length" class="task-state__actions">
-                <button
-                  v-for="action in taskActions"
-                  :key="action.key"
-                  type="button"
-                  :data-tone="action.tone || 'neutral'"
-                  @click="handleTaskAction(action.key)"
-                >
-                  <span class="material-symbols-outlined">{{ action.icon }}</span>
-                  {{ action.label }}
-                </button>
-              </div>
-            </section>
-
             <div class="message-stream">
-              <div v-if="agent.loading.value" class="conversation-loading">
-                <span class="conversation-loading__spinner"></span>
-                <span>AI 正在分析中，请稍候...</span>
-              </div>
+              <template v-for="(message, index) in agent.visibleMessages.value" :key="message.id || `${message.role}-${message.timestamp}-${index}`">
+                <MessageView
+                  :message="message"
+                  :tool-results="toolResults"
+                  :model-names="agent.modelNames.value"
+                  :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
+                />
+              </template>
 
-              <section v-else-if="agent.error.value" class="conversation-error">
+              <MessageView
+                v-if="agent.streamingMessage.value"
+                :message="agent.streamingMessage.value"
+                is-streaming
+                :tool-results="toolResults"
+                :model-names="agent.modelNames.value"
+              />
+
+              <section v-if="agent.error.value" class="conversation-error">
                 <span class="material-symbols-outlined">error</span>
                 <p>{{ agent.error.value }}</p>
               </section>
 
-              <template v-else>
-                <template v-for="(message, index) in agent.visibleMessages.value" :key="message.id || `${message.role}-${message.timestamp}-${index}`">
-                  <MessageView
-                    :message="message"
-                    :tool-results="toolResults"
-                    :model-names="agent.modelNames.value"
-                    :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
-                  />
-                </template>
+              <div v-if="(agent.loading.value || agent.agentRunning.value) && !agent.streamingMessage.value" class="conversation-loading">
+                <span class="conversation-loading__spinner"></span>
+                <span>{{ agent.commandStatus.value || phaseLabel(agent.agentPhase.value) }}</span>
+              </div>
 
-                <MessageView
-                  v-if="agent.streamingMessage.value"
-                  :message="agent.streamingMessage.value"
-                  is-streaming
-                  :tool-results="toolResults"
-                  :model-names="agent.modelNames.value"
-                />
-
-                <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="conversation-loading">
-                  <span class="conversation-loading__spinner"></span>
-                  <span>{{ agent.commandStatus.value || phaseLabel(agent.agentPhase.value) }}</span>
+              <section v-if="approvalNoticeVisible" class="conversation-approval-notice" role="status">
+                <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
+                <div>
+                  <strong>等待你确认</strong>
+                  <p>操作内容已在右侧工作台准备好，确认后才会继续执行。</p>
                 </div>
-
-                <section v-if="approvalNoticeVisible" class="conversation-approval-notice" role="status">
-                  <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
-                  <div>
-                    <strong>等待你确认</strong>
-                    <p>操作内容已在右侧工作台准备好，确认后才会继续执行。</p>
-                  </div>
-                  <button type="button" @click="handleTaskAction('open_approval')">查看</button>
-                </section>
-              </template>
+                <button type="button" @click="handleTaskAction('open_approval')">查看</button>
+              </section>
             </div>
           </div>
         </section>
@@ -966,13 +867,18 @@ watch(
             <button class="composer__icon" type="button" aria-label="添加附件">
               <span class="material-symbols-outlined">attach_file</span>
             </button>
-            <input
+            <textarea
+              ref="composerInput"
               v-model="inputText"
               data-agent-input="home"
+              rows="1"
+              aria-label="任务描述"
               placeholder="继续输入任务，或输入 @ 选择工作台上下文..."
-              type="text"
-              @keydown.enter="handleSubmit"
-            />
+              @input="handleComposerInput"
+              @compositionstart="handleComposerCompositionStart"
+              @compositionend="handleComposerCompositionEnd"
+              @keydown.enter="handleComposerKeydown"
+            ></textarea>
             <button class="composer__icon" type="button" aria-label="语音输入">
               <span class="material-symbols-outlined">mic</span>
             </button>
@@ -1178,10 +1084,10 @@ watch(
 .composer {
   display: grid;
   width: 100%;
-  height: 60px;
+  min-height: 60px;
   grid-template-columns: 36px minmax(0, 1fr) 36px 38px;
-  grid-template-rows: 1fr;
-  align-items: center;
+  grid-template-rows: minmax(42px, auto);
+  align-items: end;
   padding: 8px 10px;
   border: 1px solid var(--notion-line-strong);
   border-radius: 12px;
@@ -1195,22 +1101,28 @@ watch(
   box-shadow: rgba(35, 131, 226, 0.13) 0 0 0 2px, rgba(15, 15, 15, 0.08) 0 10px 28px;
 }
 
-.composer input {
+.composer textarea {
   grid-row: 1;
   grid-column: 2;
-  min-width: 0;
   width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  max-height: 112px;
+  box-sizing: border-box;
   align-self: center;
-  padding: 0 8px;
+  padding: 9px 8px;
+  overflow-y: hidden;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--notion-ink);
+  font: inherit;
   font-size: 15px;
   line-height: 1.55;
+  resize: none;
 }
 
-.composer input::placeholder {
+.composer textarea::placeholder {
   color: var(--notion-stone);
 }
 
@@ -1306,6 +1218,27 @@ watch(
   padding-top: 0;
 }
 
+.composer-intent-hint {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  margin: 0 4px 8px;
+  color: var(--notion-steel);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.composer-intent-hint .material-symbols-outlined {
+  color: var(--notion-blue);
+  font-size: 16px;
+}
+
+.composer-intent-hint strong {
+  color: var(--notion-charcoal);
+  font-weight: 600;
+}
+
 .quick-start {
   width: min(100%, 860px);
   margin: clamp(24px, 5vh, 60px) auto 0;
@@ -1338,6 +1271,17 @@ watch(
   background: #fafaf9;
   transform: translateY(-1px);
   box-shadow: rgba(15, 15, 15, 0.06) 0 4px 10px;
+}
+
+.quick-card:focus-visible {
+  outline: 2px solid rgba(35, 131, 226, 0.32);
+  outline-offset: 2px;
+}
+
+.quick-card.is-selected {
+  border-color: rgba(35, 131, 226, 0.38);
+  background: var(--notion-blue-soft);
+  box-shadow: rgba(35, 131, 226, 0.1) 0 0 0 1px;
 }
 
 .quick-card__icon {
@@ -1392,8 +1336,7 @@ watch(
   margin: 0 auto;
 }
 
-.cross-session-run,
-.task-state {
+.cross-session-run {
   margin-bottom: 22px;
   border: 1px solid var(--notion-line);
   border-radius: 8px;
@@ -1433,8 +1376,7 @@ watch(
   line-height: 1.45;
 }
 
-.cross-session-run button,
-.task-state__actions button {
+.cross-session-run button {
   border: 1px solid var(--notion-line-strong);
   border-radius: 6px;
   background: #ffffff;
@@ -1446,149 +1388,6 @@ watch(
 
 .cross-session-run button {
   padding: 6px 10px;
-}
-
-.task-state {
-  padding: 14px 16px;
-}
-
-.task-state__header,
-.task-state__status,
-.task-state__steps,
-.task-state__actions {
-  display: flex;
-  align-items: center;
-}
-
-.task-state__header {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.task-state__status {
-  gap: 5px;
-  color: var(--notion-blue);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.task-state__status .material-symbols-outlined {
-  font-size: 15px;
-}
-
-.task-state__status .spinning {
-  animation: home-spin 1s linear infinite;
-}
-
-.task-state[data-status="waiting_approval"] .task-state__status {
-  color: #a16207;
-}
-
-.task-state[data-status="waiting_user_input"] .task-state__status {
-  color: #6d28d9;
-}
-
-.task-state[data-status="applying"] .task-state__status,
-.task-state[data-status="completed"] .task-state__status {
-  color: var(--notion-green);
-}
-
-.task-state[data-status="failed"] .task-state__status {
-  color: #b42318;
-}
-
-.task-state__phase {
-  color: var(--notion-stone);
-  font-size: 10px;
-}
-
-.task-state h2 {
-  margin: 8px 0 0;
-  color: var(--notion-ink);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0;
-}
-
-.task-state > p {
-  margin: 5px 0 0;
-  color: var(--notion-slate);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.task-state__tags,
-.task-state__steps,
-.task-state__actions {
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.task-state__tags span {
-  padding: 3px 6px;
-  border-radius: 4px;
-  background: rgba(55, 53, 47, 0.06);
-  color: var(--notion-steel);
-  font-size: 10px;
-}
-
-.task-state__steps {
-  gap: 8px 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--notion-line);
-}
-
-.task-state__steps span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--notion-stone);
-  font-size: 10px;
-}
-
-.task-state__steps i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #d4d1cb;
-}
-
-.task-state__steps span[data-step-status="done"] i,
-.task-state__steps span[data-step-status="active"] i {
-  background: var(--notion-blue);
-}
-
-.task-state__steps span[data-step-status="active"] {
-  color: var(--notion-charcoal);
-  font-weight: 600;
-}
-
-.task-state__steps span[data-step-status="error"] i {
-  background: #dc2626;
-}
-
-.task-state__actions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 30px;
-  padding: 5px 9px;
-}
-
-.task-state__actions button[data-tone="primary"] {
-  border-color: var(--notion-blue);
-  background: var(--notion-blue);
-  color: #ffffff;
-}
-
-.task-state__actions button[data-tone="danger"] {
-  border-color: #fecaca;
-  color: #b42318;
-}
-
-.task-state__actions .material-symbols-outlined {
-  font-size: 14px;
 }
 
 .message-stream {
@@ -2013,10 +1812,16 @@ watch(
   }
 
   .composer {
-    height: 60px;
+    min-height: 60px;
     grid-template-columns: 34px minmax(0, 1fr) 34px 38px;
     padding: 8px;
     border-radius: 18px;
+  }
+
+  .composer-intent-hint {
+    align-items: flex-start;
+    margin-right: 2px;
+    margin-left: 2px;
   }
 
   .conversation-input-dock {
