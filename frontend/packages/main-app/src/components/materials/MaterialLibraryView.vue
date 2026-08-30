@@ -43,6 +43,8 @@ const localAccountFilter = ref('all')
 const localSourceFilter = ref('all')
 const localRatioFilter = ref('all')
 const localSortKey = ref<'created_at' | 'name'>('created_at')
+const PAGE_SIZE = 10
+const currentPage = ref(1)
 const searchQuery = computed({
   get: () => props.searchQuery ?? localSearchQuery.value,
   set: value => { localSearchQuery.value = value; emit('update:searchQuery', value) },
@@ -70,6 +72,7 @@ watch(() => props.selectedMaterialId, value => {
 })
 
 watch(() => props.materials, materials => {
+  currentPage.value = 1
   void loadPreviewSources(materials)
 }, { immediate: true })
 
@@ -97,6 +100,23 @@ const filteredRows = computed(() => {
     ? a.name.localeCompare(b.name)
     : new Date(b.material.created_at).getTime() - new Date(a.material.created_at).getTime())
 })
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / PAGE_SIZE)))
+const paginatedRows = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return filteredRows.value.slice(start, start + PAGE_SIZE)
+})
+
+watch([searchQuery, accountFilter, sourceFilter, ratioFilter, sortKey], () => {
+  currentPage.value = 1
+})
+
+watch(totalPages, pages => {
+  if (currentPage.value > pages) currentPage.value = pages
+})
+
+function goToPage(page: number): void {
+  currentPage.value = Math.min(Math.max(page, 1), totalPages.value)
+}
 
 async function loadPreviewSources(materials: Material[]): Promise<void> {
   await Promise.all(materials.map(async material => {
@@ -202,7 +222,7 @@ const platformClass = (platform?: string) => platform === 'Meta'
             <td :colspan="embedded ? 2 : 8" class="px-[12px] py-[42px] text-center text-[11px] text-slate-500">暂无匹配素材</td>
           </tr>
           <tr
-            v-for="row in filteredRows"
+            v-for="row in paginatedRows"
             v-else
             :key="row.id"
             class="material-library-row group relative cursor-pointer border-l-2 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60"
@@ -271,6 +291,32 @@ const platformClass = (platform?: string) => platform === 'Meta'
           </tr>
         </tbody>
       </table>
+    </div>
+    <div
+      v-if="!loading && filteredRows.length"
+      class="material-library-pagination flex items-center justify-end gap-[12px] border-t border-slate-100 px-[14px] py-[12px] text-[12px] text-slate-500 dark:border-slate-800 dark:text-slate-400"
+    >
+      <nav class="flex items-center gap-[12px]" aria-label="素材列表分页">
+        <button
+          type="button"
+          class="material-page-button"
+          :disabled="currentPage === 1"
+          aria-label="上一页"
+          @click="goToPage(currentPage - 1)"
+        >
+          上一页
+        </button>
+        <span class="material-page-summary">第 {{ currentPage }} / {{ totalPages }} 页</span>
+        <button
+          type="button"
+          class="material-page-button"
+          :disabled="currentPage === totalPages"
+          aria-label="下一页"
+          @click="goToPage(currentPage + 1)"
+        >
+          下一页
+        </button>
+      </nav>
     </div>
   </div>
 </template>
@@ -391,6 +437,77 @@ const platformClass = (platform?: string) => platform === 'Meta'
 .filter-select:focus {
   border-color: rgb(var(--color-primary, 59 130 246));
   box-shadow: 0 0 0 1px rgb(var(--color-primary, 59 130 246));
+}
+
+.material-page-button {
+  min-width: 62px;
+  height: 34px;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 8px;
+  background: white;
+  padding: 0 12px;
+  color: rgb(71 85 105);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+
+.material-page-button:hover:not(:disabled) {
+  border-color: rgb(191 219 254);
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+
+.material-page-button:disabled {
+  cursor: not-allowed;
+  background: rgb(248 250 252);
+  color: rgb(148 163 184);
+}
+
+.material-page-summary {
+  min-width: 70px;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.material-library--notion .material-library-pagination {
+  border-color: #ede9e4;
+  color: #787671;
+}
+
+.material-library--notion .material-page-button {
+  border-color: #e5e3df;
+  color: #5d5b54;
+}
+
+.material-library--notion .material-page-button:hover:not(:disabled) {
+  border-color: #c9c7c2;
+  background: #f1f1ef;
+  color: #37352f;
+}
+
+.material-library--notion .material-page-button:disabled {
+  border-color: #e5e3df;
+  background: #fafaf9;
+  color: #b4b2ad;
+}
+
+:global(.dark) .material-page-button {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42);
+  color: rgb(203 213 225);
+}
+
+:global(.dark) .material-page-button:hover:not(:disabled) {
+  border-color: rgb(71 85 105);
+  background: rgb(30 41 59);
+  color: white;
+}
+
+:global(.dark) .material-page-button:disabled {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42);
+  color: rgb(100 116 139);
 }
 
 .platform-chip, .account-chip, .source-chip {

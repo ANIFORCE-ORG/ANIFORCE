@@ -115,12 +115,26 @@ type AnalysisCard = {
 
 const materialDateStart = ref('2026-08-24')
 const materialDateEnd = ref('2026-08-30')
+const materialDateStartInput = ref<HTMLInputElement | null>(null)
+const materialDateEndInput = ref<HTMLInputElement | null>(null)
 const materialRangeDays = computed(() => {
   const start = Date.parse(`${materialDateStart.value}T00:00:00`)
   const end = Date.parse(`${materialDateEnd.value}T00:00:00`)
   return Number.isFinite(start) && Number.isFinite(end) ? Math.max(1, Math.round((end - start) / 86400000) + 1) : 1
 })
 const materialDateRangeLabel = computed(() => `${materialDateStart.value.replace(/-/g, '/')} – ${materialDateEnd.value.replace(/-/g, '/')}`)
+
+function openMaterialDatePicker(boundary: 'start' | 'end'): void {
+  const input = boundary === 'start' ? materialDateStartInput.value : materialDateEndInput.value
+  if (!input) return
+  input.focus()
+  if (typeof input.showPicker === 'function') input.showPicker()
+}
+
+function handleMaterialDateRangeClick(event: MouseEvent): void {
+  const rect = (event.currentTarget as HTMLElement).getBoundingClientRect()
+  openMaterialDatePicker(event.clientX < rect.left + rect.width / 2 ? 'start' : 'end')
+}
 const materialFilterSearch = ref('')
 const materialFilterAccount = ref('all')
 const materialFilterSource = ref('all')
@@ -1070,12 +1084,16 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
               </div>
 
               <div class="overview-filter-controls">
-                <div class="material-date-range" role="group" aria-label="时间筛选区间">
+                <div class="material-date-range" role="group" aria-label="时间筛选区间" @click="handleMaterialDateRangeClick">
                   <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
                   <span class="material-date-prefix">时间：</span>
-                  <input v-model="materialDateStart" type="date" :max="materialDateEnd" aria-label="开始日期" />
+                  <div class="material-date-hotspot" role="button" tabindex="0" aria-label="筛选开始日期" @click.stop="openMaterialDatePicker('start')" @keydown.enter.prevent="openMaterialDatePicker('start')" @keydown.space.prevent="openMaterialDatePicker('start')">
+                    <input ref="materialDateStartInput" v-model="materialDateStart" tabindex="-1" type="date" :max="materialDateEnd" aria-label="开始日期" />
+                  </div>
                   <span class="material-date-separator">至</span>
-                  <input v-model="materialDateEnd" type="date" :min="materialDateStart" aria-label="结束日期" />
+                  <div class="material-date-hotspot" role="button" tabindex="0" aria-label="筛选结束日期" @click.stop="openMaterialDatePicker('end')" @keydown.enter.prevent="openMaterialDatePicker('end')" @keydown.space.prevent="openMaterialDatePicker('end')">
+                    <input ref="materialDateEndInput" v-model="materialDateEnd" tabindex="-1" type="date" :min="materialDateStart" aria-label="结束日期" />
+                  </div>
                 </div>
 
               </div>
@@ -2140,8 +2158,22 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
   font-size: 11px;
 }
 
+.material-date-hotspot {
+  display: flex;
+  min-width: 118px;
+  height: 28px;
+  align-items: center;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+.material-date-hotspot:focus-visible {
+  outline: 2px solid rgb(35 131 226 / 18%);
+  outline-offset: 1px;
+}
+
 .material-date-range input {
-  width: 118px;
+  width: 100%;
   min-width: 0;
   border: 0;
   outline: 0;
@@ -2150,6 +2182,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
   font: inherit;
   font-size: 11px;
   font-weight: 500;
+  pointer-events: none;
   cursor: pointer;
 }
 
