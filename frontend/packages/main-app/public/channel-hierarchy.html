@@ -1,0 +1,987 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>ANIFORCE · 投放层级视图</title>
+  <style>
+    :root {
+      --canvas: #f7f7f5;
+      --surface: #ffffff;
+      --surface-soft: #fafaf9;
+      --surface-muted: #f3f2f0;
+      --hairline: #e5e3df;
+      --hairline-soft: #efede9;
+      --hairline-strong: #c8c4be;
+      --ink: #1a1a1a;
+      --charcoal: #37352f;
+      --slate: #5d5b54;
+      --steel: #787671;
+      --stone: #a4a097;
+      --blue: #2383e2;
+      --blue-soft: #edf6ff;
+      --green: #16804a;
+      --green-soft: #e8f7ee;
+      --orange: #b65c00;
+      --orange-soft: #fff3df;
+      --red: #c73c36;
+      --red-soft: #fdecec;
+      --purple: #6940a5;
+      --purple-soft: #f1eafa;
+      --meta: #1877f2;
+      --google: #4285f4;
+      --tiktok: #202124;
+      --shadow: 0 1px 2px rgba(15, 15, 15, .04);
+    }
+
+    * { box-sizing: border-box; }
+    html { color-scheme: light; }
+    body {
+      margin: 0;
+      min-width: 1080px;
+      background: var(--canvas);
+      color: var(--charcoal);
+      font-family: Inter, -apple-system, BlinkMacSystemFont, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+      font-size: 14px;
+    }
+    button, input, select { font: inherit; }
+    button { color: inherit; }
+
+    .topbar {
+      position: sticky;
+      z-index: 20;
+      top: 0;
+      height: 76px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+      padding: 0 26px;
+      border-bottom: 1px solid var(--hairline);
+      background: rgba(255, 255, 255, .94);
+      backdrop-filter: blur(12px);
+    }
+    .brand, .top-actions, .title-line, .toolbar, .toolbar-group, .node-main,
+    .node-meta, .detail-title, .schema-chain, .legend, .summary-item {
+      display: flex;
+      align-items: center;
+    }
+    .brand { gap: 14px; }
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--surface-muted);
+      color: var(--charcoal);
+      font-size: 18px;
+      font-weight: 800;
+      letter-spacing: -2px;
+    }
+    .brand strong { color: var(--ink); font-size: 18px; }
+    .top-actions { gap: 8px; }
+    .field, .button {
+      height: 46px;
+      border: 1px solid var(--hairline-strong);
+      border-radius: 8px;
+      background: #fff;
+      color: var(--charcoal);
+    }
+    .field { min-width: 160px; padding: 0 36px 0 16px; outline: none; cursor: pointer; }
+    .top-actions .field:nth-child(2) { min-width: 285px; }
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      padding: 0 18px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .button:hover { background: var(--surface-soft); }
+    .button.primary { border-color: var(--blue); background: var(--blue); color: #fff; }
+    .button.primary:hover { background: #176fc1; }
+    .button.icon { width: 46px; padding: 0; }
+
+    .page { width: min(100%, 1500px); margin: 0 auto; padding: 32px 26px 42px; }
+    .overview-stack { display: grid; gap: 16px; margin-bottom: 22px; }
+    .overview-card {
+      overflow: hidden;
+      border: 1px solid var(--hairline);
+      border-radius: 16px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .overview-title {
+      min-height: 60px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 18px;
+      padding: 0 20px;
+      border-bottom: 1px solid var(--hairline-soft);
+    }
+    .overview-title strong { display: inline-flex; align-items: center; gap: 10px; color: var(--charcoal); font-size: 16px; }
+    .overview-title strong::before { color: var(--blue); font-size: 18px; }
+    .overview-title small { color: var(--steel); font-size: 12px; }
+    .overview-title.analysis strong::before { content: "☷"; }
+    .overview-title.metrics-title strong::before { content: "↗"; }
+    .overview-title.analysis strong { align-self: stretch; position: relative; }
+    .overview-title.analysis strong::after {
+      content: "";
+      position: absolute;
+      right: 0;
+      bottom: -1px;
+      left: 0;
+      height: 3px;
+      background: var(--blue);
+    }
+    .filter-row {
+      display: grid;
+      grid-template-columns: 245px 188px minmax(230px, 1fr) 240px 440px;
+      gap: 10px;
+      padding: 14px 20px;
+    }
+    .filter-box {
+      min-width: 0;
+      height: 42px;
+      padding: 0 12px;
+      border: 0;
+      border-radius: 10px;
+      outline: none;
+      background: var(--surface-muted);
+      color: var(--charcoal);
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .date-range {
+      min-width: 0;
+      height: 42px;
+      display: grid;
+      grid-template-columns: auto 1fr auto 1fr;
+      align-items: center;
+      gap: 8px;
+      padding: 0 12px;
+      border: 1px solid var(--hairline);
+      border-radius: 10px;
+      background: #fff;
+      color: var(--steel);
+      font-size: 12px;
+    }
+    .date-range input { min-width: 0; border: 0; outline: none; background: transparent; color: var(--charcoal); font-weight: 600; }
+    .metrics-grid { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); }
+    .metric-block { position: relative; min-width: 0; padding: 26px 20px 24px; }
+    .metric-block:not(:last-child)::after { content: ""; position: absolute; top: 22%; right: 0; bottom: 22%; width: 1px; background: var(--hairline-soft); }
+    .metric-block span { display: block; color: var(--steel); font-size: 14px; font-weight: 650; }
+    .metric-block strong { display: block; margin-top: 10px; color: var(--ink); font-size: clamp(23px, 2vw, 31px); line-height: 1; letter-spacing: -.8px; white-space: nowrap; }
+    .trend { display: inline-flex !important; width: fit-content; margin-top: 13px; padding: 6px 9px; border-radius: 6px; background: var(--green-soft); color: var(--green) !important; font-size: 12px !important; }
+    .trend.negative { background: var(--red-soft); color: var(--red) !important; }
+    .submetrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); padding: 15px 22px; border-top: 1px solid var(--hairline); background: var(--surface-soft); }
+    .submetric { min-width: 0; padding: 0 22px; border-right: 1px solid var(--hairline); color: var(--steel); }
+    .submetric:first-child { padding-left: 0; }
+    .submetric:last-child { border-right: 0; }
+    .submetric strong { margin-left: 8px; color: var(--ink); font-size: 16px; }
+    .page-head {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 16px;
+    }
+    .title-line { gap: 10px; }
+    .title-icon {
+      width: 34px;
+      height: 34px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--hairline);
+      border-radius: 9px;
+      background: #fff;
+      color: var(--blue);
+      box-shadow: var(--shadow);
+      font-size: 18px;
+    }
+    h1 { margin: 0; color: var(--ink); font-size: 22px; line-height: 1.2; letter-spacing: -.35px; }
+    .page-head p { margin: 5px 0 0 44px; color: var(--steel); font-size: 12px; }
+    .updated { color: var(--steel); font-size: 12px; white-space: nowrap; }
+
+    .summary {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      margin-bottom: 14px;
+      overflow: hidden;
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .summary-item {
+      position: relative;
+      min-width: 0;
+      gap: 12px;
+      padding: 14px 18px;
+    }
+    .summary-item:not(:last-child)::after {
+      content: "";
+      position: absolute;
+      top: 22%;
+      right: 0;
+      bottom: 22%;
+      width: 1px;
+      background: var(--hairline-soft);
+    }
+    .summary-icon {
+      width: 30px;
+      height: 30px;
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      border-radius: 8px;
+      background: var(--surface-muted);
+      color: var(--slate);
+      font-size: 12px;
+      font-weight: 700;
+    }
+    .summary-copy span { display: block; color: var(--steel); font-size: 11px; }
+    .summary-copy strong { display: block; margin-top: 2px; color: var(--ink); font-size: 18px; letter-spacing: -.2px; }
+
+    .schema-strip {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    .schema-card {
+      min-width: 0;
+      padding: 12px 14px;
+      border: 1px solid var(--hairline);
+      border-radius: 10px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .schema-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+    .channel-name { display: inline-flex; align-items: center; gap: 7px; color: var(--ink); font-size: 13px; font-weight: 650; }
+    .channel-dot { width: 9px; height: 9px; border-radius: 3px; background: var(--channel); }
+    .schema-head small { color: var(--stone); font-size: 10px; text-transform: uppercase; letter-spacing: .6px; }
+    .schema-chain { gap: 6px; margin-top: 9px; overflow: hidden; color: var(--slate); font-size: 11px; white-space: nowrap; }
+    .schema-chain b { padding: 3px 6px; border-radius: 5px; background: var(--surface-muted); font-weight: 550; }
+    .schema-chain i { color: var(--stone); font-style: normal; }
+
+    .workspace {
+      display: grid;
+      grid-template-columns: minmax(700px, 1fr) 330px;
+      gap: 14px;
+      align-items: start;
+    }
+    .card {
+      overflow: hidden;
+      border: 1px solid var(--hairline);
+      border-radius: 12px;
+      background: #fff;
+      box-shadow: var(--shadow);
+    }
+    .toolbar {
+      min-height: 52px;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 8px 12px;
+      border-bottom: 1px solid var(--hairline);
+    }
+    .toolbar-group { gap: 7px; min-width: 0; }
+    .segmented {
+      display: inline-grid;
+      grid-template-columns: 1fr 1fr;
+      padding: 3px;
+      border-radius: 8px;
+      background: var(--surface-muted);
+    }
+    .segment {
+      height: 28px;
+      padding: 0 11px;
+      border: 0;
+      border-radius: 6px;
+      background: transparent;
+      color: var(--steel);
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .segment.active { background: #fff; color: var(--ink); box-shadow: 0 1px 2px rgba(15, 15, 15, .08); }
+    .search {
+      width: 210px;
+      height: 34px;
+      padding: 0 10px 0 31px;
+      border: 1px solid var(--hairline);
+      border-radius: 8px;
+      outline: none;
+      background:
+        linear-gradient(45deg, transparent 48%, var(--steel) 49% 52%, transparent 53%) 20px 20px / 7px 7px no-repeat,
+        radial-gradient(circle at center, transparent 42%, var(--steel) 44% 53%, transparent 55%) 11px 8px / 12px 12px no-repeat,
+        #fff;
+      color: var(--charcoal);
+      font-size: 12px;
+    }
+    .search:focus { border-color: #9abce8; box-shadow: 0 0 0 2px rgba(35, 131, 226, .1); }
+    .channel-filter {
+      height: 30px;
+      padding: 0 9px;
+      border: 1px solid var(--hairline);
+      border-radius: 7px;
+      background: #fff;
+      color: var(--steel);
+      font-size: 11px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    .channel-filter.active { border-color: #afd0f2; background: var(--blue-soft); color: #1767ad; }
+    .toolbar .button { height: 30px; padding: 0 9px; border-color: var(--hairline); font-size: 11px; }
+
+    .tree-head, .tree-row {
+      display: grid;
+      grid-template-columns: minmax(330px, 1fr) 82px 104px 104px 72px 76px;
+      align-items: center;
+    }
+    .tree-head {
+      min-height: 38px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--hairline);
+      background: var(--surface-soft);
+      color: var(--steel);
+      font-size: 10px;
+      font-weight: 650;
+      letter-spacing: .35px;
+      text-transform: uppercase;
+    }
+    .tree-head span:not(:first-child), .cell.metric { text-align: right; }
+    .tree { min-height: 470px; }
+    .tree-row {
+      min-height: 46px;
+      padding: 0 12px;
+      border-bottom: 1px solid var(--hairline-soft);
+      background: #fff;
+      cursor: pointer;
+      transition: background-color .14s ease;
+    }
+    .tree-row:hover { background: #fbfbfa; }
+    .tree-row.selected { background: #f1f7fd; box-shadow: inset 3px 0 var(--blue); }
+    .tree-row:last-child { border-bottom: 0; }
+    .node-main { min-width: 0; gap: 8px; padding-left: calc(var(--depth) * 22px); }
+    .toggle {
+      width: 20px;
+      height: 24px;
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      padding: 0;
+      border: 0;
+      background: transparent;
+      color: var(--steel);
+      cursor: pointer;
+      transform: rotate(0deg);
+      transition: transform .14s ease;
+    }
+    .toggle.open { transform: rotate(90deg); }
+    .toggle.placeholder { opacity: 0; pointer-events: none; }
+    .node-icon {
+      width: 24px;
+      height: 24px;
+      display: grid;
+      flex: 0 0 auto;
+      place-items: center;
+      border: 1px solid var(--hairline);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      color: var(--slate);
+      font-size: 10px;
+      font-weight: 750;
+    }
+    .node-icon.project { background: var(--purple-soft); color: var(--purple); }
+    .node-icon.channel { border-color: color-mix(in srgb, var(--channel) 25%, white); background: color-mix(in srgb, var(--channel) 9%, white); color: var(--channel); }
+    .node-icon.account { background: var(--blue-soft); color: #1767ad; }
+    .node-icon.campaign { background: var(--orange-soft); color: var(--orange); }
+    .node-icon.group { background: var(--green-soft); color: var(--green); }
+    .node-icon.ad { background: var(--surface-muted); color: var(--slate); }
+    .node-copy { min-width: 0; }
+    .node-copy strong { display: block; overflow: hidden; color: var(--ink); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+    .node-copy small { display: block; overflow: hidden; margin-top: 2px; color: var(--stone); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+    .cell { min-width: 0; color: var(--slate); font-size: 11px; }
+    .cell.metric { color: var(--charcoal); font-variant-numeric: tabular-nums; }
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 5px;
+      width: fit-content;
+      padding: 3px 6px;
+      border-radius: 5px;
+      background: var(--surface-muted);
+      color: var(--slate);
+      font-size: 10px;
+      font-weight: 650;
+    }
+    .status::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: currentColor; }
+    .status.running, .status.active { background: var(--green-soft); color: var(--green); }
+    .status.paused { background: var(--orange-soft); color: var(--orange); }
+    .status.draft { background: var(--surface-muted); color: var(--steel); }
+    .empty-state { padding: 64px 20px; color: var(--steel); text-align: center; }
+    .empty-state strong { display: block; color: var(--charcoal); }
+    .empty-state span { display: block; margin-top: 6px; font-size: 12px; }
+
+    .detail { position: sticky; top: 72px; }
+    .detail-head {
+      padding: 16px;
+      border-bottom: 1px solid var(--hairline);
+      background: var(--surface-soft);
+    }
+    .detail-title { gap: 9px; }
+    .detail-title .node-icon { width: 30px; height: 30px; }
+    .detail-title h2 { margin: 0; overflow: hidden; color: var(--ink); font-size: 15px; text-overflow: ellipsis; white-space: nowrap; }
+    .detail-title p { margin: 3px 0 0; color: var(--stone); font-size: 10px; }
+    .detail-body { padding: 14px 16px 18px; }
+    .detail-section + .detail-section { margin-top: 18px; }
+    .detail-section h3 { margin: 0 0 9px; color: var(--steel); font-size: 10px; letter-spacing: .55px; text-transform: uppercase; }
+    .breadcrumb {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 5px;
+      color: var(--slate);
+      font-size: 11px;
+      line-height: 1.7;
+    }
+    .breadcrumb span { padding: 2px 5px; border-radius: 4px; background: var(--surface-muted); }
+    .detail-metrics { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: hidden; border: 1px solid var(--hairline); border-radius: 8px; }
+    .detail-metric { min-width: 0; padding: 9px 10px; border-right: 1px solid var(--hairline-soft); border-bottom: 1px solid var(--hairline-soft); }
+    .detail-metric:nth-child(2n) { border-right: 0; }
+    .detail-metric:nth-last-child(-n + 2) { border-bottom: 0; }
+    .detail-metric span { display: block; color: var(--stone); font-size: 10px; }
+    .detail-metric strong { display: block; overflow: hidden; margin-top: 3px; color: var(--ink); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+    .properties { margin: 0; }
+    .property {
+      display: grid;
+      grid-template-columns: 105px minmax(0, 1fr);
+      gap: 10px;
+      padding: 7px 0;
+      border-bottom: 1px solid var(--hairline-soft);
+      font-size: 11px;
+    }
+    .property:last-child { border-bottom: 0; }
+    .property dt { color: var(--stone); font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+    .property dd { margin: 0; overflow: hidden; color: var(--charcoal); text-overflow: ellipsis; white-space: nowrap; }
+    .legend { flex-wrap: wrap; gap: 6px 10px; padding: 11px 14px; border-top: 1px solid var(--hairline); background: var(--surface-soft); color: var(--steel); font-size: 10px; }
+    .legend b { color: var(--slate); font-weight: 600; }
+    .legend i { width: 6px; height: 6px; border-radius: 2px; background: var(--channel); }
+
+    @media (max-width: 1180px) {
+      .filter-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+      .date-range { grid-column: 1 / -1; }
+      .workspace { grid-template-columns: 1fr; }
+      .detail { position: static; }
+      .detail-body { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; }
+      .detail-section + .detail-section { margin-top: 0; }
+      .schema-strip { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="brand-mark">▮▮</div>
+      <strong>数据概览</strong>
+    </div>
+    <div class="top-actions">
+      <select class="field" aria-label="负责人">
+        <option>Juci Li</option>
+        <option>Mia Chen</option>
+        <option>Alex Wang</option>
+      </select>
+      <select class="field" aria-label="账号范围">
+        <option>全部 active 账号</option>
+        <option>Candy Global · Meta</option>
+        <option>ANIFORCE · Google Ads</option>
+        <option>DramaWave · TikTok</option>
+      </select>
+      <button class="button" type="button" id="syncButton">↻ 数据同步</button>
+      <button class="button primary" type="button" id="refreshButton">刷新视图</button>
+    </div>
+  </header>
+
+  <main class="page">
+    <section class="overview-stack" aria-label="数据概览头部">
+      <article class="overview-card">
+        <div class="overview-title analysis">
+          <strong>分析视图</strong>
+          <small>当前范围 · 4 个项目 / 4 个账户</small>
+        </div>
+        <div class="filter-row">
+          <select class="filter-box" id="projectSelect" aria-label="项目筛选">
+            <option value="all">项目： 全部项目</option>
+            <option value="proj-001">项目： Candy Match 全球增长</option>
+            <option value="proj-002">项目： 短剧 App 日韩测试</option>
+            <option value="proj-003">项目： RPG 新版本召回</option>
+            <option value="proj-004">项目： AI 修图工具首发</option>
+          </select>
+          <select class="filter-box" id="channelSelect" aria-label="渠道筛选">
+            <option value="all">渠道： 全部渠道</option>
+            <option value="Meta">渠道： Meta</option>
+            <option value="Google">渠道： Google</option>
+            <option value="TikTok">渠道： TikTok</option>
+          </select>
+          <select class="filter-box" id="accountSelect" aria-label="账户筛选">
+            <option value="all">账户： 全部账户</option>
+            <option>Candy Global · Meta</option>
+            <option>ANIFORCE · Google Ads</option>
+            <option>DramaWave · TikTok</option>
+            <option>RPG LiveOps · Meta</option>
+          </select>
+          <select class="filter-box" aria-label="投放目标筛选">
+            <option>投放目标： 全部投放目标</option>
+            <option>App Promotion</option>
+            <option>Install</option>
+            <option>Conversions</option>
+            <option>Engagement</option>
+            <option>Traffic</option>
+          </select>
+          <label class="date-range"><span>▣ 时间：</span><input type="date" value="2026-08-24" aria-label="开始日期"><span>至</span><input type="date" value="2026-08-30" aria-label="结束日期"></label>
+        </div>
+      </article>
+
+      <article class="overview-card">
+        <div class="overview-title metrics-title">
+          <strong>数据总览</strong>
+          <small>当前筛选范围</small>
+        </div>
+        <div class="metrics-grid">
+          <div class="metric-block"><span>花费</span><strong>US$28,460.00</strong><span class="trend negative">▲ 12.4%</span></div>
+          <div class="metric-block"><span>收入</span><strong>US$68,997.60</strong><span class="trend">▲ 21.4%</span></div>
+          <div class="metric-block"><span>ROAS</span><strong>2.42x</strong><span class="trend">▲ 0.18x</span></div>
+          <div class="metric-block"><span>订单</span><strong>4,832</strong><span class="trend">▲ 8.7%</span></div>
+          <div class="metric-block"><span>客单价</span><strong>US$14.28</strong><span class="trend">▲ 11.7%</span></div>
+          <div class="metric-block"><span>每单成本</span><strong>US$5.89</strong><span class="trend negative">▲ 3.4%</span></div>
+        </div>
+        <div class="submetrics">
+          <div class="submetric">曝光<strong>1,240,000</strong></div>
+          <div class="submetric">链接点击<strong>68,420</strong></div>
+          <div class="submetric">CTR<strong>5.52%</strong></div>
+          <div class="submetric">CPM<strong>US$22.95</strong></div>
+          <div class="submetric">CPC<strong>US$0.42</strong></div>
+        </div>
+      </article>
+    </section>
+
+    <section class="page-head">
+      <div>
+        <div class="title-line">
+          <span class="title-icon">⌘</span>
+          <h1>投放层级视图</h1>
+        </div>
+        <p>统一查看 Project、渠道账户、Campaign、广告组与广告素材之间的归属关系</p>
+      </div>
+      <span class="updated" id="updatedText">最近同步：今天 16:20</span>
+    </section>
+
+    <section class="summary" aria-label="层级概览">
+      <div class="summary-item"><span class="summary-icon">CH</span><div class="summary-copy"><span>渠道</span><strong>3</strong></div></div>
+      <div class="summary-item"><span class="summary-icon">AC</span><div class="summary-copy"><span>广告账户</span><strong>4</strong></div></div>
+      <div class="summary-item"><span class="summary-icon">PJ</span><div class="summary-copy"><span>ANIFORCE 项目</span><strong>4</strong></div></div>
+      <div class="summary-item"><span class="summary-icon">CP</span><div class="summary-copy"><span>Campaign</span><strong>5</strong></div></div>
+      <div class="summary-item"><span class="summary-icon">$</span><div class="summary-copy"><span>累计花费</span><strong>US$66,630</strong></div></div>
+    </section>
+
+    <section class="schema-strip" aria-label="渠道层级口径">
+      <article class="schema-card" style="--channel:var(--meta)">
+        <div class="schema-head"><span class="channel-name"><i class="channel-dot"></i>Meta</span><small>Marketing API</small></div>
+        <div class="schema-chain"><b>Ad Account</b><i>›</i><b>Campaign</b><i>›</i><b>Ad Set</b><i>›</i><b>Ad</b></div>
+      </article>
+      <article class="schema-card" style="--channel:var(--google)">
+        <div class="schema-head"><span class="channel-name"><i class="channel-dot"></i>Google</span><small>Google Ads API</small></div>
+        <div class="schema-chain"><b>Customer</b><i>›</i><b>Campaign</b><i>›</i><b>Ad Group</b><i>›</i><b>Ad</b></div>
+      </article>
+      <article class="schema-card" style="--channel:var(--tiktok)">
+        <div class="schema-head"><span class="channel-name"><i class="channel-dot"></i>TikTok</span><small>Business API</small></div>
+        <div class="schema-chain"><b>Advertiser</b><i>›</i><b>Campaign</b><i>›</i><b>Ad Group</b><i>›</i><b>Ad</b></div>
+      </article>
+    </section>
+
+    <section class="workspace">
+      <div class="card">
+        <div class="toolbar">
+          <div class="toolbar-group">
+            <div class="segmented" aria-label="层级视角">
+              <button class="segment active" type="button" data-view="project">按项目</button>
+              <button class="segment" type="button" data-view="channel">按渠道</button>
+            </div>
+            <input id="searchInput" class="search" type="search" placeholder="搜索名称或 ID" aria-label="搜索层级">
+          </div>
+          <div class="toolbar-group">
+            <button class="channel-filter active" type="button" data-platform="all">全部</button>
+            <button class="channel-filter" type="button" data-platform="Meta">Meta</button>
+            <button class="channel-filter" type="button" data-platform="Google">Google</button>
+            <button class="channel-filter" type="button" data-platform="TikTok">TikTok</button>
+            <button class="button" type="button" id="expandAll">全部展开</button>
+            <button class="button" type="button" id="collapseAll">收起</button>
+          </div>
+        </div>
+        <div class="tree-head">
+          <span>层级 / 名称</span><span>状态</span><span>预算</span><span>花费</span><span>ROAS</span><span>对象数</span>
+        </div>
+        <div class="tree" id="tree" role="tree" aria-label="广告投放层级"></div>
+        <div class="legend">
+          <b>ANIFORCE 层</b><span>Project 跨渠道归集 Campaign</span>
+          <i style="--channel:var(--meta)"></i><span>Meta</span>
+          <i style="--channel:var(--google)"></i><span>Google</span>
+          <i style="--channel:var(--tiktok)"></i><span>TikTok</span>
+        </div>
+      </div>
+
+      <aside class="card detail" aria-label="节点详情">
+        <div class="detail-head" id="detailHead"></div>
+        <div class="detail-body">
+          <section class="detail-section">
+            <h3>所属路径</h3>
+            <div class="breadcrumb" id="detailPath"></div>
+          </section>
+          <section class="detail-section">
+            <h3>当前表现</h3>
+            <div class="detail-metrics" id="detailMetrics"></div>
+          </section>
+          <section class="detail-section">
+            <h3>字段映射</h3>
+            <dl class="properties" id="detailProperties"></dl>
+          </section>
+        </div>
+      </aside>
+    </section>
+  </main>
+
+  <script>
+    (function () {
+      var platformColors = { Meta: "var(--meta)", Google: "var(--google)", TikTok: "var(--tiktok)" };
+      var statusLabels = { running: "投放中", active: "已连接", paused: "已暂停", draft: "草稿" };
+      var typeLabels = { project: "Project", channel: "渠道", account: "广告账户", campaign: "Campaign", group: "广告组", ad: "广告 / 素材" };
+      var typeIcons = { project: "P", channel: "CH", account: "AC", campaign: "C", group: "G", ad: "AD" };
+
+      function ad(id, label, platform, spend, roas, status, materialId) {
+        return { id: id, type: "ad", label: label, sub: materialId, platform: platform, status: status || "running", spend: spend, roas: roas, objects: 1, properties: { material_ids: materialId, media_kind: label.indexOf("视频") > -1 ? "video" : "image", review_status: "已通过" }, children: [] };
+      }
+      function group(id, label, platform, budget, spend, roas, children, goal) {
+        return { id: id, type: "group", label: label, sub: platform === "Meta" ? "Ad Set" : "Ad Group", platform: platform, status: "running", budget: budget, spend: spend, roas: roas, objects: children.length, properties: { optimization_goal: goal, bid_strategy: "Lowest cost", sample_count: 168 }, children: children };
+      }
+      function campaign(id, label, platform, accountId, budget, spend, roas, status, objective, children) {
+        return { id: id, type: "campaign", label: label, sub: objective + " · " + accountId, platform: platform, status: status, budget: budget, spend: spend, roas: roas, objects: children.length, properties: { project_id: "", platform: platform, account_id: accountId, objective: objective, budget_type: "daily", material_ids: children.reduce(function (n, item) { return n + item.children.length; }, 0) + " 个" }, children: children };
+      }
+      function account(id, label, platform, children) {
+        var spend = children.reduce(function (n, item) { return n + item.spend; }, 0);
+        var budget = children.reduce(function (n, item) { return n + item.budget; }, 0);
+        return { id: id, type: "account", label: label, sub: id, platform: platform, status: "active", budget: budget, spend: spend, roas: weightedRoas(children), objects: children.length, properties: { account_id: id, connection_id: "conn-" + platform.toLowerCase() + "-001", status: "active", scopes: "ads_read, ads_management" }, children: children };
+      }
+      function channel(id, platform, children) {
+        return { id: id, type: "channel", label: platform, sub: children.length + " 个广告账户", platform: platform, status: "active", budget: sum(children, "budget"), spend: sum(children, "spend"), roas: weightedRoas(children), objects: children.length, properties: { platform: platform, connection_status: "connected", account_count: children.length }, children: children };
+      }
+      function project(id, label, product, manager, budget, spent, status, children) {
+        return { id: id, type: "project", label: label, sub: product + " · " + manager, status: status, budget: budget, spend: spent, roas: weightedRoas(children), objects: countType(children, "campaign"), properties: { product: product, manager: manager, target_market: label.indexOf("日韩") > -1 ? "日本、韩国" : "美国、加拿大、英国", total_budget: budget, project_status: status }, children: children };
+      }
+      function sum(items, field) { return items.reduce(function (n, item) { return n + (Number(item[field]) || 0); }, 0); }
+      function weightedRoas(items) {
+        var spend = sum(items, "spend");
+        if (!spend) return 0;
+        return items.reduce(function (n, item) { return n + (Number(item.spend) || 0) * (Number(item.roas) || 0); }, 0) / spend;
+      }
+      function countType(items, type) {
+        var total = 0;
+        items.forEach(function (item) { if (item.type === type) total += 1; total += countType(item.children || [], type); });
+        return total;
+      }
+
+      var metaCandyCampaign = campaign("camp-001", "Meta · UGC 通关挑战", "Meta", "act_10240001", 32000, 18420, 2.68, "running", "App Promotion", [
+        group("aset-001", "US · iOS · Broad", "Meta", 18000, 10560, 2.82, [
+          ad("ad-001", "UGC 玩家差一步通关", "Meta", 6420, 3.08, "running", "mat-001"),
+          ad("ad-002", "糖果连击爽感展示", "Meta", 4140, 2.42, "running", "mat-002")
+        ], "APP_INSTALLS"),
+        group("aset-002", "US · Android · LAL 2%", "Meta", 14000, 7860, 2.49, [
+          ad("ad-003", "30 秒高难关卡挑战视频", "Meta", 7860, 2.49, "paused", "mat-003")
+        ], "VALUE")
+      ]);
+      var googleCandyCampaign = campaign("camp-002", "Google · 高价值用户扩量", "Google", "652-310-9921", 28000, 15980, 2.31, "running", "Install", [
+        group("ag-001", "US · 高价值用户", "Google", 17000, 9910, 2.54, [
+          ad("ad-004", "糖果连击素材组", "Google", 5720, 2.68, "running", "mat-002"),
+          ad("ad-005", "Playable · Level 27", "Google", 4190, 2.35, "running", "mat-009")
+        ], "TARGET_CPA"),
+        group("ag-002", "CA · Search Core", "Google", 11000, 6070, 1.94, [
+          ad("ad-006", "Candy puzzle keyword set", "Google", 6070, 1.94, "running", "mat-010")
+        ], "MAXIMIZE_CONVERSIONS")
+      ]);
+      var tiktokDramaCampaign = campaign("camp-003", "TikTok · 霸总短剧钩子测试", "TikTok", "tt_7788021", 24000, 9280, 3.04, "running", "Conversions", [
+        group("ttg-001", "JP · Drama Fans · Spark", "TikTok", 14000, 5680, 3.26, [
+          ad("ad-007", "霸总雨夜追妻片段视频", "TikTok", 3440, 3.42, "running", "mat-005"),
+          ad("ad-008", "豪门身份反转卡点视频", "TikTok", 2240, 3.01, "running", "mat-006")
+        ], "CONVERSION"),
+        group("ttg-002", "KR · Broad · Non-Spark", "TikTok", 10000, 3600, 2.69, [
+          ad("ad-009", "契约婚姻 3 秒钩子视频", "TikTok", 3600, 2.69, "running", "mat-011")
+        ], "VALUE")
+      ]);
+      var metaRpgCampaign = campaign("camp-004", "Meta · Boss 战老用户召回", "Meta", "act_10240002", 30000, 21100, 1.86, "paused", "Engagement", [
+        group("aset-003", "SEA · Android · Re-engagement", "Meta", 30000, 21100, 1.86, [
+          ad("ad-010", "Boss 战回归奖励视频", "Meta", 12600, 1.95, "paused", "mat-007"),
+          ad("ad-011", "新版本英雄阵容图", "Meta", 8500, 1.72, "paused", "mat-008")
+        ], "POST_ENGAGEMENT")
+      ]);
+      var googleAiCampaign = campaign("camp-005", "Google · AI 功能关键词", "Google", "652-310-9921", 12000, 1850, 1.42, "draft", "Traffic", [
+        group("ag-003", "Global · AI Photo Keywords", "Google", 12000, 1850, 1.42, [
+          ad("ad-012", "AI 一键美化前后对比", "Google", 1850, 1.42, "draft", "mat-004")
+        ], "MAXIMIZE_CLICKS")
+      ]);
+
+      var projects = [
+        project("proj-001", "Candy Match 全球增长", "Candy Blast", "陈晓", 120000, 34350, "running", [
+          channel("proj-001-meta", "Meta", [account("act_10240001", "Candy Global · Meta", "Meta", [metaCandyCampaign])]),
+          channel("proj-001-google", "Google", [account("652-310-9921-p1", "ANIFORCE · Google Ads", "Google", [googleCandyCampaign])])
+        ]),
+        project("proj-002", "短剧 App 日韩测试", "DramaWave", "林薇", 80000, 9280, "running", [
+          channel("proj-002-tiktok", "TikTok", [account("tt_7788021", "DramaWave · TikTok", "TikTok", [tiktokDramaCampaign])])
+        ]),
+        project("proj-003", "RPG 新版本召回", "Dragon Realm", "王锐", 50000, 21100, "paused", [
+          channel("proj-003-meta", "Meta", [account("act_10240002", "RPG LiveOps · Meta", "Meta", [metaRpgCampaign])])
+        ]),
+        project("proj-004", "AI 修图工具首发", "PicMagic AI", "赵晴", 35000, 1850, "draft", [
+          channel("proj-004-google", "Google", [account("652-310-9921-p4", "ANIFORCE · Google Ads", "Google", [googleAiCampaign])])
+        ])
+      ];
+      setProjectIds(projects);
+
+      function setProjectIds(nodes, currentProject) {
+        nodes.forEach(function (node) {
+          var projectId = node.type === "project" ? node.id : currentProject;
+          if (node.type === "campaign") node.properties.project_id = projectId;
+          setProjectIds(node.children || [], projectId);
+        });
+      }
+      function clone(node) { return JSON.parse(JSON.stringify(node)); }
+      function buildChannelView() {
+        var channelMap = {};
+        projects.forEach(function (projectNode) {
+          projectNode.children.forEach(function (channelNode) {
+            if (!channelMap[channelNode.platform]) channelMap[channelNode.platform] = {};
+            channelNode.children.forEach(function (accountNode) {
+              var rawAccountId = accountNode.id.replace(/-p[14]$/, "");
+              if (!channelMap[channelNode.platform][rawAccountId]) {
+                channelMap[channelNode.platform][rawAccountId] = account(rawAccountId, accountNode.label, channelNode.platform, []);
+              }
+              var projectCopy = {
+                id: "channel-" + channelNode.platform + "-" + rawAccountId + "-" + projectNode.id,
+                type: "project",
+                label: projectNode.label,
+                sub: projectNode.sub,
+                platform: channelNode.platform,
+                status: projectNode.status,
+                budget: sum(accountNode.children, "budget"),
+                spend: sum(accountNode.children, "spend"),
+                roas: weightedRoas(accountNode.children),
+                objects: accountNode.children.length,
+                properties: clone(projectNode.properties),
+                children: accountNode.children.map(clone)
+              };
+              channelMap[channelNode.platform][rawAccountId].children.push(projectCopy);
+            });
+          });
+        });
+        return ["Meta", "Google", "TikTok"].map(function (platform) {
+          var accounts = Object.keys(channelMap[platform] || {}).map(function (key) {
+            var item = channelMap[platform][key];
+            item.budget = sum(item.children, "budget");
+            item.spend = sum(item.children, "spend");
+            item.roas = weightedRoas(item.children);
+            item.objects = item.children.length;
+            return item;
+          });
+          return channel("channel-root-" + platform.toLowerCase(), platform, accounts);
+        });
+      }
+
+      var state = { view: "project", project: "all", platform: "all", query: "", selected: "proj-001", expanded: new Set() };
+      var treeEl = document.getElementById("tree");
+      var detailHead = document.getElementById("detailHead");
+      var detailPath = document.getElementById("detailPath");
+      var detailMetrics = document.getElementById("detailMetrics");
+      var detailProperties = document.getElementById("detailProperties");
+
+      function currentRoots() {
+        var roots = state.view === "project" ? projects : buildChannelView();
+        if (state.view === "project" && state.project !== "all") {
+          roots = roots.filter(function (node) { return node.id === state.project; });
+        }
+        return roots;
+      }
+      function collectDefaults(nodes, depth) {
+        nodes.forEach(function (node) {
+          if ((node.children || []).length && depth < 3) state.expanded.add(node.id);
+          collectDefaults(node.children || [], depth + 1);
+        });
+      }
+      collectDefaults(projects, 0);
+
+      function money(value) { return value == null ? "—" : "US$" + Number(value).toLocaleString("en-US"); }
+      function roas(value) { return value ? Number(value).toFixed(2) + "x" : "—"; }
+      function filterNode(node) {
+        var children = (node.children || []).map(filterNode).filter(Boolean);
+        var haystack = (node.label + " " + node.id + " " + (node.sub || "")).toLowerCase();
+        var queryMatch = !state.query || haystack.indexOf(state.query) > -1;
+        var platformMatch = state.platform === "all" || !node.platform || node.platform === state.platform;
+        var isBranch = (node.children || []).length > 0;
+        if (isBranch && children.length === 0 && (state.query || state.platform !== "all")) {
+          if (!(queryMatch && platformMatch && state.platform === "all")) return null;
+        }
+        if (!isBranch && (!queryMatch || !platformMatch)) return null;
+        if (!platformMatch && children.length === 0) return null;
+        return Object.assign({}, node, { children: children });
+      }
+      function filteredRoots() { return currentRoots().map(filterNode).filter(Boolean); }
+      function channelStyle(node) { return "--channel:" + (platformColors[node.platform] || "var(--steel)"); }
+
+      function renderRows(nodes, depth, path) {
+        var html = "";
+        nodes.forEach(function (node) {
+          var children = node.children || [];
+          var isOpen = state.expanded.has(node.id);
+          var currentPath = path.concat([node.label]);
+          node._path = currentPath;
+          var status = statusLabels[node.status] || node.status || "—";
+          html += '<div class="tree-row' + (state.selected === node.id ? ' selected' : '') + '" role="treeitem" aria-level="' + (depth + 1) + '" aria-expanded="' + (children.length ? isOpen : "false") + '" data-node="' + node.id + '" style="--depth:' + depth + ';' + channelStyle(node) + '">';
+          html += '<div class="node-main">';
+          html += '<button class="toggle ' + (children.length ? (isOpen ? "open" : "") : "placeholder") + '" type="button" aria-label="' + (isOpen ? "收起" : "展开") + '" data-toggle="' + node.id + '">›</button>';
+          html += '<span class="node-icon ' + node.type + '">' + (node.type === "channel" ? node.platform.charAt(0) : typeIcons[node.type]) + '</span>';
+          html += '<span class="node-copy"><strong>' + escapeHtml(node.label) + '</strong><small>' + escapeHtml(node.sub || typeLabels[node.type]) + '</small></span></div>';
+          html += '<div class="cell"><span class="status ' + (node.status || "") + '">' + escapeHtml(status) + '</span></div>';
+          html += '<div class="cell metric">' + money(node.budget) + '</div>';
+          html += '<div class="cell metric">' + money(node.spend) + '</div>';
+          html += '<div class="cell metric">' + roas(node.roas) + '</div>';
+          html += '<div class="cell metric">' + (node.objects == null ? "—" : node.objects) + '</div></div>';
+          if (children.length && isOpen) html += renderRows(children, depth + 1, currentPath);
+        });
+        return html;
+      }
+      function escapeHtml(value) {
+        return String(value == null ? "" : value).replace(/[&<>"']/g, function (char) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[char]; });
+      }
+      function flatten(nodes, result) {
+        result = result || [];
+        nodes.forEach(function (node) { result.push(node); flatten(node.children || [], result); });
+        return result;
+      }
+      function findNode(id) { return flatten(currentRoots()).find(function (node) { return node.id === id; }); }
+      function findPath(nodes, id, path) {
+        for (var i = 0; i < nodes.length; i += 1) {
+          var next = path.concat([nodes[i].label]);
+          if (nodes[i].id === id) return next;
+          var childPath = findPath(nodes[i].children || [], id, next);
+          if (childPath) return childPath;
+        }
+        return null;
+      }
+
+      function renderDetail(node) {
+        if (!node) return;
+        var style = channelStyle(node);
+        detailHead.innerHTML = '<div class="detail-title" style="' + style + '"><span class="node-icon ' + node.type + '">' + (node.type === "channel" ? node.platform.charAt(0) : typeIcons[node.type]) + '</span><div><h2>' + escapeHtml(node.label) + '</h2><p>' + escapeHtml(typeLabels[node.type] + " · " + node.id) + '</p></div></div>';
+        var path = findPath(currentRoots(), node.id, []) || [node.label];
+        detailPath.innerHTML = path.map(function (item) { return "<span>" + escapeHtml(item) + "</span>"; }).join("<i>›</i>");
+        var metrics = [
+          ["状态", statusLabels[node.status] || node.status || "—"],
+          ["预算", money(node.budget)],
+          ["花费", money(node.spend)],
+          ["ROAS", roas(node.roas)]
+        ];
+        detailMetrics.innerHTML = metrics.map(function (item) { return '<div class="detail-metric"><span>' + item[0] + '</span><strong>' + item[1] + '</strong></div>'; }).join("");
+        var properties = Object.assign({ id: node.id, node_type: node.type, platform: node.platform || "cross-channel" }, node.properties || {});
+        detailProperties.innerHTML = Object.keys(properties).slice(0, 8).map(function (key) {
+          return '<div class="property"><dt>' + escapeHtml(key) + '</dt><dd title="' + escapeHtml(properties[key]) + '">' + escapeHtml(properties[key]) + '</dd></div>';
+        }).join("");
+      }
+      function render() {
+        var roots = filteredRoots();
+        treeEl.innerHTML = roots.length ? renderRows(roots, 0, []) : '<div class="empty-state"><strong>没有匹配的层级</strong><span>请调整渠道筛选或搜索词</span></div>';
+        var selected = findNode(state.selected) || flatten(currentRoots())[0];
+        if (selected) { state.selected = selected.id; renderDetail(selected); }
+      }
+
+      treeEl.addEventListener("click", function (event) {
+        var toggle = event.target.closest("[data-toggle]");
+        if (toggle) {
+          event.stopPropagation();
+          var id = toggle.getAttribute("data-toggle");
+          if (state.expanded.has(id)) state.expanded.delete(id); else state.expanded.add(id);
+          render();
+          return;
+        }
+        var row = event.target.closest("[data-node]");
+        if (row) { state.selected = row.getAttribute("data-node"); render(); }
+      });
+      document.querySelectorAll("[data-view]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          state.view = button.getAttribute("data-view");
+          state.selected = state.view === "project" ? "proj-001" : "channel-root-meta";
+          state.expanded.clear();
+          collectDefaults(currentRoots(), 0);
+          document.querySelectorAll("[data-view]").forEach(function (item) { item.classList.toggle("active", item === button); });
+          render();
+        });
+      });
+      document.querySelectorAll("[data-platform]").forEach(function (button) {
+        button.addEventListener("click", function () {
+          state.platform = button.getAttribute("data-platform");
+          document.getElementById("channelSelect").value = state.platform;
+          document.querySelectorAll("[data-platform]").forEach(function (item) { item.classList.toggle("active", item === button); });
+          render();
+        });
+      });
+      document.getElementById("searchInput").addEventListener("input", function (event) {
+        state.query = event.target.value.trim().toLowerCase();
+        render();
+      });
+      document.getElementById("projectSelect").addEventListener("change", function (event) {
+        state.project = event.target.value;
+        state.view = "project";
+        state.selected = state.project === "all" ? "proj-001" : state.project;
+        document.querySelectorAll("[data-view]").forEach(function (item) { item.classList.toggle("active", item.getAttribute("data-view") === "project"); });
+        render();
+      });
+      document.getElementById("channelSelect").addEventListener("change", function (event) {
+        state.platform = event.target.value;
+        document.querySelectorAll("[data-platform]").forEach(function (item) { item.classList.toggle("active", item.getAttribute("data-platform") === state.platform); });
+        render();
+      });
+      document.getElementById("accountSelect").addEventListener("change", function (event) {
+        state.query = event.target.value === "all" ? "" : event.target.options[event.target.selectedIndex].text.toLowerCase();
+        document.getElementById("searchInput").value = state.query;
+        render();
+      });
+      document.getElementById("expandAll").addEventListener("click", function () {
+        flatten(currentRoots()).forEach(function (node) { if ((node.children || []).length) state.expanded.add(node.id); });
+        render();
+      });
+      document.getElementById("collapseAll").addEventListener("click", function () {
+        state.expanded.clear();
+        render();
+      });
+      document.getElementById("syncButton").addEventListener("click", function () {
+        document.getElementById("updatedText").textContent = "最近同步：刚刚";
+        this.textContent = "✓ 已同步";
+        var button = this;
+        window.setTimeout(function () { button.textContent = "↻ 数据同步"; }, 1200);
+      });
+      document.getElementById("refreshButton").addEventListener("click", function () {
+        state.query = "";
+        state.project = "all";
+        state.platform = "all";
+        document.getElementById("searchInput").value = "";
+        document.getElementById("projectSelect").value = "all";
+        document.getElementById("channelSelect").value = "all";
+        document.getElementById("accountSelect").value = "all";
+        document.querySelectorAll("[data-platform]").forEach(function (item) { item.classList.toggle("active", item.getAttribute("data-platform") === "all"); });
+        render();
+      });
+
+      render();
+    }());
+  </script>
+</body>
+</html>
