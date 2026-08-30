@@ -5,6 +5,13 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import AnalysisMetricTable from '@/components/dashboard/AnalysisMetricTable.vue'
 import { navItems } from '@/config/navigation'
 import { formatDashboardMoney, formatDashboardNumber, useDashboardScope } from '@/data/dashboard'
+import {
+  MAX_TREND_METRICS,
+  formatTrendMetricValue,
+  trendMetricGroups,
+  trendMetricOptions,
+  type TrendMetric,
+} from '@/data/trendMetrics'
 
 const props = withDefaults(defineProps<{
   embedded?: boolean
@@ -133,40 +140,72 @@ const dailyTrendPoints = computed(() => {
 })
 const displayTrendPoints = computed(() => {
   const raw = dailyTrendPoints.value.map(item => ({ ...item, axisLabel: item.date }))
-  const values = (field: keyof typeof raw[number]) => raw.map(item => item[field])
-  const range = (field: 'rawSpend' | 'rawRevenue' | 'rawConversions' | 'rawClicks' | 'rawCtr' | 'rawRoas') => {
-    const items = values(field) as number[]
-    return { min: Math.min(...items), max: Math.max(...items) }
-  }
-  const spendRange = range('rawSpend')
-  const revenueRange = range('rawRevenue')
-  const orderRange = range('rawConversions')
-  const clickRange = range('rawClicks')
-  const ctrRange = range('rawCtr')
-  const roasRange = range('rawRoas')
-  const scaleY = (value: number, min: number, max: number) => max === min ? 94 : 142 - (value - min) / (max - min) * 94
-  const maxRevenue = Math.max(revenueRange.max, 1)
   const count = raw.length
-  return raw.map((item, index) => {
+  const enriched = raw.map((item, index) => {
+    const progress = count <= 1 ? 0 : index / (count - 1)
+    const spend = item.rawSpend
+    const revenue = item.rawRevenue
+    const clicks = item.rawClicks
+    const conversions = item.rawConversions
+    const ctr = item.rawCtr
+    const roas = item.rawRoas
+    const impressions = clicks / Math.max(ctr, .01) * 100
+    const cpc = spend / Math.max(clicks, 1)
+    const cpm = spend / Math.max(impressions, 1) * 1000
+    const cvr = conversions / Math.max(clicks, 1) * 100
+    const cpa = spend / Math.max(conversions, 1)
+    const creativeImpressions = impressions * (.84 + progress * .04)
+    const videoViews = creativeImpressions * (.48 + progress * .08)
+    const videoViewRate = videoViews / Math.max(creativeImpressions, 1) * 100
+    const completionRate = 18.5 + progress * 9.2 + Math.sin(index * .48) * 1.6
+    const engagementRate = 4.1 + progress * 1.6 + Math.cos(index * .62) * .35
+    const avgWatchTime = 5.8 + progress * 2.7 + Math.sin(index * .4) * .45
+    const fatigueRate = 38 + progress * 24 + Math.max(0, Math.sin(index * .58) * 6)
+    const metaReach = impressions / (1.32 + progress * .22)
+    const metaFrequency = impressions / Math.max(metaReach, 1)
+    const metaLinkClicks = clicks * .74
+    const metaLandingPageViews = metaLinkClicks * .82
+    const metaThruPlays = videoViews * .46
+    const googleInteractions = clicks + videoViews * .07
+    const googleInteractionRate = googleInteractions / Math.max(impressions, 1) * 100
+    const googleViews = videoViews * .63
+    const googleViewRate = googleViews / Math.max(impressions, 1) * 100
+    const googleAvgCpv = spend / Math.max(googleViews, 1)
+    const tiktokVideoViews2s = videoViews * .91
+    const tiktokVideoViews6s = videoViews * .68
+    const tiktokVideoViews25 = videoViews * .76
+    const tiktokVideoViews50 = videoViews * .58
+    const tiktokVideoViews75 = videoViews * .44
+    const tiktokVideoViews100 = videoViews * completionRate / 100
+    const tiktokEngagements = videoViews * engagementRate / 100
+    const metricValues: Record<TrendMetric, number> = {
+      spend, revenue, impressions, clicks, ctr, cpc, cpm, conversions, cvr, cpa, roas,
+      creativeImpressions, videoViews, videoViewRate, completionRate, engagementRate, avgWatchTime, fatigueRate,
+      metaReach, metaFrequency, metaLinkClicks, metaLandingPageViews, metaThruPlays,
+      googleInteractions, googleInteractionRate, googleViews, googleViewRate, googleAvgCpv,
+      tiktokVideoViews2s, tiktokVideoViews6s, tiktokVideoViews25, tiktokVideoViews50, tiktokVideoViews75, tiktokVideoViews100, tiktokEngagements,
+    }
+    return { ...item, metricValues }
+  })
+  const metricRanges = Object.fromEntries(trendMetricOptions.map(option => {
+    const values = enriched.map(item => item.metricValues[option.key])
+    return [option.key, { min: Math.min(...values), max: Math.max(...values) }]
+  })) as Record<TrendMetric, { min: number; max: number }>
+  const scaleY = (metric: TrendMetric, value: number) => {
+    const { min, max } = metricRanges[metric]
+    return max === min ? 94 : 142 - (value - min) / (max - min) * 94
+  }
+  return enriched.map((item, index) => {
     const x = count <= 1 ? 475 : 91 + index * 768 / (count - 1)
-    const barHeight = 24 + item.rawRevenue / maxRevenue * 81
+    const metricYs = Object.fromEntries(trendMetricOptions.map(option => [
+      option.key,
+      scaleY(option.key, item.metricValues[option.key]),
+    ])) as Record<TrendMetric, number>
     return {
       ...item,
-      spend: formatDashboardMoney(item.rawSpend),
-      revenue: formatDashboardMoney(item.rawRevenue),
-      orders: formatDashboardNumber(Math.round(item.rawConversions)),
-      clicks: formatDashboardNumber(Math.round(item.rawClicks)),
-      ctr: `${item.rawCtr.toFixed(2)}%`,
-      roas: `${item.rawRoas.toFixed(2)}x`,
       x,
-      spendY: scaleY(item.rawSpend, spendRange.min, spendRange.max),
-      roasY: scaleY(item.rawRoas, roasRange.min, roasRange.max),
-      ordersY: scaleY(item.rawConversions, orderRange.min, orderRange.max),
-      clicksY: scaleY(item.rawClicks, clickRange.min, clickRange.max),
-      ctrY: scaleY(item.rawCtr, ctrRange.min, ctrRange.max),
-      barY: 155 - barHeight,
-      barHeight,
-      tooltipLeft: count <= 1 ? 50 : 6 + index / (count - 1) * 88,
+      metricYs,
+      tooltipLeft: count <= 1 ? 50 : 10 + index / (count - 1) * 80,
     }
   })
 })
@@ -179,23 +218,37 @@ const trendAxisTicks = computed(() => {
   const indexes = Array.from({ length: Math.floor((points.length - 1) / step) + 1 }, (_, index) => index * step)
   return indexes.map(index => ({ point: points[index], index }))
 })
-const roasPath = computed(() => displayTrendPoints.value.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.roasY}`).join(''))
-const ctrPath = computed(() => displayTrendPoints.value.map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point.ctrY}`).join(''))
+const trendMetricPath = (metric: TrendMetric) => {
+  const points = displayTrendPoints.value.map(point => ({ x: point.x, y: point.metricYs[metric] }))
+  if (!points.length) return ''
+  if (points.length === 1) return `M${points[0].x} ${points[0].y}`
+  return points.slice(0, -1).reduce((path, point, index) => {
+    const previous = points[index - 1] || point
+    const next = points[index + 1]
+    const afterNext = points[index + 2] || next
+    const control1X = point.x + (next.x - previous.x) / 6
+    const control1Y = point.y + (next.y - previous.y) / 6
+    const control2X = next.x - (afterNext.x - point.x) / 6
+    const control2Y = next.y - (afterNext.y - point.y) / 6
+    return `${path} C${control1X} ${control1Y},${control2X} ${control2Y},${next.x} ${next.y}`
+  }, `M${points[0].x} ${points[0].y}`)
+}
 const formatUsMoney = (value: number) => `US${formatDashboardMoney(value, 2)}`
 const percentBadge = (current: number, previous: number, inverse = false) => {
   if (!previous) return { label: '—', tone: 'neutral' }
   const delta = (current - previous) / previous * 100
   const positive = inverse ? delta <= 0 : delta >= 0
   return {
-    label: `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`,
+    label: `${positive ? '▼' : '▲'} ${Math.abs(delta).toFixed(1)}%`,
     tone: positive ? 'positive' : 'negative',
   }
 }
 const pointBadge = (current: number, previous: number) => {
   const delta = current - previous
+  const positive = delta >= 0
   return {
-    label: `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(2)}x`,
-    tone: delta >= 0 ? 'positive' : 'negative',
+    label: `${positive ? '▼' : '▲'} ${Math.abs(delta).toFixed(2)}x`,
+    tone: positive ? 'positive' : 'negative',
   }
 }
 const overviewMetrics = computed(() => {
@@ -236,22 +289,15 @@ const toggleTrendSelection = (index: number) => {
   selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index
 }
 
-type TrendMetric = 'spend' | 'revenue' | 'roas' | 'orders' | 'clicks' | 'ctr'
-const trendMetricOptions: Array<{ key: TrendMetric, label: string }> = [
-  { key: 'spend', label: '花费' },
-  { key: 'revenue', label: '收入' },
-  { key: 'roas', label: 'ROAS' },
-  { key: 'orders', label: '订单' },
-  { key: 'clicks', label: '点击' },
-  { key: 'ctr', label: 'CTR' },
-]
 const activeTrendMetrics = ref<TrendMetric[]>(['spend', 'revenue', 'roas'])
 const trendMetricPickerOpen = ref(false)
 const hasTrendMetric = (metric: TrendMetric) => activeTrendMetrics.value.includes(metric)
+const isTrendMetricDisabled = (metric: TrendMetric) => !hasTrendMetric(metric) && activeTrendMetrics.value.length >= MAX_TREND_METRICS
 const selectedTrendMetricOptions = computed(() => trendMetricOptions.filter(item => hasTrendMetric(item.key)))
 const activeTrendMetricLabel = computed(() => selectedTrendMetricOptions.value.map(item => item.label).join('、'))
-const trendBarMetricOrder: TrendMetric[] = ['spend', 'revenue', 'orders', 'clicks']
-const selectedTrendBarMetrics = computed(() => trendBarMetricOrder.filter(hasTrendMetric))
+const selectedTrendBarMetricOptions = computed(() => selectedTrendMetricOptions.value.filter(item => item.chart === 'bar'))
+const selectedTrendLineMetricOptions = computed(() => selectedTrendMetricOptions.value.filter(item => item.chart === 'line'))
+const selectedTrendBarMetrics = computed(() => selectedTrendBarMetricOptions.value.map(item => item.key))
 const trendPointSpacing = computed(() => displayTrendPoints.value.length <= 1 ? 48 : 768 / (displayTrendPoints.value.length - 1))
 const trendBarGap = computed(() => Math.min(3, Math.max(.45, trendPointSpacing.value * .08)))
 const trendBarWidth = computed(() => {
@@ -270,6 +316,7 @@ const trendHitWidth = computed(() => Math.max(4, Math.min(128, trendPointSpacing
 const trendChartHeight = computed(() => dateRangeDays.value <= 7 ? 260 : dateRangeDays.value <= 31 ? 280 : dateRangeDays.value <= 90 ? 300 : 320)
 const toggleTrendMetric = (metric: TrendMetric) => {
   if (hasTrendMetric(metric) && activeTrendMetrics.value.length === 1) return
+  if (isTrendMetricDisabled(metric)) return
   activeTrendMetrics.value = hasTrendMetric(metric)
     ? activeTrendMetrics.value.filter(item => item !== metric)
     : [...activeTrendMetrics.value, metric]
@@ -807,7 +854,7 @@ onBeforeUnmount(() => {
           </div>
         </section>
 
-        <section class="replay-card">
+        <section class="replay-card trend-replay-card">
           <div class="replay-card-head trend-card-head">
             <div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ trendGranularityLabel }}</p></div>
             <div class="trend-metric-customizer">
@@ -817,33 +864,35 @@ onBeforeUnmount(() => {
               <button class="trend-custom-button" type="button" :aria-expanded="trendMetricPickerOpen" @click="trendMetricPickerOpen = !trendMetricPickerOpen"><span class="material-symbols-outlined" aria-hidden="true">tune</span>自定义指标</button>
               <div v-if="trendMetricPickerOpen" class="trend-metric-popover" role="dialog" aria-label="自定义趋势指标">
                 <strong>选择趋势指标</strong>
-                <label v-for="item in trendMetricOptions" :key="item.key"><input type="checkbox" :checked="hasTrendMetric(item.key)" @change="toggleTrendMetric(item.key)"><span><i class="legend-dot" :class="item.key"></i>{{ item.label }}</span></label>
-                <small>至少保留 1 个指标</small>
+                <div v-for="group in trendMetricGroups" :key="group.key" class="trend-metric-group">
+                  <b>{{ group.label }}</b>
+                  <div>
+                    <label v-for="item in group.metrics" :key="item.key" :class="{ disabled: isTrendMetricDisabled(item.key) }">
+                      <input type="checkbox" :checked="hasTrendMetric(item.key)" :disabled="isTrendMetricDisabled(item.key)" @change="toggleTrendMetric(item.key)">
+                      <span><i class="legend-dot" :style="{ backgroundColor: item.color }"></i>{{ item.label }}</span>
+                    </label>
+                  </div>
+                </div>
+                <small>至少保留 1 个指标，最多同时选择 {{ MAX_TREND_METRICS }} 个</small>
                 <button type="button" @click="trendMetricPickerOpen = false">完成</button>
               </div>
             </div>
           </div>
           <div class="trend-grid">
             <div class="chart-panel" :style="{ '--trend-chart-height': `${trendChartHeight}px`, '--trend-svg-height': `${trendChartHeight - 40}px` }">
-              <div class="chart-legend"><span v-for="item in selectedTrendMetricOptions" :key="item.key" class="legend-item"><i class="legend-dot" :class="item.key"></i>{{ item.label }}</span></div>
+              <div class="chart-legend"><span v-for="item in selectedTrendMetricOptions" :key="item.key" class="legend-item"><i class="legend-dot" :style="{ backgroundColor: item.color }"></i>{{ item.label }}</span></div>
+              <div class="trend-svg-stage">
               <svg viewBox="60 24 830 138" preserveAspectRatio="none" role="img" :aria-label="`${dateRangeLabel} ${activeTrendMetricLabel}趋势图`">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
-                <g v-if="hasTrendMetric('spend')" class="chart-bars spend"><rect v-for="point in displayTrendPoints" :key="`spend-bar-${point.date}`" :x="trendBarX(point.x, 'spend')" :y="point.spendY" :width="trendBarWidth" :height="155 - point.spendY" rx="2" /></g>
-                <g v-if="hasTrendMetric('revenue')" class="chart-bars revenue"><rect v-for="point in displayTrendPoints" :key="`revenue-bar-${point.date}`" :x="trendBarX(point.x, 'revenue')" :y="point.barY" :width="trendBarWidth" :height="point.barHeight" rx="2" /></g>
-                <g v-if="hasTrendMetric('orders')" class="chart-bars orders"><rect v-for="point in displayTrendPoints" :key="`orders-bar-${point.date}`" :x="trendBarX(point.x, 'orders')" :y="point.ordersY" :width="trendBarWidth" :height="155 - point.ordersY" rx="2" /></g>
-                <g v-if="hasTrendMetric('clicks')" class="chart-bars clicks"><rect v-for="point in displayTrendPoints" :key="`clicks-bar-${point.date}`" :x="trendBarX(point.x, 'clicks')" :y="point.clicksY" :width="trendBarWidth" :height="155 - point.clicksY" rx="2" /></g>
-                <path v-if="hasTrendMetric('roas')" :d="roasPath" fill="none" stroke="#dd7d00" stroke-width="1.35" />
-                <path v-if="hasTrendMetric('ctr')" :d="ctrPath" fill="none" stroke="#d946ef" stroke-width="1.35" />
-                <g v-if="hasTrendMetric('roas')" fill="#dd7d00" stroke="#fff" stroke-width="1"><circle v-for="point in displayTrendPoints" :key="`roas-${point.date}`" :cx="point.x" :cy="point.roasY" r="2.1" /></g>
-                <g v-if="hasTrendMetric('ctr')" fill="#d946ef" stroke="#fff" stroke-width="1"><circle v-for="point in displayTrendPoints" :key="`ctr-${point.date}`" :cx="point.x" :cy="point.ctrY" r="2.1" /></g>
+                <g v-for="item in selectedTrendBarMetricOptions" :key="`bars-${item.key}`" class="chart-bars" :style="{ fill: item.color }">
+                  <rect v-for="point in displayTrendPoints" :key="`${item.key}-bar-${point.date}`" :x="trendBarX(point.x, item.key)" :y="point.metricYs[item.key]" :width="trendBarWidth" :height="155 - point.metricYs[item.key]" rx="2" />
+                </g>
+                <g v-for="item in selectedTrendLineMetricOptions" :key="`line-${item.key}`">
+                  <path :d="trendMetricPath(item.key)" fill="none" :stroke="item.color" stroke-width="1.35" />
+                </g>
                 <g v-if="activeTrendPoint" class="chart-active-markers" aria-hidden="true">
                   <line :x1="activeTrendPoint.x" :x2="activeTrendPoint.x" y1="24" y2="155" />
-                  <rect v-if="hasTrendMetric('spend')" class="spend" :x="trendBarX(activeTrendPoint.x, 'spend')" :y="activeTrendPoint.spendY" :width="trendBarWidth" :height="155 - activeTrendPoint.spendY" rx="2" />
-                  <rect v-if="hasTrendMetric('revenue')" class="revenue" :x="trendBarX(activeTrendPoint.x, 'revenue')" :y="activeTrendPoint.barY" :width="trendBarWidth" :height="activeTrendPoint.barHeight" rx="2" />
-                  <rect v-if="hasTrendMetric('orders')" class="orders" :x="trendBarX(activeTrendPoint.x, 'orders')" :y="activeTrendPoint.ordersY" :width="trendBarWidth" :height="155 - activeTrendPoint.ordersY" rx="2" />
-                  <rect v-if="hasTrendMetric('clicks')" class="clicks" :x="trendBarX(activeTrendPoint.x, 'clicks')" :y="activeTrendPoint.clicksY" :width="trendBarWidth" :height="155 - activeTrendPoint.clicksY" rx="2" />
-                  <circle v-if="hasTrendMetric('roas')" class="roas" :cx="activeTrendPoint.x" :cy="activeTrendPoint.roasY" r="3.5" />
-                  <circle v-if="hasTrendMetric('ctr')" class="ctr" :cx="activeTrendPoint.x" :cy="activeTrendPoint.ctrY" r="3.5" />
+                  <rect v-for="item in selectedTrendBarMetricOptions" :key="`active-bar-${item.key}`" :x="trendBarX(activeTrendPoint.x, item.key)" :y="activeTrendPoint.metricYs[item.key]" :width="trendBarWidth" :height="155 - activeTrendPoint.metricYs[item.key]" rx="2" :style="{ stroke: item.color }" />
                 </g>
                 <rect
                   v-for="(point, index) in displayTrendPoints"
@@ -856,7 +905,7 @@ onBeforeUnmount(() => {
                   height="138"
                   role="button"
                   tabindex="0"
-                  :aria-label="`${point.date}，花费 ${point.spend}，收入 ${point.revenue}，ROAS ${point.roas}，订单 ${point.orders}，点击 ${point.clicks}，CTR ${point.ctr}`"
+                  :aria-label="`${point.date}，${selectedTrendMetricOptions.map(item => `${item.label} ${formatTrendMetricValue(item.key, point.metricValues[item.key])}`).join('，')}`"
                   @mouseenter="hoveredTrendIndex = index"
                   @mouseleave="hoveredTrendIndex = null"
                   @focus="hoveredTrendIndex = index"
@@ -866,6 +915,18 @@ onBeforeUnmount(() => {
                   @keydown.space.prevent="toggleTrendSelection(index)"
                 />
               </svg>
+                <span
+                  v-for="item in activeTrendPoint ? selectedTrendLineMetricOptions : []"
+                  :key="`active-point-${item.key}`"
+                  class="chart-active-point"
+                  :style="{
+                    left: `${((activeTrendPoint?.x || 60) - 60) / 830 * 100}%`,
+                    top: `${(((activeTrendPoint?.metricYs[item.key] ?? 24) - 24) / 138) * 100}%`,
+                    borderColor: item.color,
+                  }"
+                  aria-hidden="true"
+                ></span>
+              </div>
               <div
                 v-if="activeTrendPoint"
                 class="chart-tooltip"
@@ -874,12 +935,10 @@ onBeforeUnmount(() => {
                 aria-live="polite"
               >
                 <strong>{{ activeTrendPoint.date }}</strong>
-                <div v-if="hasTrendMetric('spend')"><span><i class="legend-dot spend"></i>花费</span><b>{{ activeTrendPoint.spend }}</b></div>
-                <div v-if="hasTrendMetric('revenue')"><span><i class="legend-dot revenue"></i>收入</span><b>{{ activeTrendPoint.revenue }}</b></div>
-                <div v-if="hasTrendMetric('roas')"><span><i class="legend-dot roas"></i>ROAS</span><b>{{ activeTrendPoint.roas }}</b></div>
-                <div v-if="hasTrendMetric('orders')"><span><i class="legend-dot orders"></i>订单</span><b>{{ activeTrendPoint.orders }}</b></div>
-                <div v-if="hasTrendMetric('clicks')"><span><i class="legend-dot clicks"></i>点击</span><b>{{ activeTrendPoint.clicks }}</b></div>
-                <div v-if="hasTrendMetric('ctr')"><span><i class="legend-dot ctr"></i>CTR</span><b>{{ activeTrendPoint.ctr }}</b></div>
+                <div v-for="item in selectedTrendMetricOptions" :key="`tooltip-${item.key}`">
+                  <span><i class="legend-dot" :style="{ backgroundColor: item.color }"></i>{{ item.label }}</span>
+                  <b>{{ formatTrendMetricValue(item.key, activeTrendPoint.metricValues[item.key]) }}</b>
+                </div>
               </div>
               <div class="chart-axis-labels" aria-hidden="true">
                 <button
@@ -1165,13 +1224,14 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .analysis-filter-tab .material-symbols-outlined { color: #3276cc; font-size: 17px; }
 .analysis-filter-tab strong { font-size: 13px; font-weight: 600; }
 .analysis-filter-count { align-self: center; color: var(--steel); font-size: 11px; font-weight: 500; white-space: nowrap; }
-.analysis-filter-controls { display: grid; grid-template-columns: minmax(150px,.8fr) minmax(138px,.75fr) minmax(205px,1.2fr) minmax(220px,1.18fr) minmax(326px,1.7fr); align-items: center; gap: 6px; padding: 9px 14px; background: #fff; }
+.analysis-filter-controls { display: grid; grid-template-columns: minmax(125px,.8fr) minmax(136px,.92fr) minmax(138px,.92fr) minmax(182px,1.18fr) minmax(242px,1.6fr); align-items: center; gap: 6px; padding: 9px 14px; background: #fff; }
 .analysis-filter-chip { width: 100%; min-width: 0; height: 32px; display: inline-flex; align-items: center; padding: 0 10px; border-radius: 8px; background: var(--surface); color: var(--slate); white-space: nowrap; }
 .analysis-filter-chip.account-filter-chip,.analysis-filter-chip.objective-filter-chip { min-width: 0; }
 .analysis-filter-chip.time-filter-chip { min-width: 0; margin-left: 0; background: #fff; box-shadow: inset 0 0 0 1px var(--hairline); cursor: pointer; }
 .analysis-filter-chip.time-filter-chip > .material-symbols-outlined { margin-right: 5px; color: var(--steel); font-size: 14px; }
 .analysis-filter-chip > span { flex: 0 0 auto; color: var(--steel); font-size: 12px; line-height: 1.2; font-weight: 500; }
 .analysis-filter-chip select { min-width: 0; flex: 1; padding: 0 20px 0 0; border: 0; outline: none; background: transparent; color: var(--charcoal); font-family: inherit; font-size: 12px; line-height: 1.2; font-weight: 600; cursor: pointer; }
+.analysis-filter-chip.channel-filter-chip select { min-width: 82px; }
 .analysis-filter-chip.objective-filter-chip select { min-width: 108px; }
 .time-date-hotspot { min-width: 0; flex: 1 1 0; display: flex; align-items: center; border-radius: 5px; cursor: pointer; }
 .time-date-hotspot:focus-visible { outline: 2px solid rgb(79 143 232 / 24%); outline-offset: 1px; }
@@ -1202,6 +1262,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .overview-secondary-item strong { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 650; text-overflow: ellipsis; }
 
 .replay-card { margin-top: 16px; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; overflow: hidden; }
+.trend-replay-card { overflow: visible; }
 .replay-card-head { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--hairline-soft); }
 .replay-card-head h2 { margin: 0; color: var(--ink); font-size: 15px; font-weight: 600; }
 .replay-card-head p { margin: 3px 0 0; color: var(--steel); font-size: 12px; }
@@ -1215,10 +1276,11 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .trend-metric-options button:focus-visible { outline: 2px solid rgb(50 118 204 / 24%); outline-offset: 2px; }
 .trend-custom-button { height: 32px; display: inline-flex; align-items: center; gap: 5px; padding: 0 10px; border: 1px solid var(--hairline); border-radius: 8px; background: #fff; color: var(--charcoal); font-family: inherit; font-size: 11px; font-weight: 600; white-space: nowrap; cursor: pointer; }
 .trend-custom-button:hover { border-color: #b8d4f5; background: #f7fbff; }.trend-custom-button .material-symbols-outlined { font-size: 15px; }
-.trend-metric-popover { position: absolute; z-index: 12; top: 40px; right: 0; width: 220px; display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; padding: 12px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; box-shadow: rgba(15,15,15,.16) 0 12px 32px; }
-.trend-metric-popover > strong,.trend-metric-popover > small { grid-column: 1 / -1; }.trend-metric-popover > strong { color: var(--ink); font-size: 12px; }.trend-metric-popover > small { color: var(--steel); font-size: 10px; }
-.trend-metric-popover label { min-height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 7px; border-radius: 6px; background: var(--surface-soft); color: var(--charcoal); font-size: 11px; cursor: pointer; }.trend-metric-popover label span { display: inline-flex; align-items: center; gap: 5px; }.trend-metric-popover input { accent-color: #3276cc; }
-.trend-metric-popover > button { grid-column: 1 / -1; height: 30px; border: 0; border-radius: 6px; background: #3276cc; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.trend-metric-popover { position: absolute; z-index: 12; top: 40px; right: 0; width: min(500px,calc(100vw - 48px)); max-height: min(560px,72vh); display: flex; flex-direction: column; gap: 8px; padding: 12px; overflow-y: auto; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; box-shadow: rgba(15,15,15,.16) 0 12px 32px; }
+.trend-metric-popover > strong { color: var(--ink); font-size: 12px; }.trend-metric-popover > small { color: var(--steel); font-size: 10px; }
+.trend-metric-group { display: grid; gap: 5px; }.trend-metric-group > b { color: var(--steel); font-size: 10px; font-weight: 600; }.trend-metric-group > div { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.trend-metric-popover label { min-height: 30px; display: flex; align-items: center; gap: 6px; padding: 0 7px; border-radius: 6px; background: var(--surface-soft); color: var(--charcoal); font-size: 11px; cursor: pointer; }.trend-metric-popover label.disabled { cursor: not-allowed; opacity: .42; }.trend-metric-popover label span { display: inline-flex; align-items: center; gap: 5px; }.trend-metric-popover input { accent-color: #3276cc; }
+.trend-metric-popover > button { flex: 0 0 auto; height: 30px; border: 0; border-radius: 6px; background: #3276cc; color: #fff; font-family: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
 
 .trend-grid { display: grid; grid-template-columns: minmax(0,1fr); align-items: start; padding: 8px; }
 .chart-panel { position: relative; min-width: 0; height: var(--trend-chart-height,280px); min-height: 0; padding: 7px 2px 0; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fcfcfb; transition: height .2s ease; }
@@ -1226,7 +1288,9 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .legend-item { display: inline-flex; align-items: center; gap: 4px; }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
 .legend-dot.spend { background: #4f8fe8; }.legend-dot.revenue,.legend-dot.conversions { background: #20a464; }.legend-dot.roas { background: #dd7d00; }.legend-dot.orders { background: #8b5cf6; }.legend-dot.clicks { background: #0891b2; }.legend-dot.ctr { background: #d946ef; }
-.chart-panel svg { display: block; width: 100%; height: var(--trend-svg-height,230px); margin-top: -2px; overflow: visible; transition: height .2s ease; }
+.trend-svg-stage { position: relative; width: 100%; height: var(--trend-svg-height,230px); margin-top: -2px; transition: height .2s ease; }
+.chart-panel svg { display: block; width: 100%; height: 100%; overflow: visible; }
+.chart-active-point { position: absolute; z-index: 5; width: 9px; height: 9px; box-sizing: border-box; border: 2px solid; border-radius: 50%; background: #fff; pointer-events: none; transform: translate(-50%,-50%); }
 .chart-bars { opacity: .76; }.chart-bars.spend { fill: #4f8fe8; }.chart-bars.revenue { fill: #20a464; }.chart-bars.orders { fill: #8b5cf6; }.chart-bars.clicks { fill: #0891b2; }
 .chart-axis-labels { position: absolute; z-index: 3; right: 2px; bottom: 0; left: 2px; height: 24px; overflow: hidden; color: var(--stone); font-size: 11px; line-height: 1; }
 .chart-axis-labels button { position: absolute; top: 0; width: auto; min-width: 0 !important; height: 24px; min-height: 24px !important; display: inline-flex; align-items: center; justify-content: center; padding: 0 1px; overflow: hidden; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; line-height: inherit; text-align: center; white-space: nowrap; transform: translateX(-50%); }

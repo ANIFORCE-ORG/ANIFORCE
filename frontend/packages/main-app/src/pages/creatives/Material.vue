@@ -23,6 +23,7 @@ import {
 } from '@/api/materials'
 import { navItems } from '@/config/navigation'
 import { useToast } from '@/composables/useToast'
+import { MAX_TREND_METRICS } from '@/data/trendMetrics'
 import { toMaterialRows, type MaterialRow } from './materialsAdapter'
 
 const route = useRoute()
@@ -105,8 +106,6 @@ type OverviewCard = {
   sub: string
 }
 
-type OverviewPeriod = 'today' | 'last7Days' | 'last30Days'
-
 type AnalysisCard = {
   badge: string
   title: string
@@ -114,24 +113,26 @@ type AnalysisCard = {
   badgeClass: string
 }
 
-const overviewPeriodOptions: Array<{ value: OverviewPeriod; label: string; dateRange: string }> = [
-  { value: 'today', label: '今日', dateRange: '2026-08-14 至 2026-08-14' },
-  { value: 'last7Days', label: '近 7 天', dateRange: '2026-08-08 至 2026-08-14' },
-  { value: 'last30Days', label: '近 30 天', dateRange: '2026-07-16 至 2026-08-14' },
-]
-
-const overviewPeriod = ref<OverviewPeriod>('today')
-const overviewCompareEnabled = ref(false)
-const overviewComparison = ref('previousPeriod')
-const overviewPeriodConfig = computed(() => (
-  overviewPeriodOptions.find(option => option.value === overviewPeriod.value) || overviewPeriodOptions[0]
-))
-const overviewDateRange = computed(() => overviewPeriodConfig.value.dateRange)
-
-const mockOverview = {
-  updatedAt: '14:06',
-}
-
+const materialDateStart = ref('2026-08-24')
+const materialDateEnd = ref('2026-08-30')
+const materialRangeDays = computed(() => {
+  const start = Date.parse(`${materialDateStart.value}T00:00:00`)
+  const end = Date.parse(`${materialDateEnd.value}T00:00:00`)
+  return Number.isFinite(start) && Number.isFinite(end) ? Math.max(1, Math.round((end - start) / 86400000) + 1) : 1
+})
+const materialDateRangeLabel = computed(() => `${materialDateStart.value.replace(/-/g, '/')} – ${materialDateEnd.value.replace(/-/g, '/')}`)
+const materialFilterSearch = ref('')
+const materialFilterAccount = ref('all')
+const materialFilterSource = ref('all')
+const materialFilterRatio = ref('all')
+const materialFilterSort = ref<'created_at' | 'name'>('created_at')
+const materialFilterAccountOptions = computed(() => {
+  const accounts = new Map<string, string>()
+  materials.value.forEach(material => material.platform_assets?.forEach(asset => {
+    accounts.set(asset.ad_account_id, asset.ad_account_name || asset.ad_account_id)
+  }))
+  return Array.from(accounts, ([value, label]) => ({ value, label })).sort((a, b) => a.label.localeCompare(b.label))
+})
 const overviewCards = computed<OverviewCard[]>(() => [
   {
     label: '当前结果',
@@ -186,6 +187,240 @@ const analysisCards = computed<AnalysisCard[]>(() => [
     badgeClass: 'bg-blue-100 text-blue-700 dark:bg-blue-950/60 dark:text-blue-200',
   },
 ])
+
+type MaterialTrendMetric =
+  | 'spend' | 'revenue' | 'impressions' | 'clicks' | 'ctr' | 'cpc' | 'cpm' | 'conversions' | 'cvr' | 'cpa' | 'roas'
+  | 'creativeImpressions' | 'videoViews' | 'videoViewRate' | 'completionRate' | 'engagementRate' | 'avgWatchTime' | 'fatigueRate'
+  | 'metaReach' | 'metaFrequency' | 'metaLinkClicks' | 'metaLandingPageViews' | 'metaThruPlays'
+  | 'googleInteractions' | 'googleInteractionRate' | 'googleViews' | 'googleViewRate' | 'googleAvgCpv'
+  | 'tiktokVideoViews2s' | 'tiktokVideoViews6s' | 'tiktokVideoViews25' | 'tiktokVideoViews50' | 'tiktokVideoViews75' | 'tiktokVideoViews100' | 'tiktokEngagements'
+type MaterialTrendMetricGroup = 'overview' | 'creative' | 'meta' | 'google' | 'tiktok'
+type MaterialTrendMetricFormat = 'number' | 'money' | 'percent' | 'ratio' | 'seconds'
+type MaterialTrendPoint = Record<MaterialTrendMetric, number> & {
+  label: string
+  fullLabel: string
+  x: number
+}
+
+const materialTrendMetricOptions: Array<{ key: MaterialTrendMetric; label: string; color: string; group: MaterialTrendMetricGroup; format: MaterialTrendMetricFormat }> = [
+  { key: 'impressions', label: '曝光次数', color: '#5b8def', group: 'overview', format: 'number' },
+  { key: 'spend', label: '花费', color: '#f5a33f', group: 'overview', format: 'money' },
+  { key: 'revenue', label: '收入', color: '#20a464', group: 'overview', format: 'money' },
+  { key: 'clicks', label: '点击', color: '#0891b2', group: 'overview', format: 'number' },
+  { key: 'ctr', label: 'CTR', color: '#d946ef', group: 'overview', format: 'percent' },
+  { key: 'cpc', label: 'CPC', color: '#64748b', group: 'overview', format: 'money' },
+  { key: 'cpm', label: 'CPM', color: '#0f766e', group: 'overview', format: 'money' },
+  { key: 'conversions', label: '转化', color: '#8b5cf6', group: 'overview', format: 'number' },
+  { key: 'cvr', label: 'CVR', color: '#a855f7', group: 'overview', format: 'percent' },
+  { key: 'cpa', label: 'CPA', color: '#475569', group: 'overview', format: 'money' },
+  { key: 'roas', label: 'ROAS', color: '#16a34a', group: 'overview', format: 'ratio' },
+  { key: 'creativeImpressions', label: '素材曝光', color: '#4f8fe8', group: 'creative', format: 'number' },
+  { key: 'videoViews', label: '视频播放', color: '#0ea5e9', group: 'creative', format: 'number' },
+  { key: 'videoViewRate', label: '视频观看率', color: '#06b6d4', group: 'creative', format: 'percent' },
+  { key: 'completionRate', label: '完播率', color: '#14b8a6', group: 'creative', format: 'percent' },
+  { key: 'engagementRate', label: '互动率', color: '#10b981', group: 'creative', format: 'percent' },
+  { key: 'avgWatchTime', label: '平均观看时长', color: '#22c55e', group: 'creative', format: 'seconds' },
+  { key: 'fatigueRate', label: '疲劳度', color: '#ef4444', group: 'creative', format: 'percent' },
+  { key: 'metaReach', label: '覆盖人数', color: '#2563eb', group: 'meta', format: 'number' },
+  { key: 'metaFrequency', label: '频次', color: '#3b82f6', group: 'meta', format: 'ratio' },
+  { key: 'metaLinkClicks', label: '链接点击', color: '#60a5fa', group: 'meta', format: 'number' },
+  { key: 'metaLandingPageViews', label: '落地页浏览', color: '#1d4ed8', group: 'meta', format: 'number' },
+  { key: 'metaThruPlays', label: 'ThruPlay', color: '#1e40af', group: 'meta', format: 'number' },
+  { key: 'googleInteractions', label: '互动次数', color: '#f59e0b', group: 'google', format: 'number' },
+  { key: 'googleInteractionRate', label: '互动率', color: '#d97706', group: 'google', format: 'percent' },
+  { key: 'googleViews', label: '观看次数', color: '#fbbf24', group: 'google', format: 'number' },
+  { key: 'googleViewRate', label: '观看率', color: '#b45309', group: 'google', format: 'percent' },
+  { key: 'googleAvgCpv', label: '平均 CPV', color: '#92400e', group: 'google', format: 'money' },
+  { key: 'tiktokVideoViews2s', label: '2秒播放', color: '#111827', group: 'tiktok', format: 'number' },
+  { key: 'tiktokVideoViews6s', label: '6秒播放', color: '#374151', group: 'tiktok', format: 'number' },
+  { key: 'tiktokVideoViews25', label: '25%播放', color: '#4b5563', group: 'tiktok', format: 'number' },
+  { key: 'tiktokVideoViews50', label: '50%播放', color: '#6b7280', group: 'tiktok', format: 'number' },
+  { key: 'tiktokVideoViews75', label: '75%播放', color: '#9ca3af', group: 'tiktok', format: 'number' },
+  { key: 'tiktokVideoViews100', label: '100%播放', color: '#0f172a', group: 'tiktok', format: 'number' },
+  { key: 'tiktokEngagements', label: '互动次数', color: '#be123c', group: 'tiktok', format: 'number' },
+]
+const materialTrendMetricGroups = ([
+  { key: 'overview', label: '数据概览维度' },
+  { key: 'creative', label: '创意素材维度' },
+  { key: 'meta', label: 'Meta 核心指标' },
+  { key: 'google', label: 'Google 核心指标' },
+  { key: 'tiktok', label: 'TikTok 核心指标' },
+] as Array<{ key: MaterialTrendMetricGroup; label: string }>).map(group => ({
+  ...group,
+  metrics: materialTrendMetricOptions.filter(item => item.group === group.key),
+}))
+const activeMaterialTrendMetrics = ref<MaterialTrendMetric[]>(['impressions', 'spend'])
+const materialTrendMetricPickerOpen = ref(false)
+const hoveredMaterialTrendIndex = ref<number | null>(null)
+const hasMaterialTrendMetric = (metric: MaterialTrendMetric) => activeMaterialTrendMetrics.value.includes(metric)
+const isMaterialTrendMetricDisabled = (metric: MaterialTrendMetric) => !hasMaterialTrendMetric(metric) && activeMaterialTrendMetrics.value.length >= MAX_TREND_METRICS
+const selectedMaterialTrendMetricOptions = computed(() => materialTrendMetricOptions.filter(item => hasMaterialTrendMetric(item.key)))
+const toggleMaterialTrendMetric = (metric: MaterialTrendMetric) => {
+  if (hasMaterialTrendMetric(metric) && activeMaterialTrendMetrics.value.length === 1) return
+  if (isMaterialTrendMetricDisabled(metric)) return
+  activeMaterialTrendMetrics.value = hasMaterialTrendMetric(metric)
+    ? activeMaterialTrendMetrics.value.filter(item => item !== metric)
+    : [...activeMaterialTrendMetrics.value, metric]
+}
+
+const materialTrendPoints = computed<MaterialTrendPoint[]>(() => {
+  const singleDay = materialRangeDays.value === 1
+  const count = singleDay ? 8 : materialRangeDays.value
+  const startDate = new Date(`${materialDateStart.value}T00:00:00`)
+  return Array.from({ length: count }, (_, index) => {
+    const progress = count <= 1 ? 0 : index / (count - 1)
+    const wave = Math.sin(index * 1.18) * .09 + Math.cos(index * .53) * .045
+    const spend = (singleDay ? 92 : 390) * (1 + progress * .42 + wave)
+    const impressions = Math.round(spend * (13.4 + (index % 4) * 1.1))
+    const ctr = 3.22 + progress * .88 + Math.sin(index * .72) * .18
+    const clicks = Math.round(impressions * ctr / 100)
+    const conversions = Math.max(1, Math.round(clicks * (.074 + progress * .014 + (index % 3) * .003)))
+    const roas = 2.02 + progress * .68 + Math.cos(index * .67) * .14
+    const revenue = spend * roas
+    const cpc = spend / Math.max(clicks, 1)
+    const cpm = spend / Math.max(impressions, 1) * 1000
+    const cvr = conversions / Math.max(clicks, 1) * 100
+    const cpa = spend / Math.max(conversions, 1)
+    const creativeImpressions = Math.round(impressions * (.84 + progress * .04))
+    const videoViews = Math.round(creativeImpressions * (.48 + progress * .08))
+    const videoViewRate = videoViews / Math.max(creativeImpressions, 1) * 100
+    const completionRate = 18.5 + progress * 9.2 + Math.sin(index * .48) * 1.6
+    const engagementRate = 4.1 + progress * 1.6 + Math.cos(index * .62) * .35
+    const avgWatchTime = 5.8 + progress * 2.7 + Math.sin(index * .4) * .45
+    const fatigueRate = 38 + progress * 24 + Math.max(0, Math.sin(index * .58) * 6)
+    const metaReach = Math.round(impressions / (1.32 + progress * .22))
+    const metaFrequency = impressions / Math.max(metaReach, 1)
+    const metaLinkClicks = Math.round(clicks * .74)
+    const metaLandingPageViews = Math.round(metaLinkClicks * .82)
+    const metaThruPlays = Math.round(videoViews * .46)
+    const googleInteractions = Math.round(clicks + videoViews * .07)
+    const googleInteractionRate = googleInteractions / Math.max(impressions, 1) * 100
+    const googleViews = Math.round(videoViews * .63)
+    const googleViewRate = googleViews / Math.max(impressions, 1) * 100
+    const googleAvgCpv = spend / Math.max(googleViews, 1)
+    const tiktokVideoViews2s = Math.round(videoViews * .91)
+    const tiktokVideoViews6s = Math.round(videoViews * .68)
+    const tiktokVideoViews25 = Math.round(videoViews * .76)
+    const tiktokVideoViews50 = Math.round(videoViews * .58)
+    const tiktokVideoViews75 = Math.round(videoViews * .44)
+    const tiktokVideoViews100 = Math.round(videoViews * completionRate / 100)
+    const tiktokEngagements = Math.round(videoViews * engagementRate / 100)
+    let label = ''
+    let fullLabel = ''
+    if (singleDay) {
+      label = `${String(8 + index * 2).padStart(2, '0')}:00`
+      fullLabel = `${materialDateStart.value.replace(/-/g, '/')} ${label}`
+    } else {
+      const date = new Date(startDate)
+      date.setDate(startDate.getDate() + index)
+      label = `${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+      fullLabel = `${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}`
+    }
+    return {
+      label,
+      fullLabel,
+      x: count <= 1 ? 480 : 84 + index * 792 / (count - 1),
+      spend,
+      revenue,
+      impressions,
+      clicks,
+      conversions,
+      ctr,
+      cpc,
+      cpm,
+      cvr,
+      cpa,
+      roas,
+      creativeImpressions,
+      videoViews,
+      videoViewRate,
+      completionRate,
+      engagementRate,
+      avgWatchTime,
+      fatigueRate,
+      metaReach,
+      metaFrequency,
+      metaLinkClicks,
+      metaLandingPageViews,
+      metaThruPlays,
+      googleInteractions,
+      googleInteractionRate,
+      googleViews,
+      googleViewRate,
+      googleAvgCpv,
+      tiktokVideoViews2s,
+      tiktokVideoViews6s,
+      tiktokVideoViews25,
+      tiktokVideoViews50,
+      tiktokVideoViews75,
+      tiktokVideoViews100,
+      tiktokEngagements,
+    }
+  })
+})
+const niceMaterialTrendMax = (value: number) => {
+  if (value <= 0) return 1
+  const roughStep = value / 3
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep))
+  return Math.ceil(roughStep / magnitude) * magnitude * 3
+}
+const materialTrendScales = computed(() => Object.fromEntries(materialTrendMetricOptions.map(({ key }) => {
+  const max = Math.max(...materialTrendPoints.value.map(point => point[key]))
+  return [key, niceMaterialTrendMax(max)]
+})) as Record<MaterialTrendMetric, number>)
+const materialTrendY = (metric: MaterialTrendMetric, value: number) => {
+  const max = materialTrendScales.value[metric]
+  return 146 - value / max * 108
+}
+const materialTrendPath = (metric: MaterialTrendMetric) => {
+  const points = materialTrendPoints.value.map(point => ({ x: point.x, y: materialTrendY(metric, point[metric]) }))
+  if (!points.length) return ''
+  if (points.length === 1) return `M${points[0].x} ${points[0].y}`
+  return points.slice(0, -1).reduce((path, point, index) => {
+    const previous = points[index - 1] || point
+    const next = points[index + 1]
+    const afterNext = points[index + 2] || next
+    const control1X = point.x + (next.x - previous.x) / 6
+    const control1Y = point.y + (next.y - previous.y) / 6
+    const control2X = next.x - (afterNext.x - point.x) / 6
+    const control2Y = next.y - (afterNext.y - point.y) / 6
+    return `${path} C${control1X} ${control1Y},${control2X} ${control2Y},${next.x} ${next.y}`
+  }, `M${points[0].x} ${points[0].y}`)
+}
+const materialTrendAxisTicks = computed(() => {
+  const points = materialTrendPoints.value
+  if (points.length <= 8) return points.map((point, index) => ({ point, index }))
+  const step = Math.ceil((points.length - 1) / 6)
+  return Array.from({ length: Math.floor((points.length - 1) / step) + 1 }, (_, tickIndex) => {
+    const index = tickIndex * step
+    return { point: points[index], index }
+  })
+})
+const materialTrendHitWidth = computed(() => materialTrendPoints.value.length <= 1 ? 72 : Math.max(10, 792 / (materialTrendPoints.value.length - 1)))
+const activeMaterialTrendPoint = computed(() => hoveredMaterialTrendIndex.value === null ? null : materialTrendPoints.value[hoveredMaterialTrendIndex.value])
+const materialTrendTooltipLeft = computed(() => {
+  const index = hoveredMaterialTrendIndex.value
+  return index === null || materialTrendPoints.value.length <= 1 ? 50 : 10 + index / (materialTrendPoints.value.length - 1) * 80
+})
+const primaryMaterialTrendMetric = computed(() => selectedMaterialTrendMetricOptions.value[0]?.key || 'impressions')
+const secondaryMaterialTrendMetric = computed(() => selectedMaterialTrendMetricOptions.value[1]?.key || null)
+const materialTrendAxisValues = (metric: MaterialTrendMetric) => {
+  const max = materialTrendScales.value[metric]
+  return [max, max * 2 / 3, max / 3, 0]
+}
+const formatMaterialTrendAxisValue = (value: number) => {
+  if (Math.abs(value) >= 1000) return Math.round(value).toLocaleString('en-US')
+  if (Math.abs(value) >= 10) return Math.round(value).toLocaleString('en-US')
+  return value.toFixed(1).replace(/\.0$/, '')
+}
+const formatMaterialTrendValue = (metric: MaterialTrendMetric, value: number) => {
+  const format = materialTrendMetricOptions.find(item => item.key === metric)?.format || 'number'
+  if (format === 'money') return `US$${value.toFixed(2)}`
+  if (format === 'percent') return `${value.toFixed(2)}%`
+  if (format === 'ratio') return `${value.toFixed(2)}x`
+  if (format === 'seconds') return `${value.toFixed(1)}s`
+  return Math.round(value).toLocaleString('en-US')
+}
 
 const selectedRow = computed(() => {
   const material = materials.value.find(item => item.id === selectedMaterialId.value) || materials.value[0]
@@ -761,7 +996,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </script>
 
 <template>
-  <div class="material-notion-page workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
+  <div class="material-notion-page workspace-page-canvas relative flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
       :sessions="sessions"
@@ -799,44 +1034,50 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
           </div>
 
           <div class="mb-[14px] space-y-[12px]">
-            <section class="overview-filter-panel" aria-label="素材周期筛选与对比维度">
+            <section class="overview-filter-panel" aria-label="素材筛选与时间区间">
               <div class="overview-report-meta">
-                <strong>素材周期报表</strong>
-                <span class="overview-report-divider" aria-hidden="true"></span>
-                <span>更新时间 {{ mockOverview.updatedAt }}</span>
+                <strong>素材</strong>
+              </div>
+
+              <div class="material-report-library-filters" aria-label="素材列表筛选">
+                <label class="material-report-search">
+                  <span class="material-symbols-outlined" aria-hidden="true">search</span>
+                  <input v-model="materialFilterSearch" type="search" placeholder="搜索名称、文件名、标签或平台账户" aria-label="搜索素材" />
+                </label>
+                <select v-model="materialFilterAccount" aria-label="筛选广告账户">
+                  <option value="all">全部广告账户</option>
+                  <option v-for="item in materialFilterAccountOptions" :key="item.value" :value="item.value">{{ item.label }}</option>
+                </select>
+                <select v-model="materialFilterSource" aria-label="筛选素材来源">
+                  <option value="all">全部来源</option>
+                  <option value="oss">手动上传</option>
+                  <option value="local">历史素材</option>
+                  <option value="meta_import">Meta 导入</option>
+                  <option value="google_import">Google 导入</option>
+                  <option value="tiktok_import">TikTok 导入</option>
+                </select>
+                <select v-model="materialFilterRatio" aria-label="筛选素材比例">
+                  <option value="all">全部比例</option>
+                  <option value="9:16">9:16</option>
+                  <option value="1:1">1:1</option>
+                  <option value="4:5">4:5</option>
+                  <option value="未知">未知</option>
+                </select>
+                <select v-model="materialFilterSort" aria-label="素材排序">
+                  <option value="created_at">最近创建</option>
+                  <option value="name">名称</option>
+                </select>
               </div>
 
               <div class="overview-filter-controls">
-                <label class="overview-filter-field">
-                  <span class="overview-filter-label">时间维度：</span>
-                  <select v-model="overviewPeriod" class="overview-period-select" aria-label="时间维度">
-                    <option v-for="option in overviewPeriodOptions" :key="option.value" :value="option.value">
-                      {{ option.label }}
-                    </option>
-                  </select>
-                </label>
-
-                <span class="overview-filter-divider" aria-hidden="true"></span>
-
-                <div class="overview-date-range" aria-label="当前日期范围">
-                  <span>{{ overviewDateRange }}</span>
-                  <span class="material-symbols-outlined" aria-hidden="true">calendar_month</span>
+                <div class="material-date-range" role="group" aria-label="时间筛选区间">
+                  <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                  <span class="material-date-prefix">时间：</span>
+                  <input v-model="materialDateStart" type="date" :max="materialDateEnd" aria-label="开始日期" />
+                  <span class="material-date-separator">至</span>
+                  <input v-model="materialDateEnd" type="date" :min="materialDateStart" aria-label="结束日期" />
                 </div>
 
-                <span class="overview-filter-divider" aria-hidden="true"></span>
-
-                <label class="overview-compare-toggle">
-                  <input v-model="overviewCompareEnabled" type="checkbox" />
-                  <span>对比</span>
-                </label>
-
-                <label v-if="overviewCompareEnabled" class="overview-filter-field overview-comparison-field">
-                  <span class="overview-filter-label">对比维度：</span>
-                  <select v-model="overviewComparison" class="overview-period-select" aria-label="对比维度">
-                    <option value="previousPeriod">上一周期</option>
-                    <option value="lastYear">去年同期</option>
-                  </select>
-                </label>
               </div>
             </section>
 
@@ -850,6 +1091,114 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
                   <div class="overview-metric-label text-[11px] font-semibold text-slate-500 dark:text-slate-400">{{ card.label }}</div>
                   <div class="overview-metric-value mt-[8px] truncate text-[21px] font-bold leading-none text-slate-900 dark:text-white">{{ card.value }}</div>
                   <div class="overview-metric-sub mt-[6px] truncate text-[10px] text-slate-500 dark:text-slate-400">{{ card.sub }}</div>
+                </div>
+              </div>
+            </section>
+
+            <section class="material-notion-section material-trend-panel" aria-labelledby="material-trend-title">
+              <div class="material-trend-header">
+                <div>
+                  <strong id="material-trend-title">数据趋势</strong>
+                  <p>{{ materialDateRangeLabel }} · 素材投放指标随时间变化</p>
+                </div>
+                <div class="material-trend-metric-actions">
+                  <div class="material-trend-selected-metrics" aria-label="已选择趋势指标">
+                    <button
+                      v-for="item in selectedMaterialTrendMetricOptions"
+                      :key="item.key"
+                      type="button"
+                      :title="`移除${item.label}`"
+                      @click="toggleMaterialTrendMetric(item.key)"
+                    >{{ item.label }}</button>
+                  </div>
+                  <button
+                    type="button"
+                    class="material-trend-custom-button"
+                    :aria-expanded="materialTrendMetricPickerOpen"
+                    @click="materialTrendMetricPickerOpen = !materialTrendMetricPickerOpen"
+                  ><span class="material-symbols-outlined" aria-hidden="true">tune</span>自定义指标</button>
+                  <div v-if="materialTrendMetricPickerOpen" class="material-trend-metric-popover" role="dialog" aria-label="自定义素材趋势指标">
+                    <strong>选择趋势指标</strong>
+                    <div v-for="group in materialTrendMetricGroups" :key="group.key" class="material-trend-metric-group">
+                      <b>{{ group.label }}</b>
+                      <div>
+                        <label v-for="item in group.metrics" :key="item.key" :class="{ disabled: isMaterialTrendMetricDisabled(item.key) }">
+                          <input type="checkbox" :checked="hasMaterialTrendMetric(item.key)" :disabled="isMaterialTrendMetricDisabled(item.key)" @change="toggleMaterialTrendMetric(item.key)" />
+                          <span><i :style="{ backgroundColor: item.color }"></i>{{ item.label }}</span>
+                        </label>
+                      </div>
+                    </div>
+                    <small>至少保留 1 个指标，最多同时选择 {{ MAX_TREND_METRICS }} 个</small>
+                    <button type="button" @click="materialTrendMetricPickerOpen = false">完成</button>
+                  </div>
+                </div>
+              </div>
+              <div class="material-trend-chart" @mouseleave="hoveredMaterialTrendIndex = null">
+                <div class="material-trend-legend">
+                  <span v-for="item in selectedMaterialTrendMetricOptions" :key="item.key"><i :style="{ backgroundColor: item.color }"></i>{{ item.label }}</span>
+                </div>
+                <div class="material-trend-y-axis left" aria-hidden="true">
+                  <span v-for="value in materialTrendAxisValues(primaryMaterialTrendMetric)" :key="`left-${value}`">{{ formatMaterialTrendAxisValue(value) }}</span>
+                </div>
+                <div v-if="secondaryMaterialTrendMetric" class="material-trend-y-axis right" aria-hidden="true">
+                  <span v-for="value in materialTrendAxisValues(secondaryMaterialTrendMetric)" :key="`right-${value}`">{{ formatMaterialTrendAxisValue(value) }}</span>
+                </div>
+                <svg viewBox="0 20 960 140" preserveAspectRatio="none" role="img" :aria-label="`${materialDateRangeLabel}素材数据趋势`">
+                  <g class="material-trend-grid"><path d="M60 38H900M60 74H900M60 110H900M60 146H900" /></g>
+                  <path
+                    v-for="item in selectedMaterialTrendMetricOptions"
+                    :key="`line-${item.key}`"
+                    :d="materialTrendPath(item.key)"
+                    fill="none"
+                    :stroke="item.color"
+                    stroke-width="2.8"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                    vector-effect="non-scaling-stroke"
+                  />
+                  <line v-if="activeMaterialTrendPoint" class="material-trend-active-line" :x1="activeMaterialTrendPoint.x" :x2="activeMaterialTrendPoint.x" y1="24" y2="146" />
+                  <g v-if="activeMaterialTrendPoint">
+                    <circle
+                      v-for="item in selectedMaterialTrendMetricOptions"
+                      :key="`active-${item.key}`"
+                      :cx="activeMaterialTrendPoint.x"
+                      :cy="materialTrendY(item.key, activeMaterialTrendPoint[item.key])"
+                      r="3.2"
+                      fill="#fff"
+                      :stroke="item.color"
+                      stroke-width="2"
+                      vector-effect="non-scaling-stroke"
+                    />
+                  </g>
+                  <rect
+                    v-for="(point, index) in materialTrendPoints"
+                    :key="`material-trend-hit-${point.fullLabel}`"
+                    class="material-trend-hit"
+                    :x="point.x - materialTrendHitWidth / 2"
+                    y="20"
+                    :width="materialTrendHitWidth"
+                    height="140"
+                    tabindex="0"
+                    role="button"
+                    :aria-label="`${point.fullLabel}素材趋势数据`"
+                    @mouseenter="hoveredMaterialTrendIndex = index"
+                    @focus="hoveredMaterialTrendIndex = index"
+                    @blur="hoveredMaterialTrendIndex = null"
+                  />
+                </svg>
+                <div v-if="activeMaterialTrendPoint" class="material-trend-tooltip" :style="{ left: `${materialTrendTooltipLeft}%` }" role="status">
+                  <strong>{{ activeMaterialTrendPoint.fullLabel }}</strong>
+                  <div v-for="item in selectedMaterialTrendMetricOptions" :key="`tooltip-${item.key}`">
+                    <span><i :style="{ backgroundColor: item.color }"></i>{{ item.label }}</span>
+                    <b>{{ formatMaterialTrendValue(item.key, activeMaterialTrendPoint[item.key]) }}</b>
+                  </div>
+                </div>
+                <div class="material-trend-axis" aria-hidden="true">
+                  <span
+                    v-for="tick in materialTrendAxisTicks"
+                    :key="`axis-${tick.point.fullLabel}`"
+                    :style="{ left: `${tick.point.x / 960 * 100}%` }"
+                  >{{ tick.point.label }}</span>
                 </div>
               </div>
             </section>
@@ -886,17 +1235,24 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
             :materials="materials"
             :loading="loading"
             :selected-material-id="selectedMaterialId"
+            :show-toolbar="false"
             variant="notion"
             allow-delete
+            v-model:search-query="materialFilterSearch"
+            v-model:account-filter="materialFilterAccount"
+            v-model:source-filter="materialFilterSource"
+            v-model:ratio-filter="materialFilterRatio"
+            v-model:sort-key="materialFilterSort"
             @select="selectRow"
             @delete="askDeleteMaterial"
           />
         </div>
       </section>
 
-      <div v-if="detailOpen" class="fixed inset-0 z-40 bg-slate-950/20" @click="closeDetailDrawer"></div>
-      <aside
-        class="fixed bottom-0 right-0 top-0 z-50 flex h-screen w-[min(620px,calc(100vw-52px))] max-w-[100vw] flex-col overflow-hidden border-l border-slate-200 bg-[#f6f7f9] shadow-2xl transition-all duration-200 dark:border-slate-800 dark:bg-slate-950 max-lg:w-screen"
+      <Teleport to="body">
+        <div v-if="detailOpen" class="material-detail-backdrop fixed inset-0 z-[60] bg-slate-950/20" aria-hidden="true" @click="closeDetailDrawer"></div>
+        <aside
+        class="fixed bottom-0 right-0 top-0 z-[70] flex h-screen w-[min(620px,calc(100vw-52px))] max-w-[100vw] flex-col overflow-hidden border-l border-slate-200 bg-[#f6f7f9] shadow-2xl transition-all duration-200 dark:border-slate-800 dark:bg-slate-950 max-lg:w-screen"
         :class="detailOpen ? 'translate-x-0 opacity-100' : 'translate-x-[108%] opacity-0 pointer-events-none'"
       >
         <div class="flex h-[64px] shrink-0 items-center gap-[12px] border-b border-slate-200 bg-white px-[18px] pr-[22px] dark:border-slate-800 dark:bg-slate-900">
@@ -977,7 +1333,8 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
         <div v-else class="flex flex-1 items-center justify-center px-[24px] text-center text-[11px] text-slate-500">
           选择一条素材查看详情
         </div>
-      </aside>
+        </aside>
+      </Teleport>
     </main>
 
     <div v-if="showUploadModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/40 px-[18px]" @click.self="closeUploadModal">
@@ -1084,7 +1441,8 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
     </div>
   </div>
 
-  <div v-if="showMetaSyncModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeMetaSyncModal">
+  <Teleport to="body">
+  <div v-if="showMetaSyncModal" class="material-meta-sync-backdrop fixed inset-0 z-[80] flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeMetaSyncModal">
     <div class="w-full max-w-[560px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
       <div class="flex items-center justify-between border-b border-slate-200 px-[18px] py-[14px] dark:border-slate-700">
         <div>
@@ -1150,6 +1508,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
       </div>
     </div>
   </div>
+  </Teleport>
 
   <div v-if="showMetaPublishModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-[16px]" @click.self="closeMetaPublishModal">
     <div class="w-full max-w-[480px] overflow-hidden rounded-md bg-white shadow-2xl dark:bg-slate-800">
@@ -1259,6 +1618,382 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
   background: var(--mn-surface);
 }
 
+.material-trend-panel {
+  position: relative;
+  overflow: visible;
+  border: 1px solid var(--mn-hairline);
+  background: var(--mn-canvas);
+}
+
+.material-trend-header {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 10px 14px;
+  border-bottom: 1px solid var(--mn-hairline-soft);
+}
+
+.material-trend-header strong {
+  color: var(--mn-ink);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.material-trend-header p {
+  margin: 2px 0 0;
+  color: var(--mn-muted);
+  font-size: 10px;
+}
+
+.material-trend-metric-actions {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+}
+
+.material-trend-selected-metrics {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 6px;
+}
+
+.material-trend-selected-metrics button,
+.material-trend-custom-button {
+  height: 32px;
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 11px;
+  border: 1px solid #c8dcf4;
+  border-radius: 7px;
+  background: #f3f8fe;
+  color: #246ebd;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.material-trend-selected-metrics button:hover {
+  border-color: #a9c9ed;
+  background: #ebf4fe;
+}
+
+.material-trend-custom-button {
+  gap: 5px;
+  border-color: var(--mn-hairline);
+  background: #fff;
+  color: var(--mn-ink);
+}
+
+.material-trend-custom-button:hover {
+  background: var(--mn-surface-soft);
+}
+
+.material-trend-custom-button .material-symbols-outlined {
+  font-size: 15px;
+}
+
+.material-trend-metric-popover {
+  position: absolute;
+  z-index: 30;
+  top: 40px;
+  right: 0;
+  width: min(500px, calc(100vw - 48px));
+  max-height: min(560px, 72vh);
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding: 12px;
+  overflow-y: auto;
+  border: 1px solid var(--mn-hairline);
+  border-radius: 9px;
+  background: #fff;
+  box-shadow: rgb(15 15 15 / 15%) 0 12px 32px;
+}
+
+.material-trend-metric-popover > strong {
+  color: var(--mn-ink);
+  font-size: 12px;
+}
+
+.material-trend-metric-group {
+  padding-top: 7px;
+  border-top: 1px solid var(--mn-hairline-soft);
+}
+
+.material-trend-metric-group > b {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--mn-muted);
+  font-size: 10px;
+  font-weight: 600;
+}
+
+.material-trend-metric-group > div {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 6px;
+}
+
+.material-trend-metric-popover label {
+  min-height: 30px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 7px;
+  border-radius: 6px;
+  background: var(--mn-surface-soft);
+  color: var(--mn-ink);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.material-trend-metric-popover label.disabled {
+  cursor: not-allowed;
+  opacity: .42;
+}
+
+.material-trend-metric-popover label span,
+.material-trend-legend span,
+.material-trend-tooltip span {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.material-trend-metric-popover i,
+.material-trend-legend i,
+.material-trend-tooltip i {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 6px;
+  border-radius: 50%;
+}
+
+.material-trend-metric-popover > small {
+  color: var(--mn-muted);
+  font-size: 10px;
+}
+
+.material-trend-metric-popover > button {
+  height: 30px;
+  border: 0;
+  border-radius: 6px;
+  background: #3276cc;
+  color: #fff;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.material-trend-chart {
+  position: relative;
+  height: 246px;
+  min-width: 0;
+  padding: 10px 10px 8px;
+  overflow: hidden;
+  background: #fcfcfb;
+}
+
+.material-trend-legend {
+  height: 18px;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  color: var(--mn-muted);
+  font-size: 11px;
+}
+
+.material-trend-chart svg {
+  display: block;
+  width: 100%;
+  height: 200px;
+}
+
+.material-trend-grid {
+  fill: none;
+  stroke: #dfe4ea;
+  stroke-width: 1;
+  stroke-dasharray: 4 4;
+  vector-effect: non-scaling-stroke;
+}
+
+.material-trend-y-axis {
+  position: absolute;
+  z-index: 2;
+  top: 48px;
+  bottom: 38px;
+  width: 6.25%;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  color: #6f716f;
+  font-size: 10px;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  pointer-events: none;
+}
+
+.material-trend-y-axis.left {
+  left: 0;
+  align-items: center;
+  text-align: center;
+}
+
+.material-trend-y-axis.right {
+  right: 0;
+  align-items: center;
+  text-align: center;
+}
+
+.material-trend-hit {
+  fill: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.material-trend-hit:focus {
+  fill: rgb(79 143 232 / 4%);
+}
+
+.material-trend-active-line {
+  stroke: rgb(100 116 139 / 32%);
+  stroke-width: 1;
+  stroke-dasharray: 3 3;
+  vector-effect: non-scaling-stroke;
+}
+
+.material-trend-axis {
+  position: absolute;
+  right: 10px;
+  bottom: 4px;
+  left: 10px;
+  height: 22px;
+  color: #9b9994;
+  font-size: 10px;
+  line-height: 1;
+}
+
+.material-trend-axis span {
+  position: absolute;
+  top: 0;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  white-space: nowrap;
+  transform: translateX(-50%);
+}
+
+.material-trend-tooltip {
+  position: absolute;
+  z-index: 5;
+  top: 42px;
+  width: 164px;
+  padding: 9px 10px;
+  border: 1px solid var(--mn-hairline);
+  border-radius: 8px;
+  background: rgb(255 255 255 / 96%);
+  box-shadow: rgb(15 15 15 / 13%) 0 10px 28px;
+  color: var(--mn-ink);
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.material-trend-tooltip > strong {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+}
+
+.material-trend-tooltip > div {
+  min-height: 19px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  color: var(--mn-muted);
+  font-size: 10px;
+}
+
+.material-trend-tooltip b {
+  color: var(--mn-ink);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+:global(.dark) .material-trend-panel,
+:global(.dark) .material-trend-chart,
+:global(.dark) .material-trend-custom-button,
+:global(.dark) .material-trend-metric-popover {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42);
+}
+
+:global(.dark) .material-trend-header {
+  border-color: rgb(51 65 85);
+}
+
+:global(.dark) .material-trend-grid {
+  stroke: rgb(71 85 105 / 65%);
+}
+
+:global(.dark) .material-trend-y-axis {
+  color: rgb(148 163 184);
+}
+
+:global(.dark) .material-trend-header strong,
+:global(.dark) .material-trend-custom-button,
+:global(.dark) .material-trend-metric-popover > strong,
+:global(.dark) .material-trend-metric-popover label,
+:global(.dark) .material-trend-tooltip,
+:global(.dark) .material-trend-tooltip b {
+  color: rgb(241 245 249);
+}
+
+:global(.dark) .material-trend-metric-popover label {
+  background: rgb(30 41 59);
+}
+
+:global(.dark) .material-trend-tooltip {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42 / 96%);
+}
+
+@media (max-width: 760px) {
+  .material-trend-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .material-trend-metric-actions,
+  .material-trend-selected-metrics {
+    width: 100%;
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .material-trend-metric-popover {
+    right: auto;
+    left: 0;
+  }
+
+  .material-trend-metric-group > div {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .material-notion-action {
   box-shadow: none;
 }
@@ -1267,13 +2002,13 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
   display: flex;
   min-height: 54px;
   align-items: center;
-  justify-content: space-between;
-  gap: 24px;
+  justify-content: flex-start;
+  gap: 12px;
   overflow-x: auto;
   border: 1px solid #e5e3df;
   border-radius: 8px;
   background: #ffffff;
-  padding: 0 16px;
+  padding: 8px 12px;
 }
 
 .overview-report-meta {
@@ -1299,15 +2034,128 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
   background: #ede9e4;
 }
 
+.material-report-library-filters {
+  min-width: 520px;
+  display: flex;
+  flex: 1 1 650px;
+  align-items: center;
+  gap: 6px;
+}
+
+.material-report-search {
+  min-width: 160px;
+  height: 34px;
+  display: flex;
+  flex: 1 1 220px;
+  align-items: center;
+  gap: 7px;
+  padding: 0 10px;
+  border: 1px solid var(--mn-hairline);
+  border-radius: 7px;
+  background: #fff;
+}
+
+.material-report-search .material-symbols-outlined {
+  flex: 0 0 auto;
+  color: #9b9a97;
+  font-size: 16px;
+}
+
+.material-report-search input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--mn-ink);
+  font: inherit;
+  font-size: 11px;
+}
+
+.material-report-search input::placeholder {
+  color: #9b9a97;
+}
+
+.material-report-library-filters select {
+  min-width: 104px;
+  height: 34px;
+  padding: 0 27px 0 9px;
+  border: 1px solid var(--mn-hairline);
+  border-radius: 7px;
+  outline: 0;
+  background-color: #fff;
+  background-image: linear-gradient(45deg, transparent 50%, #787671 50%), linear-gradient(135deg, #787671 50%, transparent 50%);
+  background-position: calc(100% - 12px) 50%, calc(100% - 8px) 50%;
+  background-repeat: no-repeat;
+  background-size: 4px 4px, 4px 4px;
+  color: var(--mn-ink);
+  font: inherit;
+  font-size: 11px;
+  white-space: nowrap;
+  appearance: none;
+  cursor: pointer;
+}
+
+.material-report-library-filters select:first-of-type {
+  min-width: 126px;
+}
+
+.material-report-search:focus-within,
+.material-report-library-filters select:focus-visible {
+  border-color: #b7b5b0;
+  box-shadow: 0 0 0 2px rgb(35 131 226 / 14%);
+}
+
 .overview-filter-controls {
   display: flex;
   min-width: max-content;
   margin-left: auto;
   align-items: center;
-  gap: 12px;
+  gap: 6px;
   color: #37352f;
   font-size: 12px;
   line-height: 1.5;
+}
+
+.material-date-range {
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 8px;
+  border: 1px solid var(--mn-hairline);
+  border-radius: 7px;
+  background: #fff;
+  white-space: nowrap;
+}
+
+.material-date-range > .material-symbols-outlined {
+  color: #787671;
+  font-size: 15px;
+}
+
+.material-date-prefix,
+.material-date-separator {
+  color: #5d5b54;
+  font-size: 11px;
+}
+
+.material-date-range input {
+  width: 118px;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: #1a1a1a;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.material-date-range:focus-within {
+  border-color: #b7b5b0;
+  box-shadow: 0 0 0 2px rgb(35 131 226 / 14%);
 }
 
 .overview-filter-field,
@@ -1378,6 +2226,13 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 :global(.dark) .overview-filter-panel {
   border-color: rgb(51 65 85);
   background: rgb(15 23 42);
+}
+
+:global(.dark) .material-report-search,
+:global(.dark) .material-report-library-filters select {
+  border-color: rgb(51 65 85);
+  background-color: rgb(15 23 42);
+  color: rgb(241 245 249);
 }
 
 :global(.dark) .overview-filter-controls,

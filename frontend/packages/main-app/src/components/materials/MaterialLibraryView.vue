@@ -10,27 +10,59 @@ const props = withDefaults(defineProps<{
   allowDelete?: boolean
   selectedMaterialId?: string | null
   variant?: 'default' | 'notion'
+  showToolbar?: boolean
+  searchQuery?: string
+  accountFilter?: string
+  sourceFilter?: string
+  ratioFilter?: string
+  sortKey?: 'created_at' | 'name'
 }>(), {
   loading: false,
   embedded: false,
   allowDelete: false,
   selectedMaterialId: null,
   variant: 'default',
+  showToolbar: true,
 })
 
 const emit = defineEmits<{
   select: [row: MaterialRow]
   mention: [material: Material]
   delete: [row: MaterialRow]
+  'update:searchQuery': [value: string]
+  'update:accountFilter': [value: string]
+  'update:sourceFilter': [value: string]
+  'update:ratioFilter': [value: string]
+  'update:sortKey': [value: 'created_at' | 'name']
 }>()
 
 const previewSources = ref<Map<string, string>>(new Map())
 const mimeTypes = ref<Map<string, string>>(new Map())
-const searchQuery = ref('')
-const accountFilter = ref('all')
-const sourceFilter = ref('all')
-const ratioFilter = ref('all')
-const sortKey = ref('created_at')
+const localSearchQuery = ref('')
+const localAccountFilter = ref('all')
+const localSourceFilter = ref('all')
+const localRatioFilter = ref('all')
+const localSortKey = ref<'created_at' | 'name'>('created_at')
+const searchQuery = computed({
+  get: () => props.searchQuery ?? localSearchQuery.value,
+  set: value => { localSearchQuery.value = value; emit('update:searchQuery', value) },
+})
+const accountFilter = computed({
+  get: () => props.accountFilter ?? localAccountFilter.value,
+  set: value => { localAccountFilter.value = value; emit('update:accountFilter', value) },
+})
+const sourceFilter = computed({
+  get: () => props.sourceFilter ?? localSourceFilter.value,
+  set: value => { localSourceFilter.value = value; emit('update:sourceFilter', value) },
+})
+const ratioFilter = computed({
+  get: () => props.ratioFilter ?? localRatioFilter.value,
+  set: value => { localRatioFilter.value = value; emit('update:ratioFilter', value) },
+})
+const sortKey = computed({
+  get: () => props.sortKey ?? localSortKey.value,
+  set: value => { localSortKey.value = value; emit('update:sortKey', value) },
+})
 const localSelectedId = ref<string | null>(props.selectedMaterialId)
 
 watch(() => props.selectedMaterialId, value => {
@@ -109,7 +141,7 @@ const platformClass = (platform?: string) => platform === 'Meta'
     class="material-library rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
     :class="{ 'material-library--notion': variant === 'notion' }"
   >
-    <div class="material-library-toolbar border-b border-slate-200 px-[16px] py-[14px] dark:border-slate-800">
+    <div v-if="showToolbar" class="material-library-toolbar border-b border-slate-200 px-[16px] py-[14px] dark:border-slate-800">
       <div class="flex flex-wrap items-center gap-[8px]">
         <div class="relative min-w-[220px] flex-1">
           <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-[15px] text-slate-400">search</span>
