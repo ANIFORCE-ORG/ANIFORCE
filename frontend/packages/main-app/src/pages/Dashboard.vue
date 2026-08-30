@@ -53,6 +53,15 @@ const dateFactorFor = (startValue: string) => {
 }
 const dateRangeDays = computed(() => rangeDaysBetween(dateStart.value, dateEnd.value))
 const dateContextFactor = computed(() => dateFactorFor(dateStart.value))
+const shiftDateInput = (value: string, offsetDays: number) => {
+  const [year, month, day] = value.split('-').map(Number)
+  const shifted = new Date(Date.UTC(year, month - 1, day + offsetDays))
+  return shifted.toISOString().slice(0, 10)
+}
+const previousPeriodStart = computed(() => shiftDateInput(dateStart.value, -dateRangeDays.value))
+const previousPeriodEnd = computed(() => shiftDateInput(dateStart.value, -1))
+const previousDateContextFactor = computed(() => dateFactorFor(previousPeriodStart.value))
+const previousPeriodLabel = computed(() => `对比上个等长周期 ${formatRangeDate(previousPeriodStart.value)} – ${formatRangeDate(previousPeriodEnd.value)}`)
 const dailyDateRangeDays = computed(() => rangeDaysBetween(dailyDateStart.value, dailyDateEnd.value))
 const dailyDateContextFactor = computed(() => dateFactorFor(dailyDateStart.value))
 watch([dateStart, dateEnd], ([start, end]) => {
@@ -251,6 +260,14 @@ const pointBadge = (current: number, previous: number) => {
     tone: positive ? 'positive' : 'negative',
   }
 }
+const periodChangeBadge = (current: number, previous: number) => {
+  if (!previous) return { label: '—', tone: 'neutral' }
+  const delta = (current - previous) / previous * 100
+  return {
+    label: `${delta >= 0 ? '▲' : '▼'} ${Math.abs(delta).toFixed(1)}%`,
+    tone: delta >= 0 ? 'increase' : 'decrease',
+  }
+}
 const overviewMetrics = computed(() => {
   const revenue = aggregate.value.spend * aggregate.value.kpiRoas
   const previousRevenue = aggregate.value.previousSpend * aggregate.value.previousKpiRoas
@@ -268,12 +285,29 @@ const overviewMetrics = computed(() => {
 const overviewSecondaryMetrics = computed(() => {
   const impressions = funnelTotals.value.impressions
   const clicks = funnelTotals.value.clicks
+  const spend = aggregate.value.spend
+  const currentCtr = impressions ? clicks / impressions * 100 : 0
+  const currentCpm = impressions ? spend / impressions * 1000 : 0
+  const currentCpc = clicks ? spend / clicks : 0
+  const periodScale = previousDateContextFactor.value / Math.max(.01, dateContextFactor.value)
+  const previousImpressions = impressions * periodScale * .96
+  const previousClicks = clicks * periodScale * .94
+  const previousSpend = aggregate.value.previousSpend * periodScale
+  const previousCtr = previousImpressions ? previousClicks / previousImpressions * 100 : 0
+  const previousCpm = previousImpressions ? previousSpend / previousImpressions * 1000 : 0
+  const previousCpc = previousClicks ? previousSpend / previousClicks : 0
+  const item = (label: string, value: string, current: number, previous: number) => ({
+    label,
+    value,
+    delta: periodChangeBadge(current, previous),
+    comparison: `${previousPeriodLabel.value}：${periodChangeBadge(current, previous).label}`,
+  })
   return [
-    { label: '曝光', value: formatDashboardNumber(impressions) },
-    { label: '链接点击', value: formatDashboardNumber(clicks) },
-    { label: 'CTR', value: `${(impressions ? clicks / impressions * 100 : 0).toFixed(2)}%` },
-    { label: 'CPM', value: formatUsMoney(impressions ? aggregate.value.spend / impressions * 1000 : 0) },
-    { label: 'CPC', value: formatUsMoney(clicks ? aggregate.value.spend / clicks : 0) },
+    item('曝光', formatDashboardNumber(impressions), impressions, previousImpressions),
+    item('链接点击', formatDashboardNumber(clicks), clicks, previousClicks),
+    item('CTR', `${currentCtr.toFixed(2)}%`, currentCtr, previousCtr),
+    item('CPM', formatUsMoney(currentCpm), currentCpm, previousCpm),
+    item('CPC', formatUsMoney(currentCpc), currentCpc, previousCpc),
   ]
 })
 
@@ -849,7 +883,9 @@ onBeforeUnmount(() => {
           </div>
           <div class="overview-secondary-row" aria-label="辅助指标">
             <div v-for="metric in overviewSecondaryMetrics" :key="metric.label" class="overview-secondary-item">
-              <span>{{ metric.label }}</span><strong>{{ metric.value }}</strong>
+              <span class="overview-secondary-label">{{ metric.label }}</span>
+              <strong>{{ metric.value }}</strong>
+              <span class="overview-secondary-delta" :class="metric.delta.tone" :title="metric.comparison" :aria-label="metric.comparison">{{ metric.delta.label }}</span>
             </div>
           </div>
         </section>
@@ -1258,8 +1294,11 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .overview-secondary-row { min-height: 52px; display: grid; grid-template-columns: repeat(5,minmax(0,1fr)); align-items: center; border-top: 1px solid var(--hairline); background: #fafaf9; }
 .overview-secondary-item { position: relative; min-width: 0; display: flex; align-items: baseline; gap: 8px; padding: 10px 18px; white-space: nowrap; }
 .overview-secondary-item:not(:last-child)::after { content: ""; position: absolute; top: 24%; right: 0; bottom: 24%; width: 1px; background: #e8e6e2; }
-.overview-secondary-item span { color: var(--steel); font-size: 12px; }
+.overview-secondary-label { color: var(--steel); font-size: 12px; }
 .overview-secondary-item strong { overflow: hidden; color: var(--ink); font-size: 14px; font-weight: 650; text-overflow: ellipsis; }
+.overview-secondary-delta { margin-left: auto; flex: 0 0 auto; padding: 2px 5px; border-radius: 4px; background: #f0efed; color: var(--slate); font-size: 10px; font-weight: 650; line-height: 1.4; }
+.overview-secondary-delta.increase { background: #fdecec; color: #c73c36; }
+.overview-secondary-delta.decrease { background: #e8f7ee; color: #12804a; }
 
 .replay-card { margin-top: 16px; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; overflow: hidden; }
 .trend-replay-card { overflow: visible; }
