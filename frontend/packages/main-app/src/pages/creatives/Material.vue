@@ -734,6 +734,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
             :materials="materials"
             :loading="loading"
             :selected-material-id="selectedMaterialId"
+            variant="notion"
             allow-delete
             @select="selectRow"
             @delete="askDeleteMaterial"
