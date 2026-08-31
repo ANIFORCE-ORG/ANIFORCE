@@ -380,6 +380,18 @@ type HierarchyRow = {
 }
 const expandedHierarchy = ref<Set<string>>(new Set())
 const hierarchyQuery = ref('')
+const hierarchyMetricComparator = (left: DashboardMetrics, right: DashboardMetrics) => {
+  const values = (metrics: DashboardMetrics) => [metrics.spend, metrics.conversion_value, metrics.conversions, metrics.clicks, metrics.impressions]
+  const leftValues = values(left).map(value => value ?? 0)
+  const rightValues = values(right).map(value => value ?? 0)
+  const activityDifference = Number(rightValues.some(value => value > 0)) - Number(leftValues.some(value => value > 0))
+  if (activityDifference) return activityDifference
+  for (let index = 0; index < leftValues.length; index += 1) {
+    const difference = rightValues[index]! - leftValues[index]!
+    if (difference) return difference
+  }
+  return 0
+}
 const hierarchySource = computed<HierarchyRow[]>(() => {
   const accountsById = new Map((overview.value?.accounts ?? []).map(item => [item.account_id, item]))
   const campaignsByAccount = new Map<string, NonNullable<MetaDashboardOverview['campaigns']>>()
@@ -396,13 +408,14 @@ const hierarchySource = computed<HierarchyRow[]>(() => {
     adsetsByCampaign.set(adset.campaign_id, rows)
   }
   const result: HierarchyRow[] = []
-  for (const account of accountsById.values()) {
+  const sortedAccounts = [...accountsById.values()].sort(hierarchyMetricComparator)
+  for (const account of sortedAccounts) {
     const accountKey = `account:${account.account_id}`
-    const campaigns = campaignsByAccount.get(account.account_id) ?? []
+    const campaigns = (campaignsByAccount.get(account.account_id) ?? []).sort(hierarchyMetricComparator)
     result.push({ key: accountKey, id: account.account_id, name: account.account_name, detail: `${campaigns.length} 个 Campaign`, kind: 'account', depth: 0, parentKey: null, hasChildren: Boolean(campaigns.length), metrics: derive(account), status: account.sync_status === 'failed' ? '同步失败' : account.data_status === 'no_delivery' ? '无投放' : '已连接' })
     for (const campaign of campaigns) {
       const campaignKey = `campaign:${campaign.campaign_id}`
-      const adsets = adsetsByCampaign.get(campaign.campaign_id) ?? []
+      const adsets = (adsetsByCampaign.get(campaign.campaign_id) ?? []).sort(hierarchyMetricComparator)
       result.push({ key: campaignKey, id: campaign.campaign_id, name: campaign.campaign_name, detail: `${account.account_name} · ${adsets.length} 个 AdSet`, kind: 'campaign', depth: 1, parentKey: accountKey, hasChildren: Boolean(adsets.length), metrics: derive(campaign), status: (campaign.spend ?? 0) > 0 ? '投放中' : '无投放' })
       for (const adset of adsets) result.push({ key: `adset:${adset.adset_id}`, id: adset.adset_id, name: adset.adset_name, detail: `${campaign.campaign_name} · ${adset.optimization_goal ?? 'AdSet'}`, kind: 'adset', depth: 2, parentKey: campaignKey, hasChildren: false, metrics: derive(adset), status: (adset.spend ?? 0) > 0 ? '投放中' : '无投放' })
     }
