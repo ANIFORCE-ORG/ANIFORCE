@@ -17,7 +17,6 @@ import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/comp
 import type { AgentMessage } from '@/api/agent'
 import { workspaceResultProjectionRegistry } from '@/store/workspace'
 import { navItems } from '@/config/navigation'
-import aniforceWorkflowHero from '@/assets/aniforce-workflow-hero.png'
 
 const router = useRouter()
 const route = useRoute()
@@ -39,6 +38,7 @@ const workspaceDragging = ref(false)
 const renameDialog = ref<{ id: string; name: string } | null>(null)
 const renameValue = ref('')
 const deleteDialog = ref<{ id: string; name: string } | null>(null)
+const strategyExpanded = ref(false)
 const sessionsReady = ref(false)
 let skippedRouteSessionId: string | null = null
 let composerCompositionEndedAt = 0
@@ -80,35 +80,65 @@ const intentModes: Array<{
 
 const starterActions = [
   {
-    icon: 'portfolio',
-    label: '盘点投放资产',
-    description: '统一查看项目、计划与素材，快速接续当前工作。',
-    prompt: '帮我盘点当前账号下的项目、投放计划和素材。',
+    icon: 'analytics',
+    label: '今日投放复盘',
+    description: '汇总核心指标，输出计划分层与今日调控清单。',
+    prompt: '请复盘当前账号最近 7 天的投放表现。按真实可用维度汇总消耗、转化、CPA、CTR 与 ROAS；先校验数据完整性和归因成熟度，再将计划分为「可放量 / 观察 / 控量 / 暂停」，说明判断依据，并给出未来 24 小时可执行的调整清单。若缺少业务类型、目标值或日期范围，请先向我确认。',
     mode: 'chat' as const
   },
   {
-    icon: 'launch',
-    label: '启动增长项目',
-    description: '描述投放方向，在工作台完善项目草稿。',
-    prompt: '我想启动一个新的增长项目，请在工作台生成一份可编辑草稿。',
-    mode: 'project' as const
-  },
-  {
-    icon: 'diagnose',
-    label: '发现增长机会',
-    description: '结合消耗、转化与素材信号，定位扩量和止损机会。',
-    prompt: '帮我诊断当前投放表现，找出值得扩量和需要止损的机会。',
+    icon: 'tune',
+    label: '计划分层调控',
+    description: '识别可放量、观察、控量和暂停计划。',
+    prompt: '请诊断当前广告计划表现，并按「可放量 / 观察 / 控量 / 暂停」输出清单。综合真实消耗、转化量、CPA、CTR、ROAS、趋势和样本量判断；说明关键证据并给出明确动作。数据不足或归因未成熟的计划请标记为待观察，不要补造指标。',
     mode: 'chat' as const
   },
   {
-    icon: 'creative',
-    label: '生成创意方案',
-    description: '将投放目标转成素材 Brief 与可执行创意方向。',
-    prompt: '帮我把投放目标整理成素材 Brief 和可执行的创意方向。',
+    icon: 'image_search',
+    label: '素材表现诊断',
+    description: '基于可关联数据定位素材机会和风险。',
+    prompt: '请分析当前素材表现，识别高潜、低效和需要迭代的素材，并给出下一批素材的选题、开头钩子、卖点与 A/B 变量建议。仅使用能够真实关联到素材维度的数据；如果当前数据无法稳定关联素材，请明确说明限制，不要推导 ROAS、疲劳度或评分。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'account_balance_wallet',
+    label: '预算扩量建议',
+    description: '找到预算承接空间，制定阶梯扩量与止损线。',
+    prompt: '请评估当前投放的预算承接能力，并制定未来 3 天的阶梯扩量方案。找出效率达标且转化稳定的计划，给出预算调整区间、观察周期、回撤条件和止损线。仅依据真实投放数据判断，缺少目标 CPA 或 ROAS 时先向我确认。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'compare_arrows',
+    label: '渠道效果对比',
+    description: '对比已接入渠道的效率、量级和稳定性。',
+    prompt: '请对比已授权且存在真实事实数据的投放渠道最近 7 天与前 7 天表现，统一指标口径后评估消耗、转化量、CPA、CTR、ROAS、趋势和稳定性，并给出预算迁移建议。没有接入或没有真实数据的渠道请标记为不可比较，不要估算数值。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'warning',
+    label: '异常波动排查',
+    description: '定位消耗、成本或转化突变的可能原因。',
+    prompt: '请排查当前投放中的异常波动。对比最近 24 小时、近 3 天均值和上周同期，识别消耗、成本、点击或转化的显著变化；按数据归因、账户审核、预算出价、流量和素材逐层列出证据、影响范围、排查顺序及可立即执行的恢复动作。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'schedule',
+    label: '素材更新节奏',
+    description: '根据真实信号安排素材观察、迭代和替换。',
+    prompt: '请基于当前真实可用的素材表现数据制定素材更新节奏，输出继续观察、优先迭代和建议替换的清单。只有在具备素材级连续趋势时才判断疲劳；如果数据无法稳定关联到素材，请说明缺失字段，并先给出不依赖虚假评分的创意迭代方案。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'experiment',
+    label: '下一轮测试方案',
+    description: '把诊断结论转成可执行的 A/B 测试矩阵。',
+    prompt: '请基于当前投放问题设计下一轮 A/B 测试方案。明确核心假设，并为素材、受众、版位、出价或落地页设计单变量测试；给出测试组、对照组、预算、观察周期、成功指标和停止条件。按影响力与实施成本排序，优先输出本周可落地的 3 至 5 个实验。',
     mode: 'chat' as const
   }
 ]
 
+const visibleStarterActions = computed(() => strategyExpanded.value ? starterActions : starterActions.slice(0, 4))
+const isPromptExpanded = computed(() => Array.from(inputText.value).length > 72 || inputText.value.includes('\n'))
 const visibleMessages = computed(() => agent.visibleMessages.value)
 const hasContent = computed(() => agent.loading.value || agent.hasAnyRunningRun.value || visibleMessages.value.length > 0 || Boolean(agent.streamingMessage.value) || Boolean(agent.error.value))
 const sidebarSessions = computed(() => agent.sessions.value.map(session => ({
@@ -696,57 +726,44 @@ watch(
     <main class="home-main">
       <div ref="conversationScroll" class="home-main__scroll">
         <section v-if="!hasContent" class="landing-document">
-          <img class="landing-visual" :src="aniforceWorkflowHero" alt="" aria-hidden="true" />
-          <header class="landing-hero">
-            <h1>从洞察到行动，让每一次投放更确定</h1>
-            <p>ANIFORCE 连接项目、数据与素材，用 AI 帮你判断下一步，并把策略快速变成可执行任务。</p>
-          </header>
+          <div class="landing-primary">
+            <header class="landing-hero">
+              <h1>让每一次投放，都有清晰的下一步</h1>
+              <p>ANIFORCE 串联项目、计划、素材与效果数据，帮你完成复盘诊断、预算调控和创意迭代。</p>
+            </header>
 
-          <section v-if="!hasInteracted" class="quick-start" aria-label="快捷入口">
-            <div class="quick-grid">
-              <button
-                v-for="action in starterActions"
-                :key="action.label"
-                class="quick-card"
-                :class="{ 'is-selected': selectedStarterAction === action.label }"
-                type="button"
-                @click="runStarterAction(action)"
-              >
-                <span class="quick-card__icon" aria-hidden="true">
-                  <svg v-if="action.icon === 'portfolio'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <path d="M5.5 10h7l2.4 2.5h11.6v13H5.5z" />
-                    <path class="quick-card__icon-accent" d="M8.5 10V6.5h14.7a2.3 2.3 0 0 1 2.3 2.3v3.7" />
-                  </svg>
-                  <svg v-else-if="action.icon === 'launch'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <circle cx="15.5" cy="16.5" r="10" />
-                    <circle cx="15.5" cy="16.5" r="4" />
-                    <path class="quick-card__icon-accent" d="m15.5 16.5 10-10m-4.5 0h4.5V11" />
-                  </svg>
-                  <svg v-else-if="action.icon === 'diagnose'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <path d="m4.5 19 6-6 5 4 6.5-9" />
-                    <path class="quick-card__icon-accent" d="M18 8h4v4" />
-                    <circle cx="20.5" cy="22" r="5.5" />
-                    <path d="m24.5 26 3.5 3.5" />
-                  </svg>
-                  <svg v-else class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <rect x="5.5" y="7.5" width="21" height="18" rx="3" />
-                    <path class="quick-card__icon-accent" d="m16 11 1.4 3.6L21 16l-3.6 1.4L16 21l-1.4-3.6L11 16l3.6-1.4z" />
-                    <path d="M24 3.5v4M22 5.5h4" />
-                  </svg>
-                </span>
-                <strong>{{ action.label }}</strong>
-                <span>{{ action.description }}</span>
-              </button>
-            </div>
-          </section>
+            <section v-if="!hasInteracted" class="quick-start" aria-label="常用投放策略">
+              <div class="quick-start__header">
+                <strong>常用投放策略</strong>
+                <button class="quick-start__toggle" type="button" :aria-expanded="strategyExpanded" aria-controls="strategy-grid" @click="strategyExpanded = !strategyExpanded">
+                  <span>{{ strategyExpanded ? '收起策略' : '展开更多策略' }}</span>
+                  <span class="material-symbols-outlined" :class="{ expanded: strategyExpanded }" aria-hidden="true">expand_more</span>
+                </button>
+              </div>
+              <div id="strategy-grid" class="quick-grid">
+                <button
+                  v-for="action in visibleStarterActions"
+                  :key="action.label"
+                  class="quick-card"
+                  :class="{ 'is-selected': selectedStarterAction === action.label }"
+                  type="button"
+                  @click="runStarterAction(action)"
+                >
+                  <span class="quick-card__icon" aria-hidden="true"><span class="material-symbols-outlined">{{ action.icon }}</span></span>
+                  <strong>{{ action.label }}</strong>
+                  <span>{{ action.description }}</span>
+                </button>
+              </div>
+            </section>
+          </div>
 
-          <div class="landing-input-dock">
+          <div class="landing-input-dock" :class="{ 'is-expanded': isPromptExpanded }">
             <div v-if="starterActionHint" class="composer-intent-hint" role="status">
               <span class="material-symbols-outlined" aria-hidden="true">{{ activeMode.icon }}</span>
               <strong>{{ activeMode.label }}</strong>
               <span>{{ starterActionHint }}</span>
             </div>
-            <div class="composer" role="search">
+            <div class="composer" :class="{ 'composer--expanded': isPromptExpanded }" role="search">
               <button class="composer__icon" type="button" aria-label="添加附件">
                 <span class="material-symbols-outlined">attach_file</span>
               </button>
@@ -1035,14 +1052,23 @@ watch(
 }
 
 .landing-document {
-  display: flex;
+  display: grid;
   width: min(100%, 1080px);
   min-height: 100%;
+  grid-template-rows: minmax(min-content, 1fr) auto;
+  gap: clamp(18px, 3vh, 36px);
   margin: 0 auto;
-  padding: clamp(32px, 8vh, 96px) 36px 24px;
+  padding: clamp(24px, 4vh, 56px) 36px clamp(18px, 3vh, 32px);
   box-sizing: border-box;
+}
+
+.landing-primary {
+  display: flex;
+  min-width: 0;
+  align-self: center;
   align-items: center;
   flex-direction: column;
+  padding-block: clamp(10px, 3vh, 44px);
 }
 
 .landing-hero {
@@ -1070,15 +1096,6 @@ watch(
 .home-shell.is-landing .home-main,
 .home-shell.is-landing .home-main__scroll {
   background: var(--notion-canvas);
-}
-
-.landing-visual {
-  display: block;
-  width: 260px;
-  height: auto;
-  flex: 0 0 auto;
-  margin-bottom: 28px;
-  object-fit: contain;
 }
 
 .composer {
@@ -1214,8 +1231,17 @@ watch(
 
 .landing-input-dock {
   width: min(100%, 860px);
-  margin-top: clamp(20px, 4vh, 32px);
+  justify-self: center;
   padding-top: 0;
+  transition: width .18s ease;
+}
+
+.landing-input-dock.is-expanded {
+  width: min(100%, 960px);
+}
+
+.composer.composer--expanded textarea {
+  max-height: 180px;
 }
 
 .composer-intent-hint {
@@ -1241,8 +1267,42 @@ watch(
 
 .quick-start {
   width: min(100%, 860px);
-  margin: clamp(24px, 5vh, 60px) auto 0;
+  margin: clamp(22px, 4vh, 48px) auto 0;
 }
+
+.quick-start__header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.quick-start__header > strong {
+  color: var(--notion-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quick-start__toggle {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 9px;
+  border: 1px solid var(--notion-line);
+  border-radius: 7px;
+  background: var(--notion-canvas);
+  color: var(--notion-slate);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.quick-start__toggle:hover { background: var(--notion-surface); color: var(--notion-ink); }
+.quick-start__toggle .material-symbols-outlined { font-size: 17px; transition: transform .18s ease; }
+.quick-start__toggle .material-symbols-outlined.expanded { transform: rotate(180deg); }
 
 .quick-grid {
   display: grid;
@@ -1252,7 +1312,7 @@ watch(
 
 .quick-card {
   display: flex;
-  min-height: 158px;
+  min-height: 142px;
   flex-direction: column;
   align-items: flex-start;
   padding: 19px;
@@ -1285,32 +1345,17 @@ watch(
 }
 
 .quick-card__icon {
-  display: block;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
+  display: grid;
   place-items: center;
-  margin-bottom: 18px;
-  background: transparent;
-  color: var(--notion-charcoal);
-  box-shadow: none;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  background: var(--notion-blue-soft);
+  color: var(--notion-blue);
 }
 
-.quick-card__icon-svg {
-  display: block;
-  width: 36px;
-  height: 36px;
-  overflow: visible;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.quick-card__icon-accent {
-  stroke: var(--notion-blue);
-  stroke-width: 2.2;
-}
+.quick-card__icon .material-symbols-outlined { font-size: 19px; }
 
 .quick-card strong {
   margin-bottom: 7px;
@@ -1766,12 +1811,23 @@ watch(
 
 @media (max-width: 980px) {
   .landing-document {
-    padding-top: 48px;
+    padding-top: 32px;
   }
 
   .quick-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+@media (max-height: 820px) and (min-width: 981px) {
+  .landing-document { gap: 14px; padding-top: 16px; padding-bottom: 16px; }
+  .landing-primary { padding-block: 0; }
+  .landing-hero h1 { font-size: 32px; }
+  .landing-hero p { margin-top: 8px; font-size: 14px; }
+  .quick-start { margin-top: 18px; }
+  .quick-card { min-height: 116px; padding: 13px; }
+  .quick-card__icon { margin-bottom: 9px; }
+  .quick-card > span:last-child { font-size: 11px; }
 }
 
 @media (max-width: 720px) {

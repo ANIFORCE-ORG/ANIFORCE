@@ -84,6 +84,10 @@ const closeSessionMenu = () => {
   openSessionMenuId.value = null
 }
 
+const openNewUserGuide = () => {
+  window.dispatchEvent(new CustomEvent('aniforce:open-new-user-guide'))
+}
+
 const toggleSessionMenu = (sessionId: string) => {
   openSessionMenuId.value = openSessionMenuId.value === sessionId ? null : sessionId
 }
@@ -366,6 +370,18 @@ onMounted(() => {
         </ul>
       </div>
     </nav>
+
+    <button
+      class="sidebar-guide-entry group relative mx-[8px] mb-[5px] flex min-h-[34px] items-center rounded-lg border-0 bg-transparent text-slate-500 transition-colors hover:bg-black/5 hover:text-slate-900"
+      :class="isSidebarCollapsed ? 'justify-center px-[6px]' : 'gap-[10px] px-[10px]'"
+      type="button"
+      aria-label="打开新手引导"
+      @click="openNewUserGuide"
+    >
+      <span class="material-symbols-outlined text-[16px]">help</span>
+      <span v-if="!isSidebarCollapsed" class="text-[11px]">新手引导</span>
+      <span v-else class="pointer-events-none absolute left-full z-50 ml-[6px] whitespace-nowrap rounded-md bg-slate-900 px-[9px] py-[5px] text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">新手引导</span>
+    </button>
 
     <AccountControls variant="sidebar" :collapsed="isSidebarCollapsed" />
   </aside>

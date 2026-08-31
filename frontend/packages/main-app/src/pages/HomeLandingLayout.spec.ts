@@ -11,21 +11,24 @@ const mockApiSource = readFileSync(new URL('../api/mock.ts', import.meta.url), '
 
 describe('Home landing layout', () => {
   it('keeps the first composer visible in short viewports', () => {
-    expect(source).toContain('padding: clamp(32px, 8vh, 96px) 36px 24px;')
-    expect(source).toContain('margin-top: clamp(20px, 4vh, 32px);')
-    expect(source).toContain('margin: clamp(24px, 5vh, 60px) auto 0;')
+    expect(source).toContain('grid-template-rows: minmax(min-content, 1fr) auto;')
+    expect(source).toContain('class="landing-primary"')
     expect(source).toContain('@media (max-width: 980px)')
-    expect(source).toContain('padding-top: 48px;')
+    expect(source).toContain('@media (max-height: 820px) and (min-width: 981px)')
+    expect(source).not.toContain('aniforceWorkflowHero')
   })
 
-  it('fills editable starter intents without duplicating workspace forms', () => {
+  it('fills eight editable strategy intents without auto-sending or inventing unavailable data', () => {
     const starterHandler = source.slice(
       source.indexOf('async function runStarterAction'),
       source.indexOf('function navigateTo'),
     )
 
-    expect(source).toContain("prompt: '我想启动一个新的增长项目，请在工作台生成一份可编辑草稿。'")
-    expect(source).toContain('结构化字段将在工作台中编辑。')
+    expect(source).toContain('strategyExpanded.value ? starterActions : starterActions.slice(0, 4)')
+    expect(source).toContain('今日投放复盘')
+    expect(source).toContain('下一轮测试方案')
+    expect(source).toContain('不要推导 ROAS、疲劳度或评分')
+    expect(source).toContain('没有接入或没有真实数据的渠道请标记为不可比较')
     expect(starterHandler).toContain('selectedStarterAction.value = action.label')
     expect(starterHandler).toContain('composerInput.value?.focus()')
     expect(starterHandler).not.toContain('handleSubmit()')
