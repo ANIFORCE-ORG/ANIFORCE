@@ -366,6 +366,68 @@ const goToLevel = (target: Level) => {
   showAllRows.value = false
 }
 
+type HierarchyRow = {
+  key: string
+  id: string
+  name: string
+  detail: string
+  kind: Level
+  depth: number
+  parentKey: string | null
+  hasChildren: boolean
+  metrics: ReturnType<typeof derive>
+  status: string
+}
+const expandedHierarchy = ref<Set<string>>(new Set())
+const hierarchyQuery = ref('')
+const hierarchySource = computed<HierarchyRow[]>(() => {
+  const accountsById = new Map((overview.value?.accounts ?? []).map(item => [item.account_id, item]))
+  const campaignsByAccount = new Map<string, NonNullable<MetaDashboardOverview['campaigns']>>()
+  for (const campaign of overview.value?.campaigns ?? []) {
+    const rows = campaignsByAccount.get(campaign.account_id) ?? []
+    rows.push(campaign)
+    campaignsByAccount.set(campaign.account_id, rows)
+  }
+  const adsetsByCampaign = new Map<string, NonNullable<MetaDashboardOverview['adsets']>>()
+  for (const adset of overview.value?.adsets ?? []) {
+    if (!adset.campaign_id) continue
+    const rows = adsetsByCampaign.get(adset.campaign_id) ?? []
+    rows.push(adset)
+    adsetsByCampaign.set(adset.campaign_id, rows)
+  }
+  const result: HierarchyRow[] = []
+  for (const account of accountsById.values()) {
+    const accountKey = `account:${account.account_id}`
+    const campaigns = campaignsByAccount.get(account.account_id) ?? []
+    result.push({ key: accountKey, id: account.account_id, name: account.account_name, detail: `${campaigns.length} 个 Campaign`, kind: 'account', depth: 0, parentKey: null, hasChildren: Boolean(campaigns.length), metrics: derive(account), status: account.sync_status === 'failed' ? '同步失败' : account.data_status === 'no_delivery' ? '无投放' : '已连接' })
+    for (const campaign of campaigns) {
+      const campaignKey = `campaign:${campaign.campaign_id}`
+      const adsets = adsetsByCampaign.get(campaign.campaign_id) ?? []
+      result.push({ key: campaignKey, id: campaign.campaign_id, name: campaign.campaign_name, detail: `${account.account_name} · ${adsets.length} 个 AdSet`, kind: 'campaign', depth: 1, parentKey: accountKey, hasChildren: Boolean(adsets.length), metrics: derive(campaign), status: (campaign.spend ?? 0) > 0 ? '投放中' : '无投放' })
+      for (const adset of adsets) result.push({ key: `adset:${adset.adset_id}`, id: adset.adset_id, name: adset.adset_name, detail: `${campaign.campaign_name} · ${adset.optimization_goal ?? 'AdSet'}`, kind: 'adset', depth: 2, parentKey: campaignKey, hasChildren: false, metrics: derive(adset), status: (adset.spend ?? 0) > 0 ? '投放中' : '无投放' })
+    }
+  }
+  return result
+})
+const hierarchyRows = computed(() => {
+  const keyword = hierarchyQuery.value.trim().toLowerCase()
+  if (keyword) return hierarchySource.value.filter(row => `${row.name} ${row.id} ${row.detail}`.toLowerCase().includes(keyword))
+  return hierarchySource.value.filter(row => {
+    if (!row.parentKey) return true
+    if (!expandedHierarchy.value.has(row.parentKey)) return false
+    const parent = hierarchySource.value.find(item => item.key === row.parentKey)
+    return !parent?.parentKey || expandedHierarchy.value.has(parent.parentKey)
+  })
+})
+const toggleHierarchy = (key: string) => {
+  const next = new Set(expandedHierarchy.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedHierarchy.value = next
+}
+const expandAllHierarchy = () => { expandedHierarchy.value = new Set(hierarchySource.value.filter(row => row.hasChildren).map(row => row.key)) }
+const collapseHierarchy = () => { expandedHierarchy.value = new Set() }
+
 const showToast = (message: string) => {
   window.clearTimeout(toastTimer)
   toastMessage.value = message
@@ -509,17 +571,6 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </div>
         <div v-if="!props.workspaceOverview" class="page-actions replay-actions">
           <label class="filter-field">
-            <select v-model="period" class="period-select" aria-label="时间范围" @change="changePeriod">
-              <option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option>
-            </select>
-          </label>
-          <div class="date-range-filter" role="group" aria-label="自定义日期范围">
-            <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
-            <input v-model="dateStart" type="date" :max="dateEnd" aria-label="开始日期" @change="changeDateRange">
-            <span>至</span>
-            <input v-model="dateEnd" type="date" :min="dateStart" :max="dateInput(new Date())" aria-label="结束日期" @change="changeDateRange">
-          </div>
-          <label class="filter-field">
             <select v-model="connectionId" class="period-select" aria-label="Meta 连接" @change="changeConnection">
               <option v-if="!connections.length" value="">暂无 Meta 连接</option>
               <option v-for="item in connections" :key="item.id" :value="item.id">{{ item.account_name || 'Meta 连接' }}</option>
@@ -609,10 +660,10 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
 
         <section class="replay-card trend-replay-card">
-          <div class="replay-card-head trend-card-head"><div><h2>每日趋势</h2><p>{{ isSales ? '花费 / 收入 / ROAS' : '花费 / Lead / CPL' }}</p></div><div class="trend-head-actions"><label class="trend-metric-select"><span>柱状指标</span><select v-model="selectedTrendMetric" aria-label="趋势柱状指标"><option v-for="metric in availableTrendMetrics" :key="metric.key" :value="metric.key">{{ metric.label }}</option></select></label><span class="soft-chip">{{ dateRangeDays }} 天</span></div></div>
+          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="趋势柱状指标"><button v-for="metric in availableTrendMetrics" :key="metric.key" type="button" :class="{ active: selectedTrendMetric === metric.key }" @click="selectedTrendMetric = metric.key">{{ metric.label }}</button></div><span class="soft-chip">自定义指标</span></div></div>
           <div class="trend-grid">
             <div class="chart-panel">
-              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ isSales ? '收入' : 'Lead' }}</span></div>
+              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ trendMetricOptions.find(item => item.key === selectedTrendMetric)?.label }}</span></div>
               <div v-if="!trendPoints.length" class="chart-empty">所选窗口暂无日级投放数据</div>
               <svg v-else viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天花费与${isSales ? '收入' : 'Lead'}趋势图`">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
@@ -662,17 +713,18 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         <section class="replay-card hierarchy-card">
           <div class="replay-card-head">
             <div>
-              <h2>投放单元</h2>
-              <nav class="crumbs" aria-label="下钻路径">
+              <h2>投放层级分析</h2>
+              <p>查看账户、Campaign 与 AdSet 的完整关系</p>
+              <nav class="crumbs legacy-crumbs" aria-label="下钻路径">
                 <template v-for="(crumb, index) in breadcrumb" :key="crumb.level">
                   <button type="button" class="crumb" :class="{ current: index === breadcrumb.length - 1 }" @click="goToLevel(crumb.level)">{{ crumb.label }}</button>
                   <span v-if="index < breadcrumb.length - 1" class="crumb-sep" aria-hidden="true">/</span>
                 </template>
               </nav>
             </div>
-            <div class="table-controls">
-              <input v-model="search" class="table-search" type="search" :placeholder="`搜索${levelLabels[level]}`" :aria-label="`搜索${levelLabels[level]}`" />
-              <span class="soft-chip">{{ levelLabels[level] }} · {{ entityRows.length }}</span>
+            <div class="hierarchy-actions">
+              <label class="hierarchy-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input v-model="hierarchyQuery" type="search" placeholder="搜索名称或 ID" aria-label="搜索层级名称或 ID"></label>
+              <button type="button" @click="expandAllHierarchy">全部展开</button><button type="button" @click="collapseHierarchy">收起</button>
             </div>
           </div>
 
@@ -681,7 +733,17 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
             <button type="button" class="attention-toggle" @click="showAllRows = !showAllRows">{{ showAllRows ? '只看需要处理' : `查看全部 ${entityRows.length} 个` }}</button>
           </div>
 
-          <div class="table-wrap">
+          <div class="hierarchy-tree-wrap">
+            <div class="hierarchy-tree-head"><span>层级 / 名称</span><span>状态</span><span>花费</span><span>{{ isSales ? 'ROAS' : 'CPL' }}</span><span>{{ isSales ? '订单' : 'Lead' }}</span><span>点击</span></div>
+            <div v-if="!hierarchyRows.length" class="data-empty">当前窗口没有可展示的层级数据</div>
+            <div v-for="row in hierarchyRows" :key="row.key" class="hierarchy-tree-row">
+              <div class="hierarchy-tree-name" :style="{ '--depth': row.depth }"><button v-if="row.hasChildren" type="button" class="tree-expander" :class="{ open: expandedHierarchy.has(row.key) }" @click="toggleHierarchy(row.key)">›</button><span v-else class="tree-expander placeholder">›</span><span class="tree-icon" :class="row.kind">{{ row.kind === 'account' ? 'A' : row.kind === 'campaign' ? 'C' : 'U' }}</span><span><strong>{{ row.name }}</strong><small>{{ row.detail }}</small></span></div>
+              <span class="tree-status" :class="{ warning: row.status !== '投放中' && row.status !== '已连接' }"><i></i>{{ row.status }}</span>
+              <span>{{ formatMoney(row.metrics.spend) }}</span><span>{{ isSales ? formatRoas(row.metrics.roas) : formatMoney(row.metrics.cost) }}</span><span>{{ formatNumber(row.metrics.results) }}</span><span>{{ formatNumber(row.metrics.clicks) }}</span>
+            </div>
+          </div>
+
+          <div class="table-wrap legacy-drill-table">
             <table class="data-table">
               <thead>
                 <tr>
@@ -777,7 +839,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 .page-title h1 { margin: 0; color: var(--ink); font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
 .page-actions { display: flex; align-items: center; gap: 7px; }
 .period-select { height: 34px; min-width: 112px; padding: 0 29px 0 10px; border: 1px solid var(--hairline-strong); border-radius: 8px; outline: none; background: #fff; color: var(--slate); font-size: 13px; cursor: pointer; }
-.content { width: min(100%,1220px); margin: 0 auto; padding: 30px clamp(24px,3vw,48px) 74px; }
+.content { width: min(100%,1440px); max-width: 1440px; margin: 0 auto; padding: 30px clamp(24px,3vw,48px) 74px; }
 
 .replay-bar { align-items: center; }
 .replay-title { align-items: center; }
@@ -788,6 +850,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 .date-range-filter .material-symbols-outlined { font-size: 15px; }
 .date-range-filter input { width: 112px; border: 0; outline: 0; background: transparent; color: var(--slate); font: inherit; font-size: 11px; }
 .trend-head-actions { display: flex; align-items: center; gap: 8px; }
+.trend-metric-pills { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }.trend-metric-pills button { height: 30px; padding: 0 10px; border: 1px solid var(--hairline); border-radius: 7px; background: #fff; color: var(--slate); font: inherit; font-size: 11px; cursor: pointer; }.trend-metric-pills button.active { border-color: #a9cef8; background: #eff7ff; color: #1769aa; font-weight: 650; }
 .trend-metric-select { display: inline-flex; align-items: center; gap: 6px; color: var(--steel); font-size: 11px; white-space: nowrap; }
 .trend-metric-select select { height: 30px; padding: 0 24px 0 8px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--charcoal); font: inherit; font-size: 11px; }
 .filter-field { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
@@ -802,7 +865,8 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 .sync-button.syncing .icon,.refreshing .icon { animation: spin .65s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.replay-content { width: 100%; max-width: none; margin: 0; padding-top: 24px; padding-bottom: 64px; }
+.content.replay-content { width: min(100%,1440px); max-width: 1440px; margin: 0 auto; padding-top: 24px; padding-bottom: 64px; display: flex; flex-direction: column; }
+.replay-content > .analysis-filter-card { order: 0; }.replay-content > .dashboard-feedback { order: 1; }.replay-content > .objective-switch { display: none; }.replay-content > .scope-note { order: 2; }.replay-content > .overview-card { order: 3; }.replay-content > .diagnostic-grid { order: 4; }.replay-content > :deep(.analysis-table-card) { order: 5; }.replay-content > .hierarchy-card { order: 6; }
 .overview-card { border-radius: 12px; }.overview-card .replay-card-head { background: #fff; }.trend-replay-card,.hierarchy-card { border-radius: 12px; }
 .dashboard-feedback { display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-soft); color: var(--slate); font-size: 12px; }
 .dashboard-feedback strong{color:var(--charcoal)}
@@ -843,11 +907,12 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 
 .replay-card { margin-top: 20px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; overflow: hidden; }
 .replay-card-head { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--hairline-soft); }
-.diagnostic-grid { display: grid; grid-template-columns: minmax(0,.9fr) minmax(0,1.6fr); align-items: stretch; gap: 20px; margin-top: 20px; }
-.diagnostic-grid > .replay-card { min-width: 0; margin-top: 0; }
+.diagnostic-grid { display: block; margin: 0; }
+.diagnostic-grid > .trend-replay-card { margin-top: 20px; }
+.diagnostic-grid > .replay-card:not(.trend-replay-card) { display: none; }
 .diagnostic-grid .replay-card-head { min-height: 62px; }
-.diagnostic-grid .trend-grid { height: calc(100% - 63px); }
-.diagnostic-grid .chart-panel { height: 252px; }
+.diagnostic-grid .chart-panel { height: 300px; }
+.diagnostic-grid .chart-panel svg { height: 246px; }
 .replay-card-head h2 { margin: 0; color: var(--ink); font-size: 15px; font-weight: 600; }
 .replay-card-head p { margin: 3px 0 0; color: var(--steel); font-size: 12px; }
 .soft-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border-radius: 6px; background: var(--surface); color: var(--slate); font-size: 11px; font-weight: 600; white-space: nowrap; }
@@ -939,6 +1004,9 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .cell-delta.none { color: var(--stone); font-weight: 400; }
 .row-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #cfe8d8; }
 .table-hint { margin: 0; padding: 9px 16px; border-top: 1px solid var(--hairline-soft); color: var(--stone); font-size: 11px; }
+.legacy-crumbs,.legacy-drill-table,.hierarchy-card > .attention-bar,.hierarchy-card > .table-hint { display: none; }
+.hierarchy-actions { display: flex; align-items: center; gap: 7px; }.hierarchy-search { width: 250px; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 8px; }.hierarchy-search .material-symbols-outlined { color: var(--stone); font-size: 17px; }.hierarchy-search input { min-width: 0; flex: 1; border: 0; outline: 0; font: inherit; font-size: 12px; }.hierarchy-actions > button { height: 34px; padding: 0 10px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--slate); font: inherit; font-size: 11px; cursor: pointer; }
+.hierarchy-tree-head,.hierarchy-tree-row { display: grid; grid-template-columns: minmax(280px,2fr) minmax(90px,.65fr) repeat(4,minmax(80px,.72fr)); align-items: center; gap: 10px; padding: 0 16px; }.hierarchy-tree-head { min-height: 42px; border-bottom: 1px solid var(--hairline); background: var(--surface-soft); color: var(--steel); font-size: 11px; font-weight: 600; }.hierarchy-tree-head span:not(:first-child),.hierarchy-tree-row > span { text-align: right; }.hierarchy-tree-row { min-height: 58px; border-bottom: 1px solid var(--hairline-soft); color: var(--charcoal); font-size: 12px; font-variant-numeric: tabular-nums; }.hierarchy-tree-row:hover { background: #fafcff; }.hierarchy-tree-name { min-width: 0; display: flex; align-items: center; gap: 8px; padding-left: calc(var(--depth) * 28px); }.hierarchy-tree-name > span:last-child { min-width: 0; }.hierarchy-tree-name strong,.hierarchy-tree-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.hierarchy-tree-name small { margin-top: 3px; color: var(--stone); font-size: 10px; }.tree-expander { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--steel); font-size: 20px; cursor: pointer; transition: transform .15s ease; }.tree-expander.open { transform: rotate(90deg); }.tree-expander.placeholder { opacity: 0; }.tree-icon { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #cfe1f5; border-radius: 7px; background: #eef6ff; color: #3276cc; font-size: 10px; font-weight: 700; }.tree-icon.campaign { border-radius: 50%; background: #f6f5f4; color: #6b6862; border-color: #ddd9d3; }.tree-icon.adset { width: 22px; height: 22px; border: 0; background: transparent; }.tree-status { justify-self: end; display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 4px 8px; border-radius: 999px; background: #e8f7ee; color: #12804a; font-size: 10px; font-weight: 600; }.tree-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }.tree-status.warning { background: #fff4df; color: #a86400; }
 
 .platform-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; gap: 8px; padding: 10px; }
 .platform-card { --accent: #4f8fe8; min-width: 0; align-self: stretch; border: 1px solid var(--hairline); border-radius: 9px; overflow: hidden; background: #fff; }

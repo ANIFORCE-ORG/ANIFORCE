@@ -574,9 +574,9 @@ describe('Dashboard workspace page contract', () => {
     expect(dashboard).not.toMatch(
       /<label class="filter-field">\s*(?:时间范围|平台|项目)\s*<select/,
     )
-    expect(dashboard).toContain(
-      '<select v-model="period" class="period-select" aria-label="时间范围" @change="changePeriod">',
-    )
+    expect(dashboard).toContain('class="analysis-filter-card"')
+    expect(dashboard).toContain('v-model="dateStart" type="date"')
+    expect(dashboard).toContain('v-model="dateEnd" type="date"')
     expect(dashboard).toContain(
       '<select v-model="connectionId" class="period-select" aria-label="Meta 连接" @change="changeConnection">',
     )
@@ -607,7 +607,8 @@ describe('Dashboard workspace page contract', () => {
     expect(dashboard).toContain(
       '<circle v-if="activeTrendPoint.spendY != null" class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />',
     )
-    expect(dashboard).toContain("<p>{{ isSales ? '花费 / 收入 / ROAS' : '花费 / Lead / CPL' }}</p>")
+    expect(dashboard).toContain('<h2>趋势监控</h2>')
+    expect(dashboard).toContain('class="trend-metric-pills"')
     expect(dashboard).toMatch(/\.legend-dot\s*\{[^}]*\bwidth:\s*5px;[^}]*\bheight:\s*5px;/s)
     expect(dashboard).toMatch(/\.chart-active-markers line\s*\{[^}]*\bstroke-width:\s*\.75;/s)
     expect(dashboard).toMatch(/\.chart-active-markers rect\s*\{[^}]*\bstroke-width:\s*1\.2;/s)

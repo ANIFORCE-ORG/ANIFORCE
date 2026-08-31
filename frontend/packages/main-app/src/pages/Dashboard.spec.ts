@@ -33,7 +33,7 @@ describe('Dashboard real Meta data contract', () => {
     expect(dashboard).toContain('funnel')
     expect(dashboard).toContain('ROAS')
     expect(dashboard).toContain('事件漏斗')
-    expect(dashboard).toContain('投放单元')
+    expect(dashboard).toContain('投放层级分析')
     expect(dashboard).toContain('drillInto')
     expect(dashboard).toContain('breadcrumb')
     expect(dashboard).toContain('accessible_with_no_rows')
