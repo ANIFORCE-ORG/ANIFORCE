@@ -4,7 +4,7 @@ import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import DataSyncDialog from '@/components/dashboard/DataSyncDialog.vue'
 import AnalysisMetricTable, { type AnalysisTableRow } from '@/components/dashboard/AnalysisMetricTable.vue'
-import { type TrendMetric } from '@/data/trendMetrics'
+import { formatTrendMetricValue, trendMetricOptions, type TrendMetric } from '@/data/trendMetrics'
 import { navItems } from '@/config/navigation'
 import { getMetaDashboardOverview, type DashboardMetrics, type MetaAdSetSyncResponse, type MetaDashboardOverview } from '@/api/dashboard'
 import { platformApi, type PlatformConnectionResponse, type SubAccountResponse } from '@/api/platform'
@@ -13,6 +13,12 @@ const props = withDefaults(defineProps<{ embedded?: boolean; workspaceOverview?:
 const router = useRouter()
 const activeSession = ref('sess-g001')
 const period = ref('7')
+const dateInput = (date: Date) => date.toISOString().slice(0, 10)
+const initialUntil = new Date()
+const initialSince = new Date(initialUntil)
+initialSince.setDate(initialUntil.getDate() - 6)
+const dateStart = ref(dateInput(initialSince))
+const dateEnd = ref(dateInput(initialUntil))
 const connectionId = ref('')
 const accountId = ref('')
 const objective = ref('')
@@ -65,10 +71,14 @@ const windowForDays = (days: number) => {
   const until = new Date()
   const since = new Date(until)
   since.setDate(since.getDate() - days + 1)
-  const iso = (value: Date) => value.toISOString().slice(0, 10)
-  return { since: iso(since), until: iso(until) }
+  return { since: dateInput(since), until: dateInput(until) }
 }
-const dateWindow = computed(() => windowForDays(Number(period.value)))
+const dateWindow = computed(() => ({ since: dateStart.value, until: dateEnd.value }))
+const dateRangeDays = computed(() => {
+  const since = Date.parse(`${dateStart.value}T00:00:00Z`)
+  const until = Date.parse(`${dateEnd.value}T00:00:00Z`)
+  return Number.isFinite(since) && Number.isFinite(until) ? Math.max(1, Math.round((until - since) / 86400000) + 1) : 1
+})
 
 const objectives = computed(() => overview.value?.objectives ?? [])
 const scope = computed(() => overview.value?.scope ?? null)
@@ -173,19 +183,20 @@ const scaleY = (value: number | null, values: Array<number | null>, top = 48, bo
 const trendPoints = computed(() => {
   const rows = overview.value?.trend ?? []
   const spendValues = rows.map(row => numberValue(row.spend))
-  const barValues = rows.map(row => isSales.value ? numberValue(row.conversion_value) : numberValue(row.conversions))
+  const barValues = rows.map(row => metricValueOf(row, selectedTrendMetric.value))
   const barMax = Math.max(...barValues.filter((item): item is number => item != null), 0)
   return rows.map((row, index) => {
     const metrics = derive(row)
     const x = rows.length <= 1 ? 475 : 91 + index * (768 / (rows.length - 1))
-    const barValue = isSales.value ? metrics.revenue : metrics.results
+    const selectedMetric = trendMetricOptions.find(option => option.key === selectedTrendMetric.value)
+    const barValue = metricValueOf(row, selectedTrendMetric.value)
     const barHeight = barValue == null || barMax === 0 ? 0 : Math.max(2, (barValue / barMax) * 105)
     return {
       ...row,
       label: formatDate(row.date),
       spendText: formatMoney(row.spend),
-      barLabel: isSales.value ? '收入' : 'Lead',
-      barText: isSales.value ? formatMoney(metrics.revenue) : formatNumber(metrics.results),
+      barLabel: selectedMetric?.label ?? (isSales.value ? '收入' : 'Lead'),
+      barText: formatTrendMetricValue(selectedTrendMetric.value, barValue, overview.value?.window?.currency, overview.value?.window?.mixed_currency),
       efficiencyLabel: isSales.value ? 'ROAS' : 'CPL',
       efficiencyText: isSales.value ? formatRoas(metrics.roas) : formatMoney(metrics.cost),
       impressionsText: formatNumber(row.impressions),
@@ -208,6 +219,24 @@ const linePath = (field: 'spendY') => trendPoints.value
 const spendPath = computed(() => linePath('spendY'))
 const hoveredTrendIndex = ref<number | null>(null)
 const selectedTrendIndex = ref<number | null>(null)
+const selectedTrendMetric = ref<TrendMetric>('conversion_value')
+const availableTrendMetrics = computed(() => trendMetricOptions.filter(option => {
+  if (option.key === 'conversion_value' || option.key === 'roas') return isSales.value
+  if (option.key === 'result_cost') return isLeads.value
+  return true
+}))
+const metricValueOf = (point: DashboardMetrics, metric: TrendMetric): number | null => {
+  const metrics = derive(point)
+  if (metric === 'conversion_value') return metrics.revenue
+  if (metric === 'roas') return metrics.roas
+  if (metric === 'result_cost') return metrics.cost
+  return numberValue(point[metric])
+}
+watch(isSales, sales => {
+  if (!availableTrendMetrics.value.some(option => option.key === selectedTrendMetric.value)) {
+    selectedTrendMetric.value = sales ? 'conversion_value' : 'conversions'
+  }
+})
 const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
 const toggleTrendSelection = (index: number) => { selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index }
@@ -416,7 +445,17 @@ const initialize = async () => {
     loading.value = false
   }
 }
-const changePeriod = () => loadOverview()
+const changePeriod = () => {
+  const next = windowForDays(Number(period.value))
+  dateStart.value = next.since
+  dateEnd.value = next.until
+  loadOverview()
+}
+const changeDateRange = () => {
+  if (dateStart.value > dateEnd.value) dateEnd.value = dateStart.value
+  period.value = String(dateRangeDays.value)
+  loadOverview()
+}
 const changeConnection = async () => { await loadAccounts(); await loadOverview() }
 const changeAccount = () => loadOverview()
 const handleRefresh = () => loadOverview(true)
@@ -474,6 +513,12 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               <option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option>
             </select>
           </label>
+          <div class="date-range-filter" role="group" aria-label="自定义日期范围">
+            <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+            <input v-model="dateStart" type="date" :max="dateEnd" aria-label="开始日期" @change="changeDateRange">
+            <span>至</span>
+            <input v-model="dateEnd" type="date" :min="dateStart" :max="dateInput(new Date())" aria-label="结束日期" @change="changeDateRange">
+          </div>
           <label class="filter-field">
             <select v-model="connectionId" class="period-select" aria-label="Meta 连接" @change="changeConnection">
               <option v-if="!connections.length" value="">暂无 Meta 连接</option>
@@ -554,7 +599,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
 
         <section class="replay-card">
-          <div class="replay-card-head"><div><h2>每日趋势</h2><p>{{ isSales ? '花费 / 收入 / ROAS' : '花费 / Lead / CPL' }}</p></div><span class="soft-chip">近 {{ period }} 天</span></div>
+          <div class="replay-card-head"><div><h2>每日趋势</h2><p>{{ isSales ? '花费 / 收入 / ROAS' : '花费 / Lead / CPL' }}</p></div><div class="trend-head-actions"><label class="trend-metric-select"><span>柱状指标</span><select v-model="selectedTrendMetric" aria-label="趋势柱状指标"><option v-for="metric in availableTrendMetrics" :key="metric.key" :value="metric.key">{{ metric.label }}</option></select></label><span class="soft-chip">{{ dateRangeDays }} 天</span></div></div>
           <div class="trend-grid">
             <div class="chart-panel">
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ isSales ? '收入' : 'Lead' }}</span></div>
@@ -700,8 +745,10 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 .dashboard-shell.embedded .replay-bar { align-items: flex-start; flex-direction: column; padding-top: 10px; padding-bottom: 10px; }
 .dashboard-shell.embedded .replay-actions { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; padding-bottom: 2px; }
 .dashboard-shell.embedded .filter-field .period-select,
+.dashboard-shell.embedded .date-range-filter,
 .dashboard-shell.embedded .sync-button,
 .dashboard-shell.embedded .refresh-button { width: 100%; min-width: 0; }
+.dashboard-shell.embedded .date-range-filter input { width: 100%; }
 .dashboard-shell.embedded .replay-content { padding: 12px 12px 52px; }
 .dashboard-shell.embedded .result-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 .dashboard-shell.embedded .trend-grid { grid-template-columns: 1fr; }
@@ -727,6 +774,12 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 .replay-title .page-icon { background: #f6f5f4; color: #37352f; }
 .replay-title h1 { font-size: 16px; }
 .replay-actions { gap: 8px; }
+.date-range-filter { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 8px; background: #fff; color: var(--steel); font-size: 11px; white-space: nowrap; }
+.date-range-filter .material-symbols-outlined { font-size: 15px; }
+.date-range-filter input { width: 112px; border: 0; outline: 0; background: transparent; color: var(--slate); font: inherit; font-size: 11px; }
+.trend-head-actions { display: flex; align-items: center; gap: 8px; }
+.trend-metric-select { display: inline-flex; align-items: center; gap: 6px; color: var(--steel); font-size: 11px; white-space: nowrap; }
+.trend-metric-select select { height: 30px; padding: 0 24px 0 8px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--charcoal); font: inherit; font-size: 11px; }
 .filter-field { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
 .filter-field .period-select { min-width: 92px; }
 .sync-button,.refresh-button { height: 34px; min-width: 116px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color .16s ease,border-color .16s ease; }
@@ -881,7 +934,8 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
   .platform-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
-  .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
+  .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .date-range-filter,.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
+  .trend-head-actions { align-items: flex-end; flex-direction: column; }
   .trend-grid,.diagnostic-grid { grid-template-columns: 1fr; }
   .diagnostic-grid { gap: 16px; }
   .replay-card-head { flex-wrap: wrap; }
