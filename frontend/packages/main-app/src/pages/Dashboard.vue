@@ -3,6 +3,8 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import DataSyncDialog from '@/components/dashboard/DataSyncDialog.vue'
+import AnalysisMetricTable, { type AnalysisTableRow } from '@/components/dashboard/AnalysisMetricTable.vue'
+import { type TrendMetric } from '@/data/trendMetrics'
 import { navItems } from '@/config/navigation'
 import { getMetaDashboardOverview, type DashboardMetrics, type MetaAdSetSyncResponse, type MetaDashboardOverview } from '@/api/dashboard'
 import { platformApi, type PlatformConnectionResponse, type SubAccountResponse } from '@/api/platform'
@@ -210,16 +212,36 @@ const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrend
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
 const toggleTrendSelection = (index: number) => { selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index }
 
-const dailyRows = computed(() => trendPoints.value.map(point => ({
-  date: point.label,
-  spend: point.spendText,
-  impressions: point.impressionsText,
-  clicks: point.clicksText,
-  ctr: point.ctrText,
-  results: point.resultsText,
-  bar: point.barText,
-  efficiency: point.efficiencyText,
-})))
+const dailyAnalysisRows = computed<AnalysisTableRow[]>(() => (overview.value?.trend ?? []).map((point, index) => {
+  const metrics = derive(point)
+  const previousPoint = index > 0 ? derive(overview.value?.trend?.[index - 1]) : null
+  const currentEfficiency = isSales.value ? metrics.roas : metrics.cost
+  const previousEfficiency = previousPoint ? (isSales.value ? previousPoint.roas : previousPoint.cost) : null
+  const delta = currentEfficiency != null && previousEfficiency != null && previousEfficiency !== 0
+    ? (currentEfficiency - previousEfficiency) / Math.abs(previousEfficiency) * 100
+    : null
+  return {
+    id: point.date,
+    name: point.date,
+    detail: `${point.accounts_with_facts ?? '—'} / ${point.accounts_expected ?? '—'} 个账号有事实数据`,
+    metrics: {
+      spend: metrics.spend,
+      conversion_value: metrics.revenue,
+      conversions: metrics.results,
+      roas: metrics.roas,
+      clicks: metrics.clicks,
+      ctr: metrics.ctr,
+      impressions: metrics.impressions,
+      result_cost: metrics.cost,
+    },
+    delta,
+    status: point.accounts_with_facts != null && point.accounts_expected != null && point.accounts_with_facts < point.accounts_expected ? '部分数据' : '',
+    statusTone: point.accounts_with_facts != null && point.accounts_expected != null && point.accounts_with_facts < point.accounts_expected ? 'warning' : 'normal',
+  }
+}))
+const dailyAnalysisColumns = computed<TrendMetric[]>(() => isSales.value
+  ? ['spend', 'conversion_value', 'conversions', 'roas', 'clicks', 'ctr']
+  : ['spend', 'conversions', 'result_cost', 'clicks', 'ctr'])
 
 type Level = 'account' | 'campaign' | 'adset'
 const level = ref<Level>('account')
@@ -651,20 +673,17 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           <p v-if="level !== 'adset'" class="table-hint">点击任意行下钻到 {{ level === 'account' ? 'Campaign' : 'AdSet' }}</p>
         </section>
 
-        <section class="replay-card">
-          <div class="replay-card-head"><div><h2>日明细</h2><p>逐日核对消耗与结果变化</p></div><span class="soft-chip">{{ dailyRows.length }} 天</span></div>
-          <div class="table-wrap">
-            <table class="data-table">
-              <thead><tr><th>日期</th><th>花费</th><th>{{ isSales ? '收入' : 'Lead' }}</th><th>{{ isSales ? 'ROAS' : 'CPL' }}</th><th>曝光</th><th>点击</th><th>CTR</th></tr></thead>
-              <tbody>
-                <tr v-if="!dailyRows.length"><td colspan="7" class="data-empty">所选窗口暂无日级投放数据</td></tr>
-                <tr v-for="(row, index) in dailyRows" :key="row.date" :class="{ active: selectedTrendIndex === index }">
-                  <td>{{ row.date }}</td><td>{{ row.spend }}</td><td>{{ row.bar }}</td><td>{{ row.efficiency }}</td><td>{{ row.impressions }}</td><td>{{ row.clicks }}</td><td>{{ row.ctr }}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
+        <AnalysisMetricTable
+          title="日明细"
+          subtitle="逐日核对真实 Meta 事实数据；空字段不补值"
+          entity-label="日期"
+          search-placeholder="搜索日期"
+          :rows="dailyAnalysisRows"
+          :columns="dailyAnalysisColumns"
+          :currency="overview?.window.currency"
+          :mixed-currency="overview?.window.mixed_currency"
+          :totals="{ spend: current.spend, conversion_value: current.revenue, conversions: current.results, roas: current.roas, clicks: current.clicks, ctr: current.ctr, impressions: current.impressions, result_cost: current.cost }"
+        />
 
       </div>
     </main>
