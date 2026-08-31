@@ -545,6 +545,16 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         <div v-else-if="loading" class="dashboard-feedback" role="status">正在读取本地 Meta 数据…</div>
         <div v-else class="dashboard-feedback" :class="{ warning: (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) }" role="status"><strong>{{ (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) ? '部分数据' : '数据完整' }}</strong><span>{{ overview?.window.since }} 至 {{ overview?.window.until }}</span><span v-if="overview?.data_quality.status === 'accessible_with_no_rows'">当前窗口无投放事实</span><span v-else-if="overview?.window.mixed_currency">多币种金额未合计</span></div>
 
+        <section class="analysis-filter-card" aria-label="数据分析视图">
+          <div class="analysis-filter-head"><div class="analysis-filter-tab active"><span class="material-symbols-outlined" aria-hidden="true">tune</span><strong>分析视图</strong></div><span class="analysis-filter-count">当前范围 · {{ overview?.data_quality.row_count ?? 0 }} 条事实数据</span></div>
+          <div class="analysis-filter-controls">
+            <label class="analysis-filter-chip"><span>连接：</span><select v-model="connectionId" aria-label="分析连接" @change="changeConnection"><option v-if="!connections.length" value="">暂无 Meta 连接</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.account_name || 'Meta 连接' }}</option></select></label>
+            <label class="analysis-filter-chip"><span>账户：</span><select v-model="accountId" aria-label="分析账户" @change="changeAccount"><option value="">全部 active 账户</option><option v-if="!accounts.length" value="">暂无活跃账户</option><option v-for="item in accounts" :key="item.id" :value="item.sub_account_id.replace(/^act_/, '')">{{ item.name }}</option></select></label>
+            <label class="analysis-filter-chip"><span>目标：</span><select v-model="objective" aria-label="分析目标" @change="() => loadOverview()"><option value="">自动选择</option><option v-for="item in objectives.filter(item => item.supported)" :key="item.objective ?? 'supported'" :value="item.objective ?? ''">{{ item.label }}</option></select></label>
+            <div class="analysis-filter-chip time-filter-chip"><span class="material-symbols-outlined" aria-hidden="true">calendar_today</span><input v-model="dateStart" type="date" :max="dateEnd" aria-label="分析开始日期" @change="changeDateRange"><span>至</span><input v-model="dateEnd" type="date" :min="dateStart" :max="dateInput(new Date())" aria-label="分析结束日期" @change="changeDateRange"></div>
+          </div>
+        </section>
+
         <nav v-if="objectives.length" class="objective-switch" aria-label="投放目标">
           <div class="objective-switch-title"><span class="material-symbols-outlined" aria-hidden="true">tune</span><span>分析视图</span></div>
           <div class="objective-tabs">
@@ -571,7 +581,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 
         <p v-if="!supportedObjective" class="scope-note">当前目标没有经过验证的结果指标，只展示消耗与流量。</p>
 
-        <section class="replay-card result-card" aria-label="结果总览">
+        <section class="replay-card result-card overview-card" aria-label="结果总览">
           <div class="replay-card-head"><div><h2>结果总览</h2><p>{{ scope?.objective_label }} 目标 · 与上一周期对比</p></div><span class="soft-chip">{{ overview?.previous?.window.since }} 至 {{ overview?.previous?.window.until }}</span></div>
           <div class="result-stats">
             <article v-for="stat in resultStats" :key="stat.label" class="result-stat" :class="{ primary: stat.primary }">
@@ -598,8 +608,8 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           </div>
         </section>
 
-        <section class="replay-card">
-          <div class="replay-card-head"><div><h2>每日趋势</h2><p>{{ isSales ? '花费 / 收入 / ROAS' : '花费 / Lead / CPL' }}</p></div><div class="trend-head-actions"><label class="trend-metric-select"><span>柱状指标</span><select v-model="selectedTrendMetric" aria-label="趋势柱状指标"><option v-for="metric in availableTrendMetrics" :key="metric.key" :value="metric.key">{{ metric.label }}</option></select></label><span class="soft-chip">{{ dateRangeDays }} 天</span></div></div>
+        <section class="replay-card trend-replay-card">
+          <div class="replay-card-head trend-card-head"><div><h2>每日趋势</h2><p>{{ isSales ? '花费 / 收入 / ROAS' : '花费 / Lead / CPL' }}</p></div><div class="trend-head-actions"><label class="trend-metric-select"><span>柱状指标</span><select v-model="selectedTrendMetric" aria-label="趋势柱状指标"><option v-for="metric in availableTrendMetrics" :key="metric.key" :value="metric.key">{{ metric.label }}</option></select></label><span class="soft-chip">{{ dateRangeDays }} 天</span></div></div>
           <div class="trend-grid">
             <div class="chart-panel">
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ isSales ? '收入' : 'Lead' }}</span></div>
@@ -649,7 +659,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
         </div>
 
-        <section class="replay-card">
+        <section class="replay-card hierarchy-card">
           <div class="replay-card-head">
             <div>
               <h2>投放单元</h2>
@@ -793,11 +803,20 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 @keyframes spin { to { transform: rotate(360deg); } }
 
 .replay-content { width: 100%; max-width: none; margin: 0; padding-top: 24px; padding-bottom: 64px; }
+.overview-card { border-radius: 12px; }.overview-card .replay-card-head { background: #fff; }.trend-replay-card,.hierarchy-card { border-radius: 12px; }
 .dashboard-feedback { display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-soft); color: var(--slate); font-size: 12px; }
 .dashboard-feedback strong{color:var(--charcoal)}
 .dashboard-feedback.warning{border-color:#f0d8a8;background:#fffaf0}
 .dashboard-feedback.warning strong{color:#946200}
 .dashboard-feedback.error { border-color: #f0c9c9; background: #fff5f5; color: #a33a3a; }
+.analysis-filter-card { margin-bottom: 12px; overflow: hidden; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; }
+.analysis-filter-head { min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 14px; border-bottom: 1px solid var(--hairline-soft); }
+.analysis-filter-tab { position: relative; display: inline-flex; align-items: center; gap: 7px; height: 46px; color: var(--slate); font-size: 13px; }
+.analysis-filter-tab::after { content: ''; position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--workspace-action-primary,#137fec); }
+.analysis-filter-tab .material-symbols-outlined { color: #3276cc; font-size: 17px; }.analysis-filter-count { color: var(--steel); font-size: 11px; }
+.analysis-filter-controls { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(260px, 1.5fr); gap: 7px; padding: 9px 14px; }
+.analysis-filter-chip { min-width: 0; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 8px; background: var(--surface); color: var(--steel); font-size: 11px; white-space: nowrap; }
+.analysis-filter-chip select,.analysis-filter-chip input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--charcoal); font: inherit; font-size: 12px; font-weight: 600; }.analysis-filter-chip input { width: 0; }.time-filter-chip { background: #fff; box-shadow: inset 0 0 0 1px var(--hairline); }.time-filter-chip .material-symbols-outlined { font-size: 15px; }
 .quiet-badge { display: inline-flex; align-items: center; min-height: 22px; margin-left: 4px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; background: #fff; color: var(--steel); font-size: 10px; font-weight: 600; white-space: nowrap; }
 .quiet-badge:first-child { margin-left: 0; }
 .quiet-badge.warn { border-color: #f0d8a8; background: #fff6e4; color: #9a6700; }
@@ -937,6 +956,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
   .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .date-range-filter,.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
   .trend-head-actions { align-items: flex-end; flex-direction: column; }
   .trend-grid,.diagnostic-grid { grid-template-columns: 1fr; }
+  .analysis-filter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .diagnostic-grid { gap: 16px; }
   .replay-card-head { flex-wrap: wrap; }
   .table-controls { width: 100%; justify-content: space-between; }
@@ -944,6 +964,8 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 }
 @media (max-width: 620px) {
   .replay-content { padding: 12px 12px 52px; }
+  .analysis-filter-controls { grid-template-columns: 1fr; padding: 8px 10px; }
+  .analysis-filter-head { padding: 0 10px; }
   .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
   .dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { width: 34px; min-width: 34px; padding: 0; }
   .dashboard-shell:not(.embedded) .sync-label,.dashboard-shell:not(.embedded) .refresh-label { display: none; }
