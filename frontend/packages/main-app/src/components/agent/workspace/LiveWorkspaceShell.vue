@@ -10,6 +10,7 @@ const props = defineProps<{
   collapsed?: boolean
   mobile?: boolean
   canExpand?: boolean
+  maximized?: boolean
   sessionId?: string
   projection: WorkspaceProjection | null
   approvalDraft: WorkspaceApprovalDraft | null
@@ -19,6 +20,7 @@ const props = defineProps<{
 
 const emit = defineEmits<{
   toggleCollapse: []
+  toggleMaximize: []
   opened: []
   approve: [payload: { checkpointId: string; editedArguments: Record<string, unknown>; argumentDiff: Array<{ field: string; before: unknown; after: unknown }> }]
   reject: [checkpointId: string]
@@ -178,6 +180,9 @@ watch(() => props.visible, visible => {
             <span class="material-symbols-outlined" :class="{ spinning: attention === 'updating' || attention === 'executing' }">{{ statusIcon }}</span>
             {{ statusLabel }}
           </span>
+          <button type="button" :title="maximized ? '恢复工作台宽度' : '放大工作台'" :aria-label="maximized ? '恢复工作台宽度' : '放大工作台'" @click="emit('toggleMaximize')">
+            <span class="material-symbols-outlined">{{ maximized ? 'close_fullscreen' : 'open_in_full' }}</span>
+          </button>
           <button type="button" title="收起工作台" aria-label="收起工作台" @click="emit('toggleCollapse')">
             <span class="material-symbols-outlined">right_panel_close</span>
           </button>

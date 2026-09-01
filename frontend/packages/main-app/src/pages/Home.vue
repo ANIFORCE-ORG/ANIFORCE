@@ -32,6 +32,8 @@ const composerIsComposing = ref(false)
 const workspaceCollapsed = ref(true)
 const workspaceManuallyCollapsed = ref(false)
 const workspaceWidth = ref(Number(localStorage.getItem('aniforce.workspace.width') || 470))
+const workspacePreviousWidth = ref(workspaceWidth.value)
+const workspaceMaximized = ref(false)
 const isDesktopWorkspaceViewport = ref(window.matchMedia('(min-width: 1280px)').matches)
 const seenWorkspaceProjectionBySession = ref<Record<string, string>>({})
 const workspaceDragging = ref(false)
@@ -288,7 +290,7 @@ function phaseLabel(phase: AgentPhase): string {
 }
 
 function clampWorkspaceWidth(value: number): number {
-  const viewportMax = Math.max(360, Math.min(640, Math.floor(window.innerWidth * 0.32)))
+  const viewportMax = Math.max(360, Math.min(1200, window.innerWidth - 620))
   return Math.min(Math.max(value, 360), viewportMax)
 }
 
@@ -334,10 +336,39 @@ function stopWorkspaceResize() {
 
 function startWorkspaceResize(event: PointerEvent) {
   if (workspaceCollapsed.value) return
+  workspaceMaximized.value = false
   workspaceDragging.value = true
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
+  event.currentTarget instanceof HTMLElement && event.currentTarget.setPointerCapture?.(event.pointerId)
   event.preventDefault()
+}
+
+function handleWorkspaceResizeKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  event.preventDefault()
+  const direction = event.key === 'ArrowLeft' ? 1 : -1
+  const step = event.shiftKey ? 96 : 32
+  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value + direction * step)
+  persistWorkspaceState()
+}
+
+function resetWorkspaceWidth() {
+  workspaceMaximized.value = false
+  workspaceWidth.value = clampWorkspaceWidth(720)
+  persistWorkspaceState()
+}
+
+function toggleWorkspaceMaximized() {
+  if (workspaceMaximized.value) {
+    workspaceWidth.value = clampWorkspaceWidth(workspacePreviousWidth.value)
+    workspaceMaximized.value = false
+  } else {
+    workspacePreviousWidth.value = workspaceWidth.value
+    workspaceWidth.value = clampWorkspaceWidth(1200)
+    workspaceMaximized.value = true
+  }
+  persistWorkspaceState()
 }
 
 function resizeComposer(target: HTMLTextAreaElement | null = composerInput.value): void {
@@ -937,20 +968,30 @@ watch(
         v-if="!workspaceEffectiveCollapsed"
         class="workspace-resize-handle"
         type="button"
+        role="separator"
         aria-label="调整工作台宽度"
+        aria-orientation="vertical"
+        aria-valuemin="360"
+        aria-valuemax="1200"
+        :aria-valuenow="workspaceWidth"
+        title="拖动调整工作台宽度，双击恢复推荐宽度"
         @pointerdown="startWorkspaceResize"
+        @keydown="handleWorkspaceResizeKeydown"
+        @dblclick="resetWorkspaceWidth"
       ></button>
       <LiveWorkspaceShell
         class="home-workspace"
         visible
         :collapsed="workspaceEffectiveCollapsed"
         :can-expand="true"
+        :maximized="workspaceMaximized"
         :session-id="agent.activeSession.value?.id"
         :projection="workspaceProjection"
         :approval-draft="workspaceApprovalDraft"
         :attention="workspaceAttention"
         :status-label="workspaceStatusLabel"
         @toggle-collapse="toggleWorkspaceCollapsed"
+        @toggle-maximize="toggleWorkspaceMaximized"
         @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: agent.workspaceApprovalDraft.value?.runId || '' })"
         @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
         @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
@@ -1756,18 +1797,33 @@ watch(
 
 .workspace-resize-handle {
   position: absolute;
-  z-index: 5;
+  z-index: 12;
   top: 0;
   bottom: 0;
-  left: -3px;
-  width: 6px;
+  left: -6px;
+  width: 12px;
+  padding: 0;
   border: 0;
+  outline: none;
   background: transparent;
   cursor: col-resize;
+  touch-action: none;
 }
 
-.workspace-resize-handle:hover {
-  background: rgba(35, 131, 226, 0.16);
+.workspace-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: transparent;
+  content: '';
+  transition: background-color .15s ease;
+}
+
+.workspace-resize-handle:hover::after,
+.workspace-resize-handle:focus-visible::after {
+  background: rgba(35, 131, 226, 0.55);
 }
 
 .home-workspace {

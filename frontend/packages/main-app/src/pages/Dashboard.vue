@@ -502,8 +502,8 @@ const initialize = async () => {
   if (props.workspaceOverview) {
     overview.value = props.workspaceOverview
     objective.value = props.workspaceOverview.scope?.objective || OBJECTIVE_SALES
-    loading.value = false
-    return
+    dateStart.value = props.workspaceOverview.window.since
+    dateEnd.value = props.workspaceOverview.window.until
   }
   loading.value = true
   try {
@@ -513,9 +513,9 @@ const initialize = async () => {
       await loadAccounts()
       if (accounts.value.length) break
     }
-    await loadOverview()
+    if (!props.workspaceOverview) await loadOverview()
   } catch (error) {
-    errorMessage.value = error instanceof Error ? error.message : '数据加载失败'
+    if (!overview.value) errorMessage.value = error instanceof Error ? error.message : '数据加载失败'
   } finally {
     loading.value = false
   }
@@ -535,7 +535,7 @@ const changeConnection = async () => { await loadAccounts(); await loadOverview(
 const changeAccount = () => loadOverview()
 const handleRefresh = () => loadOverview(true)
 const selectObjective = (value: string | null) => {
-  if (props.workspaceOverview || !value || objective.value === value) return
+  if (!value || objective.value === value) return
   objective.value = value
   loadOverview()
 }
@@ -557,6 +557,8 @@ watch(() => props.workspaceOverview, value => {
   if (!value) return
   overview.value = value
   objective.value = value.scope?.objective || OBJECTIVE_SALES
+  dateStart.value = value.window.since
+  dateEnd.value = value.window.until
   loading.value = false
 })
 onBeforeUnmount(() => window.clearTimeout(toastTimer))
@@ -582,7 +584,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
             <h1>数据概览</h1>
           </div>
         </div>
-        <div v-if="!props.workspaceOverview" class="page-actions replay-actions">
+        <div class="page-actions replay-actions">
           <label class="filter-field">
             <select v-model="connectionId" class="period-select" aria-label="Meta 连接" @change="changeConnection">
               <option v-if="!connections.length" value="">暂无 Meta 连接</option>
@@ -628,7 +630,6 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               type="button"
               class="objective-tab"
               :class="{ active: objective === item.objective }"
-              :disabled="Boolean(props.workspaceOverview)"
               @click="selectObjective(item.objective)"
             >
               <span class="objective-name">{{ item.label }}</span>

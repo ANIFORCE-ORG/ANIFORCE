@@ -14,6 +14,15 @@ describe('Dashboard real Meta data contract', () => {
     expect(dashboard).toContain('刷新本地数据视图')
   })
 
+  it('uses the same live connection controls for full-page and workspace rendering', () => {
+    const initialize = dashboard.slice(dashboard.indexOf('const initialize = async'), dashboard.indexOf('const changePeriod'))
+    expect(initialize).toContain('platformApi.getAllConnections()')
+    expect(initialize).toContain('await loadAccounts()')
+    expect(initialize).toContain('if (!props.workspaceOverview) await loadOverview()')
+    expect(initialize).not.toContain('loading.value = false\n    return')
+    expect(dashboard).toContain('<div class="page-actions replay-actions">')
+  })
+
   it('uses active connection and account filters instead of unsupported project/platform mocks', () => {
     expect(dashboard).toContain('v-model="connectionId"')
     expect(dashboard).toContain('v-model="accountId"')
