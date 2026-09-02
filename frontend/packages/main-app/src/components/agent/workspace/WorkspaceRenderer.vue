@@ -7,6 +7,7 @@ import { computed, ref, watch } from 'vue'
 import ProjectCollectionView from '@/components/projects/ProjectCollectionView.vue'
 import CampaignCollectionView from '@/components/campaigns/CampaignCollectionView.vue'
 import MaterialLibraryView from '@/components/materials/MaterialLibraryView.vue'
+import Dashboard from '@/pages/Dashboard.vue'
 import WorkspaceProjectCreate from './WorkspaceProjectCreate.vue'
 import CreateProjectForm from '@/components/projects/CreateProjectForm.vue'
 import CreateCampaignModal from '@/components/campaigns/CreateCampaignModal.vue'
@@ -384,16 +385,19 @@ function handleMaterialRowSelect(row: MaterialRow): void {
 
 <template>
   <div class="h-full overflow-y-auto">
+    <Dashboard
+      v-if="projection?.surface === 'dashboard'"
+      embedded
+      :workspace-overview="(projection.payload.overview as any) || null"
+    />
+
     <!-- 项目列表（查询类工具，无需审批） -->
-    <div v-if="projection?.surface === 'project.list' || projection?.surface === 'project.detail'" class="p-[16px]">
-      <div class="mb-[12px] flex items-center justify-between">
-        <div>
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ projection.surface === 'project.detail' ? '项目详情' : '项目库' }}</h3>
-          <p class="text-[10px] text-slate-500 dark:text-slate-400">
-            {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'project.detail' ? '已加载 1 个项目' : `共 ${projects.length} 个项目` }}
-          </p>
-        </div>
-        <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-500">数据已更新，可刷新</span>
+    <div v-else-if="projection?.surface === 'project.list' || projection?.surface === 'project.detail'" class="p-[16px]">
+      <div class="mb-[10px] flex items-center justify-between">
+        <p class="text-[10px] text-slate-500 dark:text-slate-400">
+          {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'project.detail' ? '1 个项目' : `共 ${projects.length} 个项目` }}
+        </p>
+        <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-600">数据有更新</span>
       </div>
       <div v-if="projection.mode === 'loading'" class="flex items-center justify-center py-[40px]">
         <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -414,14 +418,11 @@ function handleMaterialRowSelect(row: MaterialRow): void {
 
     <!-- 广告计划列表（查询类工具，无需审批） -->
     <div v-else-if="projection?.surface === 'campaign.list' || projection?.surface === 'campaign.detail'" class="p-[16px]">
-      <div class="mb-[12px] flex items-center justify-between">
-        <div>
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ projection.surface === 'campaign.detail' ? '广告计划详情' : '广告计划' }}</h3>
-          <p class="text-[10px] text-slate-500 dark:text-slate-400">
-            {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'campaign.detail' ? '已加载 1 个计划' : `共 ${campaigns.length} 个计划` }}
-          </p>
-        </div>
-        <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-500">数据已更新，可刷新</span>
+      <div class="mb-[10px] flex items-center justify-between">
+        <p class="text-[10px] text-slate-500 dark:text-slate-400">
+          {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'campaign.detail' ? '1 个计划' : `共 ${campaigns.length} 个计划` }}
+        </p>
+        <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-600">数据有更新</span>
       </div>
       <div v-if="projection.mode === 'loading'" class="flex items-center justify-center py-[40px]">
         <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -438,14 +439,11 @@ function handleMaterialRowSelect(row: MaterialRow): void {
 
     <!-- 素材列表（查询类工具，无需审批） -->
     <div v-else-if="projection?.surface === 'material.list' || projection?.surface === 'material.detail' || projection?.surface === 'campaign.materials'" class="p-[16px]">
-      <div class="mb-[12px] flex items-center justify-between">
-        <div>
-          <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">{{ projection.surface === 'campaign.materials' ? '广告计划素材' : projection.surface === 'material.detail' ? '素材详情' : '素材库' }}</h3>
-          <p class="text-[10px] text-slate-500 dark:text-slate-400">
-            {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'material.detail' ? '已加载 1 个素材' : `共 ${materials.length} 个素材` }}
-          </p>
-        </div>
-        <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-500">数据已更新，可刷新</span>
+      <div class="mb-[10px] flex items-center justify-between">
+        <p class="text-[10px] text-slate-500 dark:text-slate-400">
+          {{ projection.mode === 'loading' ? '正在查询...' : projection.surface === 'material.detail' ? '1 个素材' : `共 ${materials.length} 个素材` }}
+        </p>
+        <span v-if="projection.mode === 'stale'" class="text-[10px] text-amber-600">数据有更新</span>
       </div>
       <div v-if="projection.mode === 'loading'" class="flex items-center justify-center py-[40px]">
         <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
@@ -460,10 +458,7 @@ function handleMaterialRowSelect(row: MaterialRow): void {
     </div>
 
     <div v-else-if="projection?.surface === 'material.image'" class="p-[16px]">
-      <div class="mb-[12px]">
-        <h3 class="text-[13px] font-semibold text-slate-900 dark:text-white">素材预览资源</h3>
-        <p class="text-[10px] text-slate-500 dark:text-slate-400">{{ projection.mode === 'loading' ? '正在查询...' : '已加载预览资源信息' }}</p>
-      </div>
+      <p class="mb-[10px] text-[10px] text-slate-500 dark:text-slate-400">{{ projection.mode === 'loading' ? '正在查询...' : '预览资源' }}</p>
       <div v-if="projection.mode === 'loading'" class="flex items-center justify-center py-[40px]">
         <div class="h-[16px] w-[16px] border-2 border-primary border-t-transparent rounded-full animate-spin"></div>
       </div>
@@ -689,11 +684,19 @@ function handleMaterialRowSelect(row: MaterialRow): void {
     </div>
 
     <!-- 空状态 -->
-    <div v-else class="flex flex-col items-center justify-center h-full py-[60px] px-[20px] text-center">
-      <span class="material-symbols-outlined text-[40px] text-slate-300 dark:text-slate-700 mb-[12px]">workspaces</span>
-      <p class="text-[12px] text-slate-500 dark:text-slate-400">
-        Agent 正在工作，操作结果会在这里实时呈现
+    <div v-else class="flex h-full flex-col items-center justify-center px-[32px] py-[60px] text-center">
+      <div class="mb-[16px] grid h-[40px] w-[40px] place-items-center rounded-md border border-slate-200 bg-white text-slate-400 shadow-sm dark:border-slate-700 dark:bg-slate-900">
+        <span class="material-symbols-outlined text-[21px]">dashboard_customize</span>
+      </div>
+      <h3 class="text-[13px] font-semibold text-slate-800 dark:text-slate-100">任务内容将在这里展开</h3>
+      <p class="mt-[6px] max-w-[250px] text-[11px] leading-[1.6] text-slate-500 dark:text-slate-400">
+        工作台会随当前任务同步查询结果和需要确认的操作
       </p>
+      <div class="mt-[22px] w-full max-w-[260px] space-y-[8px]" aria-hidden="true">
+        <div class="flex items-center gap-[8px]"><span class="h-[22px] w-[22px] rounded bg-slate-100 dark:bg-slate-800"></span><span class="h-[6px] w-[62%] rounded bg-slate-100 dark:bg-slate-800"></span></div>
+        <div class="flex items-center gap-[8px]"><span class="h-[22px] w-[22px] rounded bg-slate-100 dark:bg-slate-800"></span><span class="h-[6px] w-[78%] rounded bg-slate-100 dark:bg-slate-800"></span></div>
+        <div class="flex items-center gap-[8px]"><span class="h-[22px] w-[22px] rounded bg-slate-100 dark:bg-slate-800"></span><span class="h-[6px] w-[48%] rounded bg-slate-100 dark:bg-slate-800"></span></div>
+      </div>
     </div>
   </div>
 </template>

@@ -10,29 +10,40 @@ import SessionRenameDialog from '@/components/layout/SessionRenameDialog.vue'
 import MessageView from '@/components/agent/MessageView.vue'
 import LiveWorkspaceShell from '@/components/agent/workspace/LiveWorkspaceShell.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
-import type { TaskPanelAction, TaskPanelStatus, TaskPanelStep } from '@/components/agent/TaskStatusPanel.vue'
 import { resolveHomeSessionState, shouldApplyHomeSessionState } from '@/agent/homeSessionState'
-import { normalizeTaskPanelStatus, taskStatusPresentation } from '@/agent/taskPresentation'
+import { normalizeTaskPanelStatus, type TaskPresentationStatus } from '@/agent/taskPresentation'
+import { getHiddenToolActivity, getToolPresentation } from '@/utils/toolNameMapping'
 import { useAgentSession, type AgentPhase, type AgentRouteContext } from '@/composables/useAgentSession'
 import type { AgentMessage } from '@/api/agent'
+import { workspaceResultProjectionRegistry } from '@/store/workspace'
 import { navItems } from '@/config/navigation'
-import aniforceWorkflowHero from '@/assets/aniforce-workflow-hero.png'
 
 const router = useRouter()
 const route = useRoute()
 const agent = useAgentSession()
 const inputText = ref('')
+const conversationScroll = ref<HTMLElement | null>(null)
 const hasInteracted = ref(false)
 const modelMenuOpen = ref(false)
 const activeIntentMode = ref<'chat' | 'project'>('chat')
-const workspaceCollapsed = ref(localStorage.getItem('aniforce.workspace.collapsed') === '1')
+const selectedStarterAction = ref<string | null>(null)
+const composerInput = ref<HTMLTextAreaElement | null>(null)
+const composerIsComposing = ref(false)
+const workspaceCollapsed = ref(true)
+const workspaceManuallyCollapsed = ref(false)
 const workspaceWidth = ref(Number(localStorage.getItem('aniforce.workspace.width') || 470))
+const workspacePreviousWidth = ref(workspaceWidth.value)
+const workspaceMaximized = ref(false)
+const isDesktopWorkspaceViewport = ref(window.matchMedia('(min-width: 1280px)').matches)
+const seenWorkspaceProjectionBySession = ref<Record<string, string>>({})
 const workspaceDragging = ref(false)
 const renameDialog = ref<{ id: string; name: string } | null>(null)
 const renameValue = ref('')
 const deleteDialog = ref<{ id: string; name: string } | null>(null)
+const strategyExpanded = ref(false)
 const sessionsReady = ref(false)
 let skippedRouteSessionId: string | null = null
+let composerCompositionEndedAt = 0
 
 type MentionEntity = { type: 'project' | 'campaign' | 'material'; id: string; name?: string }
 
@@ -71,35 +82,65 @@ const intentModes: Array<{
 
 const starterActions = [
   {
-    icon: 'portfolio',
-    label: '盘点投放资产',
-    description: '统一查看项目、计划与素材，快速接续当前工作。',
-    prompt: '帮我盘点当前账号下的项目、投放计划和素材。',
+    icon: 'analytics',
+    label: '今日投放复盘',
+    description: '汇总核心指标，输出计划分层与今日调控清单。',
+    prompt: '请复盘当前账号最近 7 天的投放表现。按真实可用维度汇总消耗、转化、CPA、CTR 与 ROAS；先校验数据完整性和归因成熟度，再将计划分为「可放量 / 观察 / 控量 / 暂停」，说明判断依据，并给出未来 24 小时可执行的调整清单。若缺少业务类型、目标值或日期范围，请先向我确认。',
     mode: 'chat' as const
   },
   {
-    icon: 'launch',
-    label: '启动增长项目',
-    description: '从目标、市场和预算出发，创建清晰的投放草稿。',
-    prompt: '帮我启动一个新的增长项目，先根据目标、市场和预算整理投放草稿。',
-    mode: 'project' as const
-  },
-  {
-    icon: 'diagnose',
-    label: '发现增长机会',
-    description: '结合消耗、转化与素材信号，定位扩量和止损机会。',
-    prompt: '帮我诊断当前投放表现，找出值得扩量和需要止损的机会。',
+    icon: 'tune',
+    label: '计划分层调控',
+    description: '识别可放量、观察、控量和暂停计划。',
+    prompt: '请诊断当前广告计划表现，并按「可放量 / 观察 / 控量 / 暂停」输出清单。综合真实消耗、转化量、CPA、CTR、ROAS、趋势和样本量判断；说明关键证据并给出明确动作。数据不足或归因未成熟的计划请标记为待观察，不要补造指标。',
     mode: 'chat' as const
   },
   {
-    icon: 'creative',
-    label: '生成创意方案',
-    description: '将投放目标转成素材 Brief 与可执行创意方向。',
-    prompt: '帮我把投放目标整理成素材 Brief 和可执行的创意方向。',
+    icon: 'image_search',
+    label: '素材表现诊断',
+    description: '基于可关联数据定位素材机会和风险。',
+    prompt: '请分析当前素材表现，识别高潜、低效和需要迭代的素材，并给出下一批素材的选题、开头钩子、卖点与 A/B 变量建议。仅使用能够真实关联到素材维度的数据；如果当前数据无法稳定关联素材，请明确说明限制，不要推导 ROAS、疲劳度或评分。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'account_balance_wallet',
+    label: '预算扩量建议',
+    description: '找到预算承接空间，制定阶梯扩量与止损线。',
+    prompt: '请评估当前投放的预算承接能力，并制定未来 3 天的阶梯扩量方案。找出效率达标且转化稳定的计划，给出预算调整区间、观察周期、回撤条件和止损线。仅依据真实投放数据判断，缺少目标 CPA 或 ROAS 时先向我确认。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'compare_arrows',
+    label: '渠道效果对比',
+    description: '对比已接入渠道的效率、量级和稳定性。',
+    prompt: '请对比已授权且存在真实事实数据的投放渠道最近 7 天与前 7 天表现，统一指标口径后评估消耗、转化量、CPA、CTR、ROAS、趋势和稳定性，并给出预算迁移建议。没有接入或没有真实数据的渠道请标记为不可比较，不要估算数值。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'warning',
+    label: '异常波动排查',
+    description: '定位消耗、成本或转化突变的可能原因。',
+    prompt: '请排查当前投放中的异常波动。对比最近 24 小时、近 3 天均值和上周同期，识别消耗、成本、点击或转化的显著变化；按数据归因、账户审核、预算出价、流量和素材逐层列出证据、影响范围、排查顺序及可立即执行的恢复动作。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'schedule',
+    label: '素材更新节奏',
+    description: '根据真实信号安排素材观察、迭代和替换。',
+    prompt: '请基于当前真实可用的素材表现数据制定素材更新节奏，输出继续观察、优先迭代和建议替换的清单。只有在具备素材级连续趋势时才判断疲劳；如果数据无法稳定关联到素材，请说明缺失字段，并先给出不依赖虚假评分的创意迭代方案。',
+    mode: 'chat' as const
+  },
+  {
+    icon: 'experiment',
+    label: '下一轮测试方案',
+    description: '把诊断结论转成可执行的 A/B 测试矩阵。',
+    prompt: '请基于当前投放问题设计下一轮 A/B 测试方案。明确核心假设，并为素材、受众、版位、出价或落地页设计单变量测试；给出测试组、对照组、预算、观察周期、成功指标和停止条件。按影响力与实施成本排序，优先输出本周可落地的 3 至 5 个实验。',
     mode: 'chat' as const
   }
 ]
 
+const visibleStarterActions = computed(() => strategyExpanded.value ? starterActions : starterActions.slice(0, 4))
+const isPromptExpanded = computed(() => Array.from(inputText.value).length > 72 || inputText.value.includes('\n'))
 const visibleMessages = computed(() => agent.visibleMessages.value)
 const hasContent = computed(() => (
   Boolean(hasInteracted.value && agent.activeSession.value) ||
@@ -117,23 +158,58 @@ const sidebarSessions = computed(() => agent.sessions.value.map(session => ({
 })))
 const sidebarActivePanel = computed(() => agent.activeSession.value ? '__session__' : 'new-task')
 const activeMode = computed(() => intentModes.find(item => item.key === activeIntentMode.value) || intentModes[0])
+const starterActionHint = computed(() => {
+  if (!selectedStarterAction.value) return ''
+  if (activeIntentMode.value === 'project') {
+    return '可继续补充产品、市场或预算；结构化字段将在工作台中编辑。'
+  }
+  return '任务描述已填入，可以修改后发送。'
+})
 const activeRoute = computed(() => {
   const { titlePrefix: _titlePrefix, ...route } = activeMode.value.route
   return route
 })
 const activeSessionId = computed(() => agent.activeSession.value?.id || '')
 const currentTask = computed(() => agent.currentTask.value)
-const hasBusinessTask = computed(() => Boolean(currentTask.value?.task_type && currentTask.value.task_type !== 'conversation' && currentTask.value.task_type !== 'data_query'))
-const hasWorkspaceToolResults = computed(() => Boolean(agent.workspaceProjection.value) || agent.workspaceToolResults.value.length > 0)
-const taskPanelVisible = computed(() => true)
-const taskStateVisible = computed(() => Boolean(currentTask.value || agent.commandStatus.value))
-const taskStatusMeta = computed(() => taskStatusPresentation[taskStatus.value])
-const taskStatusLabel = computed(() => taskStatusMeta.value.label)
+const workspaceProjection = computed(() => agent.workspaceProjection.value)
+const workspaceApprovalDraft = computed(() => agent.workspaceApprovalDraft.value)
+const workspaceUpdating = computed(() => {
+  const draftStatus = workspaceApprovalDraft.value?.status
+  if (draftStatus === 'executing' || draftStatus === 'approved') return true
+  if (!agent.agentRunning.value || agent.agentPhase.value?.kind !== 'running_tools') return false
+  return agent.agentPhase.value.tools.some(tool => (
+    tool.name === 'request_workspace_projection'
+    || Boolean(workspaceResultProjectionRegistry[tool.name])
+  ))
+})
+const workspaceHasNewResult = computed(() => {
+  const projection = workspaceProjection.value
+  if (!projection) return false
+  return seenWorkspaceProjectionBySession.value[activeSessionId.value] !== projection.id
+})
+const workspaceAttention = computed<'idle' | 'updating' | 'new' | 'approval' | 'executing' | 'error'>(() => {
+  const draftStatus = workspaceApprovalDraft.value?.status
+  if (draftStatus === 'pending') return 'approval'
+  if (draftStatus === 'executing' || draftStatus === 'approved') return 'executing'
+  if (workspaceProjection.value?.mode === 'failed') return 'error'
+  if (workspaceUpdating.value) return 'updating'
+  if (workspaceHasNewResult.value) return 'new'
+  return 'idle'
+})
+const workspaceStatusLabel = computed(() => ({
+  idle: '',
+  updating: workspaceProjection.value ? '更新中' : '准备中',
+  new: '',
+  approval: '需要确认',
+  executing: '执行中',
+  error: '未完成',
+})[workspaceAttention.value])
+const workspaceEffectiveCollapsed = computed(() => workspaceCollapsed.value)
 const runningSession = computed(() => agent.sessions.value.find(session => session.id === agent.activeRunSessionId.value) || null)
 const workspaceStyle = computed(() => ({
-  width: workspaceCollapsed.value ? '56px' : `${workspaceWidth.value}px`
+  width: workspaceEffectiveCollapsed.value ? '0px' : `${workspaceWidth.value}px`
 }))
-const taskStatus = computed<TaskPanelStatus>(() => {
+const taskStatus = computed<TaskPresentationStatus>(() => {
   if (currentTask.value?.status) return normalizeTaskPanelStatus(currentTask.value.status)
   if (agent.error.value) return 'failed'
   if (agent.agentRunning.value) return agent.agentPhase.value?.kind === 'running_tools' ? 'running' : 'running'
@@ -141,91 +217,21 @@ const taskStatus = computed<TaskPanelStatus>(() => {
   if (visibleMessages.value.length > 0 || hasInteracted.value) return 'created'
   return 'created'
 })
-const taskSummary = computed(() => {
-  if (currentTask.value?.summary) return currentTask.value.summary
-  if (currentTask.value?.goal) return currentTask.value.goal
-  if (agent.error.value) return agent.error.value
-  if (agent.agentRunning.value) return phaseLabel(agent.agentPhase.value)
-  if (taskStatus.value === 'completed') return hasWorkspaceToolResults.value ? '业务结果已保留在工作台。' : '本轮回复已完成。'
-  if (hasInteracted.value) return '任务已创建，描述你的投放目标后 Agent 会继续推进。'
-  return '等待输入任务目标。'
-})
-const taskSteps = computed<TaskPanelStep[]>(() => {
-  const definition = currentTask.value?.task_definition
-  if (definition?.phases?.length) {
-    const currentPhase = currentTask.value?.phase
-    let activeSeen = false
-    return definition.phases.map(phase => {
-      if (currentTask.value?.status === 'completed') return { key: phase.key, label: phase.label, status: 'done' }
-      if (currentTask.value?.status === 'failed') return { key: phase.key, label: phase.label, status: phase.key === currentPhase ? 'error' : 'pending' }
-      if (phase.key === currentPhase) {
-        activeSeen = true
-        return { key: phase.key, label: phase.label, status: 'active' }
-      }
-      return { key: phase.key, label: phase.label, status: activeSeen ? 'pending' : 'done' }
+const hasPendingApprovalMessage = computed(() => {
+  const streaming = agent.streamingMessage.value
+  const messages = streaming ? [...visibleMessages.value, streaming] : visibleMessages.value
+  return messages.some(message => (
+    Array.isArray(message.content)
+    && message.content.some(block => {
+      const item = block as Record<string, unknown>
+      return item?.type === 'approval' && String(item.status || 'pending') === 'pending'
     })
-  }
-  const status = taskStatus.value
-  const active = agent.agentPhase.value?.kind === 'running_tools' ? 'data' : 'goal'
-  const base = [
-    { key: 'goal', label: '确认目标与对象' },
-    { key: 'data', label: '查询业务证据' },
-    { key: 'analysis', label: '形成判断' },
-    { key: 'approval', label: '等待业务确认' },
-    { key: 'apply', label: '执行业务变更' },
-    { key: 'done', label: '验证实际结果' }
-  ]
-  if (status === 'failed') {
-    return base.map((step, index) => ({ ...step, status: index === 0 ? 'error' : 'pending' }))
-  }
-  if (status === 'completed') {
-    return base.map(step => ({ ...step, status: 'done' }))
-  }
-  if (status === 'created') {
-    return base.map((step, index) => ({ ...step, status: index === 0 ? 'active' : 'pending' }))
-  }
-  return base.map(step => {
-    if (active === 'data') {
-      if (step.key === 'goal') return { ...step, status: 'done' }
-      if (step.key === 'data') return { ...step, status: 'active' }
-      return { ...step, status: 'pending' }
-    }
-    if (step.key === 'goal') return { ...step, status: 'active' }
-    return { ...step, status: 'pending' }
-  })
+  ))
 })
-const taskActions = computed<TaskPanelAction[]>(() => {
-  const pending = currentTask.value?.pending_actions || []
-  if (pending.length) {
-    return pending.flatMap(action => {
-      const options = action.options?.length ? action.options : [{ value: action.action_type, label: action.title }]
-      return options.map(option => ({
-        key: `${action.id}:${option.value || action.action_type}`,
-        label: option.label || action.title,
-        icon: action.action_type === 'approval' ? 'check' : 'tune',
-        tone: action.action_type === 'approval' ? 'primary' : 'neutral'
-      }))
-    })
-  }
-  if (agent.agentRunning.value) return [{ key: 'abort', label: '停止任务', icon: 'stop', tone: 'danger' }]
-  if (taskStatus.value === 'waiting_user_input') return [{ key: 'focus', label: '补充所需信息', icon: 'edit_note', tone: 'primary' }]
-  if (taskStatus.value === 'waiting_approval') return [{ key: 'open_approval', label: '查看并确认', icon: 'approval_delegation', tone: 'primary' }]
-  if (taskStatus.value === 'applying' || taskStatus.value === 'canceled') return []
-  if (agent.error.value) return [{ key: 'retry', label: '重新发送', icon: 'refresh', tone: 'primary' }]
-  if (taskStatus.value === 'completed' && !hasWorkspaceToolResults.value) {
-    return [
-      { key: 'continue', label: '继续追问', icon: 'chat', tone: 'neutral' },
-      { key: 'material', label: '开始创建素材', icon: 'auto_awesome', tone: 'primary' }
-    ]
-  }
-  if (hasWorkspaceToolResults.value) return []
-  return [{ key: 'focus', label: '补充任务目标', icon: 'edit_note', tone: 'primary' }]
-})
-const taskTags = computed(() => {
-  const tags: string[] = []
-  if (currentTask.value?.task_definition?.label) tags.push(currentTask.value.task_definition.label)
-  if (taskPhaseLabel.value) tags.push(taskPhaseLabel.value)
-  return Array.from(new Set(tags)).slice(0, 4)
+const approvalNoticeVisible = computed(() => {
+  if (hasPendingApprovalMessage.value) return false
+  const draft = agent.workspaceApprovalDraft.value
+  return draft ? draft.status === 'pending' : taskStatus.value === 'waiting_approval'
 })
 const currentModel = computed(() => {
   const selected = agent.selectedModel.value
@@ -238,13 +244,6 @@ const toolResults = computed(() => {
     if (msg.role === 'toolResult' && typeof msg.toolCallId === 'string') map.set(msg.toolCallId, msg)
   }
   return map
-})
-const taskTypeLabel = computed(() => currentTask.value?.task_definition?.label || undefined)
-const taskPhaseLabel = computed(() => {
-  const phase = currentTask.value?.phase
-  const definition = currentTask.value?.task_definition
-  if (!phase || !definition?.phases) return phase || undefined
-  return definition.phases.find(item => item.key === phase)?.label || phase
 })
 const selectedContextEntities = computed(() => agent.workspaceSelectedEntities.value)
 const projectionContextEntities = computed<MentionEntity[]>(() => {
@@ -274,27 +273,39 @@ const filteredMentionCandidates = computed(() => {
 })
 const showMentionPanel = computed(() => mentionQuery.value !== null && filteredMentionCandidates.value.length > 0)
 
-function scrollToBottom() {
+function scrollToBottom(behavior: ScrollBehavior = 'smooth') {
   nextTick(() => {
-    window.scrollTo({ top: document.body.scrollHeight, behavior: 'smooth' })
+    window.requestAnimationFrame(() => {
+      const container = conversationScroll.value
+      if (!container) return
+      container.scrollTo({ top: container.scrollHeight, behavior })
+    })
   })
 }
 
 function phaseLabel(phase: AgentPhase): string {
-  if (phase?.kind === 'queued') return '任务已入队，等待 Worker 派发...'
+  if (phase?.kind === 'queued') return '任务已入队，正在等待执行...'
   if (phase?.kind === 'running_tools') {
-    const names = phase.tools.map(t => t.name)
-    if (!names.length) return 'Agent 正在调用工具...'
-    if (names.length === 1) return `Agent 正在调用 ${names[0]}...`
-    return `Agent 正在调用 ${names.slice(0, 2).join(', ')}${names.length > 2 ? ` 等 ${names.length} 个工具` : ''}...`
+    if (!phase.tools.length) return '正在处理任务...'
+    if (phase.tools.length > 1) return `正在并行处理 ${phase.tools.length} 项任务...`
+    const toolName = phase.tools[0].name
+    const hidden = getHiddenToolActivity(toolName, 'running')
+    if (hidden) return `${hidden.label}...`
+    return `${getToolPresentation(toolName, 'running').title}...`
   }
-  if (phase?.kind === 'waiting_model') return 'Agent 正在思考...'
-  return 'Agent 正在处理...'
+  if (phase?.kind === 'waiting_model') return '正在分析和整理结果...'
+  return '正在处理任务...'
 }
 
 function clampWorkspaceWidth(value: number): number {
-  const viewportMax = Math.max(360, Math.min(640, Math.floor(window.innerWidth * 0.32)))
+  const viewportMax = Math.max(360, Math.min(1200, window.innerWidth - 620))
   return Math.min(Math.max(value, 360), viewportMax)
+}
+
+function handleWorkspaceViewportResize(): void {
+  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
+  isDesktopWorkspaceViewport.value = window.matchMedia('(min-width: 1280px)').matches
+  if (isDesktopWorkspaceViewport.value && !workspaceCollapsed.value) markWorkspaceProjectionSeen()
 }
 
 function persistWorkspaceState() {
@@ -302,8 +313,20 @@ function persistWorkspaceState() {
   localStorage.setItem('aniforce.workspace.collapsed', workspaceCollapsed.value ? '1' : '0')
 }
 
+function markWorkspaceProjectionSeen(): void {
+  const projection = workspaceProjection.value
+  const sessionId = activeSessionId.value
+  if (!projection || !sessionId) return
+  seenWorkspaceProjectionBySession.value = {
+    ...seenWorkspaceProjectionBySession.value,
+    [sessionId]: projection.id,
+  }
+}
+
 function toggleWorkspaceCollapsed() {
   workspaceCollapsed.value = !workspaceCollapsed.value
+  workspaceManuallyCollapsed.value = workspaceCollapsed.value
+  if (!workspaceCollapsed.value) markWorkspaceProjectionSeen()
   persistWorkspaceState()
 }
 
@@ -321,15 +344,72 @@ function stopWorkspaceResize() {
 
 function startWorkspaceResize(event: PointerEvent) {
   if (workspaceCollapsed.value) return
+  workspaceMaximized.value = false
   workspaceDragging.value = true
   document.body.style.cursor = 'col-resize'
   document.body.style.userSelect = 'none'
+  event.currentTarget instanceof HTMLElement && event.currentTarget.setPointerCapture?.(event.pointerId)
   event.preventDefault()
+}
+
+function handleWorkspaceResizeKeydown(event: KeyboardEvent) {
+  if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+  event.preventDefault()
+  const direction = event.key === 'ArrowLeft' ? 1 : -1
+  const step = event.shiftKey ? 96 : 32
+  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value + direction * step)
+  persistWorkspaceState()
+}
+
+function resetWorkspaceWidth() {
+  workspaceMaximized.value = false
+  workspaceWidth.value = clampWorkspaceWidth(720)
+  persistWorkspaceState()
+}
+
+function toggleWorkspaceMaximized() {
+  if (workspaceMaximized.value) {
+    workspaceWidth.value = clampWorkspaceWidth(workspacePreviousWidth.value)
+    workspaceMaximized.value = false
+  } else {
+    workspacePreviousWidth.value = workspaceWidth.value
+    workspaceWidth.value = clampWorkspaceWidth(1200)
+    workspaceMaximized.value = true
+  }
+  persistWorkspaceState()
+}
+
+function resizeComposer(target: HTMLTextAreaElement | null = composerInput.value): void {
+  if (!target) return
+  target.style.height = 'auto'
+  const nextHeight = Math.min(target.scrollHeight, 112)
+  target.style.height = `${Math.max(nextHeight, 42)}px`
+  target.style.overflowY = target.scrollHeight > 112 ? 'auto' : 'hidden'
+}
+
+function handleComposerInput(event: Event): void {
+  resizeComposer(event.currentTarget as HTMLTextAreaElement)
+}
+
+function handleComposerCompositionStart(): void {
+  composerIsComposing.value = true
+}
+
+function handleComposerCompositionEnd(): void {
+  composerIsComposing.value = false
+  composerCompositionEndedAt = Date.now()
+}
+
+function handleComposerKeydown(event: KeyboardEvent): void {
+  const justConfirmedComposition = Date.now() - composerCompositionEndedAt < 120
+  if (composerIsComposing.value || event.isComposing || event.keyCode === 229 || justConfirmedComposition || event.shiftKey) return
+  event.preventDefault()
+  void handleSubmit()
 }
 
 async function handleSubmit() {
   const message = inputText.value.trim()
-  if (!message || agent.loading.value || agent.hasAnyRunningRun.value) return
+  if (composerIsComposing.value || !message || agent.loading.value || agent.hasAnyRunningRun.value) return
   if (!agent.activeSession.value) {
     await agent.createSession(activeRoute.value)
     const sessionId = activeSessionId.value
@@ -338,7 +418,10 @@ async function handleSubmit() {
     await router.replace({ path: '/home', query: { session_id: sessionId } })
   }
   hasInteracted.value = true
+  selectedStarterAction.value = null
   inputText.value = ''
+  await nextTick()
+  resizeComposer()
   scrollToBottom()
   await agent.send(message, undefined, activeRoute.value)
   scrollToBottom()
@@ -346,9 +429,12 @@ async function handleSubmit() {
 
 async function runStarterAction(action: typeof starterActions[number]) {
   activeIntentMode.value = action.mode
+  selectedStarterAction.value = action.label
   inputText.value = action.prompt
   await nextTick()
-  await handleSubmit()
+  resizeComposer()
+  composerInput.value?.focus()
+  composerInput.value?.setSelectionRange(inputText.value.length, inputText.value.length)
 }
 
 function navigateTo(path: string) {
@@ -379,7 +465,7 @@ function editProject(projectId: string): void {
 
 function createProjectTask(projectId: string): void {
   if (!projectId) return
-  navigateTo(`/campaigns/create?projectId=${encodeURIComponent(projectId)}`)
+  void router.push({ path: '/projects', query: { createCampaignFor: projectId } })
 }
 
 function viewProjectTasks(projectId: string): void {
@@ -418,7 +504,11 @@ function appendMentionToInput(entity: MentionEntity): void {
   } else if (!inputText.value.includes(mention)) {
     inputText.value = `${inputText.value.trimEnd()} ${mention} `
   }
-  nextTick(() => document.querySelector<HTMLInputElement>('[data-agent-input="home"]')?.focus())
+  nextTick(() => {
+    const input = document.querySelector<HTMLTextAreaElement>('[data-agent-input="home"]')
+    resizeComposer(input)
+    input?.focus()
+  })
 }
 
 function removeContextEntity(entity: MentionEntity): void {
@@ -431,39 +521,15 @@ function removeContextEntity(entity: MentionEntity): void {
     .trimStart()
 }
 
-function handleTaskAction(action: string) {
-  if (action.includes(':')) {
-    window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
-      input?.focus()
-    })
-    return
-  }
+function handleTaskAction(action: 'abort' | 'open_approval') {
   if (action === 'abort') {
     void agent.abort()
     return
   }
-  if (action === 'open_approval') {
-    workspaceCollapsed.value = false
-    persistWorkspaceState()
-    return
-  }
-  if (action === 'material' || action === 'open_material') {
-    navigateTo('/material')
-    return
-  }
-  if (action === 'retry' || action === 'continue' || action === 'focus') {
-    window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
-      input?.focus()
-    })
-  }
-  if (action === 'approve_campaign' || action === 'revise_campaign' || action === 'cancel_campaign' || action === 'edit_brief') {
-    window.requestAnimationFrame(() => {
-      const input = document.querySelector<HTMLInputElement>('[data-agent-input="home"]')
-      input?.focus()
-    })
-  }
+  workspaceCollapsed.value = false
+  workspaceManuallyCollapsed.value = false
+  markWorkspaceProjectionSeen()
+  persistWorkspaceState()
 }
 
 const switchPanel = (item: any) => {
@@ -482,7 +548,11 @@ async function createSessionForActiveMode() {
     return
   }
   hasInteracted.value = false
+  selectedStarterAction.value = null
   inputText.value = ''
+  workspaceCollapsed.value = true
+  workspaceManuallyCollapsed.value = false
+  persistWorkspaceState()
   if (route.path !== '/home' || route.query.session_id) await router.push('/home')
 }
 
@@ -505,6 +575,7 @@ const switchSession = (session: any) => {
 async function selectSessionTarget(target: typeof agent.sessions.value[number]): Promise<void> {
   hasInteracted.value = true
   await agent.selectSession(target)
+  scrollToBottom('auto')
 }
 
 async function applyHomeSessionState(): Promise<void> {
@@ -536,7 +607,11 @@ function showNewConversationHome(): boolean {
     return false
   }
   hasInteracted.value = false
+  selectedStarterAction.value = null
   inputText.value = ''
+  workspaceCollapsed.value = true
+  workspaceManuallyCollapsed.value = false
+  persistWorkspaceState()
   return true
 }
 
@@ -598,7 +673,8 @@ function handleVisibilityChange() {
 }
 
 onMounted(async () => {
-  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
+  handleWorkspaceViewportResize()
+  window.addEventListener('resize', handleWorkspaceViewportResize)
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -608,7 +684,8 @@ onMounted(async () => {
 })
 
 onActivated(() => {
-  workspaceWidth.value = clampWorkspaceWidth(workspaceWidth.value)
+  handleWorkspaceViewportResize()
+  window.addEventListener('resize', handleWorkspaceViewportResize)
   window.addEventListener('pointermove', handleWorkspacePointerMove)
   window.addEventListener('pointerup', stopWorkspaceResize)
   document.addEventListener('visibilitychange', handleVisibilityChange)
@@ -617,12 +694,14 @@ onActivated(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('resize', handleWorkspaceViewportResize)
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
 })
 
 onDeactivated(() => {
+  window.removeEventListener('resize', handleWorkspaceViewportResize)
   window.removeEventListener('pointermove', handleWorkspacePointerMove)
   window.removeEventListener('pointerup', stopWorkspaceResize)
   document.removeEventListener('visibilitychange', handleVisibilityChange)
@@ -642,10 +721,26 @@ watch(
 )
 
 watch(
-  () => taskStatus.value === 'waiting_approval' || agent.workspaceApprovalDraft.value?.status === 'pending',
-  needsApproval => {
-    if (!needsApproval || !workspaceCollapsed.value) return
+  () => [activeSessionId.value, workspaceProjection.value?.id || ''] as const,
+  ([sessionId, projectionId], previous) => {
+    if (!projectionId) return
+    if (previous && sessionId === previous[0] && projectionId === previous[1]) return
+    workspaceManuallyCollapsed.value = false
     workspaceCollapsed.value = false
+    if (isDesktopWorkspaceViewport.value) {
+      markWorkspaceProjectionSeen()
+    }
+    persistWorkspaceState()
+  },
+  { immediate: true },
+)
+
+watch(
+  () => taskStatus.value === 'waiting_approval' || workspaceApprovalDraft.value?.status === 'pending',
+  needsApproval => {
+    if (!needsApproval || !workspaceCollapsed.value || workspaceManuallyCollapsed.value) return
+    workspaceCollapsed.value = false
+    markWorkspaceProjectionSeen()
     persistWorkspaceState()
   },
   { immediate: true },
@@ -668,63 +763,61 @@ watch(
     />
 
     <main class="home-main">
-      <div class="home-main__scroll">
+      <div ref="conversationScroll" class="home-main__scroll">
         <section v-if="!hasContent" class="landing-document">
-          <img class="landing-visual" :src="aniforceWorkflowHero" alt="" aria-hidden="true" />
-          <header class="landing-hero">
-            <h1>从洞察到行动，让每一次投放更确定</h1>
-            <p>ANIFORCE 连接项目、数据与素材，用 AI 帮你判断下一步，并把策略快速变成可执行任务。</p>
-          </header>
+          <div class="landing-primary">
+            <header class="landing-hero">
+              <h1>让每一次投放，都有清晰的下一步</h1>
+              <p>ANIFORCE 串联项目、计划、素材与效果数据，帮你完成复盘诊断、预算调控和创意迭代。</p>
+            </header>
 
-          <section v-if="!hasInteracted" class="quick-start" aria-label="快捷入口">
-            <div class="quick-grid">
-              <button
-                v-for="action in starterActions"
-                :key="action.label"
-                class="quick-card"
-                type="button"
-                @click="runStarterAction(action)"
-              >
-                <span class="quick-card__icon" aria-hidden="true">
-                  <svg v-if="action.icon === 'portfolio'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <path d="M5.5 10h7l2.4 2.5h11.6v13H5.5z" />
-                    <path class="quick-card__icon-accent" d="M8.5 10V6.5h14.7a2.3 2.3 0 0 1 2.3 2.3v3.7" />
-                  </svg>
-                  <svg v-else-if="action.icon === 'launch'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <circle cx="15.5" cy="16.5" r="10" />
-                    <circle cx="15.5" cy="16.5" r="4" />
-                    <path class="quick-card__icon-accent" d="m15.5 16.5 10-10m-4.5 0h4.5V11" />
-                  </svg>
-                  <svg v-else-if="action.icon === 'diagnose'" class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <path d="m4.5 19 6-6 5 4 6.5-9" />
-                    <path class="quick-card__icon-accent" d="M18 8h4v4" />
-                    <circle cx="20.5" cy="22" r="5.5" />
-                    <path d="m24.5 26 3.5 3.5" />
-                  </svg>
-                  <svg v-else class="quick-card__icon-svg" viewBox="0 0 32 32">
-                    <rect x="5.5" y="7.5" width="21" height="18" rx="3" />
-                    <path class="quick-card__icon-accent" d="m16 11 1.4 3.6L21 16l-3.6 1.4L16 21l-1.4-3.6L11 16l3.6-1.4z" />
-                    <path d="M24 3.5v4M22 5.5h4" />
-                  </svg>
-                </span>
-                <strong>{{ action.label }}</strong>
-                <span>{{ action.description }}</span>
-              </button>
+            <section v-if="!hasInteracted" class="quick-start" aria-label="常用投放策略">
+              <div class="quick-start__header">
+                <strong>常用投放策略</strong>
+                <button class="quick-start__toggle" type="button" :aria-expanded="strategyExpanded" aria-controls="strategy-grid" @click="strategyExpanded = !strategyExpanded">
+                  <span>{{ strategyExpanded ? '收起策略' : '展开更多策略' }}</span>
+                  <span class="material-symbols-outlined" :class="{ expanded: strategyExpanded }" aria-hidden="true">expand_more</span>
+                </button>
+              </div>
+              <div id="strategy-grid" class="quick-grid">
+                <button
+                  v-for="action in visibleStarterActions"
+                  :key="action.label"
+                  class="quick-card"
+                  :class="{ 'is-selected': selectedStarterAction === action.label }"
+                  type="button"
+                  @click="runStarterAction(action)"
+                >
+                  <span class="quick-card__icon" aria-hidden="true"><span class="material-symbols-outlined">{{ action.icon }}</span></span>
+                  <strong>{{ action.label }}</strong>
+                  <span>{{ action.description }}</span>
+                </button>
+              </div>
+            </section>
+          </div>
+
+          <div class="landing-input-dock" :class="{ 'is-expanded': isPromptExpanded }">
+            <div v-if="starterActionHint" class="composer-intent-hint" role="status">
+              <span class="material-symbols-outlined" aria-hidden="true">{{ activeMode.icon }}</span>
+              <strong>{{ activeMode.label }}</strong>
+              <span>{{ starterActionHint }}</span>
             </div>
-          </section>
-
-          <div class="landing-input-dock">
-            <div class="composer" role="search">
+            <div class="composer" :class="{ 'composer--expanded': isPromptExpanded }" role="search">
               <button class="composer__icon" type="button" aria-label="添加附件">
                 <span class="material-symbols-outlined">attach_file</span>
               </button>
-              <input
+              <textarea
+                ref="composerInput"
                 v-model="inputText"
                 data-agent-input="home"
+                rows="1"
+                aria-label="任务描述"
                 placeholder="继续输入任务或补充信息..."
-                type="text"
-                @keydown.enter="handleSubmit"
-              />
+                @input="handleComposerInput"
+                @compositionstart="handleComposerCompositionStart"
+                @compositionend="handleComposerCompositionEnd"
+                @keydown.enter="handleComposerKeydown"
+              ></textarea>
               <button class="composer__icon" type="button" aria-label="语音输入">
                 <span class="material-symbols-outlined">mic</span>
               </button>
@@ -753,72 +846,42 @@ watch(
               <button type="button" @click="openRunningSession">查看任务</button>
             </section>
 
-            <section v-if="taskStateVisible" class="task-state" :data-status="taskStatus">
-              <div class="task-state__header">
-                <span class="task-state__status">
-                  <span class="material-symbols-outlined" :class="{ spinning: taskStatus === 'running' || taskStatus === 'applying' }">{{ taskStatusMeta.icon }}</span>
-                  {{ taskStatusLabel }}
-                </span>
-                <span v-if="taskPhaseLabel" class="task-state__phase">{{ taskPhaseLabel }}</span>
-              </div>
-              <h2 v-if="currentTask">{{ currentTask.title }}</h2>
-              <p>{{ agent.commandStatus.value || taskSummary }}</p>
-              <div v-if="taskTags.length" class="task-state__tags">
-                <span v-for="tag in taskTags" :key="tag">{{ tag }}</span>
-              </div>
-              <div v-if="currentTask && taskSteps.length" class="task-state__steps" aria-label="任务进度">
-                <span v-for="step in taskSteps" :key="step.key" :data-step-status="step.status">
-                  <i></i>{{ step.label }}
-                </span>
-              </div>
-              <div v-if="taskActions.length" class="task-state__actions">
-                <button
-                  v-for="action in taskActions"
-                  :key="action.key"
-                  type="button"
-                  :data-tone="action.tone || 'neutral'"
-                  @click="handleTaskAction(action.key)"
-                >
-                  <span class="material-symbols-outlined">{{ action.icon }}</span>
-                  {{ action.label }}
-                </button>
-              </div>
-            </section>
-
             <div class="message-stream">
-              <div v-if="agent.loading.value" class="conversation-loading">
-                <span class="conversation-loading__spinner"></span>
-                <span>AI 正在分析中，请稍候...</span>
-              </div>
+              <template v-for="(message, index) in agent.visibleMessages.value" :key="message.id || `${message.role}-${message.timestamp}-${index}`">
+                <MessageView
+                  :message="message"
+                  :tool-results="toolResults"
+                  :model-names="agent.modelNames.value"
+                  :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
+                />
+              </template>
 
-              <section v-else-if="agent.error.value" class="conversation-error">
+              <MessageView
+                v-if="agent.streamingMessage.value"
+                :message="agent.streamingMessage.value"
+                is-streaming
+                :tool-results="toolResults"
+                :model-names="agent.modelNames.value"
+              />
+
+              <section v-if="agent.error.value" class="conversation-error">
                 <span class="material-symbols-outlined">error</span>
                 <p>{{ agent.error.value }}</p>
               </section>
 
-              <template v-else>
-                <template v-for="(message, index) in agent.visibleMessages.value" :key="message.id || `${message.role}-${message.timestamp}-${index}`">
-                  <MessageView
-                    :message="message"
-                    :tool-results="toolResults"
-                    :model-names="agent.modelNames.value"
-                    :prev-timestamp="index > 0 ? Number(agent.visibleMessages.value[index - 1].timestamp || 0) : undefined"
-                  />
-                </template>
+              <div v-if="(agent.loading.value || agent.agentRunning.value) && !agent.streamingMessage.value" class="conversation-loading">
+                <span class="conversation-loading__spinner"></span>
+                <span>{{ agent.commandStatus.value || phaseLabel(agent.agentPhase.value) }}</span>
+              </div>
 
-                <MessageView
-                  v-if="agent.streamingMessage.value"
-                  :message="agent.streamingMessage.value"
-                  is-streaming
-                  :tool-results="toolResults"
-                  :model-names="agent.modelNames.value"
-                />
-
-                <div v-if="agent.agentRunning.value && !agent.streamingMessage.value" class="conversation-loading">
-                  <span class="conversation-loading__spinner"></span>
-                  <span>{{ phaseLabel(agent.agentPhase.value) }}</span>
+              <section v-if="approvalNoticeVisible" class="conversation-approval-notice" role="status">
+                <span class="material-symbols-outlined" aria-hidden="true">verified_user</span>
+                <div>
+                  <strong>等待你确认</strong>
+                  <p>操作内容已在右侧工作台准备好，确认后才会继续执行。</p>
                 </div>
-              </template>
+                <button type="button" @click="handleTaskAction('open_approval')">查看</button>
+              </section>
             </div>
           </div>
         </section>
@@ -860,13 +923,18 @@ watch(
             <button class="composer__icon" type="button" aria-label="添加附件">
               <span class="material-symbols-outlined">attach_file</span>
             </button>
-            <input
+            <textarea
+              ref="composerInput"
               v-model="inputText"
               data-agent-input="home"
+              rows="1"
+              aria-label="任务描述"
               placeholder="继续输入任务，或输入 @ 选择工作台上下文..."
-              type="text"
-              @keydown.enter="handleSubmit"
-            />
+              @input="handleComposerInput"
+              @compositionstart="handleComposerCompositionStart"
+              @compositionend="handleComposerCompositionEnd"
+              @keydown.enter="handleComposerKeydown"
+            ></textarea>
             <button class="composer__icon" type="button" aria-label="语音输入">
               <span class="material-symbols-outlined">mic</span>
             </button>
@@ -899,26 +967,39 @@ watch(
     </main>
 
     <div
-      v-if="hasContent && taskPanelVisible"
+      v-if="isDesktopWorkspaceViewport"
       class="workspace-column"
-      :class="{ collapsed: workspaceCollapsed }"
+      :class="{ collapsed: workspaceEffectiveCollapsed }"
       :style="workspaceStyle"
     >
       <button
-        v-if="!workspaceCollapsed"
+        v-if="!workspaceEffectiveCollapsed"
         class="workspace-resize-handle"
         type="button"
+        role="separator"
         aria-label="调整工作台宽度"
+        aria-orientation="vertical"
+        aria-valuemin="360"
+        aria-valuemax="1200"
+        :aria-valuenow="workspaceWidth"
+        title="拖动调整工作台宽度，双击恢复推荐宽度"
         @pointerdown="startWorkspaceResize"
+        @keydown="handleWorkspaceResizeKeydown"
+        @dblclick="resetWorkspaceWidth"
       ></button>
       <LiveWorkspaceShell
         class="home-workspace"
-        :visible="hasContent"
-        :collapsed="workspaceCollapsed"
+        visible
+        :collapsed="workspaceEffectiveCollapsed"
+        :can-expand="true"
+        :maximized="workspaceMaximized"
         :session-id="agent.activeSession.value?.id"
-        :projection="agent.workspaceProjection.value"
-        :approval-draft="agent.workspaceApprovalDraft.value"
+        :projection="workspaceProjection"
+        :approval-draft="workspaceApprovalDraft"
+        :attention="workspaceAttention"
+        :status-label="workspaceStatusLabel"
         @toggle-collapse="toggleWorkspaceCollapsed"
+        @toggle-maximize="toggleWorkspaceMaximized"
         @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: agent.workspaceApprovalDraft.value?.runId || '' })"
         @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, agent.workspaceApprovalDraft.value?.runId || '')"
         @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
@@ -932,6 +1013,30 @@ watch(
         @view-material="openMaterial"
       />
     </div>
+
+    <LiveWorkspaceShell
+      v-if="!isDesktopWorkspaceViewport"
+      mobile
+      visible
+      :can-expand="true"
+      :session-id="agent.activeSession.value?.id"
+      :projection="workspaceProjection"
+      :approval-draft="workspaceApprovalDraft"
+      :attention="workspaceAttention"
+      :status-label="workspaceStatusLabel"
+      @opened="markWorkspaceProjectionSeen"
+      @approve="payload => agent.resolveWorkspaceApproval({ ...payload, runId: workspaceApprovalDraft?.runId || '' })"
+      @reject="checkpointId => agent.rejectWorkspaceApproval(checkpointId, workspaceApprovalDraft?.runId || '')"
+      @update-approval-form="payload => agent.updateApprovalDraftForm(payload.checkpointId, payload.formModel)"
+      @select-entity="agent.selectWorkspaceEntity"
+      @mention-entity="appendMentionToInput"
+      @view-project="projectId => openProject({ id: projectId })"
+      @edit-project="editProject"
+      @create-project-task="createProjectTask"
+      @view-project-tasks="viewProjectTasks"
+      @view-campaign="openCampaign"
+      @view-material="openMaterial"
+    />
   </div>
 
   <SessionRenameDialog
@@ -996,14 +1101,23 @@ watch(
 }
 
 .landing-document {
-  display: flex;
+  display: grid;
   width: min(100%, 1080px);
   min-height: 100%;
+  grid-template-rows: minmax(min-content, 1fr) auto;
+  gap: clamp(18px, 3vh, 36px);
   margin: 0 auto;
-  padding: clamp(260px, 38vh, 720px) 36px 48px;
+  padding: clamp(24px, 4vh, 56px) 36px clamp(18px, 3vh, 32px);
   box-sizing: border-box;
+}
+
+.landing-primary {
+  display: flex;
+  min-width: 0;
+  align-self: center;
   align-items: center;
   flex-direction: column;
+  padding-block: clamp(10px, 3vh, 44px);
 }
 
 .landing-hero {
@@ -1033,22 +1147,13 @@ watch(
   background: var(--notion-canvas);
 }
 
-.landing-visual {
-  display: block;
-  width: 260px;
-  height: auto;
-  flex: 0 0 auto;
-  margin-bottom: 28px;
-  object-fit: contain;
-}
-
 .composer {
   display: grid;
   width: 100%;
-  height: 60px;
+  min-height: 60px;
   grid-template-columns: 36px minmax(0, 1fr) 36px 38px;
-  grid-template-rows: 1fr;
-  align-items: center;
+  grid-template-rows: minmax(42px, auto);
+  align-items: end;
   padding: 8px 10px;
   border: 1px solid var(--notion-line-strong);
   border-radius: 12px;
@@ -1062,22 +1167,28 @@ watch(
   box-shadow: rgba(35, 131, 226, 0.13) 0 0 0 2px, rgba(15, 15, 15, 0.08) 0 10px 28px;
 }
 
-.composer input {
+.composer textarea {
   grid-row: 1;
   grid-column: 2;
-  min-width: 0;
   width: 100%;
+  min-width: 0;
+  min-height: 42px;
+  max-height: 112px;
+  box-sizing: border-box;
   align-self: center;
-  padding: 0 8px;
+  padding: 9px 8px;
+  overflow-y: hidden;
   border: 0;
   outline: 0;
   background: transparent;
   color: var(--notion-ink);
+  font: inherit;
   font-size: 15px;
   line-height: 1.55;
+  resize: none;
 }
 
-.composer input::placeholder {
+.composer textarea::placeholder {
   color: var(--notion-stone);
 }
 
@@ -1169,14 +1280,78 @@ watch(
 
 .landing-input-dock {
   width: min(100%, 860px);
-  margin: auto auto 0;
-  padding-top: 32px;
+  justify-self: center;
+  padding-top: 0;
+  transition: width .18s ease;
+}
+
+.landing-input-dock.is-expanded {
+  width: min(100%, 960px);
+}
+
+.composer.composer--expanded textarea {
+  max-height: 180px;
+}
+
+.composer-intent-hint {
+  display: flex;
+  min-height: 24px;
+  align-items: center;
+  gap: 6px;
+  margin: 0 4px 8px;
+  color: var(--notion-steel);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.composer-intent-hint .material-symbols-outlined {
+  color: var(--notion-blue);
+  font-size: 16px;
+}
+
+.composer-intent-hint strong {
+  color: var(--notion-charcoal);
+  font-weight: 600;
 }
 
 .quick-start {
   width: min(100%, 860px);
-  margin: 60px auto 0;
+  margin: clamp(22px, 4vh, 48px) auto 0;
 }
+
+.quick-start__header {
+  display: flex;
+  min-height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 10px;
+}
+
+.quick-start__header > strong {
+  color: var(--notion-ink);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.quick-start__toggle {
+  min-height: 32px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 9px;
+  border: 1px solid var(--notion-line);
+  border-radius: 7px;
+  background: var(--notion-canvas);
+  color: var(--notion-slate);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11px;
+}
+
+.quick-start__toggle:hover { background: var(--notion-surface); color: var(--notion-ink); }
+.quick-start__toggle .material-symbols-outlined { font-size: 17px; transition: transform .18s ease; }
+.quick-start__toggle .material-symbols-outlined.expanded { transform: rotate(180deg); }
 
 .quick-grid {
   display: grid;
@@ -1186,7 +1361,7 @@ watch(
 
 .quick-card {
   display: flex;
-  min-height: 158px;
+  min-height: 142px;
   flex-direction: column;
   align-items: flex-start;
   padding: 19px;
@@ -1207,33 +1382,29 @@ watch(
   box-shadow: rgba(15, 15, 15, 0.06) 0 4px 10px;
 }
 
+.quick-card:focus-visible {
+  outline: 2px solid rgba(35, 131, 226, 0.32);
+  outline-offset: 2px;
+}
+
+.quick-card.is-selected {
+  border-color: rgba(35, 131, 226, 0.38);
+  background: var(--notion-blue-soft);
+  box-shadow: rgba(35, 131, 226, 0.1) 0 0 0 1px;
+}
+
 .quick-card__icon {
-  display: block;
-  width: 36px;
-  height: 36px;
+  width: 34px;
+  height: 34px;
+  display: grid;
   place-items: center;
-  margin-bottom: 18px;
-  background: transparent;
-  color: var(--notion-charcoal);
-  box-shadow: none;
+  margin-bottom: 14px;
+  border-radius: 8px;
+  background: var(--notion-blue-soft);
+  color: var(--notion-blue);
 }
 
-.quick-card__icon-svg {
-  display: block;
-  width: 36px;
-  height: 36px;
-  overflow: visible;
-  fill: none;
-  stroke: currentColor;
-  stroke-width: 1.8;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-}
-
-.quick-card__icon-accent {
-  stroke: var(--notion-blue);
-  stroke-width: 2.2;
-}
+.quick-card__icon .material-symbols-outlined { font-size: 19px; }
 
 .quick-card strong {
   margin-bottom: 7px;
@@ -1259,8 +1430,7 @@ watch(
   margin: 0 auto;
 }
 
-.cross-session-run,
-.task-state {
+.cross-session-run {
   margin-bottom: 22px;
   border: 1px solid var(--notion-line);
   border-radius: 8px;
@@ -1300,8 +1470,7 @@ watch(
   line-height: 1.45;
 }
 
-.cross-session-run button,
-.task-state__actions button {
+.cross-session-run button {
   border: 1px solid var(--notion-line-strong);
   border-radius: 6px;
   background: #ffffff;
@@ -1313,149 +1482,6 @@ watch(
 
 .cross-session-run button {
   padding: 6px 10px;
-}
-
-.task-state {
-  padding: 14px 16px;
-}
-
-.task-state__header,
-.task-state__status,
-.task-state__steps,
-.task-state__actions {
-  display: flex;
-  align-items: center;
-}
-
-.task-state__header {
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.task-state__status {
-  gap: 5px;
-  color: var(--notion-blue);
-  font-size: 11px;
-  font-weight: 600;
-}
-
-.task-state__status .material-symbols-outlined {
-  font-size: 15px;
-}
-
-.task-state__status .spinning {
-  animation: home-spin 1s linear infinite;
-}
-
-.task-state[data-status="waiting_approval"] .task-state__status {
-  color: #a16207;
-}
-
-.task-state[data-status="waiting_user_input"] .task-state__status {
-  color: #6d28d9;
-}
-
-.task-state[data-status="applying"] .task-state__status,
-.task-state[data-status="completed"] .task-state__status {
-  color: var(--notion-green);
-}
-
-.task-state[data-status="failed"] .task-state__status {
-  color: #b42318;
-}
-
-.task-state__phase {
-  color: var(--notion-stone);
-  font-size: 10px;
-}
-
-.task-state h2 {
-  margin: 8px 0 0;
-  color: var(--notion-ink);
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: 0;
-}
-
-.task-state > p {
-  margin: 5px 0 0;
-  color: var(--notion-slate);
-  font-size: 12px;
-  line-height: 1.55;
-}
-
-.task-state__tags,
-.task-state__steps,
-.task-state__actions {
-  flex-wrap: wrap;
-  gap: 6px;
-  margin-top: 10px;
-}
-
-.task-state__tags span {
-  padding: 3px 6px;
-  border-radius: 4px;
-  background: rgba(55, 53, 47, 0.06);
-  color: var(--notion-steel);
-  font-size: 10px;
-}
-
-.task-state__steps {
-  gap: 8px 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--notion-line);
-}
-
-.task-state__steps span {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  color: var(--notion-stone);
-  font-size: 10px;
-}
-
-.task-state__steps i {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #d4d1cb;
-}
-
-.task-state__steps span[data-step-status="done"] i,
-.task-state__steps span[data-step-status="active"] i {
-  background: var(--notion-blue);
-}
-
-.task-state__steps span[data-step-status="active"] {
-  color: var(--notion-charcoal);
-  font-weight: 600;
-}
-
-.task-state__steps span[data-step-status="error"] i {
-  background: #dc2626;
-}
-
-.task-state__actions button {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  min-height: 30px;
-  padding: 5px 9px;
-}
-
-.task-state__actions button[data-tone="primary"] {
-  border-color: var(--notion-blue);
-  background: var(--notion-blue);
-  color: #ffffff;
-}
-
-.task-state__actions button[data-tone="danger"] {
-  border-color: #fecaca;
-  color: #b42318;
-}
-
-.task-state__actions .material-symbols-outlined {
-  font-size: 14px;
 }
 
 .message-stream {
@@ -1474,6 +1500,58 @@ watch(
 
 .conversation-loading__spinner {
   color: var(--notion-blue);
+}
+
+.conversation-approval-notice {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+  padding: 11px 12px;
+  border: 1px solid rgba(180, 83, 9, 0.2);
+  border-radius: 6px;
+  background: #fffaf0;
+  color: var(--notion-charcoal);
+}
+
+.conversation-approval-notice > .material-symbols-outlined {
+  color: #b45309;
+  font-size: 18px;
+}
+
+.conversation-approval-notice strong,
+.conversation-approval-notice p {
+  display: block;
+  margin: 0;
+}
+
+.conversation-approval-notice strong {
+  font-size: 12px;
+  font-weight: 650;
+}
+
+.conversation-approval-notice p {
+  margin-top: 2px;
+  color: var(--notion-steel);
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.conversation-approval-notice button {
+  height: 28px;
+  border: 1px solid rgba(180, 83, 9, 0.3);
+  border-radius: 5px;
+  padding: 0 10px;
+  background: #ffffff;
+  color: #92400e;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.conversation-approval-notice button:hover {
+  background: #fff7e6;
 }
 
 .conversation-error {
@@ -1673,8 +1751,7 @@ watch(
 }
 
 .conversation-thread :deep(.activity-card),
-.conversation-thread :deep(.tool-call-block),
-.conversation-thread :deep(.thinking-block) {
+.conversation-thread :deep(.tool-call-block) {
   border: 1px solid rgba(55, 53, 47, 0.1);
   border-radius: 6px;
   background: var(--notion-surface-soft);
@@ -1685,20 +1762,23 @@ watch(
   padding: 9px 11px;
 }
 
-.conversation-thread :deep(.tool-header),
-.conversation-thread :deep(.thinking-header) {
-  min-height: 35px;
-  padding: 0 11px;
+.conversation-thread :deep(.tool-header) {
+  min-height: 38px;
+  padding: 7px 11px;
 }
 
-.conversation-thread :deep(.tool-name),
+.conversation-thread :deep(.tool-name) {
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+}
+
 .conversation-thread :deep(.activity-tool) {
   font-family: ui-monospace, "SFMono-Regular", Menlo, monospace;
   font-size: 11px;
   font-weight: 600;
 }
 
-.conversation-thread :deep(.tool-status-dot.done),
 .conversation-thread :deep(.status-dot-completed) {
   background: var(--notion-green);
 }
@@ -1718,23 +1798,40 @@ watch(
 }
 
 .workspace-column.collapsed {
-  min-width: 56px;
+  min-width: 0;
+  border-left: 0;
+  background: transparent;
 }
 
 .workspace-resize-handle {
   position: absolute;
-  z-index: 5;
+  z-index: 12;
   top: 0;
   bottom: 0;
-  left: -3px;
-  width: 6px;
+  left: -6px;
+  width: 12px;
+  padding: 0;
   border: 0;
+  outline: none;
   background: transparent;
   cursor: col-resize;
+  touch-action: none;
 }
 
-.workspace-resize-handle:hover {
-  background: rgba(35, 131, 226, 0.16);
+.workspace-resize-handle::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 5px;
+  width: 2px;
+  background: transparent;
+  content: '';
+  transition: background-color .15s ease;
+}
+
+.workspace-resize-handle:hover::after,
+.workspace-resize-handle:focus-visible::after {
+  background: rgba(35, 131, 226, 0.55);
 }
 
 .home-workspace {
@@ -1778,12 +1875,23 @@ watch(
 
 @media (max-width: 980px) {
   .landing-document {
-    padding-top: 48px;
+    padding-top: 32px;
   }
 
   .quick-grid {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
+
+@media (max-height: 820px) and (min-width: 981px) {
+  .landing-document { gap: 14px; padding-top: 16px; padding-bottom: 16px; }
+  .landing-primary { padding-block: 0; }
+  .landing-hero h1 { font-size: 32px; }
+  .landing-hero p { margin-top: 8px; font-size: 14px; }
+  .quick-start { margin-top: 18px; }
+  .quick-card { min-height: 116px; padding: 13px; }
+  .quick-card__icon { margin-bottom: 9px; }
+  .quick-card > span:last-child { font-size: 11px; }
 }
 
 @media (max-width: 720px) {
@@ -1820,14 +1928,20 @@ watch(
   }
 
   .landing-input-dock {
-    padding-top: 24px;
+    margin-top: 20px;
   }
 
   .composer {
-    height: 60px;
+    min-height: 60px;
     grid-template-columns: 34px minmax(0, 1fr) 34px 38px;
     padding: 8px;
     border-radius: 18px;
+  }
+
+  .composer-intent-hint {
+    align-items: flex-start;
+    margin-right: 2px;
+    margin-left: 2px;
   }
 
   .conversation-input-dock {

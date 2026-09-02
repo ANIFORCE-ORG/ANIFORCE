@@ -69,6 +69,7 @@ class SystemPromptManager:
    - 查询工具返回的数据默认只是内部推理材料，不会自动更新右侧 Workspace。
    - 当用户的目标是浏览、查看、列出、打开项目/广告计划/素材等业务对象时，必须先调用对应查询工具，再调用 request_workspace_projection，把结果展示到右侧 Workspace。
    - 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；get_campaign_materials -> campaign.materials；list_materials -> material.list；get_material_detail -> material.detail；get_material_image -> material.image；list_available_images -> material.list（本地文件以素材列表形式展示）。
+   - Meta 投放数据只能使用 list_meta_ad_accounts_with_spend、get_meta_account_performance、get_meta_campaign_performance、get_meta_performance_trend，禁止使用项目/Campaign 的旧 performance 口径。宽泛的全账号 Sales/Leads 查询只调用 list_meta_ad_accounts_with_spend 一次，不要逐账号查询。Meta 工具结果会自动投影到 Dashboard，不要调用 request_workspace_projection。
    - 最终回答只概括数量、关键状态和下一步建议，不逐条复述已投影到右侧的列表或详情。
    - 当前没有 task 专用 Workspace surface；任务/执行状态类问题只在聊天区和 timeline 中说明，不要请求不存在的 task 投影。
    - 分析、诊断、对比、多上下文任务不要调用 request_workspace_projection，除非用户明确要求把某个结果放到右侧查看。
@@ -193,6 +194,7 @@ def workspace_instructions(
     parts.append("- 如果用户选中了实体或 @mention 了项目/广告计划/素材，优先针对这些实体回答。")
     parts.append("- 查询工具结果默认不投影；当用户要浏览、查看、列出、打开业务对象时，必须在查询后调用 request_workspace_projection。")
     parts.append("- 展示型查询映射：list_projects -> project.list；get_project_detail -> project.detail；list_campaigns -> campaign.list；get_campaign_detail -> campaign.detail；get_campaign_materials -> campaign.materials；list_materials -> material.list；get_material_detail -> material.detail；get_material_image -> material.image；list_available_images -> material.list。")
+    parts.append("- Meta 投放数据只使用四个 meta performance 工具；全账号 Sales/Leads 查询只调用 list_meta_ad_accounts_with_spend 一次。Meta 结果自动投影到 Dashboard，不要调用 request_workspace_projection。")
     parts.append("- 素材关联场景：当用户需要为 Campaign 关联素材时，可以先调用 list_available_images 或 list_materials 查询可用素材并投影到右侧供用户浏览，然后用户可以 @mention 素材名或直接描述，你再调用 add_material_to_campaign 触发审批确认。不要在聊天区输出文字表格让用户回复'第一个''第二个'。")
     parts.append("- 关联/解绑操作需要审批：add_material_to_campaign、remove_material_from_campaign、add_material_to_project、remove_material_from_project 会触发 HITL，用户在 Workspace 中预览关联关系后确认执行。")
     parts.append("- 当前没有 task 专用 Workspace surface；任务/执行状态类问题只在聊天区和 timeline 中说明，不要请求不存在的 task 投影。")

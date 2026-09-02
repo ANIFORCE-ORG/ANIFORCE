@@ -5,7 +5,7 @@ import SidebarNav from '@/components/layout/SidebarNav.vue'
 import ToastContainer from '@/components/toasts/ToastContainer.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
 import { navItems } from '@/config/navigation'
-import { platformApi, type PlatformConnectionResponse } from '@/api/platform'
+import { platformApi, type PlatformConnectionResponse, type SubAccountPageResponse } from '@/api/platform'
 import { useToast } from '@/composables/useToast'
 import '@/styles/settings-notion.css'
 
@@ -19,8 +19,12 @@ const deletingConnection = ref<PlatformConnectionResponse | null>(null)
 
 // 子账号管理
 const expandedAccounts = ref<Set<string>>(new Set())
-const subAccounts = ref<Record<string, any[]>>({})
+const subAccounts = ref<Record<string, SubAccountPageResponse>>({})
 const loadingSubAccounts = ref<Set<string>>(new Set())
+const syncingConnections = ref<Set<string>>(new Set())
+const subAccountSearch = ref('')
+const subAccountStatus = ref('')
+const subAccountPageSize = ref(50)
 const showAddSubAccountDialog = ref(false)
 const currentParentConnectionId = ref<string | null>(null)
 const newSubAccountName = ref('')
@@ -100,28 +104,31 @@ const handleAddGoogleAccount = async () => {
 }
 
 const handleSyncAdAccounts = async (connection: PlatformConnectionResponse) => {
-  console.log('同步广告账户:', connection)
+  if (syncingConnections.value.has(connection.id)) return
+  syncingConnections.value.add(connection.id)
   try {
-    // 根据平台类型调用不同的同步接口
+    let response
     if (connection.platform === 'Meta') {
-      await platformApi.syncMetaAdAccounts(connection.id)
-      success('Meta 广告账户同步成功')
+      response = await platformApi.syncMetaAdAccounts(connection.id)
     } else if (connection.platform === 'Google') {
-      await platformApi.syncGoogleAdAccounts(connection.id)
-      success('Google 广告账户同步成功')
+      response = await platformApi.syncGoogleAdAccounts(connection.id)
     } else {
       showError('该平台暂不支持同步功能')
       return
     }
-    // 刷新连接列表
+    const duplicateText = response.duplicate_count
+      ? `，过滤 ${response.duplicate_count} 条重复记录`
+      : ''
+    success(`已同步 ${response.synced_count} 个广告账户${duplicateText}`)
     await loadConnections()
-    // 如果当前账户已展开，重新加载子账号
     if (isExpanded(connection.id)) {
       await loadSubAccounts(connection.id)
     }
   } catch (err: any) {
     console.error('同步广告账户失败:', err)
-    showError('同步广告账户失败，请重试')
+    showError(err.message || '同步广告账户失败，请重试')
+  } finally {
+    syncingConnections.value.delete(connection.id)
   }
 }
 
@@ -240,31 +247,53 @@ const getStatusClass = (status: string) => {
   return classMap[status] || classMap['unauthorized']
 }
 
-// 切换子账号展开/收起
 const toggleSubAccounts = async (connectionId: string) => {
   if (expandedAccounts.value.has(connectionId)) {
     expandedAccounts.value.delete(connectionId)
   } else {
     expandedAccounts.value.add(connectionId)
-    // 如果还没有加载子账号，则加载
     if (!subAccounts.value[connectionId]) {
       await loadSubAccounts(connectionId)
     }
   }
 }
 
-// 加载子账号列表
-const loadSubAccounts = async (connectionId: string) => {
+const loadSubAccounts = async (connectionId: string, page = 1) => {
   loadingSubAccounts.value.add(connectionId)
   try {
-    const accounts = await platformApi.getSubAccounts(connectionId)
-    subAccounts.value[connectionId] = accounts
+    subAccounts.value[connectionId] = await platformApi.getSubAccounts(connectionId, {
+      page,
+      page_size: subAccountPageSize.value,
+      search: subAccountSearch.value.trim() || undefined,
+      status: subAccountStatus.value || undefined,
+    })
   } catch (err: any) {
     console.error('加载子账号失败:', err)
     showError('加载子账号失败')
   } finally {
     loadingSubAccounts.value.delete(connectionId)
   }
+}
+
+const subAccountPageCount = (connectionId: string) => {
+  const result = subAccounts.value[connectionId]
+  return result ? Math.max(1, Math.ceil(result.total / result.page_size)) : 1
+}
+
+const subAccountPageNumbers = (connectionId: string) => {
+  const current = subAccounts.value[connectionId]?.page || 1
+  const last = subAccountPageCount(connectionId)
+  const start = Math.max(1, Math.min(current - 2, last - 4))
+  return Array.from({ length: Math.min(5, last) }, (_, index) => start + index)
+}
+
+const changeSubAccountPage = (connectionId: string, page: number) => {
+  if (page < 1 || page > subAccountPageCount(connectionId) || page === subAccounts.value[connectionId]?.page) return
+  loadSubAccounts(connectionId, page)
+}
+
+const changeSubAccountFilters = (connectionId: string) => {
+  if (isExpanded(connectionId)) loadSubAccounts(connectionId, 1)
 }
 
 // 检查账号是否展开
@@ -303,9 +332,18 @@ const handleAddSubAccount = async () => {
 
     // 更新本地数据
     if (!subAccounts.value[currentParentConnectionId.value]) {
-      subAccounts.value[currentParentConnectionId.value] = []
+      subAccounts.value[currentParentConnectionId.value] = {
+        items: [],
+        page: 1,
+        page_size: 50,
+        total: 0,
+        has_more: false,
+        summary: { total: 0, active: 0, disabled: 0, pending_review: 0, other: 0 },
+      }
     }
-    subAccounts.value[currentParentConnectionId.value].push(newSubAccount)
+    subAccounts.value[currentParentConnectionId.value].items.push(newSubAccount)
+    subAccounts.value[currentParentConnectionId.value].total += 1
+    subAccounts.value[currentParentConnectionId.value].summary.total += 1
 
     success('子账号添加成功')
     closeAddSubAccountDialog()
@@ -322,9 +360,11 @@ const handleDeleteSubAccount = async (connectionId: string, subAccountId: string
 
     // 更新本地数据
     if (subAccounts.value[connectionId]) {
-      subAccounts.value[connectionId] = subAccounts.value[connectionId].filter(
+      subAccounts.value[connectionId].items = subAccounts.value[connectionId].items.filter(
         (account) => account.id !== subAccountId
       )
+      subAccounts.value[connectionId].total -= 1
+      subAccounts.value[connectionId].summary.total -= 1
     }
 
     success('子账号已删除')
@@ -403,14 +443,38 @@ onMounted(() => {
                       <td><div class="sn-scope-list"><span v-for="scope in (connection.scopes || [])" :key="scope" class="sn-scope">{{ scope }}</span><span v-if="!connection.scopes?.length">-</span></div></td>
                       <td><span class="sn-status-dot" :class="{ warning: ['unauthorized','token_expired'].includes(getEffectiveStatus(connection)), danger: ['expired','revoked'].includes(getEffectiveStatus(connection)) }">{{ getStatusText(getEffectiveStatus(connection)) }}</span></td>
                       <td>{{ formatDate(connection.updated_at) }}</td>
-                      <td><div class="sn-platform-actions"><button v-if="activePlatform === 'meta' || activePlatform === 'google'" class="sn-button" type="button" :disabled="getEffectiveStatus(connection) !== 'active'" @click="handleSyncAdAccounts(connection)">同步广告账号</button><button class="sn-button" type="button" :disabled="getEffectiveStatus(connection) === 'active'" @click="handleAuthorize(connection)">授权</button><button class="sn-button danger" type="button" @click="handleDelete(connection)">删除</button></div></td>
+                      <td><div class="sn-platform-actions"><button v-if="activePlatform === 'meta' || activePlatform === 'google'" class="sn-button" type="button" :disabled="getEffectiveStatus(connection) !== 'active' || syncingConnections.has(connection.id)" @click="handleSyncAdAccounts(connection)">{{ syncingConnections.has(connection.id) ? '同步中...' : '同步广告账号' }}</button><button class="sn-button" type="button" :disabled="getEffectiveStatus(connection) === 'active'" @click="handleAuthorize(connection)">授权</button><button class="sn-button danger" type="button" @click="handleDelete(connection)">删除</button></div></td>
                     </tr>
                     <tr v-if="(activePlatform === 'meta' || activePlatform === 'google') && isExpanded(connection.id)" class="sn-detail-row">
                       <td :colspan="activePlatform === 'meta' ? 6 : 7">
                         <section class="sn-subaccount-section">
-                          <header class="sn-subaccount-head"><h3>子账号列表</h3><div><span>共 {{ subAccounts[connection.id]?.length || 0 }} 个子账号</span><button v-if="activePlatform === 'google'" class="sn-button primary" type="button" style="margin-left:8px" @click="openAddSubAccountDialog(connection.id)">添加子账号</button></div></header>
+                          <header class="sn-subaccount-head"><h3>子账号列表</h3><div v-if="subAccounts[connection.id]"><span>共 {{ subAccounts[connection.id].summary.total }} 个子账号，已加载 {{ subAccounts[connection.id].items.length }} 个</span><button v-if="activePlatform === 'google'" class="sn-button primary" type="button" style="margin-left:8px" @click="openAddSubAccountDialog(connection.id)">添加子账号</button></div></header>
+                          <div class="sn-subaccount-filters">
+                            <input v-model="subAccountSearch" class="sn-subaccount-search" type="search" placeholder="搜索名称或账号 ID" @keyup.enter="changeSubAccountFilters(connection.id)" />
+                            <select v-model="subAccountStatus" class="sn-subaccount-status" aria-label="子账号状态" @change="changeSubAccountFilters(connection.id)">
+                              <option value="">全部状态</option>
+                              <option value="active">已激活</option>
+                              <option value="pending_review">待审核</option>
+                              <option value="disabled">已禁用</option>
+                            </select>
+                            <select v-model.number="subAccountPageSize" class="sn-subaccount-status" aria-label="每页数量" @change="changeSubAccountFilters(connection.id)">
+                              <option :value="50">50 / 页</option>
+                              <option :value="100">100 / 页</option>
+                              <option :value="200">200 / 页</option>
+                            </select>
+                            <button class="sn-button" type="button" @click="changeSubAccountFilters(connection.id)">查询</button>
+                          </div>
                           <div v-if="loadingSubAccounts.has(connection.id)" class="sn-loading">加载子账号中...</div>
-                          <div v-else-if="subAccounts[connection.id]?.length" class="sn-table-wrap"><div class="sn-subaccount-list"><div class="sn-subaccount-grid sn-subaccount-columns"><span>子账号</span><span>Sub Account ID</span><span>更新时间</span><span style="text-align:right">操作</span></div><div v-for="subAccount in subAccounts[connection.id]" :key="subAccount.id" class="sn-subaccount-grid sn-subaccount-row"><div class="sn-subaccount-identity"><span class="sn-subaccount-name">{{ subAccount.name }}</span><span class="sn-connection-status">{{ getStatusText(subAccount.status) }}</span></div><span class="sn-subaccount-id">{{ subAccount.sub_account_id }}</span><span>{{ formatDate(subAccount.updated_at) }}</span><span class="sn-subaccount-action"><button class="sn-button danger" type="button" @click="handleDeleteSubAccount(connection.id, subAccount.id)">删除</button></span></div></div></div>
+                          <template v-else-if="subAccounts[connection.id]?.items.length">
+                            <div class="sn-subaccount-summary">活跃 {{ subAccounts[connection.id].summary.active }} · 已禁用 {{ subAccounts[connection.id].summary.disabled }} · 待审核 {{ subAccounts[connection.id].summary.pending_review }}</div>
+                            <div class="sn-table-wrap"><div class="sn-subaccount-list"><div class="sn-subaccount-grid sn-subaccount-columns"><span>子账号</span><span>Sub Account ID</span><span>更新时间</span><span style="text-align:right">操作</span></div><div v-for="subAccount in subAccounts[connection.id].items" :key="subAccount.id" class="sn-subaccount-grid sn-subaccount-row"><div class="sn-subaccount-identity"><span class="sn-subaccount-name">{{ subAccount.name }}</span><span class="sn-connection-status">{{ getStatusText(subAccount.status) }}</span></div><span class="sn-subaccount-id">{{ subAccount.sub_account_id }}</span><span>{{ formatDate(subAccount.updated_at) }}</span><span class="sn-subaccount-action"><button class="sn-button danger" type="button" @click="handleDeleteSubAccount(connection.id, subAccount.id)">删除</button></span></div></div></div>
+                            <div class="sn-subaccount-pagination">
+                              <button class="sn-button" type="button" :disabled="subAccounts[connection.id].page <= 1" @click="changeSubAccountPage(connection.id, subAccounts[connection.id].page - 1)">上一页</button>
+                              <button v-for="page in subAccountPageNumbers(connection.id)" :key="page" class="sn-button" :class="{ primary: page === subAccounts[connection.id].page }" type="button" @click="changeSubAccountPage(connection.id, page)">{{ page }}</button>
+                              <button class="sn-button" type="button" :disabled="!subAccounts[connection.id].has_more" @click="changeSubAccountPage(connection.id, subAccounts[connection.id].page + 1)">下一页</button>
+                              <span>第 {{ subAccounts[connection.id].page }} / {{ subAccountPageCount(connection.id) }} 页</span>
+                            </div>
+                          </template>
                           <div v-else class="sn-table-empty">暂无子账号</div>
                         </section>
                       </td>
@@ -638,10 +702,10 @@ onMounted(() => {
                           :class="getEffectiveStatus(connection) === 'active'
                             ? 'border-blue-200 dark:border-blue-800 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-900/20'
                             : 'border-slate-200 dark:border-slate-600 text-slate-400 dark:text-slate-500 cursor-not-allowed opacity-50'"
-                          :disabled="getEffectiveStatus(connection) !== 'active'"
+                          :disabled="getEffectiveStatus(connection) !== 'active' || syncingConnections.has(connection.id)"
                           @click="handleSyncAdAccounts(connection)"
                         >
-                          同步广告子账号
+                          {{ syncingConnections.has(connection.id) ? '同步中...' : '同步广告子账号' }}
                         </button>
                         <button
                           class="px-[9px] py-[6px] rounded text-[10px] font-medium border transition-colors"
@@ -674,11 +738,16 @@ onMounted(() => {
                           </div>
 
                           <!-- 子账号列表 -->
-                          <div v-else-if="subAccounts[connection.id] && subAccounts[connection.id].length > 0">
+                          <div class="flex flex-wrap items-center gap-[6px] mb-[9px]">
+                            <input v-model="subAccountSearch" class="px-[9px] py-[6px] rounded border border-slate-200 text-[10px]" type="search" placeholder="搜索名称或账号 ID" @keyup.enter="changeSubAccountFilters(connection.id)" />
+                            <select v-model="subAccountStatus" class="px-[9px] py-[6px] rounded border border-slate-200 text-[10px]" aria-label="子账号状态" @change="changeSubAccountFilters(connection.id)"><option value="">全部状态</option><option value="active">已激活</option><option value="pending_review">待审核</option><option value="disabled">已禁用</option></select>
+                            <button type="button" class="px-[9px] py-[6px] rounded border border-slate-200 text-[10px]" @click="changeSubAccountFilters(connection.id)">查询</button>
+                          </div>
+                          <div v-if="subAccounts[connection.id] && subAccounts[connection.id].items.length > 0">
                             <div class="flex items-center justify-between mb-[9px]">
                               <h4 class="text-[10px] font-semibold text-slate-700 dark:text-slate-300">子账号列表</h4>
                               <div class="flex items-center gap-[9px]">
-                                <span class="text-[10px] text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].length }} 个子账号</span>
+                                <span class="text-[10px] text-slate-500 dark:text-slate-400">共 {{ subAccounts[connection.id].summary.total }} 个，已加载 {{ subAccounts[connection.id].items.length }} 个</span>
                                 <!-- Google 平台显示手动添加按钮 -->
                                 <button
                                   v-if="activePlatform === 'google'"
@@ -691,7 +760,7 @@ onMounted(() => {
                             </div>
                             <div class="space-y-[6px]">
                               <div
-                                v-for="subAccount in subAccounts[connection.id]"
+                                v-for="subAccount in subAccounts[connection.id].items"
                                 :key="subAccount.id"
                                 class="flex items-center justify-between p-[9px] rounded-md bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600"
                               >
@@ -720,6 +789,12 @@ onMounted(() => {
                                   </button>
                                 </div>
                               </div>
+                            </div>
+                            <div class="flex items-center gap-[5px] mt-[9px]">
+                              <button type="button" :disabled="subAccounts[connection.id].page <= 1" @click="changeSubAccountPage(connection.id, subAccounts[connection.id].page - 1)" class="px-[9px] py-[6px] rounded text-[10px] border border-slate-200 disabled:opacity-50">上一页</button>
+                              <button v-for="page in subAccountPageNumbers(connection.id)" :key="page" type="button" @click="changeSubAccountPage(connection.id, page)" class="px-[9px] py-[6px] rounded text-[10px] border border-slate-200" :class="{ 'bg-primary text-white': page === subAccounts[connection.id].page }">{{ page }}</button>
+                              <button type="button" :disabled="!subAccounts[connection.id].has_more" @click="changeSubAccountPage(connection.id, subAccounts[connection.id].page + 1)" class="px-[9px] py-[6px] rounded text-[10px] border border-slate-200 disabled:opacity-50">下一页</button>
+                              <span class="ml-[4px] text-[10px] text-slate-500">第 {{ subAccounts[connection.id].page }} / {{ subAccountPageCount(connection.id) }} 页</span>
                             </div>
                           </div>
 

@@ -94,6 +94,19 @@ class CreateMaterialRequest(BaseModel):
     ctr_estimate: float | None = None
 
 
+class MaterialUploadInitRequest(BaseModel):
+    name: str
+    original_filename: str
+    media_kind: str = "image"
+    format: str | None = None
+    width: int | None = None
+    height: int | None = None
+    ratio: str | None = None
+    duration: int | None = None
+    tags: list[str] = Field(default_factory=list)
+    source: str = "oss_upload"
+
+
 class MetaMaterialSyncRequest(BaseModel):
     connection_id: str
     ad_account_id: str
@@ -909,6 +922,96 @@ async def upload_materials(
         materials.append(material)
 
     return {"materials": materials}
+
+
+@router.post("/uploads")
+async def initialize_material_upload(
+    request: MaterialUploadInitRequest,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """Create a durable uploading record before transferring the file."""
+    media_kind = request.media_kind if request.media_kind in {"image", "video"} else "image"
+    return await material_repo.create(
+        user_id=current_user["id"],
+        name=request.name.strip() or Path(request.original_filename).stem,
+        type="full_video" if media_kind == "video" else "a_segment",
+        url="",
+        original_filename=request.original_filename,
+        media_kind=media_kind,
+        format=(request.format or Path(request.original_filename).suffix.lstrip(".")).upper(),
+        width=request.width,
+        height=request.height,
+        ratio=request.ratio,
+        duration=request.duration,
+        tags=request.tags or ["uploaded"],
+        source=request.source,
+        lifecycle_status="active",
+        processing_status="uploading",
+        review_status="待审核",
+    )
+
+
+@router.post("/uploads/{material_id}/file")
+async def upload_initialized_material(
+    material_id: str,
+    file: Annotated[UploadFile, File(description="素材文件，支持图片和视频")],
+    poster: Annotated[UploadFile | None, File(description="视频封面图")] = None,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    """Transfer an initialized upload and update its durable state."""
+    material = await material_repo.get_by_id(material_id)
+    if not material or material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=404, detail="Upload record not found")
+    if material.get("processing_status") not in {"uploading", "failed"}:
+        raise HTTPException(status_code=409, detail="Upload is no longer active")
+    _validate_upload_file(file)
+    if poster:
+        _validate_upload_file(poster, image_only=True, max_size=5 * 1024 * 1024)
+
+    storage = AliyunOssStorageService()
+    uploaded_keys: list[str] = []
+    try:
+        uploaded = await storage.upload_material(file, current_user["id"])
+        uploaded_keys.append(uploaded.object_key)
+        poster_uploaded = None
+        if poster:
+            poster_uploaded = await storage.upload_material(poster, current_user["id"])
+            uploaded_keys.append(poster_uploaded.object_key)
+        is_image = uploaded.content_type.startswith("image/")
+        thumbnail_url = poster_uploaded.url if poster_uploaded else (uploaded.url if is_image else None)
+        return await material_repo.update(
+            material_id,
+            url=uploaded.url,
+            original_filename=file.filename,
+            storage_object_key=uploaded.object_key,
+            mime_type=uploaded.content_type,
+            checksum_sha256=uploaded.checksum_sha256,
+            thumbnail_url=thumbnail_url,
+            poster_url=poster_uploaded.url if poster_uploaded else None,
+            preview_url=thumbnail_url,
+            file_size=uploaded.size,
+            processing_status="ready",
+        )
+    except Exception as exc:
+        _cleanup_storage_objects(storage, uploaded_keys)
+        await material_repo.update(material_id, processing_status="failed")
+        raise HTTPException(status_code=502, detail=f"Upload failed: {exc}") from exc
+
+
+@router.post("/uploads/{material_id}/cancel")
+async def cancel_initialized_material_upload(
+    material_id: str,
+    current_user: dict = Depends(get_current_user),
+    material_repo: MaterialRepository = Depends(get_material_repo),
+):
+    material = await material_repo.get_by_id(material_id)
+    if not material or material["user_id"] != current_user["id"]:
+        raise HTTPException(status_code=404, detail="Upload record not found")
+    if material.get("processing_status") == "ready":
+        raise HTTPException(status_code=409, detail="Upload is already complete")
+    return await material_repo.update(material_id, processing_status="cancelled")
 
 
 @router.post("/upload-with-metadata")

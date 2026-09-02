@@ -3,7 +3,7 @@ import { computed, onUnmounted, ref, watch } from 'vue'
 import MarkdownIt from 'markdown-it'
 import type { AgentMessage } from '@/api/agent'
 import ActivityMessageView from './ActivityMessageView.vue'
-import { getToolIcon } from '@/utils/toolNameMapping'
+import { getHiddenToolActivity, getToolPresentation, type ToolPresentationState } from '@/utils/toolNameMapping'
 
 const props = defineProps<{
   message: AgentMessage
@@ -19,8 +19,7 @@ const emit = defineEmits<{
 
 const hovered = ref(false)
 const copied = ref(false)
-const expandedThinking = ref<Record<number, boolean>>({})
-const expandedTools = ref<Record<string, boolean>>({})
+const processExpanded = ref(false)
 const codeCopied = ref<Record<number, boolean>>({})
 const streamStartedAt = ref<number | null>(null)
 const tps = ref<number | null>(null)
@@ -48,108 +47,107 @@ const isUser = computed(() => props.message.role === 'user')
 const isAssistant = computed(() => props.message.role === 'assistant')
 const isActivity = computed(() => props.message.role === 'activity')
 const textContent = computed(() => messageText(props.message))
-const blocks = computed(() => contentBlocks(props.message).filter(block => block.type !== 'approval'))
+const blocks = computed(() => contentBlocks(props.message))
+const hasTextOutput = computed(() => blocks.value.some(block => block.type === 'text' && String(block.text || '').trim()))
+const processBlocks = computed(() => blocks.value.filter(block => {
+  if (block.type === 'thinking') return Boolean(thinkingText(block).trim())
+  if (block.type === 'toolCall') return processToolPresentation(block).visible
+  return false
+}))
+const thinkingBlocks = computed(() => processBlocks.value.filter(block => block.type === 'thinking'))
+const processToolBlocks = computed(() => processBlocks.value.filter(block => block.type === 'toolCall'))
+const hasProcessDetails = computed(() => processBlocks.value.length > 0)
+const processIsActive = computed(() => {
+  if (!props.isStreaming) return false
+  const latest = blocks.value[blocks.value.length - 1]
+  return latest?.type === 'thinking' || latest?.type === 'toolCall'
+})
+const processHasError = computed(() => processToolBlocks.value.some(block => toolState(block) === 'error'))
+const processLiveLabel = computed(() => {
+  const current = processBlocks.value[processBlocks.value.length - 1]
+  if (!current) return '正在分析你的问题'
+  const index = blocks.value.indexOf(current)
+  if (current.type === 'thinking') return continuationLabel(index)
+  if (toolState(current) === 'completed') return toolContinuationLabel(current)
+  return processToolPresentation(current).title
+})
+const processSummary = computed(() => {
+  const parts: string[] = []
+  if (thinkingBlocks.value.length) parts.push(`${thinkingBlocks.value.length} 段思考`)
+  if (processToolBlocks.value.length) parts.push(`${processToolBlocks.value.length} 项操作`)
+  const label = processIsActive.value ? processLiveLabel.value : '处理过程'
+  return parts.length ? `${label} · ${parts.join(' · ')}` : label
+})
 const userImageBlocks = computed(() => {
   const content = props.message.content
   if (!Array.isArray(content)) return []
   return content.filter(block => block && typeof block === 'object' && block.type === 'image') as Record<string, unknown>[]
 })
-const modelLabel = computed(() => {
-  const provider = props.message.provider
-  const model = props.message.model
-  if (!model) return ''
-  return props.modelNames?.[`${provider}:${model}`] || props.modelNames?.[model] || model
-})
 const estimatedTokens = computed(() => Math.round(textContent.value.length / 4))
 const usageText = computed(() => formatUsage(props.message.usage))
 
-// Thinking block 耗时追踪（参考 CustomPiAgent）
-// 每个 block 首次出现时记录开始时间；下一个 block 出现时计算耗时
-const blockStartTimes = ref<Record<number, number>>({})
-const thinkingDurations = ref<Record<number, number>>({})
-const liveThinkingMs = ref(0) // 流式中实时更新的毫秒数
-let liveTimer: number | null = null
-
-watch(blocks, (newBlocks) => {
-  const now = Date.now()
-  newBlocks.forEach((_, i) => {
-    if (blockStartTimes.value[i] === undefined) {
-      blockStartTimes.value[i] = now
-    }
-  })
-  // 当非末尾 block 已有后继 block 开始时，计算其耗时
-  for (let i = 0; i < newBlocks.length - 1; i++) {
-    if (thinkingDurations.value[i] === undefined && blockStartTimes.value[i] !== undefined) {
-      const start = blockStartTimes.value[i]
-      const nextStart = blockStartTimes.value[i + 1] ?? now
-      const secs = Math.round((nextStart - start) / 1000)
-      if (secs > 0) thinkingDurations.value[i] = secs
-    }
-  }
-}, { deep: true, immediate: true })
-
-// 流式中实时更新末尾 thinking block 的耗时
-watch(() => [props.isStreaming, blocks.value.length] as const, ([streaming]) => {
-  if (streaming) {
-    if (liveTimer) window.clearInterval(liveTimer)
-    liveTimer = window.setInterval(() => {
-      liveThinkingMs.value = Date.now()
-    }, 200)
-  } else {
-    if (liveTimer) window.clearInterval(liveTimer)
-    liveTimer = null
-    // 流式结束时，计算未完成的 thinking block 耗时
-    const now = Date.now()
-    const newDurations = { ...thinkingDurations.value }
-    blocks.value.forEach((block, i) => {
-      if (block.type === 'thinking' && newDurations[i] === undefined && blockStartTimes.value[i] !== undefined) {
-        const secs = Math.round((now - blockStartTimes.value[i]) / 1000)
-        if (secs > 0) newDurations[i] = secs
-      }
-    })
-    thinkingDurations.value = newDurations
-  }
-}, { immediate: true })
-
-function thinkingDuration(index: number): number | undefined {
-  // 优先用后端历史重建给的 duration
-  const block = blocks.value[index]
-  if (block && typeof block === 'object' && 'duration' in block && typeof block.duration === 'number') {
-    return block.duration
-  }
-  // 已有前端实时计算值
-  if (thinkingDurations.value[index] !== undefined) {
-    return thinkingDurations.value[index]
-  }
-  // 流式中：实时计算
-  if (props.isStreaming && blockStartTimes.value[index] !== undefined) {
-    const secs = Math.round((liveThinkingMs.value - blockStartTimes.value[index]) / 1000)
-    return secs > 0 ? secs : undefined
-  }
-  return undefined
+interface RunActivityPresentation {
+  icon: string
+  label: string
+  mode: 'thinking' | 'internal' | 'continuing'
 }
 
-function thinkingCharCount(index: number): number {
-  const block = blocks.value[index]
-  if (block && typeof block === 'object' && block.type === 'thinking') {
-    return String(block.thinking || '').length
-  }
-  return 0
-}
-
-// 流式阶段判断
-const hasTextOutput = computed(() => blocks.value.some(b => b.type === 'text' && String(b.text || '').trim()))
-const hasThinkingOnly = computed(() => props.isStreaming && blocks.value.some(b => b.type === 'thinking') && !hasTextOutput.value && !blocks.value.some(b => b.type === 'toolCall'))
+// A run gets one foreground signal. Raw reasoning and hidden tools never enter
+// the DOM, but they still keep the user informed through this safe fallback.
 const hasRunningTools = computed(() => props.isStreaming && blocks.value.some(b => b.type === 'toolCall' && !hasToolResult(b)))
+const runActivity = computed<RunActivityPresentation | null>(() => {
+  if (!props.isStreaming) return null
+
+  const visibleToolIsRunning = blocks.value.some(block => (
+    block.type === 'toolCall'
+    && toolState(block) === 'running'
+    && toolPresentation(block).visible
+  ))
+  if (visibleToolIsRunning) return null
+
+  for (let index = blocks.value.length - 1; index >= 0; index -= 1) {
+    const block = blocks.value[index]
+    if (block.type === 'text') {
+      if (String(block.text || '').trim()) return null
+      continue
+    }
+    if (block.type === 'approval') return null
+    if (block.type === 'thinking') {
+      return { icon: 'psychology', label: continuationLabel(index), mode: 'thinking' }
+    }
+    if (block.type === 'toolCall') {
+      const state = toolState(block)
+      const hiddenActivity = getHiddenToolActivity(toolName(block), state)
+      if (hiddenActivity) return { ...hiddenActivity, mode: 'internal' }
+      const category = toolPresentation(block).category
+      return {
+        icon: category === 'write' || category === 'link' ? 'fact_check' : 'psychology',
+        label: category === 'write' || category === 'link' ? '正在核对执行结果' : '正在整理查询结果',
+        mode: 'continuing',
+      }
+    }
+    if (block.type === 'image') {
+      return { icon: 'psychology', label: '正在整理结果', mode: 'continuing' }
+    }
+  }
+
+  return { icon: 'psychology', label: '正在分析你的问题', mode: 'thinking' }
+})
+
+function toolContinuationLabel(block: Record<string, unknown>): string {
+  const category = toolPresentation(block).category
+  return category === 'write' || category === 'link' ? '正在核对执行结果' : '正在整理查询结果'
+}
+
+function continuationLabel(index: number): string {
+  const earlierTools = blocks.value.slice(0, index < 0 ? blocks.value.length : index).filter(block => block.type === 'toolCall')
+  if (earlierTools.some(block => toolContinuationLabel(block) === '正在核对执行结果')) return '正在核对执行结果'
+  if (earlierTools.length > 0) return '正在整理查询结果'
+  return '正在分析你的问题'
+}
+
 function isLastBlock(index: number): boolean {
   return index === blocks.value.length - 1
-}
-function isThinkingExpanded(index: number): boolean {
-  // 流式中且是当前正在输出的 thinking block：默认展开。
-  if (props.isStreaming && isLastBlock(index) && blocks.value[index]?.type === 'thinking') {
-    return expandedThinking.value[index] ?? true
-  }
-  return expandedThinking.value[index] ?? false
 }
 
 watch(() => [props.isStreaming, textContent.value.length] as const, ([streaming, chars]) => {
@@ -174,7 +172,7 @@ watch(() => [props.isStreaming, textContent.value.length] as const, ([streaming,
   }
 }, { immediate: true })
 
-onUnmounted(() => { if (tpsTimer) window.clearInterval(tpsTimer); if (liveTimer) window.clearInterval(liveTimer) })
+onUnmounted(() => { if (tpsTimer) window.clearInterval(tpsTimer) })
 
 function messageText(message: AgentMessage): string {
   const content = message.content
@@ -197,7 +195,8 @@ function contentBlocks(message: AgentMessage): Record<string, unknown>[] {
 function approvalTitle(block: Record<string, unknown>): string {
   const interruptions = Array.isArray(block.interruptions) ? block.interruptions : []
   const first = interruptions[0] as Record<string, unknown> | undefined
-  return String(first?.tool_name || 'tool approval')
+  const tool = getToolPresentation(String(first?.tool_name || ''), 'running')
+  return tool.visible && tool.title ? `需要确认：${tool.title.replace(/^正在/, '')}` : '需要确认一项操作'
 }
 
 function approvalArgs(block: Record<string, unknown>): string {
@@ -211,10 +210,10 @@ function approvalArgs(block: Record<string, unknown>): string {
 
 function approvalStatus(block: Record<string, unknown>): string {
   const status = String(block.status || 'pending')
-  if (status === 'approved') return '已批准，正在继续执行'
-  if (status === 'rejected') return '已拒绝'
-  if (status === 'running') return '正在提交审批结果'
-  return '等待人工确认'
+  if (status === 'approved') return '已确认，正在继续执行'
+  if (status === 'rejected') return '已拒绝，不会执行'
+  if (status === 'running') return '正在提交确认结果'
+  return '操作内容已在右侧工作台准备好，确认后才会继续执行'
 }
 
 function canResolveApproval(block: Record<string, unknown>): boolean {
@@ -226,28 +225,38 @@ function resolveApproval(block: Record<string, unknown>, decision: 'approve' | '
   emit('approval', { runId: String(block.runId), checkpointId: String(block.checkpointId), decision })
 }
 
+function thinkingText(block: Record<string, unknown>): string {
+  return String(block.thinking || block.content || block.summary || '')
+}
 function toolId(block: Record<string, unknown>): string {
   return String(block.toolCallId || block.id || '')
 }
 function toolName(block: Record<string, unknown>): string {
   return String(block.toolName || block.name || 'tool')
 }
-function toolIconEmoji(block: Record<string, unknown>): string {
-  const rawName = String(block.toolName || block.name || 'tool')
-  return getToolIcon(rawName)
+function toolState(block: Record<string, unknown>): ToolPresentationState {
+  if (isToolError(block)) return 'error'
+  return hasToolResult(block) ? 'completed' : 'running'
 }
-function toolInput(block: Record<string, unknown>): unknown {
-  return block.input || block.arguments || {}
+function toolResult(block: Record<string, unknown>): unknown {
+  const paired = props.toolResults?.get(toolId(block))
+  return paired ? messageText(paired) : block.result
 }
-function toolPreview(block: Record<string, unknown>): string {
-  const input = toolInput(block)
-  if (!input || typeof input !== 'object' || Array.isArray(input)) return ''
-  const record = input as Record<string, unknown>
-  for (const key of ['command', 'path', 'file_path', 'pattern', 'query']) {
-    if (record[key]) return String(record[key]).slice(0, 120)
-  }
-  const first = Object.keys(record)[0]
-  return first ? String(record[first]).slice(0, 120) : ''
+function toolPresentation(block: Record<string, unknown>) {
+  return getToolPresentation(toolName(block), toolState(block), toolResult(block))
+}
+function processToolPresentation(block: Record<string, unknown>): {
+  visible: boolean
+  icon: string
+  title: string
+  summary: string
+} {
+  const presentation = toolPresentation(block)
+  if (presentation.visible) return presentation
+  const hidden = getHiddenToolActivity(toolName(block), toolState(block))
+  return hidden
+    ? { visible: true, icon: hidden.icon, title: hidden.label, summary: '' }
+    : { visible: false, icon: 'progress_activity', title: '', summary: '' }
 }
 function imageSrc(block: Record<string, unknown>): string {
   if (typeof block.data === 'string') return `data:${String(block.mimeType || 'image/png')};base64,${block.data}`
@@ -262,20 +271,12 @@ function imageSrc(block: Record<string, unknown>): string {
   return ''
 }
 
-function toolResultText(result?: AgentMessage): string {
-  if (!result) return ''
-  return messageText(result)
-}
 function hasToolResult(block: Record<string, unknown>): boolean {
   return props.toolResults?.has(toolId(block)) || block.result !== undefined
 }
 function isToolError(block: Record<string, unknown>): boolean {
-  return !!props.toolResults?.get(toolId(block))?.isError
-}
-function toolBlockResultText(block: Record<string, unknown>): string {
-  const paired = props.toolResults?.get(toolId(block))
-  if (paired) return toolResultText(paired)
-  return formatPayload(block.result)
+  const status = String(block.status || '').toLowerCase()
+  return status === 'error' || status === 'failed' || !!props.toolResults?.get(toolId(block))?.isError
 }
 function formatPayload(value: unknown): string {
   if (value === undefined || value === null || value === '') return ''
@@ -373,7 +374,7 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   <div
     v-else-if="isAssistant"
     class="assistant-message"
-    :class="{ 'is-streaming': isStreaming, 'phase-thinking': isStreaming && hasThinkingOnly, 'phase-text': isStreaming && hasTextOutput, 'phase-tools': isStreaming && hasRunningTools }"
+    :class="{ 'is-streaming': isStreaming, 'phase-text': isStreaming && hasTextOutput, 'phase-tools': isStreaming && hasRunningTools }"
     @mouseenter="hovered = true"
     @mouseleave="hovered = false"
   >
@@ -383,34 +384,58 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
       <span v-if="tps !== null" class="tps-badge">{{ tps.toFixed(1) }} t/s</span>
     </div>
 
-    <!-- 等待首块：脉冲点动效 -->
-    <div v-if="isStreaming && blocks.length === 0" class="waiting-indicator">
-      <span class="waiting-dot"></span>
-      <span class="waiting-dot"></span>
-      <span class="waiting-dot"></span>
-    </div>
-
-    <!-- Block 列表：thinking / text / toolCall 平级渲染 -->
     <div class="assistant-block-list">
+      <div v-if="hasProcessDetails" class="process-disclosure">
+        <button
+          class="process-toggle"
+          :class="{ 'is-active': processIsActive, 'is-expanded': processExpanded, 'has-error': processHasError }"
+          type="button"
+          :aria-expanded="processExpanded"
+          @click="processExpanded = !processExpanded"
+        >
+          <span class="material-symbols-outlined process-chevron" aria-hidden="true">chevron_right</span>
+          <span class="material-symbols-outlined process-glyph" aria-hidden="true">psychology</span>
+          <span class="process-summary">{{ processSummary }}</span>
+          <span v-if="processIsActive" class="process-live-dots" aria-hidden="true"><i></i><i></i><i></i></span>
+        </button>
+
+        <Transition name="process-reveal">
+          <div v-if="processExpanded" class="process-panel">
+            <template v-for="(item, index) in processBlocks" :key="item.type === 'toolCall' ? (toolId(item) || index) : `thinking-${index}`">
+              <div
+                v-if="item.type === 'thinking'"
+                class="process-timeline-item thought-item"
+                :class="{ 'is-current': processIsActive && index === processBlocks.length - 1 }"
+              >
+                <span class="material-symbols-outlined process-entry-icon" :class="{ breathing: processIsActive && index === processBlocks.length - 1 }" aria-hidden="true">neurology</span>
+                <div class="thought-copy">
+                  <span>思考</span>
+                  <p>{{ thinkingText(item) }}</p>
+                </div>
+              </div>
+
+              <div
+                v-else
+                class="process-tool-row"
+                :class="[`is-${toolState(item)}`, { 'is-current': processIsActive && index === processBlocks.length - 1 }]"
+              >
+                <span class="material-symbols-outlined process-tool-icon" aria-hidden="true">{{ processToolPresentation(item).icon }}</span>
+                <span class="process-tool-copy">
+                  <strong>{{ processToolPresentation(item).title }}</strong>
+                  <small v-if="processToolPresentation(item).summary">{{ processToolPresentation(item).summary }}</small>
+                </span>
+                <span class="process-tool-state" aria-hidden="true">
+                  <span v-if="toolState(item) === 'running'" class="tool-spinner"></span>
+                  <span v-else class="material-symbols-outlined">{{ toolState(item) === 'error' ? 'priority_high' : 'check' }}</span>
+                </span>
+              </div>
+            </template>
+          </div>
+        </Transition>
+      </div>
+
       <template v-for="(block, i) in blocks" :key="i">
-        <!-- Thinking Block: 流式时展开，完成后折叠 -->
-        <div v-if="block.type === 'thinking'" class="thinking-block" :class="{ 'is-streaming-thinking': isStreaming }">
-          <button class="thinking-header" @click="expandedThinking[i] = !expandedThinking[i]">
-            <span class="thinking-dot" :class="{ active: isStreaming && isLastBlock(i) }"></span>
-            <span class="thinking-label">Thinking</span>
-            <span v-if="thinkingCharCount(i) > 0 && !isStreaming" class="thinking-char-hint">{{ thinkingCharCount(i) }} 字</span>
-            <span v-if="thinkingDuration(i) !== undefined" class="thinking-duration">{{ thinkingDuration(i) }}s</span>
-            <svg class="thinking-chevron" :class="{ expanded: isThinkingExpanded(i) }" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="2 3.5 5 6.5 8 3.5" />
-            </svg>
-          </button>
-          <transition name="thinking-slide">
-            <div v-if="isThinkingExpanded(i)" class="thinking-content">
-              {{ block.thinking }}
-              <span v-if="isStreaming && isLastBlock(i)" class="thinking-cursor">▍</span>
-            </div>
-          </transition>
-        </div>
+        <template v-if="block.type === 'thinking' || block.type === 'toolCall'"></template>
 
         <!-- Text Block: 纯 markdown，无包装，流式时带光标 -->
         <div v-else-if="block.type === 'text'" class="markdown-body" :class="{ 'streaming-text': isStreaming && isLastBlock(i) }">
@@ -432,28 +457,23 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
             <span class="material-symbols-outlined approval-icon">verified_user</span>
             <div class="approval-title-wrap">
               <div class="approval-title">{{ approvalTitle(block) }}</div>
-              <div class="approval-subtitle">{{ approvalStatus(block) }} · 请在右侧工作台确认</div>
+              <div class="approval-subtitle">{{ approvalStatus(block) }}</div>
             </div>
           </div>
         </div>
-
-        <!-- Tool Call Block: 可展开查看原始参数和结果。 -->
-        <div v-else-if="block.type === 'toolCall'" class="tool-call-block" :class="{ error: isToolError(block), 'is-running': isStreaming && !hasToolResult(block) }">
-          <button class="tool-header" @click="expandedTools[toolId(block)] = !expandedTools[toolId(block)]">
-            <span class="tool-status-dot" :class="hasToolResult(block) ? (isToolError(block) ? 'error' : 'done') : 'running'"></span>
-            <span class="tool-icon">{{ toolIconEmoji(block) }}</span>
-            <span class="tool-name">{{ toolName(block) }}</span>
-            <span class="tool-preview">{{ toolPreview(block) }}</span>
-            <svg class="tool-chevron" :class="{ expanded: expandedTools[toolId(block)] }" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="2 3.5 5 6.5 8 3.5" />
-            </svg>
-          </button>
-          <template v-if="expandedTools[toolId(block)]">
-            <pre class="tool-pre">{{ formatPayload(toolInput(block)) }}</pre>
-            <pre v-if="hasToolResult(block)" class="tool-pre result">{{ toolBlockResultText(block) || '(no output)' }}</pre>
-          </template>
-        </div>
       </template>
+
+      <div
+        v-if="runActivity && !hasProcessDetails"
+        class="run-activity"
+        :data-mode="runActivity.mode"
+        role="status"
+        aria-live="polite"
+      >
+        <span class="material-symbols-outlined run-activity__icon" aria-hidden="true">{{ runActivity.icon }}</span>
+        <span class="run-activity__label">{{ runActivity.label }}</span>
+        <span class="run-activity__dots" aria-hidden="true"><i></i><i></i><i></i></span>
+      </div>
     </div>
 
     <!-- 底部行：usage + copy + timestamp（完成时显示） -->
@@ -568,40 +588,7 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   position: relative;
 }
 
-/* thinking 阶段：左侧蓝色脉冲条 */
-.assistant-message.phase-thinking::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: var(--accent, #1a73e8);
-  border-radius: 1px;
-  animation: phase-pulse 1.5s ease-in-out infinite;
-  opacity: 0.6;
-}
-
 /* text 阶段：无额外动效，靠光标 */
-
-/* tools 阶段：左侧琥珀色脉冲条 */
-.assistant-message.phase-tools::before {
-  content: '';
-  position: absolute;
-  left: -8px;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: #f9ab00;
-  border-radius: 1px;
-  animation: phase-pulse 1.5s ease-in-out infinite;
-  opacity: 0.6;
-}
-
-@keyframes phase-pulse {
-  0%, 100% { opacity: 0.3; }
-  50% { opacity: 0.8; }
-}
 
 /* 流式指示器：只在有文本输出时显示 */
 .streaming-indicators {
@@ -619,36 +606,204 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   to { opacity: 1; }
 }
 
-/* 等待首块脉冲点 */
-.waiting-indicator {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 0;
-}
-
-.waiting-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--accent, #1a73e8);
-  animation: waiting-bounce 1.4s ease-in-out infinite;
-}
-
-.waiting-dot:nth-child(2) { animation-delay: 0.2s; }
-.waiting-dot:nth-child(3) { animation-delay: 0.4s; }
-
-@keyframes waiting-bounce {
-  0%, 80%, 100% { opacity: 0.3; transform: scale(0.8); }
-  40% { opacity: 1; transform: scale(1.1); }
-}
-
-/* Block 列表：thinking / text / toolCall 平级 */
+/* Block list: process disclosure, final answer, and approvals. */
 .assistant-block-list {
   display: flex;
   flex-direction: column;
   gap: 8px;
   padding: 0;
+}
+
+.process-disclosure {
+  margin: 1px 0 5px;
+}
+
+.process-toggle {
+  display: inline-flex;
+  min-height: 28px;
+  max-width: 100%;
+  align-items: center;
+  gap: 6px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  padding: 3px 5px 3px 0;
+  color: var(--text-muted, #5f6368);
+  cursor: pointer;
+  font: inherit;
+  transition: color 180ms ease, opacity 180ms ease;
+}
+
+.process-toggle:hover { color: var(--text, #202124); }
+.process-toggle:focus-visible { outline: 2px solid color-mix(in srgb, var(--accent, #1a73e8) 34%, transparent); outline-offset: 2px; }
+
+.process-chevron {
+  width: 16px;
+  flex: 0 0 16px;
+  font-size: 17px;
+  transition: transform 220ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.process-toggle.is-expanded .process-chevron { transform: rotate(90deg); }
+
+.process-glyph {
+  width: 18px;
+  flex: 0 0 18px;
+  color: var(--text-dim, #9aa0a6);
+  font-size: 16px;
+  font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 20;
+}
+.process-toggle.is-active .process-glyph {
+  color: var(--accent, #1a73e8);
+  animation: process-breathe 2.8s ease-in-out infinite;
+}
+.process-toggle.has-error .process-glyph { color: var(--error, #d93025); }
+
+.process-summary {
+  overflow: hidden;
+  font-size: 11.5px;
+  font-weight: 550;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.process-live-dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+}
+.process-live-dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent, #1a73e8);
+  opacity: 0.24;
+  animation: process-dot-step 1.2s ease-in-out infinite;
+}
+.process-live-dots i:nth-child(2) { animation-delay: 160ms; }
+.process-live-dots i:nth-child(3) { animation-delay: 320ms; }
+
+.process-panel {
+  position: relative;
+  margin: 3px 0 8px 8px;
+  padding: 5px 0 4px 24px;
+}
+.process-panel::before {
+  content: '';
+  position: absolute;
+  top: 3px;
+  bottom: 5px;
+  left: 7px;
+  width: 1px;
+  background: color-mix(in srgb, var(--text-dim, #9aa0a6) 22%, transparent);
+}
+
+.process-timeline-item,
+.process-tool-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) 20px;
+  align-items: start;
+  gap: 7px;
+}
+.process-timeline-item + .process-timeline-item,
+.process-timeline-item + .process-tool-row,
+.process-tool-row + .process-timeline-item,
+.process-tool-row + .process-tool-row { margin-top: 10px; }
+
+.process-entry-icon {
+  margin-top: 1px;
+  color: var(--text-dim, #9aa0a6);
+  font-size: 15px;
+  font-variation-settings: 'FILL' 0, 'wght' 350, 'GRAD' 0, 'opsz' 20;
+}
+.process-entry-icon.breathing { animation: process-breathe 2.8s ease-in-out infinite; }
+.thought-copy {
+  max-width: 720px;
+  color: color-mix(in srgb, var(--text-muted, #5f6368) 86%, transparent);
+  font-size: 12px;
+  line-height: 1.75;
+}
+.thought-copy > span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-dim, #9aa0a6);
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.thought-copy p {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.thought-item.is-current .thought-copy p::after {
+  content: '';
+  display: inline-block;
+  width: 1px;
+  height: 1em;
+  margin-left: 3px;
+  background: currentColor;
+  opacity: 0.65;
+  vertical-align: -0.16em;
+  animation: thought-cursor 1.2s ease-in-out infinite;
+}
+
+.process-tool-row {
+  min-height: 30px;
+  align-items: center;
+  color: var(--text-muted, #5f6368);
+}
+.process-tool-icon { color: var(--text-dim, #9aa0a6); font-size: 15px; }
+.process-tool-row.is-current .process-tool-icon { animation: process-breathe 2.8s ease-in-out infinite; }
+.process-tool-copy {
+  display: flex;
+  min-width: 0;
+  align-items: baseline;
+  gap: 8px;
+}
+.process-tool-copy strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 11.5px;
+  font-weight: 550;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process-tool-copy small {
+  overflow: hidden;
+  color: var(--text-dim, #9aa0a6);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.process-tool-state {
+  display: grid;
+  width: 20px;
+  height: 20px;
+  place-items: center;
+  color: var(--success, #16803c);
+}
+.process-tool-state .material-symbols-outlined { font-size: 14px; }
+.process-tool-row.is-error .process-tool-copy strong,
+.process-tool-row.is-error .process-tool-state { color: var(--error, #d93025); }
+
+.process-reveal-enter-active,
+.process-reveal-leave-active { transition: opacity 180ms ease, transform 220ms cubic-bezier(0.16, 1, 0.3, 1); }
+.process-reveal-enter-from,
+.process-reveal-leave-to { opacity: 0; transform: translateY(-4px); }
+
+@keyframes process-breathe {
+  0%, 100% { opacity: 0.56; transform: scale(0.96); }
+  50% { opacity: 1; transform: scale(1.04); }
+}
+@keyframes thought-cursor {
+  0%, 100% { opacity: 0.2; }
+  50% { opacity: 0.75; }
+}
+@keyframes process-dot-step {
+  0%, 65%, 100% { opacity: 0.24; transform: translateY(0); }
+  30% { opacity: 1; transform: translateY(-1px); }
 }
 
 /* Markdown Body - 对齐 CustomPiAgent: 14px/1.7，紧凑间距 */
@@ -773,127 +928,73 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   font-family: var(--font-mono, monospace);
 }
 
-/* Thinking Block - 对齐 CustomPiAgent: 折叠卡片 + 耗时 */
-.thinking-block {
-  overflow: hidden;
-  border: 1px solid var(--outline-variant, #e8eaed);
-  border-radius: 12px;
-  background: var(--surface-container, #f8fafd);
-  font-size: 12px;
-  transition: border-color 0.2s ease;
-}
-
-/* 流式 thinking：边框高亮 + 轻微脉冲 */
-.thinking-block.is-streaming-thinking {
-  border-color: color-mix(in srgb, var(--accent, #1a73e8) 40%, var(--outline-variant, #e8eaed));
-  animation: thinking-glow 2s ease-in-out infinite;
-}
-
-@keyframes thinking-glow {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(26, 115, 232, 0); }
-  50% { box-shadow: 0 0 0 3px rgba(26, 115, 232, 0.08); }
-}
-
-.thinking-header {
+/* One quiet fallback covers reasoning and otherwise invisible run activity. */
+.run-activity {
   display: flex;
+  min-width: 0;
+  min-height: 30px;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 7px 12px;
-  border: 0;
-  background: none;
+  gap: 6px;
+  padding: 2px 4px;
   color: var(--text-muted, #5f6368);
-  cursor: pointer;
-  text-align: left;
-  font-size: 12px;
-  font-weight: 500;
-  transition: background 0.12s ease;
+  animation: run-activity-enter 160ms cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 
-.thinking-header:hover {
-  background: rgba(100, 116, 139, 0.05);
-}
-
-.thinking-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--text-dim, #9aa0a6);
-  flex-shrink: 0;
-  transition: background 0.2s ease;
-}
-
-.thinking-dot.active {
-  background: var(--accent, #1a73e8);
-  animation: thinking-pulse 1.5s ease-in-out infinite;
-}
-
-@keyframes thinking-pulse {
-  0%, 100% { opacity: 0.4; transform: scale(0.9); }
-  50% { opacity: 1; transform: scale(1.1); }
-}
-
-.thinking-label {
-  flex: 1;
-}
-
-.thinking-duration {
-  font-size: 11px;
-  color: var(--text-dim, #9aa0a6);
-  font-variant-numeric: tabular-nums;
-}
-
-.thinking-char-hint {
-  font-size: 10px;
-  color: var(--text-dim, #9aa0a6);
-  opacity: 0.7;
-}
-
-.thinking-chevron {
-  flex-shrink: 0;
-  color: var(--text-dim, #9aa0a6);
-  transform: rotate(0deg);
-  transition: transform 0.15s ease;
-}
-
-.thinking-chevron.expanded {
-  transform: rotate(180deg);
-}
-
-.thinking-content {
-  border-top: 1px solid var(--outline-variant, #e8eaed);
-  padding: 10px 12px;
+.run-activity__icon {
+  width: 18px;
+  flex: 0 0 18px;
   color: var(--text-muted, #5f6368);
-  background: var(--surface, #fff);
-  line-height: 1.6;
-  white-space: pre-wrap;
-  font-size: 12px;
+  font-size: 16px;
+  line-height: 1;
+  text-align: center;
 }
 
-/* thinking 流式光标 */
-.thinking-cursor {
-  display: inline-block;
+.run-activity[data-mode="internal"] .run-activity__icon {
   color: var(--accent, #1a73e8);
-  animation: cursor-blink 1s steps(2) infinite;
-  margin-left: 1px;
+}
+
+.run-activity__label {
+  overflow: hidden;
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.run-activity__dots {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  margin-left: -1px;
+}
+
+.run-activity__dots i {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--accent, #1a73e8);
+  opacity: 0.25;
+  animation: run-activity-dot-step 1.2s ease-in-out infinite;
+}
+
+.run-activity__dots i:nth-child(2) { animation-delay: 160ms; }
+.run-activity__dots i:nth-child(3) { animation-delay: 320ms; }
+
+@keyframes run-activity-enter {
+  from { opacity: 0; transform: translateY(2px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes run-activity-dot-step {
+  0%, 65%, 100% { opacity: 0.25; }
+  30% { opacity: 1; }
 }
 
 @keyframes cursor-blink {
   0%, 50% { opacity: 1; }
   51%, 100% { opacity: 0; }
-}
-
-/* thinking 展开/折叠过渡 */
-.thinking-slide-enter-active,
-.thinking-slide-leave-active {
-  transition: max-height 0.25s ease, opacity 0.2s ease;
-  max-height: 500px;
-  overflow: hidden;
-}
-.thinking-slide-enter-from,
-.thinking-slide-leave-to {
-  max-height: 0;
-  opacity: 0;
 }
 
 /* text 流式光标：最后一个字符后闪烁 */
@@ -1020,166 +1121,43 @@ function parseMarkdown(value: string): Array<{ type: 'html'; html: string } | { 
   background: #92400e;
 }
 
-/* Tool Call Block - 紧凑卡片，不可点击 */
-.tool-call-block {
-  overflow: hidden;
-  border: 1px solid var(--outline-variant, #e8eaed);
-  border-radius: 8px;
-  background: var(--surface-container, #f8fafd);
-  font-size: 12px;
-  transition: border-color 0.2s ease, box-shadow 0.3s ease;
-}
-
-/* 运行中：边框高亮 + 脉冲发光 */
-.tool-call-block.is-running {
-  border-color: color-mix(in srgb, #3b82f6 40%, var(--outline-variant, #e8eaed));
-  animation: tool-pulse 2s ease-in-out infinite;
-}
-
-@keyframes tool-pulse {
-  0%, 100% {
-    box-shadow: 0 0 0 0 rgba(59, 130, 246, 0), 0 1px 2px rgba(0, 0, 0, 0.05);
-  }
-  50% {
-    box-shadow: 0 0 0 4px rgba(59, 130, 246, 0.15), 0 2px 8px rgba(59, 130, 246, 0.2);
-  }
-}
-
-.tool-call-block.error {
-  border-color: color-mix(in srgb, var(--error, #d93025) 40%, var(--outline-variant, #e8eaed));
-  background: color-mix(in srgb, var(--error, #d93025) 7%, var(--surface, #fff));
-}
-
-.tool-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 8px 12px;
-  border: 0;
-  background: none;
-  color: var(--text, #202124);
-  cursor: pointer;
-  text-align: left;
-  font-size: 12px;
-  min-width: 0;
-  transition: background 0.12s ease;
-}
-
-.tool-header:hover {
-  background: rgba(100, 116, 139, 0.05);
-}
-
-.tool-status-dot {
-  width: 7px;
-  height: 7px;
+.tool-spinner {
+  width: 14px;
+  height: 14px;
+  border: 1.5px solid color-mix(in srgb, var(--accent, #1a73e8) 22%, transparent);
+  border-top-color: var(--accent, #1a73e8);
   border-radius: 50%;
-  flex-shrink: 0;
-  transition: all 0.3s ease;
+  animation: tool-spinner-rotate 900ms linear infinite;
 }
 
-.tool-status-dot.running {
-  background: #3b82f6;
-  animation: dot-pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+@keyframes tool-spinner-rotate {
+  to { transform: rotate(360deg); }
 }
 
-@keyframes dot-pulse {
-  0%, 100% {
-    opacity: 0.6;
-    transform: scale(0.9);
+@media (prefers-reduced-motion: reduce) {
+  .run-activity,
+  .process-glyph,
+  .process-entry-icon.breathing,
+  .process-tool-row.is-current .process-tool-icon,
+  .thought-item.is-current .thought-copy p::after {
+    animation: none;
   }
-  50% {
-    opacity: 1;
-    transform: scale(1.2);
+
+  .process-chevron,
+  .process-reveal-enter-active,
+  .process-reveal-leave-active {
+    transition: none;
   }
-}
 
-.tool-status-dot.done {
-  background: #10b981;
-  animation: scale-in 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
-}
-
-@keyframes scale-in {
-  0% {
-    transform: scale(0.5);
-    opacity: 0;
+  .run-activity__dots i,
+  .process-live-dots i {
+    animation: none;
+    opacity: 0.55;
   }
-  100% {
-    transform: scale(1);
-    opacity: 1;
+
+  .tool-spinner {
+    animation-duration: 1600ms;
   }
-}
-
-.tool-status-dot.error {
-  background: #ef4444;
-  animation: shake 0.5s cubic-bezier(0.36, 0.07, 0.19, 0.97);
-}
-
-@keyframes shake {
-  10%, 90% { transform: translateX(-1px); }
-  20%, 80% { transform: translateX(2px); }
-  30%, 50%, 70% { transform: translateX(-2px); }
-  40%, 60% { transform: translateX(2px); }
-}
-
-.tool-icon {
-  font-size: 14px;
-  line-height: 1;
-  flex-shrink: 0;
-}
-
-.tool-name {
-  flex-shrink: 0;
-  color: var(--text, #202124);
-  font-family: var(--font-mono, monospace);
-  font-weight: 600;
-  font-size: 11.5px;
-  line-height: 1.4;
-}
-
-.tool-call-block.error .tool-name {
-  color: var(--error, #d93025);
-}
-
-.tool-preview {
-  flex: 1;
-  min-width: 0;
-  overflow: hidden;
-  color: var(--text-dim, #9aa0a6);
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.tool-chevron {
-  flex-shrink: 0;
-  color: var(--text-dim, #9aa0a6);
-  transform: rotate(0deg);
-  transition: transform 0.15s ease;
-}
-
-.tool-chevron.expanded {
-  transform: rotate(180deg);
-}
-
-.tool-pre {
-  overflow: auto;
-  max-height: 400px;
-  margin: 0;
-  border-top: 1px solid var(--outline-variant, #e8eaed);
-  padding: 10px 12px;
-  background: var(--surface, #fff);
-  color: var(--text-muted, #5f6368);
-  font-family: var(--font-mono, monospace);
-  font-size: 12px;
-  line-height: 1.5;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.tool-pre.result {
-  background: var(--bg, #fff);
 }
 
 /* 流式指示器内部元素 */

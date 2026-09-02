@@ -14,7 +14,7 @@ export interface Material {
   type: string
   status: string // legacy compatibility only
   lifecycle_status?: 'active' | 'archived'
-  processing_status?: 'processing' | 'ready' | 'failed'
+  processing_status?: 'uploading' | 'processing' | 'ready' | 'failed' | 'cancelled'
   url: string
   thumbnail_url?: string
   ctr_estimate?: number
@@ -265,10 +265,53 @@ export async function uploadMaterials(files: File[]): Promise<Material[]> {
 /**
  * 上传单个素材并保存详情字段。
  */
+export async function initializeMaterialUpload(data: {
+  name: string
+  original_filename: string
+  media_kind: 'image' | 'video'
+  format?: string
+  width?: number
+  height?: number
+  ratio?: string
+  duration?: number
+  tags?: string[]
+  source?: string
+}): Promise<Material> {
+  return http.post<Material>('/materials/uploads', data)
+}
+
+export async function cancelInitializedMaterialUpload(materialId: string): Promise<Material> {
+  return http.post<Material>(`/materials/uploads/${materialId}/cancel`, {})
+}
+
+export async function uploadInitializedMaterial(
+  materialId: string,
+  file: File,
+  poster?: Blob,
+  signal?: AbortSignal,
+): Promise<Material> {
+  const token = localStorage.getItem('animagus_token')
+  const formData = new FormData()
+  formData.append('file', file)
+  if (poster) formData.append('poster', poster, `${file.name.replace(/\\.[^.]+$/, '')}_poster.jpg`)
+  const response = await fetch(`/api/v1/materials/uploads/${materialId}/file`, {
+    method: 'POST',
+    headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+    body: formData,
+    signal,
+  })
+  if (!response.ok) {
+    const data = await response.json().catch(() => ({ detail: response.statusText }))
+    throw new Error(data.detail || `HTTP ${response.status}`)
+  }
+  return response.json() as Promise<Material>
+}
+
 export async function uploadMaterialWithMetadata(
   file: File,
   metadata: UploadMaterialMetadata,
-  poster?: Blob
+  poster?: Blob,
+  signal?: AbortSignal
 ): Promise<Material> {
   const token = localStorage.getItem('animagus_token')
   const formData = new FormData()
@@ -292,6 +335,7 @@ export async function uploadMaterialWithMetadata(
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     },
     body: formData,
+    signal,
   })
 
   if (!response.ok) {

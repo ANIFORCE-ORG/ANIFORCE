@@ -44,6 +44,7 @@ export type WorkspaceSurface =
   | 'material.list'
   | 'material.detail'
   | 'material.image'
+  | 'dashboard'
   | 'approval.review'
 
 export type WorkspaceProjectionMode =
@@ -425,6 +426,14 @@ export const workspaceResultProjectionRegistry: Record<string, WorkspaceResultPr
     mode: 'readonly',
     resultToPayload: transformLocalFilesToMaterialsPayload,
   },
+  get_meta_account_performance: { surface: 'dashboard', mode: 'readonly', resultToPayload: dashboardResultToPayload },
+  get_meta_performance_trend: { surface: 'dashboard', mode: 'readonly', resultToPayload: dashboardResultToPayload },
+  list_meta_ad_accounts_with_spend: { surface: 'dashboard', mode: 'readonly', resultToPayload: dashboardResultToPayload },
+  get_meta_campaign_performance: { surface: 'dashboard', mode: 'readonly', resultToPayload: dashboardResultToPayload },
+}
+
+function dashboardResultToPayload(result: unknown): Record<string, unknown> {
+  return { overview: parseJsonLikeResult(result) }
 }
 
 function parseProjectsResult(result: unknown): Record<string, unknown> {

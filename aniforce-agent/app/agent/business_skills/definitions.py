@@ -3,66 +3,6 @@
 from app.agent.business_skills.models import BusinessSkill
 
 
-CAMPAIGN_DIAGNOSIS = BusinessSkill(
-    name="campaign_diagnosis",
-    version="1.0",
-    description="诊断广告计划效果下降、消耗或转化异常，并给出有证据的行动建议。",
-    trigger_examples=("这个计划怎么突然掉了", "分析这个 Campaign 最近表现", "为什么转化变差"),
-    required_slots=("campaign_id", "time_range_hours"),
-    clarification_rules=(
-        "必须确认唯一 Campaign；同名或多选时提供候选并等待用户选择，禁止猜测。",
-        "时间范围未指定时使用最近 7 天（168 小时），并在回答中明确说明。",
-    ),
-    evidence_contract=(
-        "至少读取 Campaign 详情和指定窗口的 performance 证据。",
-        "data_available=false、样本不足或数据过旧时，只能说明不足以判断。",
-        "严格区分工具事实、可能原因和建议，不把推断写成已发生事实。",
-    ),
-    workflow=(
-        "解析唯一 Campaign 和时间范围。",
-        "调用 get_campaign_detail 与 get_campaign_performance。",
-        "识别主要变化和证据限制，再按影响与成本排序建议。",
-    ),
-    allowed_tools=frozenset({"list_campaigns", "get_campaign_detail", "get_campaign_performance"}),
-    response_contract=(
-        "先给一句结论，再列关键证据。",
-        "将事实、可能原因和建议分开表达。",
-        "给出最多三项有优先级的下一步，不罗列泛化常识。",
-    ),
-)
-
-PROJECT_REVIEW = BusinessSkill(
-    name="project_review",
-    version="1.0",
-    description="复盘项目整体表现，定位重点计划、预算和素材问题。",
-    trigger_examples=("哪个项目不太行", "复盘这个项目", "哪些计划还值得继续投"),
-    required_slots=("project_id", "time_range_hours"),
-    clarification_rules=(
-        "必须确认唯一项目；无法从显式 ID、Workspace 或任务状态唯一确定时再追问。",
-        "时间范围未指定时使用最近 7 天（168 小时），并在回答中明确说明。",
-    ),
-    evidence_contract=(
-        "至少读取项目详情和项目 performance 汇总。",
-        "比较 Campaign 必须使用相同时间窗口和统一指标口径。",
-        "没有数据的 Campaign 单独标记，禁止按零表现参与排名。",
-    ),
-    workflow=(
-        "解析项目和时间范围。",
-        "调用 get_project_detail、get_project_performance，必要时补充计划或素材关联查询。",
-        "聚焦整体结论、重点问题和优先行动，不逐条复述所有对象。",
-    ),
-    allowed_tools=frozenset({
-        "list_projects", "get_project_detail", "get_project_performance",
-        "list_campaigns", "get_campaign_detail", "get_campaign_performance",
-        "list_materials", "get_campaign_materials",
-    }),
-    response_contract=(
-        "先给项目整体判断和数据覆盖情况。",
-        "突出最多三个重点 Campaign 或问题。",
-        "建议必须映射到已取得的业务证据。",
-    ),
-)
-
 SAFE_BUSINESS_MUTATION = BusinessSkill(
     name="safe_business_mutation",
     version="1.0",
@@ -104,4 +44,4 @@ SAFE_BUSINESS_MUTATION = BusinessSkill(
     ),
 )
 
-BUSINESS_SKILLS = (CAMPAIGN_DIAGNOSIS, PROJECT_REVIEW, SAFE_BUSINESS_MUTATION)
+BUSINESS_SKILLS = (SAFE_BUSINESS_MUTATION,)

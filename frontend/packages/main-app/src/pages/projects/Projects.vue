@@ -85,6 +85,7 @@ const loadProjects = async () => {
 onMounted(async () => {
   await loadProjects()
   openProjectEditFromQuery()
+  openCampaignCreateFromQuery()
 })
 
 // 筛选后的项目列表
@@ -163,6 +164,25 @@ const handleCreateTask = (project: Project) => {
   // 设置当前项目ID并打开Campaign模态框
   currentProjectId.value = project.id
   showCampaignModal.value = true
+}
+
+const clearCampaignCreateQuery = () => {
+  if (!route.query.createCampaignFor) return
+  const query = { ...route.query }
+  delete query.createCampaignFor
+  void router.replace({ path: route.path, query })
+}
+
+const openCampaignCreateFromQuery = () => {
+  const projectId = typeof route.query.createCampaignFor === 'string' ? route.query.createCampaignFor : ''
+  if (!projectId) return
+  const project = projects.value.find(item => item.id === projectId)
+  if (!project) {
+    showToastMessage('未找到要创建 Campaign 的项目', 'error')
+    clearCampaignCreateQuery()
+    return
+  }
+  handleCreateTask(project)
 }
 
 const handleCloseModal = () => {
@@ -268,6 +288,7 @@ const handleSubmitProject = async (data: any) => {
 const handleCloseCampaignModal = () => {
   showCampaignModal.value = false
   currentProjectId.value = null
+  clearCampaignCreateQuery()
 }
 
 const handleSubmitCampaign = async (data: any) => {
@@ -298,6 +319,7 @@ const handleSubmitCampaign = async (data: any) => {
     // 关闭 Campaign 模态框
     showCampaignModal.value = false
     currentProjectId.value = null
+    clearCampaignCreateQuery()
 
     // 刷新项目列表
     await loadProjects()

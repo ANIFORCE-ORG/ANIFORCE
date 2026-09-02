@@ -8,6 +8,7 @@ interface RequestOptions {
   method?: string
   headers?: Record<string, string>
   body?: any
+  signal?: AbortSignal
 }
 
 class HttpClient {
@@ -94,6 +95,7 @@ class HttpClient {
     const config: RequestInit = {
       method: options.method || 'GET',
       headers,
+      signal: options.signal,
     }
 
     if (options.body) {

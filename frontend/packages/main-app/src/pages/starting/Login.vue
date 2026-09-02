@@ -177,9 +177,9 @@ function handleForgotPassword() {
 
       <p class="login-terms">
         {{ t.termsText }}
-        <a href="#">{{ t.termsLink }}</a>
+        <RouterLink to="/terms">{{ t.termsLink }}</RouterLink>
         {{ t.and }}
-        <a href="#">{{ t.privacyLink }}</a>
+        <RouterLink to="/privacy">{{ t.privacyLink }}</RouterLink>
       </p>
 
       <footer class="login-copyright">© 2026 ANIFORCE</footer>

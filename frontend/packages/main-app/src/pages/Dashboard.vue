@@ -1,25 +1,38 @@
 <script setup lang="ts">
-import { computed, onBeforeUnmount, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
+import DataSyncDialog from '@/components/dashboard/DataSyncDialog.vue'
+import AnalysisMetricTable, { type AnalysisTableRow } from '@/components/dashboard/AnalysisMetricTable.vue'
+import { formatTrendMetricValue, trendMetricOptions, type TrendMetric } from '@/data/trendMetrics'
 import { navItems } from '@/config/navigation'
+import { getMetaDashboardOverview, type DashboardMetrics, type MetaAdSetSyncResponse, type MetaDashboardOverview } from '@/api/dashboard'
+import { platformApi, type PlatformConnectionResponse, type SubAccountResponse } from '@/api/platform'
 
-const props = withDefaults(defineProps<{
-  embedded?: boolean
-}>(), {
-  embedded: false,
-})
-
+const props = withDefaults(defineProps<{ embedded?: boolean; workspaceOverview?: MetaDashboardOverview | null }>(), { embedded: false, workspaceOverview: null })
 const router = useRouter()
 const activeSession = ref('sess-g001')
 const period = ref('7')
-const platform = ref('全部平台')
-const project = ref('全部项目')
+const dateInput = (date: Date) => date.toISOString().slice(0, 10)
+const initialUntil = new Date()
+const initialSince = new Date(initialUntil)
+initialSince.setDate(initialUntil.getDate() - 6)
+const dateStart = ref(dateInput(initialSince))
+const dateEnd = ref(dateInput(initialUntil))
+const connectionId = ref('')
+const accountId = ref('')
+const objective = ref('')
+const connections = ref<PlatformConnectionResponse[]>([])
+const accounts = ref<SubAccountResponse[]>([])
+const overview = ref<MetaDashboardOverview | null>(props.workspaceOverview)
+const loading = ref(true)
 const refreshing = ref(false)
+const syncing = ref(false)
+const syncDialogOpen = ref(false)
+const errorMessage = ref('')
 const toastMessage = ref('')
 const toastVisible = ref(false)
 let toastTimer: number | undefined
-let refreshTimer: number | undefined
 
 const sessions = ref([
   { id: 'sess-g001', name: 'Candy Blast 投放咨询', active: true },
@@ -28,86 +41,405 @@ const sessions = ref([
   { id: 'sess-d001', name: 'DramaBox 新剧推广', active: false },
 ])
 
-const kpis = [
-  { label: '总消耗', value: '$28,460', delta: '+12.4%', icon: 'account_balance_wallet' },
-  { label: '转化数', value: '4,832', delta: '+8.7%', icon: 'download' },
-  { label: 'CPI', value: '$5.89', delta: '−6.2%', icon: 'attach_money' },
-  { label: 'ROAS', value: '2.42x', delta: '+0.18x', icon: 'trending_up' },
-  { label: 'CTR', value: '4.0%', delta: '+0.7%', icon: 'ads_click' },
-  { label: 'CVR', value: '9.1%', delta: '需关注', icon: 'target', warning: true },
-]
+const OBJECTIVE_SALES = 'OUTCOME_SALES'
+const OBJECTIVE_LEADS = 'OUTCOME_LEADS'
 
-const funnel = [
-  { label: '曝光', value: '1,240,000', rate: '100%', width: 100 },
-  { label: '点击', value: '68,420', rate: '5.5%', width: 58 },
-  { label: '安装', value: '14,834', rate: '21.7%', width: 36 },
-  { label: '注册', value: '8,420', rate: '56.8%', width: 25 },
-  { label: '付费', value: '1,128', rate: '13.4%', width: 15 },
-]
+const numberValue = (value: number | null | undefined) => value == null ? null : Number(value)
+const formatNumber = (value: number | null | undefined, maximumFractionDigits = 0) => {
+  const numeric = numberValue(value)
+  return numeric == null ? '—' : new Intl.NumberFormat('zh-CN', { maximumFractionDigits }).format(numeric)
+}
+const formatMoney = (value: number | null | undefined) => {
+  const numeric = numberValue(value)
+  if (overview.value?.window?.mixed_currency) return '多币种'
+  if (numeric == null) return '—'
+  const currency = overview.value?.window?.currency
+  if (!currency) return formatNumber(numeric, 2)
+  return new Intl.NumberFormat('zh-CN', { style: 'currency', currency, maximumFractionDigits: 2 }).format(numeric)
+}
+const formatPercent = (value: number | null | undefined, digits = 2) => {
+  const numeric = numberValue(value)
+  return numeric == null ? '—' : `${(numeric * 100).toFixed(digits)}%`
+}
+const formatRoas = (value: number | null | undefined) => {
+  const numeric = numberValue(value)
+  return numeric == null ? '—' : `${numeric.toFixed(2)}x`
+}
+const formatDate = (value: string) => value.slice(5)
 
-const segments = [
-  { name: 'US / iOS / Broad', detail: '可控量 · CPI $5.62 · ROAS 2.82x' },
-  { name: 'US / Android / LAL 2%', detail: '观察 · CPI $6.12 · ROAS 2.41x' },
-  { name: 'US / Android / Spark', detail: '加预算 · CPI $5.25 · ROAS 3.04x' },
-  { name: 'US / Search / Core', detail: '稳定 · CPI $5.95 · ROAS 2.22x' },
-  { name: 'US / PMax / Creative', detail: '降预算 · CPI $8.97 · ROAS 1.86x' },
-  { name: 'CA / Drama Fans', detail: '继续测 · CPI $6.31 · ROAS 2.06x' },
-]
-
-const trendPoints = [
-  { date: '05-21', spend: '$3,536', conversions: '583', roas: '2.34x', x: 91, spendY: 106, roasY: 138, barY: 116, barHeight: 39, tooltipLeft: 10 },
-  { date: '05-22', spend: '$3,647', conversions: '605', roas: '2.38x', x: 219, spendY: 98, roasY: 121, barY: 106, barHeight: 49, tooltipLeft: 19.2 },
-  { date: '05-23', spend: '$3,760', conversions: '626', roas: '2.42x', x: 347, spendY: 90, roasY: 104, barY: 99, barHeight: 56, tooltipLeft: 34.6 },
-  { date: '05-24', spend: '$4,071', conversions: '678', roas: '2.47x', x: 475, spendY: 82, roasY: 116, barY: 91, barHeight: 64, tooltipLeft: 50 },
-  { date: '05-25', spend: '$4,097', conversions: '695', roas: '2.52x', x: 603, spendY: 73, roasY: 83, barY: 78, barHeight: 77, tooltipLeft: 65.4 },
-  { date: '05-26', spend: '$4,519', conversions: '775', roas: '2.59x', x: 731, spendY: 57, roasY: 66, barY: 64, barHeight: 91, tooltipLeft: 80.8 },
-  { date: '05-27', spend: '$4,830', conversions: '870', roas: '2.66x', x: 859, spendY: 48, roasY: 57, barY: 50, barHeight: 105, tooltipLeft: 90 },
-]
-
-const hoveredTrendIndex = ref<number | null>(null)
-const selectedTrendIndex = ref<number | null>(null)
-const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
-const activeTrendPoint = computed(() => {
-  const index = activeTrendIndex.value
-  return index === null ? null : { ...trendPoints[index], index }
+const windowForDays = (days: number) => {
+  const until = new Date()
+  const since = new Date(until)
+  since.setDate(since.getDate() - days + 1)
+  return { since: dateInput(since), until: dateInput(until) }
+}
+const dateWindow = computed(() => ({ since: dateStart.value, until: dateEnd.value }))
+const dateRangeDays = computed(() => {
+  const since = Date.parse(`${dateStart.value}T00:00:00Z`)
+  const until = Date.parse(`${dateEnd.value}T00:00:00Z`)
+  return Number.isFinite(since) && Number.isFinite(until) ? Math.max(1, Math.round((until - since) / 86400000) + 1) : 1
 })
 
-const toggleTrendSelection = (index: number) => {
-  selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index
+const objectives = computed(() => overview.value?.objectives ?? [])
+const scope = computed(() => overview.value?.scope ?? null)
+const isSales = computed(() => objective.value === OBJECTIVE_SALES)
+const isLeads = computed(() => objective.value === OBJECTIVE_LEADS)
+const supportedObjective = computed(() => isSales.value || isLeads.value)
+
+// Ratio metrics are recomputed from range totals, never averaged across accounts.
+const derive = (metrics: DashboardMetrics | null | undefined) => {
+  const spend = numberValue(metrics?.spend)
+  const revenue = numberValue(metrics?.conversion_value)
+  const results = numberValue(metrics?.conversions)
+  const clicks = numberValue(metrics?.clicks)
+  const impressions = numberValue(metrics?.impressions)
+  return {
+    spend,
+    revenue,
+    results,
+    clicks,
+    impressions,
+    roas: numberValue(metrics?.roas) ?? (spend && revenue != null ? revenue / spend : null),
+    cost: numberValue(metrics?.result_cost) ?? (results && spend != null ? spend / results : null),
+    aov: results && revenue != null ? revenue / results : null,
+    ctr: numberValue(metrics?.ctr),
+    cpc: clicks && spend != null ? spend / clicks : null,
+    cpm: impressions && spend != null ? spend / impressions * 1000 : null,
+  }
+}
+const current = computed(() => derive(overview.value?.kpis))
+const previous = computed(() => derive(overview.value?.previous?.kpis))
+
+type DeltaTone = 'good' | 'bad' | 'neutral' | 'none'
+type DeltaDirection = 'higher_is_better' | 'lower_is_better' | 'neutral'
+const deltaOf = (currentValue: number | null, previousValue: number | null, direction: DeltaDirection): { text: string; tone: DeltaTone } => {
+  if (currentValue == null) return { text: '', tone: 'none' }
+  if (previousValue == null) return { text: '上周期无数据', tone: 'none' }
+  if (previousValue === 0) return currentValue === 0 ? { text: '持平', tone: 'neutral' } : { text: '新增', tone: direction === 'lower_is_better' ? 'bad' : 'good' }
+  const pct = (currentValue - previousValue) / previousValue * 100
+  const text = `${pct >= 0 ? '▲' : '▼'} ${Math.abs(pct).toFixed(1)}%`
+  if (direction === 'neutral') return { text, tone: 'neutral' }
+  const improving = direction === 'higher_is_better' ? pct >= 0 : pct < 0
+  return { text, tone: improving ? 'good' : 'bad' }
 }
 
-const platforms = [
-  {
-    name: 'Meta', account: 'Candy Blast Meta UA', campaigns: 5, score: 68, className: '',
-    spend: '$12,840', conversions: '2,180', cpi: '$5.89', roas: '2.31x',
-    daily: [
-      ['05-21', '$1,284', '205', '2.13x'], ['05-22', '$1,412', '228', '2.19x'],
-      ['05-23', '$1,541', '251', '2.26x'], ['05-24', '$1,798', '293', '2.33x'],
-      ['05-25', '$1,926', '326', '2.40x'], ['05-26', '$2,311', '398', '2.47x'],
-      ['05-27', '$2,568', '479', '2.54x'],
-    ],
-  },
-  {
-    name: 'Google', account: 'DramaBox Google Ads', campaigns: 3, score: 54, className: 'google',
-    spend: '$8,620', conversions: '1,426', cpi: '$6.04', roas: '2.12x',
-    daily: [
-      ['05-21', '$1,552', '257', '2.37x'], ['05-22', '$1,465', '242', '2.29x'],
-      ['05-23', '$1,379', '228', '2.20x'], ['05-24', '$1,293', '214', '2.12x'],
-      ['05-25', '$1,121', '185', '2.06x'], ['05-26', '$948', '157', '1.99x'],
-      ['05-27', '$862', '143', '1.93x'],
-    ],
-  },
-  {
-    name: 'TikTok', account: 'Candy Blast TikTok US', campaigns: 4, score: 78, className: 'tiktok',
-    spend: '$7,000', conversions: '1,226', cpi: '$5.71', roas: '2.86x',
-    daily: [
-      ['05-21', '$700', '121', '2.63x'], ['05-22', '$770', '135', '2.72x'],
-      ['05-23', '$840', '147', '2.80x'], ['05-24', '$980', '171', '2.89x'],
-      ['05-25', '$1,050', '184', '2.97x'], ['05-26', '$1,260', '220', '3.08x'],
-      ['05-27', '$1,400', '248', '3.15x'],
-    ],
-  },
-]
+// Each objective declares its own success metrics. Sales spend is never divided
+// by leads, and lead spend is never reported as revenue.
+const resultStats = computed(() => {
+  const now = current.value
+  const before = previous.value
+  if (isSales.value) {
+    return [
+      { label: '花费', value: formatMoney(now.spend), delta: deltaOf(now.spend, before.spend, 'neutral'), primary: false },
+      { label: '收入', value: formatMoney(now.revenue), delta: deltaOf(now.revenue, before.revenue, 'higher_is_better'), primary: true },
+      { label: 'ROAS', value: formatRoas(now.roas), delta: deltaOf(now.roas, before.roas, 'higher_is_better'), primary: true },
+      { label: '订单', value: formatNumber(now.results), delta: deltaOf(now.results, before.results, 'higher_is_better'), primary: false },
+      { label: '客单价', value: formatMoney(now.aov), delta: deltaOf(now.aov, before.aov, 'higher_is_better'), primary: false },
+      { label: '每单成本', value: formatMoney(now.cost), delta: deltaOf(now.cost, before.cost, 'lower_is_better'), primary: false }
+    ]
+  }
+  return [
+    { label: '花费', value: formatMoney(now.spend), delta: deltaOf(now.spend, before.spend, 'neutral'), primary: false },
+    { label: 'Leads', value: formatNumber(now.results), delta: deltaOf(now.results, before.results, 'higher_is_better'), primary: true },
+    { label: 'CPL', value: formatMoney(now.cost), delta: deltaOf(now.cost, before.cost, 'lower_is_better'), primary: true },
+    { label: '链接点击', value: formatNumber(now.clicks), delta: deltaOf(now.clicks, before.clicks, 'neutral'), primary: false },
+    { label: '点击到 Lead', value: formatPercent(now.clicks && now.results != null ? now.results / now.clicks : null), delta: { text: '', tone: 'none' }, primary: false },
+    { label: 'CPC', value: formatMoney(now.cpc), delta: deltaOf(now.cpc, before.cpc, 'lower_is_better'), primary: false },
+  ]
+})
+const trafficMetrics = computed(() => {
+  const now = current.value
+  return [
+    { label: '曝光', value: formatNumber(now.impressions) },
+    { label: '链接点击', value: formatNumber(now.clicks) },
+    { label: 'CTR', value: formatPercent(now.ctr) },
+    { label: 'CPM', value: formatMoney(now.cpm) },
+    { label: 'CPC', value: formatMoney(now.cpc) },
+  ]
+})
+
+const funnelSteps = computed(() => {
+  const steps = overview.value?.funnel ?? []
+  const top = numberValue(steps[0]?.value) ?? 0
+  return steps.map(step => ({
+    ...step,
+    valueText: formatNumber(step.value),
+    fromPreviousText: step.rate_from_previous == null ? null : formatPercent(step.rate_from_previous, 1),
+    width: top > 0 ? Math.max((numberValue(step.value) ?? 0) / top * 100, 1.5) : 0,
+  }))
+})
+const biggestDropStep = computed(() => {
+  const candidates = funnelSteps.value.filter(step => step.rate_from_previous != null)
+  if (!candidates.length) return null
+  return candidates.reduce((worst, step) => (numberValue(step.rate_from_previous) ?? 1) < (numberValue(worst.rate_from_previous) ?? 1) ? step : worst)
+})
+
+const scaleY = (value: number | null, values: Array<number | null>, top = 48, bottom = 138) => {
+  if (value == null) return null
+  const present = values.filter((item): item is number => item != null)
+  const max = Math.max(...present, 0)
+  return max === 0 ? bottom : bottom - (value / max) * (bottom - top)
+}
+const trendPoints = computed(() => {
+  const rows = overview.value?.trend ?? []
+  const spendValues = rows.map(row => numberValue(row.spend))
+  const barValues = rows.map(row => metricValueOf(row, selectedTrendMetric.value))
+  const barMax = Math.max(...barValues.filter((item): item is number => item != null), 0)
+  return rows.map((row, index) => {
+    const metrics = derive(row)
+    const x = rows.length <= 1 ? 475 : 91 + index * (768 / (rows.length - 1))
+    const selectedMetric = trendMetricOptions.find(option => option.key === selectedTrendMetric.value)
+    const barValue = metricValueOf(row, selectedTrendMetric.value)
+    const barHeight = barValue == null || barMax === 0 ? 0 : Math.max(2, (barValue / barMax) * 105)
+    return {
+      ...row,
+      label: formatDate(row.date),
+      spendText: formatMoney(row.spend),
+      barLabel: selectedMetric?.label ?? (isSales.value ? '收入' : 'Lead'),
+      barText: formatTrendMetricValue(selectedTrendMetric.value, barValue, overview.value?.window?.currency, overview.value?.window?.mixed_currency),
+      efficiencyLabel: isSales.value ? 'ROAS' : 'CPL',
+      efficiencyText: isSales.value ? formatRoas(metrics.roas) : formatMoney(metrics.cost),
+      impressionsText: formatNumber(row.impressions),
+      clicksText: formatNumber(row.clicks),
+      ctrText: formatPercent(row.ctr),
+      resultsText: formatNumber(metrics.results),
+      x,
+      spendY: scaleY(numberValue(row.spend), spendValues),
+      barY: 155 - barHeight,
+      barHeight,
+      tooltipLeft: rows.length <= 1 ? 50 : 5 + index * (90 / (rows.length - 1)),
+      hitWidth: Math.min(128, 768 / Math.max(rows.length, 1)),
+    }
+  })
+})
+const linePath = (field: 'spendY') => trendPoints.value
+  .filter(point => point[field] != null)
+  .map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point[field]}`)
+  .join('')
+const spendPath = computed(() => linePath('spendY'))
+const hoveredTrendIndex = ref<number | null>(null)
+const selectedTrendIndex = ref<number | null>(null)
+const selectedTrendMetric = ref<TrendMetric>('conversion_value')
+const availableTrendMetrics = computed(() => trendMetricOptions.filter(option => {
+  if (option.key === 'conversion_value' || option.key === 'roas') return isSales.value
+  if (option.key === 'result_cost') return isLeads.value
+  return true
+}))
+const metricValueOf = (point: DashboardMetrics, metric: TrendMetric): number | null => {
+  const metrics = derive(point)
+  if (metric === 'conversion_value') return metrics.revenue
+  if (metric === 'roas') return metrics.roas
+  if (metric === 'result_cost') return metrics.cost
+  return numberValue(point[metric])
+}
+watch(isSales, sales => {
+  if (!availableTrendMetrics.value.some(option => option.key === selectedTrendMetric.value)) {
+    selectedTrendMetric.value = sales ? 'conversion_value' : 'conversions'
+  }
+})
+const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
+const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
+const toggleTrendSelection = (index: number) => { selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index }
+
+const dailyAnalysisRows = computed<AnalysisTableRow[]>(() => (overview.value?.trend ?? []).map((point, index) => {
+  const metrics = derive(point)
+  const previousPoint = index > 0 ? derive(overview.value?.trend?.[index - 1]) : null
+  const currentEfficiency = isSales.value ? metrics.roas : metrics.cost
+  const previousEfficiency = previousPoint ? (isSales.value ? previousPoint.roas : previousPoint.cost) : null
+  const delta = currentEfficiency != null && previousEfficiency != null && previousEfficiency !== 0
+    ? (currentEfficiency - previousEfficiency) / Math.abs(previousEfficiency) * 100
+    : null
+  return {
+    id: point.date,
+    name: point.date,
+    detail: `${point.accounts_with_facts ?? '—'} / ${point.accounts_expected ?? '—'} 个账号有事实数据`,
+    metrics: {
+      spend: metrics.spend,
+      conversion_value: metrics.revenue,
+      conversions: metrics.results,
+      roas: metrics.roas,
+      clicks: metrics.clicks,
+      ctr: metrics.ctr,
+      impressions: metrics.impressions,
+      result_cost: metrics.cost,
+    },
+    delta,
+    status: point.accounts_with_facts != null && point.accounts_expected != null && point.accounts_with_facts < point.accounts_expected ? '部分数据' : '',
+    statusTone: point.accounts_with_facts != null && point.accounts_expected != null && point.accounts_with_facts < point.accounts_expected ? 'warning' : 'normal',
+  }
+}))
+const dailyAnalysisColumns = computed<TrendMetric[]>(() => isSales.value
+  ? ['spend', 'conversion_value', 'conversions', 'roas', 'clicks', 'ctr']
+  : ['spend', 'conversions', 'result_cost', 'clicks', 'ctr'])
+
+type Level = 'account' | 'campaign' | 'adset'
+const level = ref<Level>('account')
+const selectedAccountId = ref('')
+const selectedCampaignId = ref('')
+const showAllRows = ref(false)
+const search = ref('')
+
+const rowsOf = (target: Level) => {
+  if (target === 'account') return (overview.value?.accounts ?? []).filter(row => (numberValue(row.spend) ?? 0) > 0 || (numberValue(row.conversions) ?? 0) > 0)
+  if (target === 'campaign') return overview.value?.campaigns ?? []
+  return overview.value?.adsets ?? []
+}
+const entityRows = computed(() => {
+  const rows = rowsOf(level.value).map(row => {
+    const metrics = derive(row as DashboardMetrics)
+    const before = derive((row as { previous?: DashboardMetrics | null }).previous)
+    const anyRow = row as Record<string, any>
+    const name = level.value === 'account' ? anyRow.account_name : level.value === 'campaign' ? anyRow.campaign_name : anyRow.adset_name
+    const id = level.value === 'account' ? anyRow.account_id : level.value === 'campaign' ? anyRow.campaign_id : anyRow.adset_id
+    const efficiency = isSales.value ? metrics.roas : metrics.cost
+    const previousEfficiency = isSales.value ? before.roas : before.cost
+    const flags: Array<{ label: string; tone: 'warn' | 'bad' }> = []
+    if ((metrics.spend ?? 0) > 0 && !metrics.results) {
+      flags.push({ label: isSales.value ? '0 订单' : '0 Lead', tone: 'warn' })
+    } else if (isSales.value && metrics.roas != null && metrics.roas < 1) {
+      flags.push({ label: 'ROAS < 1', tone: 'bad' })
+    } else if (efficiency != null && previousEfficiency != null && previousEfficiency > 0) {
+      const change = (efficiency - previousEfficiency) / previousEfficiency
+      if (isSales.value && change <= -0.3) flags.push({ label: 'ROAS 跌超 30%', tone: 'bad' })
+      if (isLeads.value && change >= 0.3) flags.push({ label: 'CPL 涨超 30%', tone: 'bad' })
+    }
+    return {
+      id: String(id ?? ''),
+      name: String(name ?? id ?? ''),
+      subtitle: level.value === 'adset' ? anyRow.campaign_name : level.value === 'campaign' ? anyRow.account_name : anyRow.account_id,
+      accountId: anyRow.account_id as string,
+      campaignId: (anyRow.campaign_id ?? null) as string | null,
+      metrics,
+      efficiency,
+      efficiencyDelta: deltaOf(efficiency, previousEfficiency, isSales.value ? 'higher_is_better' : 'lower_is_better'),
+      flags,
+    }
+  })
+  const scoped = rows.filter(row => {
+    if (level.value === 'campaign' && selectedAccountId.value) return row.accountId === selectedAccountId.value
+    if (level.value === 'adset') {
+      if (selectedCampaignId.value) return row.campaignId === selectedCampaignId.value
+      if (selectedAccountId.value) return row.accountId === selectedAccountId.value
+    }
+    return true
+  })
+  const keyword = search.value.trim().toLowerCase()
+  const filtered = keyword
+    ? scoped.filter(row => row.name.toLowerCase().includes(keyword) || row.id.toLowerCase().includes(keyword))
+    : scoped
+  return filtered.sort((a, b) => (b.metrics.spend ?? -1) - (a.metrics.spend ?? -1))
+})
+const attentionRows = computed(() => entityRows.value.filter(row => row.flags.length))
+const visibleRows = computed(() => {
+  if (showAllRows.value || !attentionRows.value.length) return entityRows.value
+  return attentionRows.value
+})
+const attentionSpend = computed(() => attentionRows.value.reduce((sum, row) => sum + (row.metrics.spend ?? 0), 0))
+const levelLabels: Record<Level, string> = { account: '账号', campaign: 'Campaign', adset: 'AdSet' }
+const breadcrumb = computed(() => {
+  const items: Array<{ label: string; level: Level }> = [{ label: '全部账号', level: 'account' }]
+  if (selectedAccountId.value) {
+    const account = (overview.value?.accounts ?? []).find(row => row.account_id === selectedAccountId.value)
+    items.push({ label: account?.account_name ?? selectedAccountId.value, level: 'campaign' })
+  }
+  if (selectedCampaignId.value) {
+    const campaign = (overview.value?.campaigns ?? []).find(row => row.campaign_id === selectedCampaignId.value)
+    items.push({ label: campaign?.campaign_name ?? selectedCampaignId.value, level: 'adset' })
+  }
+  return items
+})
+const drillInto = (row: { id: string; accountId: string }) => {
+  if (level.value === 'account') {
+    selectedAccountId.value = row.id
+    selectedCampaignId.value = ''
+    level.value = 'campaign'
+  } else if (level.value === 'campaign') {
+    selectedCampaignId.value = row.id
+    level.value = 'adset'
+  }
+  showAllRows.value = false
+}
+const goToLevel = (target: Level) => {
+  if (target === 'account') { selectedAccountId.value = ''; selectedCampaignId.value = '' }
+  if (target === 'campaign') selectedCampaignId.value = ''
+  level.value = target
+  showAllRows.value = false
+}
+
+type HierarchyRow = {
+  key: string
+  id: string
+  name: string
+  detail: string
+  kind: Level
+  depth: number
+  parentKey: string | null
+  hasChildren: boolean
+  metrics: ReturnType<typeof derive>
+  status: string
+}
+const expandedHierarchy = ref<Set<string>>(new Set())
+const hierarchyQuery = ref('')
+const hierarchyMetricComparator = (left: DashboardMetrics, right: DashboardMetrics) => {
+  const values = (metrics: DashboardMetrics) => [metrics.spend, metrics.conversion_value, metrics.conversions, metrics.clicks, metrics.impressions]
+  const leftValues = values(left).map(value => value ?? 0)
+  const rightValues = values(right).map(value => value ?? 0)
+  const activityDifference = Number(rightValues.some(value => value > 0)) - Number(leftValues.some(value => value > 0))
+  if (activityDifference) return activityDifference
+  for (let index = 0; index < leftValues.length; index += 1) {
+    const difference = rightValues[index]! - leftValues[index]!
+    if (difference) return difference
+  }
+  return 0
+}
+const hierarchySource = computed<HierarchyRow[]>(() => {
+  const accountsById = new Map((overview.value?.accounts ?? []).map(item => [item.account_id, item]))
+  const campaignsByAccount = new Map<string, NonNullable<MetaDashboardOverview['campaigns']>>()
+  for (const campaign of overview.value?.campaigns ?? []) {
+    const rows = campaignsByAccount.get(campaign.account_id) ?? []
+    rows.push(campaign)
+    campaignsByAccount.set(campaign.account_id, rows)
+  }
+  const adsetsByCampaign = new Map<string, NonNullable<MetaDashboardOverview['adsets']>>()
+  for (const adset of overview.value?.adsets ?? []) {
+    if (!adset.campaign_id) continue
+    const rows = adsetsByCampaign.get(adset.campaign_id) ?? []
+    rows.push(adset)
+    adsetsByCampaign.set(adset.campaign_id, rows)
+  }
+  const result: HierarchyRow[] = []
+  const sortedAccounts = [...accountsById.values()].sort(hierarchyMetricComparator)
+  for (const account of sortedAccounts) {
+    const accountKey = `account:${account.account_id}`
+    const campaigns = (campaignsByAccount.get(account.account_id) ?? []).sort(hierarchyMetricComparator)
+    result.push({ key: accountKey, id: account.account_id, name: account.account_name, detail: `${campaigns.length} 个 Campaign`, kind: 'account', depth: 0, parentKey: null, hasChildren: Boolean(campaigns.length), metrics: derive(account), status: account.sync_status === 'failed' ? '同步失败' : account.data_status === 'no_delivery' ? '无投放' : '已连接' })
+    for (const campaign of campaigns) {
+      const campaignKey = `campaign:${campaign.campaign_id}`
+      const adsets = (adsetsByCampaign.get(campaign.campaign_id) ?? []).sort(hierarchyMetricComparator)
+      result.push({ key: campaignKey, id: campaign.campaign_id, name: campaign.campaign_name, detail: `${account.account_name} · ${adsets.length} 个 AdSet`, kind: 'campaign', depth: 1, parentKey: accountKey, hasChildren: Boolean(adsets.length), metrics: derive(campaign), status: (campaign.spend ?? 0) > 0 ? '投放中' : '无投放' })
+      for (const adset of adsets) result.push({ key: `adset:${adset.adset_id}`, id: adset.adset_id, name: adset.adset_name, detail: `${campaign.campaign_name} · ${adset.optimization_goal ?? 'AdSet'}`, kind: 'adset', depth: 2, parentKey: campaignKey, hasChildren: false, metrics: derive(adset), status: (adset.spend ?? 0) > 0 ? '投放中' : '无投放' })
+    }
+  }
+  return result
+})
+const hierarchyRows = computed(() => {
+  const keyword = hierarchyQuery.value.trim().toLowerCase()
+  if (keyword) return hierarchySource.value.filter(row => `${row.name} ${row.id} ${row.detail}`.toLowerCase().includes(keyword))
+  return hierarchySource.value.filter(row => {
+    if (!row.parentKey) return true
+    if (!expandedHierarchy.value.has(row.parentKey)) return false
+    const parent = hierarchySource.value.find(item => item.key === row.parentKey)
+    return !parent?.parentKey || expandedHierarchy.value.has(parent.parentKey)
+  })
+})
+const toggleHierarchy = (key: string) => {
+  const next = new Set(expandedHierarchy.value)
+  if (next.has(key)) next.delete(key)
+  else next.add(key)
+  expandedHierarchy.value = next
+}
+const expandAllHierarchy = () => { expandedHierarchy.value = new Set(hierarchySource.value.filter(row => row.hasChildren).map(row => row.key)) }
+const collapseHierarchy = () => { expandedHierarchy.value = new Set() }
 
 const showToast = (message: string) => {
   window.clearTimeout(toastTimer)
@@ -115,38 +447,121 @@ const showToast = (message: string) => {
   toastVisible.value = true
   toastTimer = window.setTimeout(() => { toastVisible.value = false }, 2000)
 }
-
 const switchPanel = (item: any) => item.path && router.push(item.path)
-
 const switchSession = (session: any) => {
   activeSession.value = session.id
   sessions.value.forEach(item => { item.active = item.id === session.id })
 }
 
+const loadOverview = async (isRefresh = false) => {
+  if (!connectionId.value) return
+  if (isRefresh) refreshing.value = true
+  else loading.value = true
+  errorMessage.value = ''
+  try {
+    const response = await getMetaDashboardOverview({
+      connectionId: connectionId.value,
+      accountId: accountId.value || undefined,
+      since: dateWindow.value.since,
+      until: dateWindow.value.until,
+      objective: objective.value || undefined,
+      clickType: 'inline_link_clicks',
+    })
+    overview.value = response
+    // Default to the objective that actually holds the spend.
+    if (!objective.value) {
+      const preferred = (response.objectives ?? []).find(item => item.supported)
+      if (preferred?.objective) {
+        objective.value = preferred.objective
+        await loadOverview(isRefresh)
+        return
+      }
+    }
+    selectedTrendIndex.value = null
+    if (isRefresh) showToast('已刷新本地数据视图')
+  } catch (error) {
+    errorMessage.value = error instanceof Error ? error.message : '数据加载失败'
+    showToast(errorMessage.value)
+  } finally {
+    loading.value = false
+    refreshing.value = false
+  }
+}
+
+const loadAccounts = async () => {
+  accounts.value = []
+  accountId.value = ''
+  if (!connectionId.value) return
+  const response = await platformApi.getSubAccounts(connectionId.value, { page: 1, page_size: 200, status: 'active' })
+  const items = Array.isArray(response) ? response : response.items
+  accounts.value = items
+  accountId.value = ''
+}
+
+const initialize = async () => {
+  if (props.workspaceOverview) {
+    overview.value = props.workspaceOverview
+    objective.value = props.workspaceOverview.scope?.objective || OBJECTIVE_SALES
+    dateStart.value = props.workspaceOverview.window.since
+    dateEnd.value = props.workspaceOverview.window.until
+  }
+  loading.value = true
+  try {
+    connections.value = (await platformApi.getAllConnections()).filter(item => item.platform === 'Meta' && item.status === 'active')
+    for (const connection of connections.value) {
+      connectionId.value = connection.id
+      await loadAccounts()
+      if (accounts.value.length) break
+    }
+    if (!props.workspaceOverview) await loadOverview()
+  } catch (error) {
+    if (!overview.value) errorMessage.value = error instanceof Error ? error.message : '数据加载失败'
+  } finally {
+    loading.value = false
+  }
+}
 const changePeriod = () => {
-  showToast(`统计周期已切换为最近 ${period.value} 天`)
+  const next = windowForDays(Number(period.value))
+  dateStart.value = next.since
+  dateEnd.value = next.until
+  loadOverview()
+}
+const changeDateRange = () => {
+  if (dateStart.value > dateEnd.value) dateEnd.value = dateStart.value
+  period.value = String(dateRangeDays.value)
+  loadOverview()
+}
+const changeConnection = async () => { await loadAccounts(); await loadOverview() }
+const changeAccount = () => loadOverview()
+const handleRefresh = () => loadOverview(true)
+const selectObjective = (value: string | null) => {
+  if (!value || objective.value === value) return
+  objective.value = value
+  loadOverview()
+}
+const handleSync = () => {
+  if (!connectionId.value || syncing.value) return
+  syncDialogOpen.value = true
+}
+const handleSyncCompleted = async (result: MetaAdSetSyncResponse) => {
+  const failed = result.accounts.filter(item => item.status === 'failed').length
+  const rows = result.accounts.reduce((sum, item) => sum + item.rows_written, 0)
+  showToast(failed ? `${result.accounts.length - failed} 个账号成功，${failed} 个失败` : `数据同步完成，写入 ${rows} 条 AdSet 日级事实`)
+  await loadOverview()
 }
 
-const changePlatform = () => {
-  showToast(`平台筛选：${platform.value}`)
-}
+watch([objective, accountId, period], () => { goToLevel('account'); search.value = '' })
 
-const changeProject = () => {
-  showToast(`项目筛选：${project.value}`)
-}
-
-const handleRefresh = () => {
-  window.clearTimeout(refreshTimer)
-  refreshing.value = false
-  requestAnimationFrame(() => { refreshing.value = true })
-  showToast('数据已刷新')
-  refreshTimer = window.setTimeout(() => { refreshing.value = false }, 700)
-}
-
-onBeforeUnmount(() => {
-  window.clearTimeout(toastTimer)
-  window.clearTimeout(refreshTimer)
+onMounted(initialize)
+watch(() => props.workspaceOverview, value => {
+  if (!value) return
+  overview.value = value
+  objective.value = value.scope?.objective || OBJECTIVE_SALES
+  dateStart.value = value.window.since
+  dateEnd.value = value.window.until
+  loading.value = false
 })
+onBeforeUnmount(() => window.clearTimeout(toastTimer))
 </script>
 
 <template>
@@ -171,65 +586,121 @@ onBeforeUnmount(() => {
         </div>
         <div class="page-actions replay-actions">
           <label class="filter-field">
-            <select v-model="period" class="period-select" aria-label="时间范围" @change="changePeriod">
-              <option value="7">最近 7 天</option><option value="30">最近 30 天</option><option value="90">最近 90 天</option>
+            <select v-model="connectionId" class="period-select" aria-label="Meta 连接" @change="changeConnection">
+              <option v-if="!connections.length" value="">暂无 Meta 连接</option>
+              <option v-for="item in connections" :key="item.id" :value="item.id">{{ item.account_name || 'Meta 连接' }}</option>
             </select>
           </label>
           <label class="filter-field">
-            <select v-model="platform" class="period-select" aria-label="平台" @change="changePlatform">
-              <option>全部平台</option><option>Meta</option><option>Google</option><option>TikTok</option>
+            <select v-model="accountId" class="period-select" aria-label="广告账号" @change="changeAccount">
+              <option value="">全部 active 账号</option><option v-if="!accounts.length" value="">暂无活跃账号</option>
+              <option v-for="item in accounts" :key="item.id" :value="item.sub_account_id.replace(/^act_/, '')">{{ item.name }}</option>
             </select>
           </label>
-          <label class="filter-field">
-            <select v-model="project" class="period-select" aria-label="项目" @change="changeProject">
-              <option>全部项目</option><option>CANDY BLASTER</option><option>DramaBox</option>
-            </select>
-          </label>
-          <button class="refresh-button" :class="{ refreshing }" type="button" aria-label="刷新数据" @click="handleRefresh">
-            <span class="icon material-symbols-outlined" aria-hidden="true">refresh</span><span class="refresh-label">刷新</span>
+          <button class="sync-button" :class="{ syncing }" type="button" aria-label="配置数据同步" :disabled="loading || syncing || !connectionId || !accounts.length" @click="handleSync">
+            <span class="icon material-symbols-outlined" aria-hidden="true">{{ syncing ? 'progress_activity' : 'cloud_sync' }}</span><span class="sync-label">{{ syncing ? '同步中' : '数据同步' }}</span>
+          </button>
+          <button class="refresh-button" :class="{ refreshing }" type="button" aria-label="刷新本地数据视图" :disabled="loading || syncing || !connectionId" @click="handleRefresh">
+            <span class="icon material-symbols-outlined" aria-hidden="true">refresh</span><span class="refresh-label">刷新视图</span>
           </button>
         </div>
       </header>
 
       <div class="content replay-content workspace-page-content">
-        <section class="replay-kpis" aria-label="核心指标">
-          <article v-for="kpi in kpis" :key="kpi.label" class="replay-kpi">
-            <div class="kpi-head"><span>{{ kpi.label }}</span><span class="icon material-symbols-outlined" aria-hidden="true">{{ kpi.icon }}</span></div>
-            <div class="kpi-value">{{ kpi.value }}</div>
-            <span class="kpi-delta" :class="{ warn: kpi.warning }">{{ kpi.delta }}</span>
-          </article>
+        <div v-if="errorMessage" class="dashboard-feedback error" role="alert">{{ errorMessage }} · 已保留最近一次成功数据</div>
+        <div v-else-if="loading" class="dashboard-feedback" role="status">正在读取本地 Meta 数据…</div>
+        <div v-else class="dashboard-feedback" :class="{ warning: (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) }" role="status"><strong>{{ (overview?.data_quality.accounts_with_rows ?? 0) < (overview?.data_quality.accounts_expected ?? 0) ? '部分数据' : '数据完整' }}</strong><span>{{ overview?.window.since }} 至 {{ overview?.window.until }}</span><span v-if="overview?.data_quality.status === 'accessible_with_no_rows'">当前窗口无投放事实</span><span v-else-if="overview?.window.mixed_currency">多币种金额未合计</span></div>
+
+        <section class="analysis-filter-card" aria-label="数据分析视图">
+          <div class="analysis-filter-head"><div class="analysis-filter-tab active"><span class="material-symbols-outlined" aria-hidden="true">tune</span><strong>分析视图</strong></div><span class="analysis-filter-count">当前范围 · {{ overview?.data_quality.row_count ?? 0 }} 条事实数据</span></div>
+          <div class="analysis-filter-controls">
+            <label class="analysis-filter-chip"><span>连接：</span><select v-model="connectionId" aria-label="分析连接" @change="changeConnection"><option v-if="!connections.length" value="">暂无 Meta 连接</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.account_name || 'Meta 连接' }}</option></select></label>
+            <label class="analysis-filter-chip"><span>账户：</span><select v-model="accountId" aria-label="分析账户" @change="changeAccount"><option value="">全部 active 账户</option><option v-if="!accounts.length" value="">暂无活跃账户</option><option v-for="item in accounts" :key="item.id" :value="item.sub_account_id.replace(/^act_/, '')">{{ item.name }}</option></select></label>
+            <label class="analysis-filter-chip"><span>目标：</span><select v-model="objective" aria-label="分析目标" @change="() => loadOverview()"><option value="">自动选择</option><option v-for="item in objectives.filter(item => item.supported)" :key="item.objective ?? 'supported'" :value="item.objective ?? ''">{{ item.label }}</option></select></label>
+            <div class="analysis-filter-chip time-filter-chip"><span class="material-symbols-outlined" aria-hidden="true">calendar_today</span><input v-model="dateStart" type="date" :max="dateEnd" aria-label="分析开始日期" @change="changeDateRange"><span>至</span><input v-model="dateEnd" type="date" :min="dateStart" :max="dateInput(new Date())" aria-label="分析结束日期" @change="changeDateRange"></div>
+          </div>
         </section>
 
-        <section class="replay-card">
-          <div class="replay-card-head"><div><h2>趋势监控</h2><p>消耗、转化与 ROAS 随时间变化</p></div><span class="soft-chip">近 7 天</span></div>
+        <nav v-if="objectives.length" class="objective-switch" aria-label="投放目标">
+          <div class="objective-switch-title"><span class="material-symbols-outlined" aria-hidden="true">tune</span><span>分析视图</span></div>
+          <div class="objective-tabs">
+            <button
+              v-for="item in objectives.filter(item => item.supported)"
+              :key="item.objective ?? 'supported'"
+              type="button"
+              class="objective-tab"
+              :class="{ active: objective === item.objective }"
+              @click="selectObjective(item.objective)"
+            >
+              <span class="objective-name">{{ item.label }}</span>
+              <span class="objective-spend">{{ formatMoney(item.spend) }}</span>
+              <span class="objective-share">{{ formatPercent(item.spend_share, 0) }} · {{ item.adsets }} 个 AdSet</span>
+            </button>
+          </div>
+          <div v-for="item in objectives.filter(item => !item.supported)" :key="item.objective ?? 'unsupported'" class="objective-reference" title="该目标尚未确定统一的结果指标">
+            <span class="objective-name">{{ item.label }}</span>
+            <span class="objective-spend">{{ formatMoney(item.spend) }}</span>
+            <span class="objective-share">{{ formatPercent(item.spend_share, 0) }} · 参考</span>
+          </div>
+        </nav>
+
+        <p v-if="!supportedObjective" class="scope-note">当前目标没有经过验证的结果指标，只展示消耗与流量。</p>
+
+        <section class="replay-card result-card overview-card" aria-label="结果总览">
+          <div class="replay-card-head"><div><h2>结果总览</h2><p>{{ scope?.objective_label }} 目标 · 与上一周期对比</p></div><span class="soft-chip">{{ overview?.previous?.window.since }} 至 {{ overview?.previous?.window.until }}</span></div>
+          <div class="result-stats">
+            <article v-for="stat in resultStats" :key="stat.label" class="result-stat" :class="{ primary: stat.primary }">
+              <span class="result-label">{{ stat.label }}</span>
+              <div class="result-value">{{ stat.value }}</div>
+              <span class="result-delta" :class="stat.delta.tone">{{ stat.delta.text || '—' }}</span>
+            </article>
+          </div>
+          <div class="result-traffic">
+            <span v-for="metric in trafficMetrics" :key="metric.label" class="traffic-item"><small>{{ metric.label }}</small><b>{{ metric.value }}</b></span>
+          </div>
+        </section>
+
+        <div class="diagnostic-grid">
+        <section v-if="isSales && funnelSteps.length" class="replay-card">
+          <div class="replay-card-head"><div><h2>事件漏斗</h2><p>Meta 归因事件，不是去重用户</p></div><span v-if="biggestDropStep" class="soft-chip warn">流失最大：{{ biggestDropStep.label }} {{ biggestDropStep.fromPreviousText }}</span></div>
+          <div class="funnel-body">
+            <div v-for="step in funnelSteps" :key="step.key" class="funnel-row">
+              <span class="funnel-label">{{ step.label }}</span>
+              <div class="funnel-track"><i :style="{ width: `${step.width}%` }" :class="{ danger: biggestDropStep?.key === step.key }"></i></div>
+              <b class="funnel-value">{{ step.valueText }}</b>
+              <span class="funnel-rate" :class="{ danger: biggestDropStep?.key === step.key }">{{ step.fromPreviousText ?? '起点' }}</span>
+            </div>
+          </div>
+        </section>
+
+        <section class="replay-card trend-replay-card">
+          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="趋势柱状指标"><button v-for="metric in availableTrendMetrics" :key="metric.key" type="button" :class="{ active: selectedTrendMetric === metric.key }" @click="selectedTrendMetric = metric.key">{{ metric.label }}</button></div><span class="soft-chip">自定义指标</span></div></div>
           <div class="trend-grid">
             <div class="chart-panel">
-              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>消耗</span><span class="legend-item"><i class="legend-dot conversions"></i>转化</span><span class="legend-item"><i class="legend-dot roas"></i>ROAS</span></div>
-              <svg viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" aria-label="近七天消耗、转化和 ROAS 趋势图">
+              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ trendMetricOptions.find(item => item.key === selectedTrendMetric)?.label }}</span></div>
+              <div v-if="!trendPoints.length" class="chart-empty">所选窗口暂无日级投放数据</div>
+              <svg v-else viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天花费与${isSales ? '收入' : 'Lead'}趋势图`">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
-                <g fill="#20a464" opacity=".8"><rect x="80" y="116" width="22" height="39" rx="3" /><rect x="208" y="106" width="22" height="49" rx="3" /><rect x="336" y="99" width="22" height="56" rx="3" /><rect x="464" y="91" width="22" height="64" rx="3" /><rect x="592" y="78" width="22" height="77" rx="3" /><rect x="720" y="64" width="22" height="91" rx="3" /><rect x="848" y="50" width="22" height="105" rx="3" /></g>
-                <path d="M91 106L219 98L347 90L475 82L603 73L731 57L859 48" fill="none" stroke="#4f8fe8" stroke-width="1.4" />
-                <path d="M91 138L219 121L347 104L475 116L603 83L731 66L859 57" fill="none" stroke="#dd7d00" stroke-width="1.35" />
-                <g fill="#4f8fe8" stroke="#fff" stroke-width="1"><circle cx="91" cy="106" r="2.1" /><circle cx="219" cy="98" r="2.1" /><circle cx="347" cy="90" r="2.1" /><circle cx="475" cy="82" r="2.1" /><circle cx="603" cy="73" r="2.1" /><circle cx="731" cy="57" r="2.1" /><circle cx="859" cy="48" r="2.1" /></g>
-                <g fill="#dd7d00" stroke="#fff" stroke-width="1"><circle cx="91" cy="138" r="2.1" /><circle cx="219" cy="121" r="2.1" /><circle cx="347" cy="104" r="2.1" /><circle cx="475" cy="116" r="2.1" /><circle cx="603" cy="83" r="2.1" /><circle cx="731" cy="66" r="2.1" /><circle cx="859" cy="57" r="2.1" /></g>
-                <g v-if="activeTrendPoint" class="chart-active-markers" aria-hidden="true">
+                <g fill="#20a464" opacity=".8"><rect v-for="point in trendPoints" :key="`bar-${point.date}`" :x="point.x - 11" :y="point.barY" width="22" :height="point.barHeight" rx="3" /></g>
+                <path v-if="spendPath" :d="spendPath" fill="none" stroke="#4f8fe8" stroke-width="1.4" />
+                                <g fill="#4f8fe8" stroke="#fff" stroke-width="1"><circle v-for="point in trendPoints" v-show="point.spendY != null" :key="`spend-${point.date}`" :cx="point.x" :cy="point.spendY ?? 0" r="2.1" /></g>
+                                <g v-if="activeTrendPoint" class="chart-active-markers" aria-hidden="true">
                   <line :x1="activeTrendPoint.x" :x2="activeTrendPoint.x" y1="24" y2="155" />
                   <rect :x="activeTrendPoint.x - 10" :y="activeTrendPoint.barY" width="20" :height="activeTrendPoint.barHeight" rx="3" />
-                  <circle class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />
-                  <circle class="roas" :cx="activeTrendPoint.x" :cy="activeTrendPoint.roasY" r="3.5" />
+                  <circle v-if="activeTrendPoint.spendY != null" class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />
                 </g>
                 <rect
                   v-for="(point, index) in trendPoints"
                   :key="`hit-${point.date}`"
                   class="chart-hit-area"
                   :class="{ selected: selectedTrendIndex === index }"
-                  :x="point.x - 64"
+                  :x="point.x - point.hitWidth / 2"
                   y="24"
-                  width="128"
+                  :width="point.hitWidth"
                   height="138"
                   role="button"
                   tabindex="0"
-                  :aria-label="`${point.date}，消耗 ${point.spend}，转化 ${point.conversions}，ROAS ${point.roas}`"
+                  :aria-label="`${point.date}，花费 ${point.spendText}，${point.barLabel} ${point.barText}，${point.efficiencyLabel} ${point.efficiencyText}`"
                   @mouseenter="hoveredTrendIndex = index"
                   @mouseleave="hoveredTrendIndex = null"
                   @focus="hoveredTrendIndex = index"
@@ -239,246 +710,264 @@ onBeforeUnmount(() => {
                   @keydown.space.prevent="toggleTrendSelection(index)"
                 />
               </svg>
-              <div
-                v-if="activeTrendPoint"
-                class="chart-tooltip"
-                :style="{ left: `${activeTrendPoint.tooltipLeft}%` }"
-                role="status"
-                aria-live="polite"
-              >
+              <div v-if="activeTrendPoint" class="chart-tooltip" :style="{ left: `${activeTrendPoint.tooltipLeft}%` }" role="status" aria-live="polite">
                 <strong>{{ activeTrendPoint.date }}</strong>
-                <div><span><i class="legend-dot spend"></i>消耗</span><b>{{ activeTrendPoint.spend }}</b></div>
-                <div><span><i class="legend-dot conversions"></i>转化</span><b>{{ activeTrendPoint.conversions }}</b></div>
-                <div><span><i class="legend-dot roas"></i>ROAS</span><b>{{ activeTrendPoint.roas }}</b></div>
+                <div><span><i class="legend-dot spend"></i>花费</span><b>{{ activeTrendPoint.spendText }}</b></div>
+                <div><span><i class="legend-dot conversions"></i>{{ activeTrendPoint.barLabel }}</span><b>{{ activeTrendPoint.barText }}</b></div>
+                <div><span>{{ activeTrendPoint.efficiencyLabel }}</span><b>{{ activeTrendPoint.efficiencyText }}</b></div>
               </div>
-              <div class="chart-axis-labels" aria-hidden="true">
-                <button
-                  v-for="(point, index) in trendPoints"
-                  :key="point.date"
-                  type="button"
-                  :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }"
-                  @mouseenter="hoveredTrendIndex = index"
-                  @mouseleave="hoveredTrendIndex = null"
-                  @focus="hoveredTrendIndex = index"
-                  @blur="hoveredTrendIndex = null"
-                  @click="toggleTrendSelection(index)"
-                >{{ point.date }}</button>
+              <div v-if="trendPoints.length" class="chart-axis-labels" aria-hidden="true">
+                <button v-for="(point, index) in trendPoints" :key="point.date" type="button" :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }" @mouseenter="hoveredTrendIndex = index" @mouseleave="hoveredTrendIndex = null" @focus="hoveredTrendIndex = index" @blur="hoveredTrendIndex = null" @click="toggleTrendSelection(index)">{{ point.label }}</button>
               </div>
             </div>
-            <aside class="chart-summary">
-              <div class="summary-box"><span>筛选消耗</span><strong>$24,220</strong><small>来自当前 Campaign 筛选集合</small></div>
-              <div class="summary-box"><span>转化</span><strong>4,832</strong><small>安装 / 注册 / 购买合计</small></div>
-              <div class="summary-box"><span>平均 ROAS</span><strong>2.42x</strong><small>按商品总价值计算</small></div>
-            </aside>
           </div>
         </section>
-
-        <div class="replay-split">
-          <section class="replay-card">
-            <div class="replay-card-head"><div><h2>漏斗下钻</h2><p>曝光到付费的转化路径</p></div><span class="soft-chip">Funnel</span></div>
-            <div class="compact-body funnel-list">
-              <div v-for="item in funnel" :key="item.label" class="funnel-row"><strong>{{ item.label }}</strong><span class="funnel-track"><i :style="{ width: `${item.width}%` }"></i></span><strong>{{ item.value }}</strong><small>{{ item.rate }}</small></div>
-            </div>
-          </section>
-          <section class="replay-card">
-            <div class="replay-card-head"><div><h2>分群表现</h2><p>国家 / 系统 / 受众 / 版位效率对比</p></div><span class="soft-chip">Segment</span></div>
-            <div class="compact-body segment-grid">
-              <div v-for="segment in segments" :key="segment.name" class="segment-row workspace-data-row">
-                <div><strong>{{ segment.name }}</strong><small>{{ segment.detail }}</small></div>
-                <button class="quiet-badge" type="button" @click="showToast(`已展开 ${segment.name}`)">展开</button>
-              </div>
-            </div>
-          </section>
         </div>
 
-        <section class="replay-card">
-          <div class="replay-card-head"><div><h2>平台表现</h2><p>平台账户、Campaign 数量、消耗、转化与回报</p></div><span class="soft-chip">Platform Account</span></div>
-          <div class="platform-grid">
-            <article v-for="item in platforms" :key="item.name" class="platform-card" :class="item.className" :style="`--score:${item.score}`">
-              <div class="platform-top">
-                <div class="platform-heading"><div><h3>{{ item.name }}</h3><p>{{ item.account }} · {{ item.campaigns }} Campaign</p></div><span class="soft-chip">收起</span></div>
-                <div class="platform-health"><div class="gauge"><strong>{{ item.score }}</strong></div><div class="health-copy">平台健康度 {{ item.score }}%<div class="health-bar"><i></i></div></div></div>
-                <div class="platform-metrics">
-                  <div class="platform-metric"><span>Spend</span><strong>{{ item.spend }}</strong></div><div class="platform-metric"><span>转化</span><strong>{{ item.conversions }}</strong></div><div class="platform-metric"><span>CPI</span><strong>{{ item.cpi }}</strong></div><div class="platform-metric"><span>ROAS</span><strong>{{ item.roas }}</strong></div>
-                </div>
-              </div>
-              <div class="daily-table" role="table" :aria-label="`${item.name} 分天表现`">
-                <div class="daily-table-head" role="row"><span>日期</span><span>消耗</span><span>转化</span><span>ROAS</span></div>
-                <div v-for="row in item.daily" :key="row[0]" class="daily-table-row workspace-data-row" role="row"><span>{{ row[0] }}</span><strong>{{ row[1] }}</strong><span>{{ row[2] }}</span><span class="daily-roas">{{ row[3] }}</span></div>
-              </div>
-            </article>
+        <section class="replay-card hierarchy-card">
+          <div class="replay-card-head">
+            <div>
+              <h2>投放层级分析</h2>
+              <p>查看账户、Campaign 与 AdSet 的完整关系</p>
+              <nav class="crumbs legacy-crumbs" aria-label="下钻路径">
+                <template v-for="(crumb, index) in breadcrumb" :key="crumb.level">
+                  <button type="button" class="crumb" :class="{ current: index === breadcrumb.length - 1 }" @click="goToLevel(crumb.level)">{{ crumb.label }}</button>
+                  <span v-if="index < breadcrumb.length - 1" class="crumb-sep" aria-hidden="true">/</span>
+                </template>
+              </nav>
+            </div>
+            <div class="hierarchy-actions">
+              <label class="hierarchy-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input v-model="hierarchyQuery" type="search" placeholder="搜索名称或 ID" aria-label="搜索层级名称或 ID"></label>
+              <button type="button" @click="expandAllHierarchy">全部展开</button><button type="button" @click="collapseHierarchy">收起</button>
+            </div>
           </div>
+
+          <div v-if="attentionRows.length" class="attention-bar">
+            <span class="attention-text"><b>{{ attentionRows.length }}</b> 个{{ levelLabels[level] }}需要处理，共消耗 {{ formatMoney(attentionSpend) }}</span>
+            <button type="button" class="attention-toggle" @click="showAllRows = !showAllRows">{{ showAllRows ? '只看需要处理' : `查看全部 ${entityRows.length} 个` }}</button>
+          </div>
+
+          <div class="hierarchy-tree-wrap">
+            <div class="hierarchy-tree-head"><span>层级 / 名称</span><span>状态</span><span>花费</span><span>{{ isSales ? 'ROAS' : 'CPL' }}</span><span>{{ isSales ? '订单' : 'Lead' }}</span><span>点击</span></div>
+            <div v-if="!hierarchyRows.length" class="data-empty">当前窗口没有可展示的层级数据</div>
+            <div v-for="row in hierarchyRows" :key="row.key" class="hierarchy-tree-row">
+              <div class="hierarchy-tree-name" :style="{ '--depth': row.depth }"><button v-if="row.hasChildren" type="button" class="tree-expander" :class="{ open: expandedHierarchy.has(row.key) }" @click="toggleHierarchy(row.key)">›</button><span v-else class="tree-expander placeholder">›</span><span class="tree-icon" :class="row.kind">{{ row.kind === 'account' ? 'A' : row.kind === 'campaign' ? 'C' : 'U' }}</span><span><strong>{{ row.name }}</strong><small>{{ row.detail }}</small></span></div>
+              <span class="tree-status" :class="{ warning: row.status !== '投放中' && row.status !== '已连接' }"><i></i>{{ row.status }}</span>
+              <span>{{ formatMoney(row.metrics.spend) }}</span><span>{{ isSales ? formatRoas(row.metrics.roas) : formatMoney(row.metrics.cost) }}</span><span>{{ formatNumber(row.metrics.results) }}</span><span>{{ formatNumber(row.metrics.clicks) }}</span>
+            </div>
+          </div>
+
+          <div class="table-wrap legacy-drill-table">
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>{{ levelLabels[level] }}</th>
+                  <th>花费</th>
+                  <th v-if="isSales">收入</th>
+                  <th>{{ isSales ? '订单' : 'Lead' }}</th>
+                  <th>{{ isSales ? 'ROAS' : 'CPL' }}</th>
+                  <th>环比</th>
+                  <th>点击</th>
+                  <th>CTR</th>
+                  <th>状态</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr v-if="!visibleRows.length"><td :colspan="isSales ? 9 : 8" class="data-empty">当前窗口没有可展示的{{ levelLabels[level] }}</td></tr>
+                <tr v-for="row in visibleRows" :key="row.id" :class="{ drillable: level !== 'adset' }" @click="level !== 'adset' && drillInto(row)">
+                  <td><strong>{{ row.name }}</strong><small>{{ row.subtitle || row.id }}</small></td>
+                  <td>{{ formatMoney(row.metrics.spend) }}</td>
+                  <td v-if="isSales">{{ formatMoney(row.metrics.revenue) }}</td>
+                  <td>{{ formatNumber(row.metrics.results) }}</td>
+                  <td>{{ isSales ? formatRoas(row.efficiency) : formatMoney(row.efficiency) }}</td>
+                  <td><span class="cell-delta" :class="row.efficiencyDelta.tone">{{ row.efficiencyDelta.text || '—' }}</span></td>
+                  <td>{{ formatNumber(row.metrics.clicks) }}</td>
+                  <td>{{ formatPercent(row.metrics.ctr) }}</td>
+                  <td><span v-for="flag in row.flags" :key="flag.label" class="quiet-badge" :class="flag.tone">{{ flag.label }}</span><span v-if="!row.flags.length" class="row-dot"></span></td>
+                </tr>
+              </tbody>
+              <tfoot>
+                <tr>
+                  <td>合计</td>
+                  <td>{{ formatMoney(current.spend) }}</td>
+                  <td v-if="isSales">{{ formatMoney(current.revenue) }}</td>
+                  <td>{{ formatNumber(current.results) }}</td>
+                  <td>{{ isSales ? formatRoas(current.roas) : formatMoney(current.cost) }}</td>
+                  <td></td>
+                  <td>{{ formatNumber(current.clicks) }}</td>
+                  <td>{{ formatPercent(current.ctr) }}</td>
+                  <td></td>
+                </tr>
+              </tfoot>
+            </table>
+          </div>
+          <p v-if="level !== 'adset'" class="table-hint">点击任意行下钻到 {{ level === 'account' ? 'Campaign' : 'AdSet' }}</p>
         </section>
+
+        <AnalysisMetricTable
+          title="日明细"
+          subtitle="逐日核对真实 Meta 事实数据；空字段不补值"
+          entity-label="日期"
+          search-placeholder="搜索日期"
+          :rows="dailyAnalysisRows"
+          :columns="dailyAnalysisColumns"
+          :currency="overview?.window.currency"
+          :mixed-currency="overview?.window.mixed_currency"
+          :totals="{ spend: current.spend, conversion_value: current.revenue, conversions: current.results, roas: current.roas, clicks: current.clicks, ctr: current.ctr, impressions: current.impressions, result_cost: current.cost }"
+        />
+
       </div>
     </main>
 
+    <DataSyncDialog :show="syncDialogOpen" :connection-id="connectionId" :accounts="accounts" :current-account-id="accountId || undefined" @close="syncDialogOpen = false" @completed="handleSyncCompleted" />
     <div class="toast" :class="{ show: toastVisible }" role="status" aria-live="polite">{{ toastMessage }}</div>
   </div>
 </template>
 
 <style scoped>
-.dashboard-shell {
-  height: 100vh;
-  width: 100%;
-  display: flex;
-  overflow: hidden;
-  background: #fff;
-}
-
-.dashboard-shell.embedded {
-  height: 100%;
-  min-height: 0;
-}
-
-.dashboard-shell.embedded .replay-page {
-  min-width: 0;
-}
-
-.dashboard-shell.embedded .replay-bar {
-  align-items: flex-start;
-  flex-direction: column;
-  padding-top: 10px;
-  padding-bottom: 10px;
-}
-
-.dashboard-shell.embedded .replay-actions {
-  display: grid;
-  width: 100%;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  overflow: visible;
-  padding-bottom: 2px;
-}
-
+.dashboard-shell { height: 100vh; width: 100%; display: flex; overflow: hidden; background: #fff; }
+.dashboard-shell.embedded { height: 100%; min-height: 0; }
+.dashboard-shell.embedded .replay-page { min-width: 0; }
+.dashboard-shell.embedded .replay-bar { align-items: flex-start; flex-direction: column; padding-top: 10px; padding-bottom: 10px; }
+.dashboard-shell.embedded .replay-actions { display: grid; width: 100%; grid-template-columns: repeat(2, minmax(0, 1fr)); overflow: visible; padding-bottom: 2px; }
 .dashboard-shell.embedded .filter-field .period-select,
-.dashboard-shell.embedded .refresh-button {
-  width: 100%;
-  min-width: 0;
-}
-
-.dashboard-shell.embedded .replay-content {
-  padding: 12px 12px 52px;
-}
-
-.dashboard-shell.embedded .replay-kpis {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
-.dashboard-shell.embedded .replay-kpi {
-  border-bottom: 1px solid #f3f2f0;
-}
-
-.dashboard-shell.embedded .replay-kpi:nth-child(2n)::after {
-  display: none;
-}
-
-.dashboard-shell.embedded .replay-kpi:nth-last-child(-n + 2) {
-  border-bottom: 0;
-}
-
-.dashboard-shell.embedded .trend-grid,
-.dashboard-shell.embedded .replay-split {
-  grid-template-columns: 1fr;
-}
-
-.dashboard-shell.embedded .chart-summary {
-  width: 100%;
-  height: auto;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  grid-template-rows: 1fr;
-}
-
-.dashboard-shell.embedded .summary-box {
-  border-right: 1px solid var(--hairline-soft);
-  border-bottom: 0;
-}
-
-.dashboard-shell.embedded .summary-box:last-child {
-  border-right: 0;
-}
-
-.dashboard-shell.embedded .segment-grid,
-.dashboard-shell.embedded .platform-grid {
-  grid-template-columns: 1fr;
-}
-
-.dashboard-shell.embedded .platform-card {
-  display: block;
-}
-
-.dashboard-shell.embedded .platform-card .platform-top {
-  border-right: 0;
-}
+.dashboard-shell.embedded .date-range-filter,
+.dashboard-shell.embedded .sync-button,
+.dashboard-shell.embedded .refresh-button { width: 100%; min-width: 0; }
+.dashboard-shell.embedded .date-range-filter input { width: 100%; }
+.dashboard-shell.embedded .replay-content { padding: 12px 12px 52px; }
+.dashboard-shell.embedded .result-stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.dashboard-shell.embedded .trend-grid { grid-template-columns: 1fr; }
 
 .replay-page {
   --canvas: var(--workspace-canvas);
-  --surface: #f6f5f4;
-  --surface-soft: #fafaf9;
-  --hairline: #e5e3df;
-  --hairline-soft: #ede9e4;
-  --hairline-strong: #c8c4be;
-  --ink: #1a1a1a;
-  --charcoal: #37352f;
-  --slate: #5d5b54;
-  --steel: #787671;
-  --stone: #a4a097;
-  --green-soft: #d9f3e1;
-  min-width: 0;
-  flex: 1;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  scrollbar-color: var(--hairline-strong) transparent;
-  scrollbar-width: thin;
-  background: var(--canvas);
-  color: var(--charcoal);
+  --surface: #f6f5f4; --surface-soft: #fafaf9; --hairline: #e5e3df; --hairline-soft: #ede9e4; --hairline-strong: #c8c4be;
+  --ink: #1a1a1a; --charcoal: #37352f; --slate: #5d5b54; --steel: #787671; --stone: #a4a097;
+  min-width: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-color: var(--hairline-strong) transparent; scrollbar-width: thin; background: var(--canvas); color: var(--charcoal);
 }
 
-.page-bar { min-height: 54px; display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 clamp(24px,3vw,48px); border-bottom: 1px solid var(--hairline); background: rgba(255,255,255,.86); }
+.page-bar { display: flex; align-items: center; justify-content: space-between; gap: 20px; padding: 0 clamp(24px,3vw,48px); border-bottom: 1px solid var(--hairline); background: rgba(255,255,255,.86); }
 .page-title { display: flex; align-items: center; gap: 12px; }
 .page-title .page-icon { width: 26px; height: 26px; flex: 0 0 auto; display: grid; place-items: center; border-radius: 6px; }
 .page-title .page-icon .material-symbols-outlined { display: block; width: 16px; height: 16px; font-size: 16px; line-height: 16px; }
 .page-title h1 { margin: 0; color: var(--ink); font-size: 16px; font-weight: 600; letter-spacing: -.2px; }
 .page-actions { display: flex; align-items: center; gap: 7px; }
 .period-select { height: 34px; min-width: 112px; padding: 0 29px 0 10px; border: 1px solid var(--hairline-strong); border-radius: 8px; outline: none; background: #fff; color: var(--slate); font-size: 13px; cursor: pointer; }
-.content { width: min(100%,1220px); margin: 0 auto; padding: 30px clamp(24px,3vw,48px) 74px; }
+.content { width: min(100%,1440px); max-width: 1440px; margin: 0 auto; padding: 30px clamp(24px,3vw,48px) 74px; }
 
 .replay-bar { align-items: center; }
 .replay-title { align-items: center; }
 .replay-title .page-icon { background: #f6f5f4; color: #37352f; }
 .replay-title h1 { font-size: 16px; }
 .replay-actions { gap: 8px; }
+.date-range-filter { height: 34px; display: inline-flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 8px; background: #fff; color: var(--steel); font-size: 11px; white-space: nowrap; }
+.date-range-filter .material-symbols-outlined { font-size: 15px; }
+.date-range-filter input { width: 112px; border: 0; outline: 0; background: transparent; color: var(--slate); font: inherit; font-size: 11px; }
+.trend-head-actions { display: flex; align-items: center; gap: 8px; }
+.trend-metric-pills { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }.trend-metric-pills button { height: 30px; padding: 0 10px; border: 1px solid var(--hairline); border-radius: 7px; background: #fff; color: var(--slate); font: inherit; font-size: 11px; cursor: pointer; }.trend-metric-pills button.active { border-color: #a9cef8; background: #eff7ff; color: #1769aa; font-weight: 650; }
+.trend-metric-select { display: inline-flex; align-items: center; gap: 6px; color: var(--steel); font-size: 11px; white-space: nowrap; }
+.trend-metric-select select { height: 30px; padding: 0 24px 0 8px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--charcoal); font: inherit; font-size: 11px; }
 .filter-field { display: flex; align-items: center; min-width: 0; white-space: nowrap; }
 .filter-field .period-select { min-width: 92px; }
-.refresh-button { height: 34px; min-width: 116px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border: 1px solid var(--workspace-action-primary,#137fec); border-radius: 8px; background: var(--workspace-action-primary,#137fec); color: #fff; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color .16s ease,border-color .16s ease; }
+.sync-button,.refresh-button { height: 34px; min-width: 116px; display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 0 12px; border-radius: 8px; font-size: 13px; font-weight: 600; cursor: pointer; transition: background-color .16s ease,border-color .16s ease; }
+.sync-button { border: 1px solid var(--hairline-strong); background: #fff; color: var(--charcoal); }
+.sync-button:hover { border-color: var(--workspace-action-primary,#137fec); color: var(--workspace-action-primary,#137fec); background: #f7fbff; }
+.refresh-button { border: 1px solid var(--workspace-action-primary,#137fec); background: var(--workspace-action-primary,#137fec); color: #fff; }
 .refresh-button:hover { border-color: var(--workspace-action-primary-hover,#0f6fcf); background: var(--workspace-action-primary-hover,#0f6fcf); }
-.refresh-button .icon { font-size: 15px; }
-.refreshing .icon { animation: spin .65s ease; }
+.sync-button:disabled,.refresh-button:disabled { border-color: var(--hairline); background: var(--hairline); color: var(--stone); cursor: not-allowed; }
+.sync-button .icon,.refresh-button .icon { font-size: 15px; }
+.sync-button.syncing .icon,.refreshing .icon { animation: spin .65s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-.replay-content { width: 100%; max-width: none; margin: 0; padding-top: 24px; padding-bottom: 64px; }
-.quiet-badge { display: inline-flex; align-items: center; min-height: 28px; padding: 4px 10px; border: 1px solid var(--hairline); border-radius: 999px; background: #fff; color: var(--steel); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.content.replay-content { width: min(100%,1440px); max-width: 1440px; margin: 0 auto; padding-top: 24px; padding-bottom: 64px; display: flex; flex-direction: column; }
+.replay-content > .analysis-filter-card { order: 0; }.replay-content > .dashboard-feedback { order: 1; }.replay-content > .objective-switch { display: none; }.replay-content > .scope-note { order: 2; }.replay-content > .overview-card { order: 3; }.replay-content > .diagnostic-grid { order: 4; }.replay-content > :deep(.analysis-table-card) { order: 5; }.replay-content > .hierarchy-card { order: 6; }
+.overview-card { border-radius: 12px; }.overview-card .replay-card-head { background: #fff; }.trend-replay-card,.hierarchy-card { border-radius: 12px; }
+.dashboard-feedback { display:flex; flex-wrap:wrap; gap:6px 12px; margin-bottom: 10px; padding: 9px 12px; border: 1px solid var(--hairline); border-radius: 8px; background: var(--surface-soft); color: var(--slate); font-size: 12px; }
+.dashboard-feedback strong{color:var(--charcoal)}
+.dashboard-feedback.warning{border-color:#f0d8a8;background:#fffaf0}
+.dashboard-feedback.warning strong{color:#946200}
+.dashboard-feedback.error { border-color: #f0c9c9; background: #fff5f5; color: #a33a3a; }
+.analysis-filter-card { margin-bottom: 12px; overflow: hidden; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; }
+.analysis-filter-head { min-height: 46px; display: flex; align-items: center; justify-content: space-between; gap: 14px; padding: 0 14px; border-bottom: 1px solid var(--hairline-soft); }
+.analysis-filter-tab { position: relative; display: inline-flex; align-items: center; gap: 7px; height: 46px; color: var(--slate); font-size: 13px; }
+.analysis-filter-tab::after { content: ''; position: absolute; right: 0; bottom: -1px; left: 0; height: 2px; background: var(--workspace-action-primary,#137fec); }
+.analysis-filter-tab .material-symbols-outlined { color: #3276cc; font-size: 17px; }.analysis-filter-count { color: var(--steel); font-size: 11px; }
+.analysis-filter-controls { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(260px, 1.5fr); gap: 7px; padding: 9px 14px; }
+.analysis-filter-chip { min-width: 0; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 8px; background: var(--surface); color: var(--steel); font-size: 11px; white-space: nowrap; }
+.analysis-filter-chip select,.analysis-filter-chip input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--charcoal); font: inherit; font-size: 12px; font-weight: 600; }.analysis-filter-chip input { width: 0; }.time-filter-chip { background: #fff; box-shadow: inset 0 0 0 1px var(--hairline); }.time-filter-chip .material-symbols-outlined { font-size: 15px; }
+.quiet-badge { display: inline-flex; align-items: center; min-height: 22px; margin-left: 4px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; background: #fff; color: var(--steel); font-size: 10px; font-weight: 600; white-space: nowrap; }
+.quiet-badge:first-child { margin-left: 0; }
+.quiet-badge.warn { border-color: #f0d8a8; background: #fff6e4; color: #9a6700; }
+.quiet-badge.bad { border-color: #f0c9c9; background: #fdecec; color: #b4402e; }
 button.quiet-badge { cursor: pointer; font-family: inherit; }
 
-.replay-kpis { display: grid; grid-template-columns: repeat(6,minmax(0,1fr)); gap: 0; margin-top: 0; border: 1px solid var(--hairline); border-radius: 12px; overflow: hidden; background: #fff; }
-.replay-kpi { position: relative; min-width: 0; padding: 18px 20px; border: 0; border-radius: 0; background: #fff; }
-.replay-kpi:not(:last-child)::after { content: ""; position: absolute; top: 20%; right: 0; bottom: 20%; width: 1px; background: #f0efed; }
-.kpi-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; color: var(--steel); font-size: 13px; font-weight: 600; }
-.kpi-head .icon { color: var(--steel); font-size: 18px; font-weight: 400; }
-.kpi-value { margin-top: 9px; color: var(--ink); font-size: 26px; line-height: 1.1; font-weight: 650; letter-spacing: -.45px; }
-.kpi-delta { width: fit-content; display: inline-flex; align-items: center; margin-top: 9px; padding: 3px 7px; border-radius: 4px; background: #edf8f0; color: #16804a; font-size: 11px; font-weight: 600; }
-.kpi-delta.warn { background: #fff6e4; color: #9a6700; }
+.objective-switch { display: flex; align-items: stretch; gap: 20px; margin-bottom: 18px; padding: 0 2px 12px; border-bottom: 1px solid var(--hairline); }
+.objective-switch-title { display: inline-flex; align-items: center; gap: 6px; min-width: 84px; color: var(--steel); font-size: 11px; font-weight: 600; letter-spacing: .02em; }
+.objective-switch-title .material-symbols-outlined { font-size: 16px; }
+.objective-tabs { display: flex; align-items: stretch; gap: 4px; min-width: 0; }
+.objective-tab { position: relative; display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: baseline; min-width: 150px; padding: 2px 16px 0; border: 0; border-radius: 0; background: transparent; color: var(--slate); font: inherit; text-align: left; cursor: pointer; }
+.objective-tab::after { content: ""; position: absolute; right: 16px; bottom: -13px; left: 16px; height: 2px; background: transparent; }
+.objective-tab:hover { color: var(--ink); }
+.objective-tab.active { color: var(--ink); }
+.objective-tab.active::after { background: var(--workspace-action-primary,#137fec); }
+.objective-name { grid-row: 1; color: inherit; font-size: 13px; font-weight: 600; }
+.objective-spend { grid-row: 1; color: var(--ink); font-size: 13px; font-weight: 650; }
+.objective-share { grid-column: 1 / -1; color: var(--steel); font-size: 11px; }
+.objective-reference { display: grid; grid-template-columns: auto auto; grid-template-rows: auto auto; column-gap: 8px; align-items: baseline; min-width: 150px; padding: 2px 16px 0; border-left: 1px solid var(--hairline-soft); color: var(--stone); opacity: .82; }
+.objective-reference .objective-name { color: var(--steel); }
+.objective-reference .objective-spend { color: var(--slate); }
+.objective-reference .objective-share { grid-column: 1 / -1; color: var(--stone); }
+.scope-note { margin: 0 0 12px; color: #946200; font-size: 12px; }
 
-.replay-card { margin-top: 16px; border: 1px solid var(--hairline); border-radius: 12px; background: #fff; overflow: hidden; }
-.replay-card-head { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 16px; border-bottom: 1px solid var(--hairline-soft); }
+.replay-card { margin-top: 20px; border: 1px solid var(--hairline); border-radius: 10px; background: #fff; overflow: hidden; }
+.replay-card-head { min-height: 58px; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--hairline-soft); }
+.diagnostic-grid { display: block; margin: 0; }
+.diagnostic-grid > .trend-replay-card { margin-top: 20px; }
+.diagnostic-grid > .replay-card:not(.trend-replay-card) { display: none; }
+.diagnostic-grid .replay-card-head { min-height: 62px; }
+.diagnostic-grid .chart-panel { height: 300px; }
+.diagnostic-grid .chart-panel svg { height: 246px; }
 .replay-card-head h2 { margin: 0; color: var(--ink); font-size: 15px; font-weight: 600; }
 .replay-card-head p { margin: 3px 0 0; color: var(--steel); font-size: 12px; }
-.soft-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border-radius: 6px; background: var(--surface); color: var(--slate); font-size: 11px; font-weight: 600; }
+.soft-chip { display: inline-flex; align-items: center; min-height: 26px; padding: 3px 9px; border-radius: 6px; background: var(--surface); color: var(--slate); font-size: 11px; font-weight: 600; white-space: nowrap; }
+.soft-chip.warn { background: #fff6e4; color: #9a6700; }
 
-.trend-grid { display: grid; grid-template-columns: minmax(0,1fr) 180px; align-items: start; gap: 8px; padding: 8px; }
+.result-card { margin-top: 0; }
+.result-stats { display: grid; grid-template-columns: 1.1fr 1.35fr 1.2fr repeat(3, minmax(0,1fr)); }
+.result-stat { position: relative; padding: 18px 20px; }
+.result-stat:not(:last-child)::after { content: ""; position: absolute; top: 20%; right: 0; bottom: 20%; width: 1px; background: #f0efed; }
+.result-stat.primary { background: #fcfdff; }
+.result-label { color: var(--steel); font-size: 12px; font-weight: 600; }
+.result-value { margin-top: 8px; color: var(--ink); font-size: 22px; line-height: 1.15; font-weight: 650; letter-spacing: -.4px; }
+.result-stat.primary .result-value { font-size: 27px; }
+.result-delta { display: inline-flex; align-items: center; margin-top: 8px; padding: 2px 7px; border-radius: 4px; font-size: 11px; font-weight: 600; }
+.result-delta.good { background: #edf8f0; color: #16804a; }
+.result-delta.bad { background: #fdecec; color: #b4402e; }
+.result-delta.neutral { background: #f0efed; color: var(--slate); }
+.result-delta.none { padding-left: 0; background: transparent; color: var(--stone); }
+.result-traffic { display: flex; flex-wrap: wrap; padding: 11px 20px; border-top: 1px solid var(--hairline-soft); background: var(--surface-soft); }
+.traffic-item { display: inline-flex; align-items: baseline; gap: 6px; }
+.traffic-item:not(:last-child) { margin-right: 18px; padding-right: 18px; border-right: 1px solid var(--hairline-soft); }
+.traffic-item small { color: var(--steel); font-size: 11px; }
+.traffic-item b { color: var(--charcoal); font-size: 13px; font-weight: 600; }
+
+.funnel-body { display: grid; gap: 10px; padding: 14px 16px; }
+.funnel-row { display: grid; grid-template-columns: 72px minmax(0,1fr) 84px 64px; align-items: center; gap: 12px; }
+.funnel-label { color: var(--slate); font-size: 12px; }
+.funnel-track { height: 8px; border-radius: 999px; background: #f0efed; overflow: hidden; }
+.funnel-track i { display: block; height: 100%; border-radius: inherit; background: #4f8fe8; transition: width .2s ease; }
+.funnel-track i.danger { background: #dd7d00; }
+.funnel-value { color: var(--ink); font-size: 13px; font-weight: 600; text-align: right; }
+.funnel-rate { color: var(--steel); font-size: 11px; text-align: right; }
+.funnel-rate.danger { color: #b4402e; font-weight: 600; }
+
+.trend-grid { display: grid; grid-template-columns: minmax(0,1fr); gap: 8px; padding: 8px; }
 .chart-panel { position: relative; min-width: 0; height: 252px; min-height: 0; padding: 7px 2px 0; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fcfcfb; }
+.chart-empty { height: 208px; display: grid; place-items: center; color: var(--stone); font-size: 12px; }
 .chart-legend { display: flex; align-items: center; gap: 14px; padding-left: 8px; color: var(--steel); font-size: 12px; }
 .legend-item { display: inline-flex; align-items: center; gap: 4px; }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
-.legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }.legend-dot.roas { background: #dd7d00; }
+.legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }
 .chart-panel svg { display: block; width: 100%; height: 202px; margin-top: -2px; overflow: visible; }
 .chart-axis-labels { display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 3.7%; color: var(--stone); font-size: 11px; line-height: 1; }
 .chart-axis-labels button { padding: 3px 2px; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; line-height: inherit; }
@@ -491,65 +980,91 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .chart-active-markers rect { fill: none; stroke: #20a464; stroke-width: 1.2; }
 .chart-active-markers circle { fill: #ffffff; stroke-width: 1.5; }
 .chart-active-markers circle.spend { stroke: #4f8fe8; }
-.chart-active-markers circle.roas { stroke: #dd7d00; }
-.chart-tooltip { position: absolute; z-index: 4; top: 28px; width: 146px; padding: 8px 9px; border: 1px solid var(--hairline); border-radius: 7px; background: rgb(255 255 255 / 96%); box-shadow: rgba(15,15,15,.12) 0 8px 24px; color: var(--charcoal); pointer-events: none; transform: translateX(-50%); }
+.chart-tooltip { position: absolute; z-index: 4; top: 28px; width: 152px; padding: 8px 9px; border: 1px solid var(--hairline); border-radius: 7px; background: rgb(255 255 255 / 96%); box-shadow: rgba(15,15,15,.12) 0 8px 24px; color: var(--charcoal); pointer-events: none; transform: translateX(-50%); }
 .chart-tooltip > strong { display: block; margin-bottom: 5px; color: var(--ink); font-size: 12px; }
 .chart-tooltip > div { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 19px; color: var(--steel); font-size: 11px; }
 .chart-tooltip span { display: inline-flex; align-items: center; gap: 4px; }
 .chart-tooltip b { color: var(--charcoal); font-size: 12px; font-weight: 600; }
-.chart-summary { height: 252px; display: grid; grid-template-rows: repeat(3,1fr); gap: 0; border: 1px solid var(--hairline); border-radius: 8px; overflow: hidden; background: var(--surface); }
-.summary-box { min-height: 0; display: flex; flex-direction: column; justify-content: center; padding: 10px 12px; border-bottom: 1px solid #f0efed; }
-.summary-box:last-child { border-bottom: 0; }
-.summary-box span { color: var(--steel); font-size: 12px; }
-.summary-box strong { display: block; margin: 5px 0 2px; color: var(--ink); font-size: 20px; line-height: 1.1; }
-.summary-box small { color: var(--steel); font-size: 11px; }
 
-.replay-split { display: grid; grid-template-columns: .86fr 1.14fr; align-items: stretch; gap: 12px; }
-.replay-split > .replay-card { align-self: stretch; }
-.compact-body { padding: 10px 12px 12px; }
-.funnel-list { display: grid; gap: 11px; }
-.funnel-row { display: grid; grid-template-columns: 52px minmax(0,1fr) 72px 46px; align-items: center; gap: 10px; font-size: 12px; }
-.funnel-track { height: 6px; border-radius: 999px; background: #efefed; overflow: hidden; }
-.funnel-track i { display: block; height: 100%; border-radius: inherit; background: #4f8fe8; }
-.funnel-row strong { font-size: 12px; }.funnel-row small { color: var(--steel); font-size: 11px; }
-.segment-grid { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 7px; }
-.segment-row { min-height: 58px; display: grid; grid-template-columns: minmax(0,1fr) auto; align-items: center; gap: 10px; padding: 10px 12px; border: 1px solid var(--hairline-soft); border-radius: 8px; background: #fff; }
-.segment-row strong { display: block; color: var(--ink); font-size: 13px; }.segment-row small { display: block; margin-top: 3px; color: var(--steel); font-size: 12px; }
+.crumbs { display: flex; align-items: center; gap: 5px; margin-top: 4px; }
+.crumb { padding: 0; border: 0; background: transparent; color: var(--workspace-action-primary,#137fec); font: inherit; font-size: 12px; cursor: pointer; }
+.crumb.current { color: var(--steel); cursor: default; }
+.crumb-sep { color: var(--stone); font-size: 11px; }
+.table-controls { display: flex; align-items: center; gap: 8px; }
+.table-search { height: 30px; width: 168px; padding: 0 10px; border: 1px solid var(--hairline-strong); border-radius: 7px; outline: none; background: #fff; color: var(--charcoal); font: inherit; font-size: 12px; }
+.table-search:focus { border-color: var(--workspace-action-primary,#137fec); }
+.attention-bar { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 16px; border-bottom: 1px solid var(--hairline-soft); background: #fffaf0; }
+.attention-text { color: #946200; font-size: 12px; }
+.attention-text b { color: #7a5200; }
+.attention-toggle { padding: 4px 10px; border: 1px solid #f0d8a8; border-radius: 6px; background: #fff; color: #946200; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; }
+.attention-toggle:hover { border-color: #d9b978; }
+
+.table-wrap { overflow-x: auto; }
+.data-table { width: 100%; min-width: 860px; border-collapse: collapse; font-size: 12px; }
+.data-table th,.data-table td { height: 42px; padding: 0 12px; border-bottom: 1px solid var(--hairline-soft); text-align: right; white-space: nowrap; }
+.data-table th:first-child,.data-table td:first-child { text-align: left; }
+.data-table th { height: 36px; color: var(--steel); font-size: 11px; font-weight: 600; background: var(--surface-soft); }
+.data-table tbody tr.drillable { cursor: pointer; }
+.data-table tbody tr:hover { background: #f7fbff; }
+.data-table tbody tr.active { background: #f2f8ff; }
+.data-table td strong { display: block; max-width: 280px; overflow: hidden; color: var(--ink); font-size: 12px; text-overflow: ellipsis; }
+.data-table td small { display: block; max-width: 280px; margin-top: 2px; overflow: hidden; color: var(--stone); font-size: 10px; text-overflow: ellipsis; }
+.data-table tfoot td { height: 42px; border-top: 1px solid var(--hairline-strong); border-bottom: 0; color: var(--ink); font-weight: 600; background: #fff; }
+.data-empty { text-align: center!important; color: var(--stone); }
+.cell-delta { font-size: 11px; font-weight: 600; }
+.cell-delta.good { color: #16804a; }
+.cell-delta.bad { color: #b4402e; }
+.cell-delta.neutral { color: var(--slate); }
+.cell-delta.none { color: var(--stone); font-weight: 400; }
+.row-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: #cfe8d8; }
+.table-hint { margin: 0; padding: 9px 16px; border-top: 1px solid var(--hairline-soft); color: var(--stone); font-size: 11px; }
+.legacy-crumbs,.legacy-drill-table,.hierarchy-card > .attention-bar,.hierarchy-card > .table-hint { display: none; }
+.hierarchy-actions { display: flex; align-items: center; gap: 7px; }.hierarchy-search { width: 250px; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 8px; }.hierarchy-search .material-symbols-outlined { color: var(--stone); font-size: 17px; }.hierarchy-search input { min-width: 0; flex: 1; border: 0; outline: 0; font: inherit; font-size: 12px; }.hierarchy-actions > button { height: 34px; padding: 0 10px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--slate); font: inherit; font-size: 11px; cursor: pointer; }
+.hierarchy-tree-head,.hierarchy-tree-row { display: grid; grid-template-columns: minmax(280px,2fr) minmax(90px,.65fr) repeat(4,minmax(80px,.72fr)); align-items: center; gap: 10px; padding: 0 16px; }.hierarchy-tree-head { min-height: 42px; border-bottom: 1px solid var(--hairline); background: var(--surface-soft); color: var(--steel); font-size: 11px; font-weight: 600; }.hierarchy-tree-head span:not(:first-child),.hierarchy-tree-row > span { text-align: right; }.hierarchy-tree-row { min-height: 58px; border-bottom: 1px solid var(--hairline-soft); color: var(--charcoal); font-size: 12px; font-variant-numeric: tabular-nums; }.hierarchy-tree-row:hover { background: #fafcff; }.hierarchy-tree-name { min-width: 0; display: flex; align-items: center; gap: 8px; padding-left: calc(var(--depth) * 28px); }.hierarchy-tree-name > span:last-child { min-width: 0; }.hierarchy-tree-name strong,.hierarchy-tree-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.hierarchy-tree-name small { margin-top: 3px; color: var(--stone); font-size: 10px; }.tree-expander { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--steel); font-size: 20px; cursor: pointer; transition: transform .15s ease; }.tree-expander.open { transform: rotate(90deg); }.tree-expander.placeholder { opacity: 0; }.tree-icon { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #cfe1f5; border-radius: 7px; background: #eef6ff; color: #3276cc; font-size: 10px; font-weight: 700; }.tree-icon.campaign { border-radius: 50%; background: #f6f5f4; color: #6b6862; border-color: #ddd9d3; }.tree-icon.adset { width: 22px; height: 22px; border: 0; background: transparent; }.tree-status { justify-self: end; display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 4px 8px; border-radius: 999px; background: #e8f7ee; color: #12804a; font-size: 10px; font-weight: 600; }.tree-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }.tree-status.warning { background: #fff4df; color: #a86400; }
 
 .platform-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; gap: 8px; padding: 10px; }
 .platform-card { --accent: #4f8fe8; min-width: 0; align-self: stretch; border: 1px solid var(--hairline); border-radius: 9px; overflow: hidden; background: #fff; }
-.platform-card.google { --accent: #dd7d00; }.platform-card.tiktok { --accent: #16a05d; }
-.platform-top { padding: 10px; }
-.platform-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
-.platform-heading h3 { margin: 0; color: var(--ink); font-size: 14px; }.platform-heading p { margin: 3px 0 0; color: var(--steel); font-size: 11px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.platform-health { display: grid; grid-template-columns: 50px 1fr; align-items: center; gap: 9px; margin-top: 9px; }
-.gauge { width: 46px; height: 46px; border-radius: 50%; display: grid; place-items: center; background: conic-gradient(var(--accent) calc(var(--score)*1%),var(--hairline) 0); position: relative; }
-.gauge::after { content: ""; position: absolute; inset: 6px; border-radius: 50%; background: #fff; }.gauge strong { position: relative; z-index: 1; font-size: 12px; }
-.health-copy { min-width: 0; color: var(--steel); font-size: 11px; }.health-bar { height: 5px; margin-top: 6px; border-radius: 999px; background: var(--hairline-soft); overflow: hidden; }.health-bar i { display: block; width: calc(var(--score)*1%); height: 100%; border-radius: inherit; background: var(--accent); }
-.platform-metrics { display: grid; grid-template-columns: repeat(4,1fr); gap: 0; margin-top: 9px; border: 1px solid var(--hairline-soft); border-radius: 6px; overflow: hidden; background: var(--surface-soft); }
-.platform-metric { position: relative; padding: 7px 8px; }.platform-metric:not(:last-child)::after { content: ""; position: absolute; top: 22%; right: 0; bottom: 22%; width: 1px; background: #f0efed; }
-.platform-metric span { display: block; color: var(--steel); font-size: 11px; }.platform-metric strong { display: block; margin-top: 3px; color: var(--ink); font-size: 13px; }
-.daily-table { margin: 0 8px 8px; overflow: hidden; border: 1px solid var(--hairline-soft); border-radius: 7px; background: #fff; }
-.daily-table-head,.daily-table-row { display: grid; grid-template-columns: .8fr 1.15fr .9fr .8fr; align-items: center; gap: 8px; min-height: 30px; padding: 0 10px; }
-.daily-table-head { min-height: 34px; background: var(--surface-soft); color: var(--steel); font-size: 11px; font-weight: 600; }.daily-table-row { min-height: 38px; border-top: 1px solid #f1f0ee; background: #fff; color: var(--slate); font-size: 12px; }.daily-table-row:hover { background: #fafaf9; }.daily-table-row strong { color: var(--ink); font-size: 12px; font-weight: 600; }
-.daily-roas { display: inline-flex; align-items: center; gap: 5px; color: var(--ink); font-weight: 600; }.daily-roas::before { content: ""; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
 
 .toast { position: fixed; z-index: 90; left: 50%; bottom: 52px; max-width: calc(100vw - 32px); padding: 10px 13px; border: 1px solid var(--hairline,#e5e3df); border-radius: 8px; background: #fff; color: #37352f; font-size: 12px; box-shadow: rgba(15,15,15,.16) 0 16px 44px -10px; opacity: 0; pointer-events: none; transform: translate(-50%,8px); transition: opacity .16s ease,transform .16s ease; }
 .toast.show { opacity: 1; transform: translate(-50%,0); }
 
 @media (max-width: 1220px) {
-  .replay-kpis { grid-template-columns: repeat(3,1fr); }.replay-kpi:nth-child(3)::after,.replay-kpi:nth-child(6)::after { display: none; }.replay-kpi:nth-child(-n+3) { border-bottom: 1px solid #f3f2f0; }
-  .platform-grid { grid-template-columns: 1fr; }.platform-card { display: grid; grid-template-columns: 310px minmax(0,1fr); align-items: start; }.platform-card .platform-top { border-right: 1px solid var(--hairline-soft); }.platform-card .daily-table { margin: 8px; }
+  .result-stats { grid-template-columns: repeat(3,1fr); }
+  .result-stat:nth-child(3)::after { display: none; }
+  .result-stat:nth-child(-n+3) { border-bottom: 1px solid #f3f2f0; }
+  .platform-grid { grid-template-columns: 1fr; }
 }
 @media (max-width: 900px) {
-  .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
-  .trend-grid,.replay-split { grid-template-columns: 1fr; }.chart-summary { width: 100%; height: auto; grid-template-columns: repeat(3,1fr); grid-template-rows: 1fr; }.summary-box { border-right: 1px solid var(--hairline-soft); border-bottom: 0; }.summary-box:last-child { border-right: 0; }
-  .platform-card { display: block; }.platform-card .platform-top { border-right: 0; }
+  .dashboard-shell:not(.embedded) .replay-title { flex: 0 0 auto; }.dashboard-shell:not(.embedded) .replay-title p { display: none; }.dashboard-shell:not(.embedded) .replay-actions { min-width: 0; overflow-x: auto; }.dashboard-shell:not(.embedded) .filter-field,.dashboard-shell:not(.embedded) .date-range-filter,.dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { flex: 0 0 auto; }
+  .trend-head-actions { align-items: flex-end; flex-direction: column; }
+  .trend-grid,.diagnostic-grid { grid-template-columns: 1fr; }
+  .analysis-filter-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .diagnostic-grid { gap: 16px; }
+  .replay-card-head { flex-wrap: wrap; }
+  .table-controls { width: 100%; justify-content: space-between; }
+  .table-search { width: 100%; }
 }
 @media (max-width: 620px) {
-  .replay-content { padding: 12px 12px 52px; }.replay-kpis { grid-template-columns: repeat(2,1fr); }.replay-kpi { border-bottom: 1px solid #f3f2f0; }.replay-kpi:nth-child(3)::after { display: block; }.replay-kpi:nth-child(2n)::after { display: none; }.replay-kpi:nth-last-child(-n+2) { border-bottom: 0; }
-  .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }.dashboard-shell:not(.embedded) .refresh-button { width: 31px; min-width: 31px; padding: 0; }.dashboard-shell:not(.embedded) .refresh-label { display: none; }
-  .segment-grid { grid-template-columns: 1fr; }.chart-summary { grid-template-columns: 1fr; }.summary-box { border-right: 0; border-bottom: 1px solid var(--hairline-soft); }.summary-box:last-child { border-bottom: 0; }.funnel-row { grid-template-columns: 36px minmax(0,1fr) 48px; }.funnel-row small { display: none; }
+  .replay-content { padding: 12px 12px 52px; }
+  .analysis-filter-controls { grid-template-columns: 1fr; padding: 8px 10px; }
+  .analysis-filter-head { padding: 0 10px; }
+  .dashboard-shell:not(.embedded) .replay-title h1 { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; border: 0; }
+  .dashboard-shell:not(.embedded) .sync-button,.dashboard-shell:not(.embedded) .refresh-button { width: 34px; min-width: 34px; padding: 0; }
+  .dashboard-shell:not(.embedded) .sync-label,.dashboard-shell:not(.embedded) .refresh-label { display: none; }
+  .objective-switch { align-items: flex-start; flex-direction: column; gap: 8px; margin-bottom: 14px; padding-bottom: 10px; }
+  .objective-switch-title { min-width: 0; }
+  .objective-tabs { width: 100%; overflow-x: auto; }
+  .objective-tab { min-width: 142px; padding-right: 12px; padding-left: 12px; }
+  .objective-tab::after { right: 12px; bottom: -11px; left: 12px; }
+  .objective-reference { min-width: 142px; padding-right: 12px; padding-left: 12px; border-top: 1px solid var(--hairline-soft); border-left: 0; padding-top: 8px; }
+  .result-stats { grid-template-columns: repeat(2,1fr); }
+  .result-stat { padding: 14px 12px; }
+  .result-stat:nth-child(2n)::after { display: none; }
+  .result-stat.primary .result-value { font-size: 22px; }
+  .objective-tab { flex: 1 1 44%; min-width: 0; }
+  .funnel-row { grid-template-columns: 56px minmax(0,1fr) 66px 52px; gap: 8px; }
+  .traffic-item:not(:last-child) { margin-right: 12px; padding-right: 12px; }
 }
+
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }
 </style>

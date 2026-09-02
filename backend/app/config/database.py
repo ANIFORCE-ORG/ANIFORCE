@@ -1,6 +1,7 @@
 """数据库配置和连接管理"""
 from sqlalchemy import event
 from sqlalchemy.ext.asyncio import AsyncSession, create_async_engine, async_sessionmaker
+from sqlalchemy.pool import NullPool
 from sqlalchemy.orm import DeclarativeBase
 from motor.motor_asyncio import AsyncIOMotorClient
 from app.config.settings import get_settings
@@ -32,20 +33,31 @@ def get_engine():
         if "sqlite" in database_url:
             connect_args = {"check_same_thread": False}
         
-        _engine = create_async_engine(
-            database_url,
-            echo=False,
-            connect_args=connect_args,
-        )
         if "sqlite" in database_url:
+            # SQLite does not benefit from a process-local connection pool here:
+            # each request gets a short-lived connection and WAL mode is configured
+            # once when the database is provisioned, never during connection setup.
+            connect_args.update({"timeout": 30})
+            _engine = create_async_engine(
+                database_url,
+                echo=False,
+                connect_args=connect_args,
+                poolclass=NullPool,
+            )
+
             @event.listens_for(_engine.sync_engine, "connect")
             def configure_sqlite(dbapi_connection, _connection_record):
                 cursor = dbapi_connection.cursor()
-                cursor.execute("PRAGMA journal_mode=WAL")
                 cursor.execute("PRAGMA foreign_keys=ON")
-                cursor.execute("PRAGMA busy_timeout=5000")
+                cursor.execute("PRAGMA busy_timeout=30000")
                 cursor.execute("PRAGMA synchronous=NORMAL")
                 cursor.close()
+        else:
+            _engine = create_async_engine(
+                database_url,
+                echo=False,
+                connect_args=connect_args,
+            )
     return _engine
 
 

@@ -147,8 +147,8 @@ router.beforeEach((to, from, next) => {
     auth.fakeLogin()
   }
 
-  // 需要登录的页面列表
-  const requiresAuth = ['/home', '/dashboard', '/projects', '/campaign', '/material', '/monitor', '/settings', '/account-config', '/ai-usage-config', '/platform-connections', '/system-admin']
+  // Workspace routes, including dynamic detail routes, require authentication.
+  const requiresAuth = to.meta.workspaceShell === true
 
   // 已登录用户访问GetStart页面,重定向到/home
   if (to.path === '/' && auth.isLoggedIn) {
@@ -157,7 +157,7 @@ router.beforeEach((to, from, next) => {
   }
 
   // 未登录用户访问需要登录的页面,重定向到登录页
-  if (requiresAuth.includes(to.path) && !auth.isLoggedIn) {
+  if (requiresAuth && !auth.isLoggedIn) {
     next('/login')
     return
   }

@@ -9,26 +9,77 @@ const props = withDefaults(defineProps<{
   embedded?: boolean
   allowDelete?: boolean
   selectedMaterialId?: string | null
+  variant?: 'default' | 'notion'
+  showToolbar?: boolean
+  searchQuery?: string
+  accountFilter?: string
+  sourceFilter?: string
+  ratioFilter?: string
+  sortKey?: 'created_at' | 'name'
 }>(), {
   loading: false,
   embedded: false,
   allowDelete: false,
   selectedMaterialId: null,
+  variant: 'default',
+  showToolbar: true,
 })
 
 const emit = defineEmits<{
   select: [row: MaterialRow]
   mention: [material: Material]
   delete: [row: MaterialRow]
+  'update:searchQuery': [value: string]
+  'update:accountFilter': [value: string]
+  'update:sourceFilter': [value: string]
+  'update:ratioFilter': [value: string]
+  'update:sortKey': [value: 'created_at' | 'name']
 }>()
 
 const previewSources = ref<Map<string, string>>(new Map())
 const mimeTypes = ref<Map<string, string>>(new Map())
-const searchQuery = ref('')
-const accountFilter = ref('all')
-const sourceFilter = ref('all')
-const ratioFilter = ref('all')
-const sortKey = ref('created_at')
+const localSearchQuery = ref('')
+const localAccountFilter = ref('all')
+const localSourceFilter = ref('all')
+const localRatioFilter = ref('all')
+const localSortKey = ref<'created_at' | 'name'>('created_at')
+const PAGE_SIZE = 10
+const currentPage = ref(1)
+const searchQuery = computed({
+  get: () => props.searchQuery ?? localSearchQuery.value,
+  set: value => {
+    localSearchQuery.value = value
+    emit('update:searchQuery', value)
+  },
+})
+const accountFilter = computed({
+  get: () => props.accountFilter ?? localAccountFilter.value,
+  set: value => {
+    localAccountFilter.value = value
+    emit('update:accountFilter', value)
+  },
+})
+const sourceFilter = computed({
+  get: () => props.sourceFilter ?? localSourceFilter.value,
+  set: value => {
+    localSourceFilter.value = value
+    emit('update:sourceFilter', value)
+  },
+})
+const ratioFilter = computed({
+  get: () => props.ratioFilter ?? localRatioFilter.value,
+  set: value => {
+    localRatioFilter.value = value
+    emit('update:ratioFilter', value)
+  },
+})
+const sortKey = computed({
+  get: () => props.sortKey ?? localSortKey.value,
+  set: value => {
+    localSortKey.value = value
+    emit('update:sortKey', value)
+  },
+})
 const localSelectedId = ref<string | null>(props.selectedMaterialId)
 
 watch(() => props.selectedMaterialId, value => {
@@ -36,6 +87,7 @@ watch(() => props.selectedMaterialId, value => {
 })
 
 watch(() => props.materials, materials => {
+  currentPage.value = 1
   void loadPreviewSources(materials)
 }, { immediate: true })
 
@@ -63,6 +115,23 @@ const filteredRows = computed(() => {
     ? a.name.localeCompare(b.name)
     : new Date(b.material.created_at).getTime() - new Date(a.material.created_at).getTime())
 })
+const totalPages = computed(() => Math.max(1, Math.ceil(filteredRows.value.length / PAGE_SIZE)))
+const paginatedRows = computed(() => {
+  const start = (currentPage.value - 1) * PAGE_SIZE
+  return filteredRows.value.slice(start, start + PAGE_SIZE)
+})
+
+watch([searchQuery, accountFilter, sourceFilter, ratioFilter, sortKey], () => {
+  currentPage.value = 1
+})
+
+watch(totalPages, pages => {
+  if (currentPage.value > pages) currentPage.value = pages
+})
+
+function goToPage(page: number): void {
+  currentPage.value = Math.min(Math.max(page, 1), totalPages.value)
+}
 
 async function loadPreviewSources(materials: Material[]): Promise<void> {
   await Promise.all(materials.map(async material => {
@@ -103,12 +172,15 @@ const platformClass = (platform?: string) => platform === 'Meta'
 </script>
 
 <template>
-  <div class="rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900">
-    <div class="border-b border-slate-200 px-[16px] py-[14px] dark:border-slate-800">
+  <div
+    class="material-library rounded-md border border-slate-200 bg-white dark:border-slate-800 dark:bg-slate-900"
+    :class="{ 'material-library--notion': variant === 'notion' }"
+  >
+    <div v-if="showToolbar" class="material-library-toolbar border-b border-slate-200 px-[16px] py-[14px] dark:border-slate-800">
       <div class="flex flex-wrap items-center gap-[8px]">
         <div class="relative min-w-[220px] flex-1">
           <span class="material-symbols-outlined absolute left-[9px] top-1/2 -translate-y-1/2 text-[15px] text-slate-400">search</span>
-          <input v-model="searchQuery" type="text" placeholder="搜索名称、文件名、标签或平台账户" class="w-full rounded-md border border-slate-200 bg-white py-[7px] pl-[31px] pr-[10px] text-[11px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
+          <input v-model="searchQuery" type="text" placeholder="搜索名称、文件名、标签或平台账户" class="material-library-search w-full rounded-md border border-slate-200 bg-white py-[7px] pl-[31px] pr-[10px] text-[11px] text-slate-900 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-primary dark:border-slate-700 dark:bg-slate-800 dark:text-white" />
         </div>
         <template v-if="!embedded">
           <select v-model="accountFilter" class="filter-select min-w-[150px]">
@@ -141,8 +213,12 @@ const platformClass = (platform?: string) => platform === 'Meta'
     </div>
 
     <div class="overflow-x-auto">
-      <table class="w-full text-left" :class="embedded ? 'min-w-[420px]' : 'min-w-[980px]'">
-        <thead class="bg-slate-50 text-[10px] uppercase text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
+      <table class="w-full text-left" :class="embedded ? 'table-fixed' : 'min-w-[980px]'">
+        <colgroup v-if="embedded">
+          <col />
+          <col class="w-[74px]" />
+        </colgroup>
+        <thead class="material-library-table-head bg-slate-50 text-[10px] uppercase text-slate-500 dark:bg-slate-800/60 dark:text-slate-400">
           <tr>
             <th class="px-[12px] py-[9px] font-semibold">素材</th>
             <th v-if="!embedded" class="px-[10px] py-[9px] font-semibold">平台 / 账户</th>
@@ -151,7 +227,7 @@ const platformClass = (platform?: string) => platform === 'Meta'
             <th v-if="!embedded" class="px-[10px] py-[9px] font-semibold">尺寸 / 比例</th>
             <th v-if="!embedded" class="px-[10px] py-[9px] font-semibold">大小 / 时长</th>
             <th v-if="!embedded" class="px-[10px] py-[9px] font-semibold">创建时间</th>
-            <th class="px-[10px] py-[9px] font-semibold">操作</th>
+            <th class="w-[74px] px-[10px] py-[9px] text-right font-semibold">操作</th>
           </tr>
         </thead>
         <tbody class="divide-y divide-slate-100 dark:divide-slate-800">
@@ -165,17 +241,17 @@ const platformClass = (platform?: string) => platform === 'Meta'
             <td :colspan="embedded ? 2 : 8" class="px-[12px] py-[42px] text-center text-[11px] text-slate-500">暂无匹配素材</td>
           </tr>
           <tr
-            v-for="row in filteredRows"
+            v-for="row in paginatedRows"
             v-else
             :key="row.id"
-            class="group relative cursor-pointer border-l-2 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60"
+            class="material-library-row group relative cursor-pointer border-l-2 border-transparent hover:bg-slate-50 dark:hover:bg-slate-800/60"
             :class="localSelectedId === row.id ? 'border-l-primary bg-primary/[.04] dark:bg-primary/[.08]' : ''"
             @click="selectRow(row)"
           >
             <td class="px-[12px] py-[10px]">
               <div class="flex min-w-0 items-center gap-[10px]" :class="embedded ? '' : 'min-w-[280px]'">
                 <div
-                  class="relative shrink-0 overflow-hidden border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800"
+                  class="material-library-thumb relative shrink-0 overflow-hidden border border-slate-200 bg-slate-100 dark:border-slate-700 dark:bg-slate-800"
                   :class="embedded
                     ? 'h-[62px] w-[62px] rounded-lg'
                     : 'h-[82px] w-[54px] rounded-md'"
@@ -189,10 +265,10 @@ const platformClass = (platform?: string) => platform === 'Meta'
                   </div>
                 </div>
                 <div class="min-w-0">
-                  <p class="truncate text-[12px] font-semibold text-slate-900 dark:text-white">{{ row.name }}</p>
-                  <p class="mt-[3px] truncate text-[10px] text-slate-500 dark:text-slate-400">{{ row.id }} · {{ row.format }} · {{ row.ratio }}</p>
+                  <p class="material-library-name truncate text-[12px] font-semibold text-slate-900 dark:text-white">{{ row.name }}</p>
+                  <p class="material-library-meta mt-[3px] truncate text-[10px] text-slate-500 dark:text-slate-400">{{ row.id }} · {{ row.format }} · {{ row.ratio }}</p>
                   <div class="mt-[5px] flex flex-wrap gap-[4px]">
-                    <span v-for="tag in row.tags.slice(0, 3)" :key="tag" class="rounded bg-slate-100 px-[5px] py-[2px] text-[9px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ tag }}</span>
+                    <span v-for="tag in row.tags.slice(0, 3)" :key="tag" class="material-library-tag rounded bg-slate-100 px-[5px] py-[2px] text-[9px] text-slate-600 dark:bg-slate-800 dark:text-slate-300">{{ tag }}</span>
                   </div>
                 </div>
               </div>
@@ -213,18 +289,20 @@ const platformClass = (platform?: string) => platform === 'Meta'
             <td v-if="!embedded" class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.material.width && row.material.height ? `${row.material.width} × ${row.material.height}` : '-' }} · {{ row.ratio }}</td>
             <td v-if="!embedded" class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.fileSizeLabel }}<span v-if="row.durationLabel !== '-'"> · {{ row.durationLabel }}</span></td>
             <td v-if="!embedded" class="px-[10px] py-[10px] text-[11px] text-slate-600 dark:text-slate-400">{{ row.createdAtLabel }}</td>
-            <td class="px-[10px] py-[10px]">
-              <div class="flex items-center gap-[2px]">
-                <button v-if="embedded" class="rounded-md p-[5px] text-slate-400 hover:bg-primary/10 hover:text-primary" title="预览素材" @click.stop="selectRow(row)">
-                  <span class="material-symbols-outlined text-[15px]">visibility</span>
+            <td class="w-[74px] px-[8px] py-[10px]">
+              <div class="flex items-center justify-end gap-[2px]">
+                <button v-if="embedded" class="material-action" type="button" title="预览素材" aria-label="预览素材" @click.stop="selectRow(row)">
+                  <span class="material-symbols-outlined">visibility</span>
                 </button>
                 <button
                   v-if="embedded"
-                  class="mention-btn rounded-md border border-primary/20 bg-white/95 px-[8px] py-[5px] text-[10px] font-semibold text-primary opacity-0 shadow-sm transition-all hover:bg-primary/10 group-hover:opacity-100 dark:bg-slate-900/95"
+                  class="material-action"
+                  type="button"
                   title="引用到对话"
+                  :aria-label="`在对话中引用 ${row.name}`"
                   @click.stop="emit('mention', row.material)"
                 >
-                  @mention
+                  <span class="material-symbols-outlined">alternate_email</span>
                 </button>
                 <button v-if="allowDelete" class="rounded-md p-[5px] text-slate-400 hover:bg-red-50 hover:text-red-600 dark:hover:bg-red-950/30" title="从 ANIFORCE 删除" @click.stop="emit('delete', row)">
                   <span class="material-symbols-outlined text-[15px]">delete</span>
@@ -235,10 +313,99 @@ const platformClass = (platform?: string) => platform === 'Meta'
         </tbody>
       </table>
     </div>
+
+    <div
+      v-if="!loading && filteredRows.length"
+      class="material-library-pagination flex items-center justify-end gap-[12px] border-t border-slate-100 px-[14px] py-[12px] text-[12px] text-slate-500 dark:border-slate-800 dark:text-slate-400"
+    >
+      <nav class="flex items-center gap-[12px]" aria-label="素材列表分页">
+        <button
+          type="button"
+          class="material-page-button"
+          :disabled="currentPage === 1"
+          aria-label="上一页"
+          @click="goToPage(currentPage - 1)"
+        >
+          上一页
+        </button>
+        <span class="material-page-summary">第 {{ currentPage }} / {{ totalPages }} 页</span>
+        <button
+          type="button"
+          class="material-page-button"
+          :disabled="currentPage === totalPages"
+          aria-label="下一页"
+          @click="goToPage(currentPage + 1)"
+        >
+          下一页
+        </button>
+      </nav>
+    </div>
   </div>
 </template>
 
 <style scoped>
+.material-library--notion {
+  border-color: #e5e3df;
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: none;
+  color: #37352f;
+}
+
+.material-library--notion .material-library-toolbar {
+  border-color: #ede9e4;
+  background: #ffffff;
+}
+
+.material-library--notion .material-library-search {
+  border-color: #e5e3df;
+  border-radius: 6px;
+  color: #37352f;
+  box-shadow: none;
+}
+
+.material-library--notion .material-library-search::placeholder { color: #9b9a97; }
+.material-library--notion .material-library-search:focus {
+  border-color: #b7b5b0;
+  box-shadow: 0 0 0 2px rgb(35 131 226 / 14%);
+}
+.material-library--notion .filter-select {
+  border-color: #e5e3df;
+  background-color: #ffffff;
+  color: #37352f;
+}
+.material-library--notion .filter-select:hover { background-color: #f6f5f4; }
+.material-library--notion .material-library-table-head {
+  background: #f6f5f4;
+  color: #787671;
+  text-transform: none;
+}
+.material-library--notion tbody { border-color: #ede9e4; }
+.material-library--notion .material-library-row:hover { background: #fafaf9; }
+.material-library--notion .material-library-row.border-l-primary {
+  border-left-color: #2383e2;
+  background: rgb(35 131 226 / 5.5%);
+}
+.material-library--notion .material-library-thumb {
+  border-color: #e5e3df;
+  border-radius: 6px;
+  background: #f6f5f4;
+}
+.material-library--notion .material-library-name { color: #37352f; }
+.material-library--notion .material-library-meta { color: #787671; }
+.material-library--notion .material-library-tag {
+  border: 0;
+  border-radius: 4px;
+  background: #f1f1ef;
+  color: #5d5b54;
+}
+.material-library--notion .account-chip,
+.material-library--notion .source-chip {
+  border-color: #e5e3df;
+  background: #f6f5f4;
+  color: #5d5b54;
+}
+
 .filter-select {
   min-width: 96px;
   height: 32px;
@@ -260,6 +427,63 @@ const platformClass = (platform?: string) => platform === 'Meta'
   border-color: rgb(var(--color-primary, 59 130 246));
   box-shadow: 0 0 0 1px rgb(var(--color-primary, 59 130 246));
 }
+
+.material-page-button {
+  min-width: 62px;
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid rgb(226 232 240);
+  border-radius: 8px;
+  background: white;
+  color: rgb(71 85 105);
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 140ms ease, border-color 140ms ease, color 140ms ease;
+}
+.material-page-button:hover:not(:disabled) {
+  border-color: rgb(191 219 254);
+  background: rgb(239 246 255);
+  color: rgb(29 78 216);
+}
+.material-page-button:disabled {
+  cursor: not-allowed;
+  background: rgb(248 250 252);
+  color: rgb(148 163 184);
+}
+.material-page-summary {
+  min-width: 70px;
+  text-align: center;
+  white-space: nowrap;
+}
+.material-library--notion .material-library-pagination {
+  border-color: #ede9e4;
+  color: #787671;
+}
+.material-library--notion .material-page-button {
+  border-color: #e5e3df;
+  color: #5d5b54;
+}
+.material-library--notion .material-page-button:hover:not(:disabled) {
+  border-color: #c9c7c2;
+  background: #f1f1ef;
+  color: #37352f;
+}
+.material-library--notion .material-page-button:disabled {
+  border-color: #e5e3df;
+  background: #fafaf9;
+  color: #b4b2ad;
+}
+:global(.dark) .material-page-button {
+  border-color: rgb(51 65 85);
+  background: rgb(15 23 42);
+  color: rgb(203 213 225);
+}
+:global(.dark) .material-page-button:hover:not(:disabled) {
+  border-color: rgb(71 85 105);
+  background: rgb(30 41 59);
+  color: white;
+}
+:global(.dark) .material-page-button:disabled { color: rgb(100 116 139); }
 
 .platform-chip, .account-chip, .source-chip {
   display: inline-flex;
@@ -291,17 +515,20 @@ const platformClass = (platform?: string) => platform === 'Meta'
 .account-dot { height: 6px; width: 6px; border-radius: 999px; background: rgb(37 99 235); }
 tbody tr { transition: background-color 140ms ease, border-color 140ms ease; }
 
-.mention-btn { cursor: pointer; }
-
-.mention-btn:hover {
-  transform: translateY(-2px) scale(1.05);
-  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.25);
-  background: white !important;
-  border-color: rgb(var(--color-primary)) !important;
+.material-action {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: rgb(148 163 184);
+  cursor: pointer;
 }
 
-.mention-btn:active {
-  transform: translateY(0) scale(0.95);
-  transition-duration: 0.1s;
-}
+.material-action .material-symbols-outlined { font-size: 17px; }
+.material-action:hover { background: rgb(239 246 255); color: rgb(37 99 235); }
+.material-action:focus-visible { outline: 2px solid rgb(147 197 253); outline-offset: 1px; }
 </style>

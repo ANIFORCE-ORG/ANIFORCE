@@ -4,6 +4,7 @@ Meta (Facebook/Instagram) Ads 适配器
 """
 
 import aiohttp
+from collections.abc import AsyncIterator, Awaitable, Callable
 from typing import Dict, List, Optional, Any
 from datetime import datetime
 import json
@@ -33,6 +34,7 @@ class MetaAdsAdapter(BaseAdapter):
         self.base_url = f"https://graph.facebook.com/{self.api_version}"
         self.app_id = config['app_id']
         self.app_secret = config['app_secret']
+        self.insights_request_timeout_seconds = float(config.get('insights_request_timeout_seconds', 30.0))
 
     # ==================== 认证模块 ====================
 
@@ -580,6 +582,80 @@ class MetaAdsAdapter(BaseAdapter):
                     raise Exception(f"Ad creation error: {error}")
 
     # ==================== 数据获取 ====================
+
+    async def get_account_daily_insights(
+        self,
+        account_id: str,
+        date_range: Dict[str, str],
+        level: str,
+        *,
+        max_pages: int = 10,
+    ) -> List[Dict[str, Any]]:
+        """Read all daily Insights pages for one explicitly selected account."""
+        rows: List[Dict[str, Any]] = []
+        async for page in self.iter_account_daily_insight_pages(
+            account_id, date_range, level, max_pages=max_pages
+        ):
+            rows.extend(page)
+        return rows
+
+    async def iter_account_daily_insight_pages(
+        self,
+        account_id: str,
+        date_range: Dict[str, str],
+        level: str,
+        *,
+        max_pages: int = 10,
+        before_request: Callable[[], Awaitable[None]] | None = None,
+    ) -> AsyncIterator[List[Dict[str, Any]]]:
+        """Yield one Meta Insights page at a time for controlled batch ingestion."""
+        self._ensure_authenticated()
+        if level not in {"campaign", "adset", "ad"}:
+            raise ValueError(f"Unsupported Meta Insights level: {level}")
+        if max_pages < 1:
+            raise ValueError("max_pages must be positive")
+
+        normalized_account_id = str(account_id).removeprefix("act_")
+        level_fields = {
+            "campaign": ["campaign_id", "campaign_name", "objective"],
+            "adset": ["campaign_id", "campaign_name", "adset_id", "adset_name", "objective", "optimization_goal"],
+            "ad": ["campaign_id", "campaign_name", "adset_id", "adset_name", "ad_id", "ad_name"],
+        }
+        fields = [
+            "account_id", "account_name", *level_fields[level],
+            "impressions", "reach", "frequency", "clicks", "inline_link_clicks",
+            "spend", "ctr", "cpc", "cpm", "actions", "action_values",
+            "cost_per_action_type", "account_currency", "attribution_setting",
+            "date_start", "date_stop",
+        ]
+        url: str | None = f"{self.base_url}/act_{normalized_account_id}/insights"
+        params: Dict[str, Any] | None = {
+            "access_token": self.access_token,
+            "time_range": json.dumps(date_range),
+            "time_increment": 1,
+            "fields": ",".join(fields),
+            "level": level,
+            "limit": 100,
+        }
+        timeout = aiohttp.ClientTimeout(total=self.insights_request_timeout_seconds)
+        async with aiohttp.ClientSession(timeout=timeout) as session:
+            for _ in range(max_pages):
+                if not url:
+                    break
+                if before_request is not None:
+                    await before_request()
+                async with session.get(url, params=params) as response:
+                    payload = await response.json()
+                    if response.status != 200:
+                        error = payload.get("error", payload)
+                        raise Exception(f"Meta Insights read failed: {error}")
+                    yield payload.get("data") or []
+                    url = (payload.get("paging") or {}).get("next")
+                    params = None
+        if url:
+            raise RuntimeError(
+                f"Meta Insights pagination exceeded the {max_pages}-page safety limit"
+            )
 
     async def get_campaign_insights(self, campaign_id: str, date_range: Dict[str, str]) -> Dict[str, Any]:
         """

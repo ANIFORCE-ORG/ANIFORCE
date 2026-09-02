@@ -28,11 +28,21 @@ class ChatEventAssembler:
         events: list[tuple[str, dict[str, Any]]],
         tool_facts_by_id: dict[str, dict[str, Any]] | None = None,
     ) -> dict:
-        text_parts: list[str] = []
-        thinking_parts: list[str] = []
-        tool_blocks: list[dict] = []
+        blocks: list[dict[str, Any]] = []
         usage = None
-        tool_by_id: dict[str, dict] = {}
+        tool_by_id: dict[str, dict[str, Any]] = {}
+
+        def append_delta(block_type: str, field: str, delta: str) -> None:
+            if blocks and blocks[-1].get("type") == block_type:
+                block = blocks[-1]
+            else:
+                block = {"type": block_type, field: ""}
+                blocks.append(block)
+            block[field] = str(block.get(field) or "") + delta
+
+        def next_tool_id() -> str:
+            count = sum(1 for block in blocks if block.get("type") == "tool_call")
+            return f"tool_{count + 1}"
 
         for event_name, data in events:
             if event_name in {"raw_response_event", "run_item_stream_event", "agent_updated_stream_event"}:
@@ -44,15 +54,15 @@ class ChatEventAssembler:
                     data_type = str(sdk_data.get("type") or "")
                     delta = str(sdk_data.get("delta") or "")
                     if data_type == "response.output_text.delta" and delta:
-                        text_parts.append(delta)
+                        append_delta("text", "text", delta)
                     elif data_type in {"response.reasoning_text.delta", "response.reasoning_summary_text.delta"} and delta:
-                        thinking_parts.append(delta)
+                        append_delta("thinking", "thinking", delta)
 
                 elif sdk_type == "run_item_stream_event":
                     name = str(data.get("name") or "")
                     if name == "tool_called":
                         call_id, tool_name, args = self._tool_call_info(sdk_item)
-                        call_id = call_id or f"tool_{len(tool_blocks) + 1}"
+                        call_id = call_id or next_tool_id()
                         block = {
                             "type": "tool_call",
                             "toolCallId": call_id,
@@ -61,7 +71,7 @@ class ChatEventAssembler:
                             "status": "running",
                         }
                         tool_by_id[call_id] = block
-                        tool_blocks.append(block)
+                        blocks.append(block)
                     elif name == "tool_output":
                         call_id, result = self._tool_output_info(sdk_item)
                         block = tool_by_id.get(call_id or "")
@@ -69,34 +79,44 @@ class ChatEventAssembler:
                             fact = (tool_facts_by_id or {}).get(call_id or "", {})
                             block = {
                                 "type": "tool_call",
-                                "toolCallId": call_id or f"tool_{len(tool_blocks) + 1}",
+                                "toolCallId": call_id or next_tool_id(),
                                 "tool": str(fact.get("tool_name") or "unknown"),
                                 "args": fact.get("arguments") if isinstance(fact.get("arguments"), dict) else {},
                             }
-                            tool_blocks.append(block)
+                            blocks.append(block)
                         fact = (tool_facts_by_id or {}).get(call_id or "", {})
                         block["status"] = str(fact.get("status") or "completed")
                         block["result"] = fact.get("result") if fact.get("result") is not None else result
                     elif name == "reasoning_item_created":
-                        # reasoning 内容已通过 reasoning_summary_text.delta 实时累积，不再重复追加
+                        # Reasoning text is already accumulated from raw deltas.
                         pass
             elif event_name == "runtime.completed":
                 usage = data.get("usage") or usage
 
-        blocks: list[dict] = []
-        thinking = "".join(thinking_parts).strip()
-        if thinking:
-            block = {"type": "thinking", "summary": self._summarize(thinking), "collapsed": True}
-            if self.save_full_thinking:
-                block["content"] = thinking
-                block["thinking"] = thinking
-            blocks.append(block)
-        blocks.extend(tool_blocks)
-        text = "".join(text_parts)
-        if text:
-            blocks.append({"type": "text", "content": text, "text": text})
+        normalized_blocks: list[dict[str, Any]] = []
+        for block in blocks:
+            if block.get("type") == "thinking":
+                thinking = str(block.get("thinking") or "").strip()
+                if not thinking:
+                    continue
+                normalized = {
+                    "type": "thinking",
+                    "summary": self._summarize(thinking),
+                    "collapsed": True,
+                }
+                if self.save_full_thinking:
+                    normalized["content"] = thinking
+                    normalized["thinking"] = thinking
+                normalized_blocks.append(normalized)
+                continue
+            if block.get("type") == "text":
+                text = str(block.get("text") or "")
+                if text:
+                    normalized_blocks.append({"type": "text", "content": text, "text": text})
+                continue
+            normalized_blocks.append(block)
 
-        return {"blocks": blocks, "usage": usage}
+        return {"blocks": normalized_blocks, "usage": usage}
 
     def _summarize(self, content: str) -> str:
         cleaned = " ".join(content.split())

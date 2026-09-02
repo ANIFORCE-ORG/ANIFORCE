@@ -84,6 +84,10 @@ const closeSessionMenu = () => {
   openSessionMenuId.value = null
 }
 
+const openNewUserGuide = () => {
+  window.dispatchEvent(new CustomEvent('aniforce:open-new-user-guide'))
+}
+
 const toggleSessionMenu = (sessionId: string) => {
   openSessionMenuId.value = openSessionMenuId.value === sessionId ? null : sessionId
 }
@@ -219,7 +223,7 @@ onMounted(() => {
 <template>
   <div
     class="sidebar-rail-spacer flex-none transition-all duration-300"
-    :class="isNarrowViewport ? 'w-[52px]' : (isSidebarCollapsed ? 'w-[52px]' : 'w-[205px]')"
+    :class="{ 'is-collapsed': isNarrowViewport || isSidebarCollapsed }"
     aria-hidden="true"
   />
   <button
@@ -232,7 +236,7 @@ onMounted(() => {
   <aside
     id="workspace-sidebar-navigation"
     class="sidebar-notion fixed bottom-0 left-0 top-0 z-50 flex flex-col transition-all duration-300"
-    :class="isSidebarCollapsed ? 'w-[52px]' : 'w-[205px]'"
+    :class="isSidebarCollapsed ? 'is-collapsed' : 'is-expanded'"
   >
     <div class="sidebar-brand-row" :class="{ 'is-collapsed': isSidebarCollapsed }">
       <button
@@ -367,6 +371,18 @@ onMounted(() => {
       </div>
     </nav>
 
+    <button
+      class="sidebar-guide-entry group relative mx-[8px] mb-[5px] flex min-h-[34px] items-center rounded-lg border-0 bg-transparent text-slate-500 transition-colors hover:bg-black/5 hover:text-slate-900"
+      :class="isSidebarCollapsed ? 'justify-center px-[6px]' : 'gap-[10px] px-[10px]'"
+      type="button"
+      aria-label="打开新手引导"
+      @click="openNewUserGuide"
+    >
+      <span class="material-symbols-outlined text-[16px]">help</span>
+      <span v-if="!isSidebarCollapsed" class="text-[11px]">新手引导</span>
+      <span v-else class="pointer-events-none absolute left-full z-50 ml-[6px] whitespace-nowrap rounded-md bg-slate-900 px-[9px] py-[5px] text-[11px] text-white opacity-0 transition-opacity group-hover:opacity-100">新手引导</span>
+    </button>
+
     <AccountControls variant="sidebar" :collapsed="isSidebarCollapsed" />
   </aside>
 
@@ -397,6 +413,16 @@ onMounted(() => {
   border: 0;
   background: rgba(15, 15, 15, 0.2);
   cursor: default;
+}
+
+.sidebar-rail-spacer,
+.sidebar-notion {
+  width: 205px;
+}
+
+.sidebar-rail-spacer.is-collapsed,
+.sidebar-notion.is-collapsed {
+  width: 52px;
 }
 
 .sidebar-notion {

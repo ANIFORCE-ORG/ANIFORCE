@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import RedirectResponse
 from pydantic import BaseModel
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, update
+from sqlalchemy import case, delete, func, or_, select, update
 from typing import List, Optional
 from datetime import datetime, timedelta, timezone
 import asyncio
@@ -130,6 +130,25 @@ class SubAccountResponse(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class SubAccountSummary(BaseModel):
+    """子账号统计摘要"""
+    total: int
+    active: int
+    disabled: int
+    pending_review: int
+    other: int
+
+
+class SubAccountPageResponse(BaseModel):
+    """分页子账号响应"""
+    items: List[SubAccountResponse]
+    page: int
+    page_size: int
+    total: int
+    has_more: bool
+    summary: SubAccountSummary
 
 
 # ==================== API 路由 ====================
@@ -1144,54 +1163,97 @@ async def google_auth_callback(
 
 # ==================== 子账号管理 API（使用独立表） ====================
 
-@router.get("/google/{connection_id}/sub-accounts", response_model=List[SubAccountResponse])
+@router.get("/google/{connection_id}/sub-accounts", response_model=SubAccountPageResponse)
 async def get_sub_accounts(
     connection_id: str,
+    page: int = Query(1, ge=1),
+    page_size: int = Query(50, ge=1, le=200),
+    search: Optional[str] = Query(None, min_length=1, max_length=100),
+    status: Optional[str] = Query(None, max_length=20),
     db: AsyncSession = Depends(get_db),
     current_user: dict = Depends(get_current_user)
 ):
-    """
-    获取 Google 账户的子账号列表
-    从 sub_account_bindings 表查询
+    """获取子账号分页列表及统计摘要。
+
+    默认只返回一页，避免大型 Meta 账户把数千条绑定一次性序列化并渲染。
     """
     try:
         user_id = current_user["id"]
-
-        # 验证连接是否存在且属于当前用户
-        stmt = select(PlatformConnection).where(
+        connection_stmt = select(PlatformConnection.id).where(
             PlatformConnection.id == connection_id,
-            PlatformConnection.user_id == user_id
+            PlatformConnection.user_id == user_id,
         )
-        result = await db.execute(stmt)
-        connection = result.scalar_one_or_none()
-
-        if not connection:
+        connection_result = await db.execute(connection_stmt)
+        if connection_result.scalar_one_or_none() is None:
             raise HTTPException(status_code=404, detail="连接不存在")
 
-        # 从 SubAccountBinding 表查询子账号
-        from app.models import SubAccountBinding
-        stmt = select(SubAccountBinding).where(
-            SubAccountBinding.parent_connection_id == connection_id
-        ).order_by(SubAccountBinding.created_at.desc())
+        filters = [SubAccountBinding.parent_connection_id == connection_id]
+        if search:
+            pattern = f"%{search.strip()}%"
+            filters.append(or_(
+                SubAccountBinding.sub_account_name.ilike(pattern),
+                SubAccountBinding.sub_account_id.ilike(pattern),
+            ))
+        if status:
+            filters.append(SubAccountBinding.status == status)
 
-        result = await db.execute(stmt)
+        filtered = select(SubAccountBinding).where(*filters)
+        total = (await db.execute(
+            select(func.count()).select_from(filtered.subquery())
+        )).scalar_one()
+
+        status_rows = (await db.execute(
+            select(SubAccountBinding.status, func.count())
+            .where(SubAccountBinding.parent_connection_id == connection_id)
+            .group_by(SubAccountBinding.status)
+        )).all()
+        status_counts = {row[0]: row[1] for row in status_rows}
+
+        result = await db.execute(
+            filtered.order_by(
+                case(
+                    (SubAccountBinding.status == "active", 0),
+                    (SubAccountBinding.status == "pending_review", 1),
+                    (SubAccountBinding.status == "unknown", 2),
+                    else_=3,
+                ),
+                SubAccountBinding.created_at.desc(),
+                SubAccountBinding.id.desc(),
+            )
+            .offset((page - 1) * page_size)
+            .limit(page_size)
+        )
         bindings = result.scalars().all()
-
-        logger.info(f"Found {len(bindings)} sub accounts for connection {connection_id}")
-
-        # 转换为响应格式
-        return [
+        items = [
             SubAccountResponse(
                 id=binding.id,
                 name=binding.sub_account_name,
                 sub_account_id=binding.sub_account_id,
                 bm_customer_id=binding.bm_customer_id,
                 status=binding.status,
-                updated_at=binding.updated_at
+                updated_at=binding.updated_at,
             )
             for binding in bindings
         ]
-
+        logger.info(
+            f"Found {len(items)} sub accounts for connection {connection_id} "
+            f"(page={page}, page_size={page_size}, total={total})"
+        )
+        return SubAccountPageResponse(
+            items=items,
+            page=page,
+            page_size=page_size,
+            total=total,
+            has_more=page * page_size < total,
+            summary=SubAccountSummary(
+                total=sum(status_counts.values()),
+                active=status_counts.get("active", 0),
+                disabled=status_counts.get("disabled", 0),
+                pending_review=status_counts.get("pending_review", 0),
+                other=sum(count for key, count in status_counts.items()
+                          if key not in {"active", "disabled", "pending_review"}),
+            ),
+        )
     except HTTPException:
         raise
     except Exception as e:
@@ -1386,44 +1448,52 @@ async def sync_meta_ad_accounts(
                 9: "suspended"      # 暂停
             }
 
-            # 删除现有的子账号绑定（重新同步）
-            stmt = select(SubAccountBinding).where(
-                SubAccountBinding.parent_connection_id == connection_id
-            )
-            result = await db.execute(stmt)
-            existing_bindings = result.scalars().all()
-            for binding in existing_bindings:
-                await db.delete(binding)
-
-            # 创建新的子账号绑定
-            synced_count = 0
+            # Meta may return the same account through multiple business paths.
+            # Normalize by account identity before replacing the local snapshot.
+            unique_accounts: dict[str, dict] = {}
             for ad_account in accounts_list:
                 account_id = ad_account.get('id', '')
-                account_name = ad_account.get('name', '')
-                account_status = ad_account.get('account_status')
+                normalized_id = account_id.removeprefix("act_")
+                if normalized_id:
+                    unique_accounts[normalized_id] = {
+                        "account_id": account_id,
+                        "account_name": ad_account.get('name', ''),
+                        "status": status_mapping.get(ad_account.get('account_status'), "unknown"),
+                    }
 
-                # 映射状态（SDK 返回的是整数）
-                mapped_status = status_mapping.get(account_status, "unknown")
-
-                # 创建子账号绑定
-                binding = SubAccountBinding(
-                    parent_connection_id=connection_id,
-                    sub_account_name=account_name,
-                    sub_account_id=account_id,
-                    status=mapped_status
+            if not unique_accounts:
+                raise HTTPException(
+                    status_code=502,
+                    detail="Meta 未返回任何广告账户，已保留现有子账号数据",
                 )
-                db.add(binding)
-                synced_count += 1
 
-                logger.info(f"Synced ad account: id={account_id}, name={account_name}, status={mapped_status}")
-
+            await db.execute(
+                delete(SubAccountBinding).where(
+                    SubAccountBinding.parent_connection_id == connection_id
+                )
+            )
+            db.add_all([
+                SubAccountBinding(
+                    parent_connection_id=connection_id,
+                    sub_account_name=account["account_name"],
+                    sub_account_id=account["account_id"],
+                    status=account["status"],
+                )
+                for account in unique_accounts.values()
+            ])
+            connection.last_sync_at = datetime.utcnow()
             await db.commit()
 
-            logger.info(f"Successfully synced {synced_count} ad accounts for connection: {connection_id}")
-
+            synced_count = len(unique_accounts)
+            duplicate_count = len(accounts_list) - synced_count
+            logger.info(
+                f"Successfully synced {synced_count} unique ad accounts for connection: "
+                f"{connection_id}; discarded_duplicates={duplicate_count}"
+            )
             return {
                 "message": f"成功同步 {synced_count} 个广告账户",
-                "synced_count": synced_count
+                "synced_count": synced_count,
+                "duplicate_count": duplicate_count,
             }
 
         except FacebookRequestError as e:
