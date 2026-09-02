@@ -142,7 +142,15 @@ const starterActions = [
 const visibleStarterActions = computed(() => strategyExpanded.value ? starterActions : starterActions.slice(0, 4))
 const isPromptExpanded = computed(() => Array.from(inputText.value).length > 72 || inputText.value.includes('\n'))
 const visibleMessages = computed(() => agent.visibleMessages.value)
-const hasContent = computed(() => agent.loading.value || agent.hasAnyRunningRun.value || visibleMessages.value.length > 0 || Boolean(agent.streamingMessage.value) || Boolean(agent.error.value))
+const hasContent = computed(() => (
+  Boolean(hasInteracted.value && agent.activeSession.value) ||
+  agent.loading.value ||
+  agent.hasAnyRunningRun.value ||
+  agent.agentRunning.value ||
+  visibleMessages.value.length > 0 ||
+  Boolean(agent.streamingMessage.value) ||
+  Boolean(agent.error.value)
+))
 const sidebarSessions = computed(() => agent.sessions.value.map(session => ({
   id: session.id,
   name: session.title || session.id,

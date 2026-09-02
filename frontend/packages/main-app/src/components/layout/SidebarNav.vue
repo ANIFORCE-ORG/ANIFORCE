@@ -710,40 +710,10 @@ onMounted(() => {
   background: #2a2a2a !important;
 }
 
-.sidebar-session-name {
-  min-width: 0;
-}
-
 .sidebar-session-item > .material-symbols-outlined {
   width: 16px;
   flex: 0 0 16px;
   font-size: 17px !important;
-}
-
-.sidebar-session-actions {
-  width: 38px;
-  justify-content: flex-end;
-}
-
-.sidebar-session-action-button {
-  display: grid;
-  width: 18px;
-  height: 18px;
-  place-items: center;
-  border: 0;
-  border-radius: 4px !important;
-  background: transparent;
-  color: var(--sidebar-steel) !important;
-}
-
-.sidebar-session-action-button .material-symbols-outlined {
-  font-size: 12px !important;
-  line-height: 1;
-}
-
-.sidebar-session-action-button:hover {
-  background: rgba(55, 53, 47, 0.08) !important;
-  color: var(--sidebar-ink) !important;
 }
 
 nav::-webkit-scrollbar {

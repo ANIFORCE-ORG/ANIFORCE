@@ -102,7 +102,6 @@ type UploadMediaMetadata = {
 const uploadFile = computed(() => uploadFiles.value[0] || null)
 const uploadPreviewUrl = ref('')
 const uploadIsVideo = computed(() => uploadFile.value?.type.startsWith('video/') || false)
-
 const selectedRow = computed(() => {
   const material = materials.value.find(item => item.id === selectedMaterialId.value) || materials.value[0]
   if (!material) return null
@@ -693,6 +692,7 @@ const platformClass = (platform?: string) => platform === 'Meta' ? 'platform-chi
 </script>
 
 <template>
+  <!-- <div class="flex h-[calc(100vh-100px)] w-full overflow-hidden bg-[#fafaf9] dark:bg-slate-950"> -->
   <div class="workspace-page-canvas flex h-screen w-full overflow-hidden dark:bg-slate-950">
     <SidebarNav
       :nav-items="navItems"
