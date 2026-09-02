@@ -113,6 +113,7 @@ DEMO_MODE=false
 DAEMON=0
 DAEMON_CHILD=0
 WITH_PHOENIX=1
+OPEN_BROWSER=${OPEN_BROWSER:-1}
 BACKEND_API_WORKERS=${BACKEND_API_WORKERS:-2}
 AGENT_API_WORKERS=${AGENT_API_WORKERS:-1}
 AGENT_RUN_WORKERS=${AGENT_RUN_WORKERS:-2}
@@ -788,7 +789,7 @@ fi
 echo ""
 
 # 自动打开浏览器访问前端（cloud 和后台模式默认不打开）
-if [ "$MODE" = "local" ] && [ "$DAEMON" -eq 0 ]; then
+if [ "$MODE" = "local" ] && [ "$DAEMON" -eq 0 ] && [ "$OPEN_BROWSER" -eq 1 ]; then
   if command -v open &>/dev/null; then
     open "http://localhost:$FRONTEND_PORT"
   elif command -v xdg-open &>/dev/null; then

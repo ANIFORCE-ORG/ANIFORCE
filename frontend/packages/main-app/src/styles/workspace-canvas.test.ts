@@ -9,14 +9,11 @@ const globalSource = readSource('./global.css')
 
 const workspacePages = [
   ['Home', '../pages/Home.vue', '@/pages/Home.vue'],
-  ['Campaign', '../pages/campaigns/Campaign.vue', '@/pages/campaigns/Campaign.vue'],
   ['Material', '../pages/creatives/Material.vue', '@/pages/creatives/Material.vue'],
-  ['Monitor', '../pages/Monitor.vue', '@/pages/Monitor.vue'],
   ['Dashboard', '../pages/Dashboard.vue', '@/pages/Dashboard.vue'],
   ['Projects', '../pages/projects/Projects.vue', '@/pages/projects/Projects.vue'],
   ['ProjectDetail', '../pages/projects/ProjectDetail.vue', '@/pages/projects/ProjectDetail.vue'],
   ['CampaignDetail', '../pages/campaigns/CampaignDetail.vue', '@/pages/campaigns/CampaignDetail.vue'],
-  ['CreateCampaign', '../pages/campaigns/CreateCampaign.vue', '@/pages/campaigns/CreateCampaign.vue'],
   ['CreateAdUnit', '../pages/campaigns/CreateAdUnit.vue', '@/pages/campaigns/CreateAdUnit.vue'],
   ['Settings', '../pages/settings/Settings.vue', '@/pages/settings/Settings.vue'],
   ['AccountConfig', '../pages/settings/AccountConfig.vue', '@/pages/settings/AccountConfig.vue'],
@@ -174,9 +171,9 @@ const expectUniqueCanvasBackground = (
 }
 
 describe('workspace page canvas contract', () => {
-  it('keeps exactly fifteen routes in the workspace shell', () => {
-    expect(workspacePages).toHaveLength(15)
-    expect(routerSource.match(/meta: \{ workspaceShell: true \}/g)).toHaveLength(15)
+  it('keeps exactly twelve routes in the workspace shell', () => {
+    expect(workspacePages).toHaveLength(12)
+    expect(routerSource.match(/meta: \{ workspaceShell: true \}/g)).toHaveLength(12)
     expect(workspaceRouteComponents).toEqual(workspacePages.map(([, , routePath]) => routePath))
   })
 
@@ -187,28 +184,8 @@ describe('workspace page canvas contract', () => {
   })
 
   it('removes legacy gray only from full-height page canvases', () => {
-    const monitor = readSource('../pages/Monitor.vue')
     const projects = readSource('../pages/projects/Projects.vue')
-    const createCampaign = readSource('../pages/campaigns/CreateCampaign.vue')
     const material = readSource('../pages/creatives/Material.vue')
-
-    const monitorCanvas = elementClassTokens(
-      monitor,
-      'main',
-      ['flex-1', 'flex-col', 'overflow-hidden'],
-    )
-    expect(monitorCanvas).toContain('workspace-page-canvas')
-    expect(monitorCanvas).not.toContain('bg-slate-50')
-    expect(monitorCanvas).toContain('dark:bg-slate-950')
-
-    const createCampaignCanvas = elementClassTokens(
-      createCampaign,
-      'div',
-      ['flex-1', 'flex-col', 'overflow-hidden'],
-    )
-    expect(createCampaignCanvas).toContain('workspace-page-canvas')
-    expect(createCampaignCanvas).not.toContain('bg-slate-50')
-    expect(createCampaignCanvas).toContain('dark:bg-slate-950')
 
     const projectShellRules = topLevelSfcStyleRules(projects)
       .filter(rule => rule.selector === '.projects-shell')
@@ -223,13 +200,7 @@ describe('workspace page canvas contract', () => {
   })
 
   it('preserves representative component-level soft surfaces', () => {
-    const monitor = readSource('../pages/Monitor.vue')
     const material = readSource('../pages/creatives/Material.vue')
-
-    const monitorTableHead = elementClassTokens(monitor, 'thead', [])
-    expect(monitorTableHead).toContain('bg-slate-50')
-    expect(monitorTableHead).toContain('text-slate-500')
-    expect(monitorTableHead).toContain('dark:bg-slate-800/50')
 
     const materialDropZone = elementClassTokens(
       material,

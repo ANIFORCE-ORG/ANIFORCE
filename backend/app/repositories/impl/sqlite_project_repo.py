@@ -1,9 +1,9 @@
 """项目 Repository SQLite 实现"""
 import json
 from datetime import datetime
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from app.models import Project
+from app.models import Campaign, Project
 from app.models.project import ProjectStatus
 
 
@@ -13,8 +13,49 @@ class SqliteProjectRepository:
     def __init__(self, session: AsyncSession):
         self.session = session
 
-    def _to_dict(self, project: Project) -> dict:
+    @staticmethod
+    def _normalize_campaign_platforms(platforms: list[str]) -> list[str]:
+        unique_platforms = []
+        for platform in platforms:
+            value = platform.strip()
+            if value and value not in unique_platforms:
+                unique_platforms.append(value)
+
+        preferred_order = ["Meta", "Google"]
+        ordered_platforms = [platform for platform in preferred_order if platform in unique_platforms]
+        ordered_platforms.extend(platform for platform in unique_platforms if platform not in preferred_order)
+        return ordered_platforms
+
+    async def _get_campaign_summary_by_project_ids(self, project_ids: list[str]) -> dict[str, dict[str, object]]:
+        if not project_ids:
+            return {}
+
+        result = await self.session.execute(
+            select(
+                Campaign.project_id,
+                func.count(Campaign.id).label("campaign_count"),
+                func.group_concat(Campaign.platform, ",").label("campaign_platforms"),
+            )
+            .where(Campaign.project_id.in_(project_ids))
+            .group_by(Campaign.project_id)
+        )
+
+        summary_map: dict[str, dict[str, object]] = {}
+        for project_id, campaign_count, campaign_platforms in result.all():
+            platforms = []
+            if campaign_platforms:
+                platforms = self._normalize_campaign_platforms(
+                    [platform for platform in str(campaign_platforms).split(",") if platform]
+                )
+            summary_map[str(project_id)] = {
+                "campaign_count": int(campaign_count or 0),
+                "campaign_platforms": platforms,
+            }
+        return summary_map
+
+    def _to_dict(self, project: Project, campaign_summary: dict[str, object] | None = None) -> dict:
         """将 ORM 对象转换为字典"""
+        summary = campaign_summary or {}
         return {
             "id": project.id,
             "user_id": project.user_id,
@@ -24,6 +65,8 @@ class SqliteProjectRepository:
             "game_type": project.game_type,
             "target_market": project.target_market,
             "tags": json.loads(project.tags) if project.tags else [],
+            "campaign_count": int(summary.get("campaign_count") or 0),
+            "campaign_platforms": list(summary.get("campaign_platforms") or []),
             "total_budget": project.total_budget,
             "spent": project.spent,
             "status": project.status.value,
@@ -66,7 +109,8 @@ class SqliteProjectRepository:
         self.session.add(project)
         await self.session.flush()
 
-        return self._to_dict(project)
+        summary_map = await self._get_campaign_summary_by_project_ids([project.id])
+        return self._to_dict(project, summary_map.get(project.id))
 
     async def get_by_id(self, project_id: str) -> dict | None:
         """根据 ID 获取项目"""
@@ -77,7 +121,8 @@ class SqliteProjectRepository:
         if not project:
             return None
 
-        return self._to_dict(project)
+        summary_map = await self._get_campaign_summary_by_project_ids([project.id])
+        return self._to_dict(project, summary_map.get(project.id))
 
     async def list_by_user(
         self, user_id: str, status: str | None = None, limit: int = 20
@@ -93,7 +138,8 @@ class SqliteProjectRepository:
         result = await self.session.execute(query)
         projects = result.scalars().all()
 
-        return [self._to_dict(p) for p in projects]
+        summary_map = await self._get_campaign_summary_by_project_ids([project.id for project in projects])
+        return [self._to_dict(project, summary_map.get(project.id)) for project in projects]
 
     async def update(self, project_id: str, **kwargs) -> None:
         """更新项目"""

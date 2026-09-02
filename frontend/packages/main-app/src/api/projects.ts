@@ -12,6 +12,8 @@ export interface Project {
   game_type: string
   target_market: string
   tags: string[]
+  campaign_count?: number
+  campaign_platforms?: string[]
   total_budget: number
   spent: number
   status: string

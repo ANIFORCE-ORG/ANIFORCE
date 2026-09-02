@@ -10,37 +10,15 @@ const router = createRouter({
       component: () => import('@/pages/starting/GetStartFormal.vue'),
     },
     {
-      path: '/getstart',
-      name: 'get-start',
-      component: () => import('@/pages/starting/GetStart.vue'),
-    },
-    {
       path: '/home',
       name: 'home',
       component: () => import('@/pages/Home.vue'),
       meta: { workspaceShell: true },
     },
     {
-      path: '/market-analysis',
-      name: 'market-analysis',
-      component: () => import('@/pages/MarketAnalysis.vue'),
-    },
-    {
-      path: '/campaign',
-      name: 'campaign',
-      component: () => import('@/pages/campaigns/Campaign.vue'),
-      meta: { workspaceShell: true },
-    },
-    {
       path: '/material',
       name: 'material',
       component: () => import('@/pages/creatives/Material.vue'),
-      meta: { workspaceShell: true },
-    },
-    {
-      path: '/monitor',
-      name: 'monitor',
-      component: () => import('@/pages/Monitor.vue'),
       meta: { workspaceShell: true },
     },
     {
@@ -65,12 +43,6 @@ const router = createRouter({
       path: '/campaigns/:id',
       name: 'campaign-detail',
       component: () => import('@/pages/campaigns/CampaignDetail.vue'),
-      meta: { workspaceShell: true },
-    },
-    {
-      path: '/campaigns/create',
-      name: 'create-campaign',
-      component: () => import('@/pages/campaigns/CreateCampaign.vue'),
       meta: { workspaceShell: true },
     },
     {
@@ -150,7 +122,7 @@ router.beforeEach((to, from, next) => {
   // Workspace routes, including dynamic detail routes, require authentication.
   const requiresAuth = to.meta.workspaceShell === true
 
-  // 已登录用户访问GetStart页面,重定向到/home
+  // 已登录用户访问入口页,重定向到/home
   if (to.path === '/' && auth.isLoggedIn) {
     next('/home')
     return

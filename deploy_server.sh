@@ -294,7 +294,7 @@ else
   fi
 
   info "执行: ./run_server.sh $AGENT_ARGS"
-  bash "$ROOT_DIR/run_server.sh" $AGENT_ARGS &
+  OPEN_BROWSER=0 bash "$ROOT_DIR/run_server.sh" $AGENT_ARGS &
   AGENT_SCRIPT_PID=$!
 
   wait_for_service_port "$AGENT_PORT" "Agent 服务"
@@ -345,7 +345,7 @@ else
   fi
   
   info "执行: ./run_server.sh $BACKEND_ARGS"
-  bash "$ROOT_DIR/run_server.sh" $BACKEND_ARGS &
+  OPEN_BROWSER=0 bash "$ROOT_DIR/run_server.sh" $BACKEND_ARGS &
   BACKEND_SCRIPT_PID=$!
   
   wait_for_service_port "$BACKEND_PORT" "后端服务"
@@ -380,7 +380,7 @@ else
   fi
   
   info "执行: ./run_server.sh $FRONTEND_ARGS"
-  bash "$ROOT_DIR/run_server.sh" $FRONTEND_ARGS &
+  OPEN_BROWSER=0 bash "$ROOT_DIR/run_server.sh" $FRONTEND_ARGS &
   FRONTEND_SCRIPT_PID=$!
   
   wait_for_service_port "$FRONTEND_PORT" "前端服务"

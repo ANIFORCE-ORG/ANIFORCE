@@ -5,9 +5,7 @@ const read = (relativePath: string) => readFileSync(new URL(relativePath, import
 
 const globalCss = read('./global.css')
 const sidebar = read('../components/layout/SidebarNav.vue')
-const campaign = read('../pages/campaigns/Campaign.vue')
 const campaignDetail = read('../pages/campaigns/CampaignDetail.vue')
-const createCampaign = read('../pages/campaigns/CreateCampaign.vue')
 const createAdUnit = read('../pages/campaigns/CreateAdUnit.vue')
 const settingsCss = read('./settings-notion.css')
 const organizationDialog = read('../components/settings/OrganizationDetail.vue')
@@ -38,17 +36,12 @@ describe('application-wide responsive layout', () => {
     expect(sidebar).toContain(':aria-expanded="!isSidebarCollapsed"')
   })
 
-  it('allows campaign search, cards and details to reflow', () => {
-    expect(campaign).toContain('class="campaign-filter-bar')
-    expect(campaign).toContain('class="campaign-card-head')
-    expect(campaign).toContain('@media (max-width: 720px)')
+  it('allows campaign details to reflow', () => {
     expect(campaignDetail).toContain('grid grid-cols-1 gap-[8px] sm:grid-cols-2 xl:grid-cols-4')
     expect(campaignDetail).toContain('class="campaign-detail-head')
   })
 
   it('stacks campaign creation forms on narrow screens', () => {
-    expect(createCampaign).toContain('class="campaign-stepper-scroll')
-    expect(createCampaign).toContain('grid grid-cols-1 gap-[12px] md:grid-cols-2')
     expect(createAdUnit).toContain('grid grid-cols-1 gap-[10px] md:grid-cols-2')
     expect(createAdUnit).not.toContain('class="grid grid-cols-2 gap-[10px]"')
   })
