@@ -26,12 +26,6 @@ const router = createRouter({
       component: () => import('@/pages/MarketAnalysis.vue'),
     },
     {
-      path: '/campaign',
-      name: 'campaign',
-      component: () => import('@/pages/campaigns/Campaign.vue'),
-      meta: { workspaceShell: true },
-    },
-    {
       path: '/material',
       name: 'material',
       component: () => import('@/pages/creatives/Material.vue'),

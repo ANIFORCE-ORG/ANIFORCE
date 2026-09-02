@@ -142,7 +142,6 @@ const mediaRuleBody = (source: string, maxWidth: number) => {
 
 const sharedHeaderPages = [
   '../pages/projects/ProjectDetail.vue',
-  '../pages/campaigns/Campaign.vue',
   '../pages/campaigns/CampaignDetail.vue',
   '../pages/campaigns/CreateAdUnit.vue',
   '../pages/creatives/Material.vue',

@@ -9,7 +9,6 @@ const globalSource = readSource('./global.css')
 
 const workspacePages = [
   ['Home', '../pages/Home.vue', '@/pages/Home.vue'],
-  ['Campaign', '../pages/campaigns/Campaign.vue', '@/pages/campaigns/Campaign.vue'],
   ['Material', '../pages/creatives/Material.vue', '@/pages/creatives/Material.vue'],
   ['Monitor', '../pages/Monitor.vue', '@/pages/Monitor.vue'],
   ['Dashboard', '../pages/Dashboard.vue', '@/pages/Dashboard.vue'],
@@ -173,9 +172,9 @@ const expectUniqueCanvasBackground = (
 }
 
 describe('workspace page canvas contract', () => {
-  it('keeps exactly fourteen routes in the workspace shell', () => {
-    expect(workspacePages).toHaveLength(14)
-    expect(routerSource.match(/meta: \{ workspaceShell: true \}/g)).toHaveLength(14)
+  it('keeps exactly thirteen routes in the workspace shell', () => {
+    expect(workspacePages).toHaveLength(13)
+    expect(routerSource.match(/meta: \{ workspaceShell: true \}/g)).toHaveLength(13)
     expect(workspaceRouteComponents).toEqual(workspacePages.map(([, , routePath]) => routePath))
   })
 

@@ -5,7 +5,6 @@ const read = (relativePath: string) => readFileSync(new URL(relativePath, import
 
 const globalCss = read('./global.css')
 const sidebar = read('../components/layout/SidebarNav.vue')
-const campaign = read('../pages/campaigns/Campaign.vue')
 const campaignDetail = read('../pages/campaigns/CampaignDetail.vue')
 const createAdUnit = read('../pages/campaigns/CreateAdUnit.vue')
 const settingsCss = read('./settings-notion.css')
@@ -37,10 +36,7 @@ describe('application-wide responsive layout', () => {
     expect(sidebar).toContain(':aria-expanded="!isSidebarCollapsed"')
   })
 
-  it('allows campaign search, cards and details to reflow', () => {
-    expect(campaign).toContain('class="campaign-filter-bar')
-    expect(campaign).toContain('class="campaign-card-head')
-    expect(campaign).toContain('@media (max-width: 720px)')
+  it('allows campaign details to reflow', () => {
     expect(campaignDetail).toContain('grid grid-cols-1 gap-[8px] sm:grid-cols-2 xl:grid-cols-4')
     expect(campaignDetail).toContain('class="campaign-detail-head')
   })

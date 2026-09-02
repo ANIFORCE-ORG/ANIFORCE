@@ -3,6 +3,7 @@ import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { useRouter, useRoute } from 'vue-router'
 import { useAuthStore } from '@/store/auth'
 import { useAgentSession } from '@/composables/useAgentSession'
+import { navItems as defaultNavItems } from '@/config/navigation'
 import AccountControls from '@/components/layout/AccountControls.vue'
 import SessionRenameDialog from '@/components/layout/SessionRenameDialog.vue'
 import ConfirmDialog from '@/components/toasts/ConfirmDialog.vue'
@@ -30,13 +31,7 @@ interface Props {
 }
 
 const props = withDefaults(defineProps<Props>(), {
-  navItems: () => [
-    { id: 'dashboard', icon: 'pie_chart', label: '数据概览', path: '/dashboard' },
-    { id: 'projects', icon: 'folder_open', label: '项目管理', path: '/projects' },
-    { id: 'campaigns', icon: 'ads_click', label: '广告投放', path: '/campaign' },
-    { id: 'materials', icon: 'video_library', label: '创意素材', path: '/material' },
-    { id: 'reports', icon: 'bar_chart', label: '数据报表', path: '/monitor' },
-  ],
+  navItems: () => [...defaultNavItems],
   sessions: () => [],
   activePanel: '',
   sessionActions: true,
