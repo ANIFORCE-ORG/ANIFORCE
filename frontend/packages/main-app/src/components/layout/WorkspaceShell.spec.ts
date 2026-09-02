@@ -13,9 +13,9 @@ describe('Codex-inspired workspace shell', () => {
   const confirmDialogSource = readSource('../toasts/ConfirmDialog.vue')
   const footerSource = readSource('./AppFooter.vue')
 
-  it('opts the thirteen SidebarNav routes into the workspace shell', () => {
-    expect(routerSource.match(/meta: \{ workspaceShell: true \}/g)).toHaveLength(13)
-    expect(routerSource).toMatch(/name: 'market-analysis',\s+component: \(\) => import\('@\/pages\/MarketAnalysis\.vue'\),\s+\},/)
+  it('opts the twelve SidebarNav routes into the workspace shell', () => {
+    expect(routerSource.match(/meta: \{ workspaceShell: true \}/g)).toHaveLength(12)
+    expect(routerSource).not.toContain("name: 'market-analysis'")
   })
 
   it('keeps the public header Logo while removing workspace account actions', () => {

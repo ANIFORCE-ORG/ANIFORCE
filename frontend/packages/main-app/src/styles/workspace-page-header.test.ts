@@ -145,7 +145,6 @@ const sharedHeaderPages = [
   '../pages/campaigns/CampaignDetail.vue',
   '../pages/campaigns/CreateAdUnit.vue',
   '../pages/creatives/Material.vue',
-  '../pages/Monitor.vue',
   '../pages/settings/Settings.vue',
   '../pages/settings/AccountConfig.vue',
   '../pages/settings/AIUsageConfig.vue',
