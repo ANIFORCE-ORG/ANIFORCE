@@ -241,7 +241,7 @@ if [[ "${SKIP_INSTALL}" -eq 0 ]]; then
 
   echo "Preparing frontend pnpm environment..."
   cd "${FRONTEND_DIR}"
-  npm_config_cache="${ROOT_DIR}/npm_cache" npx pnpm install
+  CI=true npm_config_cache="${ROOT_DIR}/npm_cache" npx pnpm install
 fi
 
 echo "Checking Redis Agent event stream..."

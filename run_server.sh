@@ -552,7 +552,7 @@ elif [ "$SKIP_INSTALL" -eq 1 ]; then
   warn "已启用 --skip-install, 跳过前端依赖完整性校验与安装"
 else
   info "校正前端依赖 (pnpm install --frozen-lockfile)..."
-  pnpm install --frozen-lockfile || fail "前端依赖安装或完整性校正失败"
+  CI=true pnpm install --frozen-lockfile || fail "前端依赖安装或完整性校正失败"
   ok "前端依赖已校正"
 fi
 
