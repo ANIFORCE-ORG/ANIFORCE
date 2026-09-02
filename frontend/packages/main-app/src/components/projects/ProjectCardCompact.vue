@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { computed } from 'vue'
 import { useRouter } from 'vue-router'
 import type { Project } from '@/api/projects'
 
@@ -20,6 +21,26 @@ const emit = defineEmits<{
 }>()
 
 const router = useRouter()
+
+const campaignCountLabel = computed(() => {
+  if (typeof props.project.campaign_count !== 'number') return 'Campaign 未加载'
+  return `${props.project.campaign_count} 个 Campaign`
+})
+
+const campaignPlatformLabel = computed(() => {
+  if (!Array.isArray(props.project.campaign_platforms)) return 'Campaign 未加载'
+
+  const platforms = Array.from(new Set(props.project.campaign_platforms.map(item => item.trim()).filter(Boolean)))
+  if (!platforms.length) return '暂无 Campaign'
+
+  const preferredOrder = ['Meta', 'Google']
+  const orderedPlatforms = [
+    ...preferredOrder.filter(platform => platforms.includes(platform)),
+    ...platforms.filter(platform => !preferredOrder.includes(platform))
+  ]
+
+  return orderedPlatforms.join('/')
+})
 
 const getStatusColor = (status: string) => {
   const colors: Record<string, string> = {
@@ -88,11 +109,12 @@ const handleViewDetail = () => {
     <p class="project-info">
       <span>{{ project.game_type }}</span>
       <span>{{ project.target_market }}</span>
+      <span>{{ campaignCountLabel }}</span>
     </p>
 
     <!-- Tags / Chips -->
     <div class="tag-list">
-      <span class="tag">Meta Campaign</span>
+      <span class="tag">{{ campaignPlatformLabel }}</span>
       <span class="tag">{{ project.tags[0] || '支付计划' }}</span>
       <span class="tag">App promotion</span>
     </div>
@@ -215,7 +237,7 @@ const handleViewDetail = () => {
 }
 
 .project-info {
-  min-height: 42px;
+  min-height: 64px;
   margin: 8px 0 0;
   color: #787671;
   font-size: 13px;

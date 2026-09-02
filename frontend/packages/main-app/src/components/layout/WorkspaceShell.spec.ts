@@ -13,8 +13,8 @@ describe('Codex-inspired workspace shell', () => {
   const confirmDialogSource = readSource('../toasts/ConfirmDialog.vue')
   const footerSource = readSource('./AppFooter.vue')
 
-  it('opts the fifteen SidebarNav routes into the workspace shell', () => {
-    expect(routerSource.match(/meta: \{ workspaceShell: true \}/g)).toHaveLength(15)
+  it('opts the fourteen SidebarNav routes into the workspace shell', () => {
+    expect(routerSource.match(/meta: \{ workspaceShell: true \}/g)).toHaveLength(14)
     expect(routerSource).toMatch(/name: 'market-analysis',\s+component: \(\) => import\('@\/pages\/MarketAnalysis\.vue'\),\s+\},/)
   })
 

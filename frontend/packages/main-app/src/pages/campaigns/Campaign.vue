@@ -113,8 +113,7 @@ const switchSession = (session: any) => {
 
 // 创建广告
 const handleCreateCampaign = () => {
-  // 跳转到创建广告页面，不传projectId参数，让用户在页面中选择项目
-  router.push('/campaigns/create')
+  router.push('/projects')
 }
 
 // 查看广告详情

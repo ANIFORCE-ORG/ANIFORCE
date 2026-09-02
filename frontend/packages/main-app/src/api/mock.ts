@@ -110,6 +110,31 @@ function createRecord(collection: any[], body: any, prefix: string, defaults: Re
   return item
 }
 
+function normalizeCampaignPlatforms(platforms: string[]) {
+  const uniquePlatforms = Array.from(new Set(platforms.map(item => item.trim()).filter(Boolean)))
+  const preferredOrder = ['Meta', 'Google']
+  return [
+    ...preferredOrder.filter(platform => uniquePlatforms.includes(platform)),
+    ...uniquePlatforms.filter(platform => !preferredOrder.includes(platform))
+  ]
+}
+
+function getProjectCampaignSummary(projectId: string) {
+  const projectCampaigns = campaigns.filter(item => item.project_id === projectId)
+  const platforms = normalizeCampaignPlatforms(projectCampaigns.map(item => item.platform).filter(Boolean))
+  return {
+    campaign_count: projectCampaigns.length,
+    campaign_platforms: platforms
+  }
+}
+
+function decorateProject(project: any) {
+  return {
+    ...project,
+    ...getProjectCampaignSummary(project.id)
+  }
+}
+
 function mockAgentEvents(runId: string): Response {
   const run = agentRuns.get(runId)
   const prompt = run?.prompt || '当前投放'
@@ -149,15 +174,15 @@ async function handleMockRequest(url: URL, init?: RequestInit): Promise<Response
   if (path === '/projects' && method === 'GET') {
     const status = url.searchParams.get('status')
     const limit = Number(url.searchParams.get('limit') || projects.length)
-    return jsonResponse({ projects: projects.filter(item => !status || item.status === status).slice(0, limit) })
+    return jsonResponse({ projects: projects.filter(item => !status || item.status === status).slice(0, limit).map(decorateProject) })
   }
-  if (path === '/projects' && method === 'POST') return jsonResponse(createRecord(projects, body, 'proj', { game_type: '应用', target_market: '全球', tags: [], total_budget: 0, spent: 0, status: 'draft', manager: 'Admin' }))
+  if (path === '/projects' && method === 'POST') return jsonResponse(decorateProject(createRecord(projects, body, 'proj', { game_type: '应用', target_market: '全球', tags: [], total_budget: 0, spent: 0, status: 'draft', manager: 'Admin' })))
   const projectMatch = path.match(/^\/projects\/([^/]+)$/)
   if (projectMatch) {
     const index = projects.findIndex(item => item.id === projectMatch[1])
-    if (method === 'GET') return jsonResponse(projects[index] || projects[0])
+    if (method === 'GET') return jsonResponse(decorateProject(projects[index] || projects[0]))
     if (method === 'DELETE') { if (index >= 0) projects.splice(index, 1); return jsonResponse({ success: true }) }
-    if (index >= 0 && (method === 'PUT' || method === 'PATCH')) { projects[index] = { ...projects[index], ...body, updated_at: now }; return jsonResponse(projects[index]) }
+    if (index >= 0 && (method === 'PUT' || method === 'PATCH')) { projects[index] = { ...projects[index], ...body, updated_at: now }; return jsonResponse(decorateProject(projects[index])) }
   }
 
   if (path === '/campaigns' && method === 'GET') {

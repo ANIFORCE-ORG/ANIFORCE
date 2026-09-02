@@ -68,12 +68,6 @@ const router = createRouter({
       meta: { workspaceShell: true },
     },
     {
-      path: '/campaigns/create',
-      name: 'create-campaign',
-      component: () => import('@/pages/campaigns/CreateCampaign.vue'),
-      meta: { workspaceShell: true },
-    },
-    {
       path: '/campaigns/:campaignId/ad-units/create',
       name: 'create-ad-unit',
       component: () => import('@/pages/campaigns/CreateAdUnit.vue'),

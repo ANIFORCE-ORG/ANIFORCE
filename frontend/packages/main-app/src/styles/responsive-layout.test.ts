@@ -7,7 +7,6 @@ const globalCss = read('./global.css')
 const sidebar = read('../components/layout/SidebarNav.vue')
 const campaign = read('../pages/campaigns/Campaign.vue')
 const campaignDetail = read('../pages/campaigns/CampaignDetail.vue')
-const createCampaign = read('../pages/campaigns/CreateCampaign.vue')
 const createAdUnit = read('../pages/campaigns/CreateAdUnit.vue')
 const settingsCss = read('./settings-notion.css')
 const organizationDialog = read('../components/settings/OrganizationDetail.vue')
@@ -47,8 +46,6 @@ describe('application-wide responsive layout', () => {
   })
 
   it('stacks campaign creation forms on narrow screens', () => {
-    expect(createCampaign).toContain('class="campaign-stepper-scroll')
-    expect(createCampaign).toContain('grid grid-cols-1 gap-[12px] md:grid-cols-2')
     expect(createAdUnit).toContain('grid grid-cols-1 gap-[10px] md:grid-cols-2')
     expect(createAdUnit).not.toContain('class="grid grid-cols-2 gap-[10px]"')
   })

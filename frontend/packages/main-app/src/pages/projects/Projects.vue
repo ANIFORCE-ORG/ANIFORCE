@@ -66,13 +66,13 @@ const loadProjects = async () => {
 
   try {
     console.log('开始加载项目数据...')
-    const data = await getProjects({ limit: 50 })
-    projects.value = data
-    const availableIds = new Set(data.map(project => project.id))
+    const projectData = await getProjects({ limit: 50 })
+    projects.value = projectData
+    const availableIds = new Set(projectData.map(project => project.id))
     selectedProjectIds.value = new Set(
       [...selectedProjectIds.value].filter(projectId => availableIds.has(projectId))
     )
-    console.log('项目数据加载成功:', data.length, '条')
+    console.log('项目数据加载成功:', projectData.length, '条')
   } catch (err: any) {
     error.value = err.message || '加载数据失败'
     console.error('加载数据失败:', err)
