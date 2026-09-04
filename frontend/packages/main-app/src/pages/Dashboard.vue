@@ -253,6 +253,8 @@ const linePath = (field: 'spendY') => trendPoints.value
 const spendPath = computed(() => linePath('spendY'))
 const hoveredTrendIndex = ref<number | null>(null)
 const selectedTrendIndex = ref<number | null>(null)
+const chartPanelRef = ref<HTMLElement | null>(null)
+const chartPanelWidth = ref(0)
 const selectedTrendChartMetrics = ref<TrendMetric[]>(['spend', 'conversions'])
 const availableTrendMetrics = computed(() => trendMetricOptions.filter(option => {
   if (option.key === 'conversion_value' || option.key === 'roas') return isSales.value
@@ -327,6 +329,24 @@ watch(isSales, sales => {
 const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
 const toggleTrendSelection = (index: number) => { selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index }
+const visibleTrendAxisPoints = computed(() => {
+  const points = trendPoints.value
+  if (!points.length) return []
+  const availableWidth = chartPanelWidth.value || 960
+  const maximumLabels = Math.min(12, Math.max(4, Math.floor(availableWidth / 92)))
+  const labelCount = Math.min(points.length, maximumLabels)
+  if (labelCount === points.length) return points.map((point, index) => ({ point, index }))
+  return Array.from({ length: labelCount }, (_, position) => {
+    const index = Math.round(position * (points.length - 1) / (labelCount - 1))
+    return { point: points[index]!, index }
+  })
+})
+const trendAxisFontSize = computed(() => {
+  const availableWidth = chartPanelWidth.value || 960
+  const svgScale = Math.min(availableWidth / 830, 246 / 161)
+  const screenFontSize = availableWidth < 640 ? 9 : 10
+  return Math.min(24, Math.max(6, screenFontSize / Math.max(svgScale, 0.25)))
+})
 
 const dailyAnalysisRows = computed<AnalysisTableRow[]>(() => (overview.value?.trend ?? []).map((point, index) => {
   const metrics = derive(point)
@@ -680,7 +700,24 @@ const handleSyncCompleted = async (result: MetaAdSetSyncResponse) => {
 
 watch([objective, accountId, period], () => { goToLevel('account'); search.value = ''; hierarchyPage.value = 1 })
 
-onMounted(initialize)
+let trendChartResizeObserver: ResizeObserver | null = null
+watch(chartPanelRef, (element, previousElement) => {
+  if (previousElement) trendChartResizeObserver?.unobserve(previousElement)
+  if (!element) return
+  chartPanelWidth.value = element.clientWidth
+  trendChartResizeObserver?.observe(element)
+}, { flush: 'post' })
+
+onMounted(() => {
+  trendChartResizeObserver = new ResizeObserver(entries => {
+    chartPanelWidth.value = entries[0]?.contentRect.width ?? chartPanelRef.value?.clientWidth ?? 0
+  })
+  if (chartPanelRef.value) {
+    chartPanelWidth.value = chartPanelRef.value.clientWidth
+    trendChartResizeObserver.observe(chartPanelRef.value)
+  }
+  void initialize()
+})
 watch(() => props.workspaceOverview, value => {
   if (!value) return
   overview.value = value
@@ -689,7 +726,10 @@ watch(() => props.workspaceOverview, value => {
   dateEnd.value = value.window.until
   loading.value = false
 })
-onBeforeUnmount(() => window.clearTimeout(toastTimer))
+onBeforeUnmount(() => {
+  window.clearTimeout(toastTimer)
+  trendChartResizeObserver?.disconnect()
+})
 </script>
 
 <template>
@@ -816,7 +856,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         <section class="replay-card trend-replay-card">
           <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="选择趋势指标（支持多选）"><button v-for="metric in trendMetricColumns" :key="metric" type="button" :class="{ active: selectedTrendChartMetrics.includes(metric) }" :aria-pressed="selectedTrendChartMetrics.includes(metric)" @click="toggleTrendMetric(metric)">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</button></div><MetricSelector :model-value="trendMetricColumns" :options="availableTrendMetrics" @update:model-value="updateTrendMetrics" /></div></div>
           <div class="trend-grid">
-            <div class="chart-panel">
+            <div ref="chartPanelRef" class="chart-panel">
               <div class="chart-legend"><span v-for="metric in selectedTrendChartMetrics" :key="metric" class="legend-item"><i class="legend-dot" :style="{ backgroundColor: trendMetricOptions.find(item => item.key === metric)?.color }"></i>{{ trendMetricOptions.find(item => item.key === metric)?.label }}</span></div>
               <div v-if="!trendPoints.length" class="chart-empty">所选窗口暂无日级投放数据</div>
               <svg v-else viewBox="60 24 830 161" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天${selectedTrendChartMetrics.map(metric => trendMetricOptions.find(item => item.key === metric)?.label).join('、')}趋势图`">
@@ -849,9 +889,9 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
                   @keydown.enter.prevent="toggleTrendSelection(index)"
                   @keydown.space.prevent="toggleTrendSelection(index)"
                 />
-                <g class="chart-axis-labels">
+                <g class="chart-axis-labels" :style="{ fontSize: `${trendAxisFontSize}px` }">
                   <text
-                    v-for="(point, index) in trendPoints"
+                    v-for="({ point, index }) in visibleTrendAxisPoints"
                     :key="`axis-${point.date}`"
                     :x="point.x"
                     y="170"
@@ -1129,7 +1169,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
 .legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }
 .chart-panel svg { display: block; width: 100%; height: 202px; margin-top: -2px; overflow: visible; }
-.chart-axis-labels text { fill: var(--stone); font-size: 10.5px; cursor: pointer; outline: none; }
+.chart-axis-labels text { fill: var(--stone); cursor: pointer; outline: none; }
 .chart-axis-labels text.active { fill: var(--charcoal); font-weight: 600; }
 .chart-axis-labels text.selected { fill: #3276cc; }
 .chart-hit-area { fill: transparent; cursor: pointer; outline: none; }
