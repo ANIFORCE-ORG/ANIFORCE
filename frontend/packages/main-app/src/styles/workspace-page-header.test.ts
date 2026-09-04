@@ -602,13 +602,15 @@ describe('Dashboard workspace page contract', () => {
     )
     expect(dashboard).not.toContain('class="roas" :cx="activeTrendPoint.x"')
     expect(dashboard).toContain(
-      '<rect :x="activeTrendPoint.x - 10" :y="activeTrendPoint.barY" width="20" :height="activeTrendPoint.barHeight" rx="3" />',
+      '<rect v-for="bar in activeTrendPoint.bars" :key="bar.metric" :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height" :stroke="bar.color" rx="2" />',
     )
     expect(dashboard).toContain(
       '<circle v-if="activeTrendPoint.spendY != null" class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />',
     )
     expect(dashboard).toContain('<h2>趋势监控</h2>')
     expect(dashboard).toContain('class="trend-metric-pills"')
+    expect(dashboard).toContain(':aria-pressed="selectedTrendChartMetrics.includes(metric)"')
+    expect(dashboard).toContain('@click="toggleTrendMetric(metric)"')
     expect(dashboard).toMatch(/\.legend-dot\s*\{[^}]*\bwidth:\s*5px;[^}]*\bheight:\s*5px;/s)
     expect(dashboard).toMatch(/\.chart-active-markers line\s*\{[^}]*\bstroke-width:\s*\.75;/s)
     expect(dashboard).toMatch(/\.chart-active-markers rect\s*\{[^}]*\bstroke-width:\s*1\.2;/s)

@@ -196,36 +196,56 @@ const scaleY = (value: number | null, values: Array<number | null>, top = 48, bo
 }
 const trendPoints = computed(() => {
   const rows = overview.value?.trend ?? []
+  const chartMetrics = selectedTrendChartMetrics.value
+  const barMetrics = chartMetrics.filter(metric => metric !== 'spend')
   const spendValues = rows.map(row => numberValue(row.spend))
-  const barValues = rows.map(row => metricValueOf(row, selectedTrendMetric.value))
-  const barMax = Math.max(...barValues.filter((item): item is number => item != null), 0)
+  const barMaxByMetric = new Map<TrendMetric, number>(barMetrics.map(metric => {
+    const values = rows.map(row => metricValueOf(row, metric))
+    return [metric, Math.max(...values.filter((item): item is number => item != null), 0)]
+  }))
+  const barGap = 2
+  const barWidth = barMetrics.length ? Math.max(3, Math.min(14, (42 - barGap * (barMetrics.length - 1)) / barMetrics.length)) : 0
+  const barGroupWidth = barMetrics.length * barWidth + Math.max(0, barMetrics.length - 1) * barGap
+
   return rows.map((row, index) => {
-    const metrics = derive(row)
     const x = rows.length <= 1 ? 475 : 91 + index * (768 / (rows.length - 1))
-    const selectedMetric = trendMetricOptions.find(option => option.key === selectedTrendMetric.value)
-    const barValue = metricValueOf(row, selectedTrendMetric.value)
-    const barHeight = barValue == null || barMax === 0 ? 0 : Math.max(2, (barValue / barMax) * 105)
+    const metricValues = chartMetrics.map(metric => {
+      const option = trendMetricOptions.find(item => item.key === metric)!
+      const value = metricValueOf(row, metric)
+      return {
+        metric,
+        label: option.label,
+        color: option.color,
+        text: formatTrendMetricValue(metric, value, overview.value?.window?.currency, overview.value?.window?.mixed_currency),
+      }
+    })
+    const bars = barMetrics.map((metric, seriesIndex) => {
+      const value = metricValueOf(row, metric)
+      const max = barMaxByMetric.get(metric) ?? 0
+      const height = value == null || max === 0 ? 0 : Math.max(2, (value / max) * 105)
+      return {
+        metric,
+        color: trendMetricOptions.find(item => item.key === metric)?.color ?? '#20a464',
+        x: x - barGroupWidth / 2 + seriesIndex * (barWidth + barGap),
+        y: 155 - height,
+        width: barWidth,
+        height,
+      }
+    })
     return {
       ...row,
       label: formatDate(row.date),
-      spendText: formatMoney(row.spend),
-      barLabel: selectedMetric?.label ?? (isSales.value ? '收入' : 'Lead'),
-      barText: formatTrendMetricValue(selectedTrendMetric.value, barValue, overview.value?.window?.currency, overview.value?.window?.mixed_currency),
-      efficiencyLabel: isSales.value ? 'ROAS' : 'CPL',
-      efficiencyText: isSales.value ? formatRoas(metrics.roas) : formatMoney(metrics.cost),
-      impressionsText: formatNumber(row.impressions),
-      clicksText: formatNumber(row.clicks),
-      ctrText: formatPercent(row.ctr),
-      resultsText: formatNumber(metrics.results),
+      metricValues,
+      bars,
+      ariaLabel: [row.date, ...metricValues.map(metric => `${metric.label} ${metric.text}`)].join('，'),
       x,
-      spendY: scaleY(numberValue(row.spend), spendValues),
-      barY: 155 - barHeight,
-      barHeight,
+      spendY: chartMetrics.includes('spend') ? scaleY(numberValue(row.spend), spendValues) : null,
       tooltipLeft: rows.length <= 1 ? 50 : 5 + index * (90 / (rows.length - 1)),
       hitWidth: Math.min(128, 768 / Math.max(rows.length, 1)),
     }
   })
 })
+const trendBars = computed(() => trendPoints.value.flatMap(point => point.bars.map(bar => ({ ...bar, date: point.date }))))
 const linePath = (field: 'spendY') => trendPoints.value
   .filter(point => point[field] != null)
   .map((point, index) => `${index ? 'L' : 'M'}${point.x} ${point[field]}`)
@@ -233,7 +253,7 @@ const linePath = (field: 'spendY') => trendPoints.value
 const spendPath = computed(() => linePath('spendY'))
 const hoveredTrendIndex = ref<number | null>(null)
 const selectedTrendIndex = ref<number | null>(null)
-const selectedTrendMetric = ref<TrendMetric>('conversion_value')
+const selectedTrendChartMetrics = ref<TrendMetric[]>(['spend', 'conversions'])
 const availableTrendMetrics = computed(() => trendMetricOptions.filter(option => {
   if (option.key === 'conversion_value' || option.key === 'roas') return isSales.value
   if (option.key === 'result_cost') return isLeads.value
@@ -255,7 +275,18 @@ const hierarchyMetricColumns = computed<TrendMetric[]>(() => availableAnalysisMe
 const dailyMetricColumns = computed<TrendMetric[]>(() => availableAnalysisMetrics(selectedDailyMetrics.value))
 const updateTrendMetrics = (metrics: TrendMetric[]) => {
   selectedTrendMetrics.value = metrics
-  if (!metrics.includes(selectedTrendMetric.value)) selectedTrendMetric.value = metrics.find(metric => metric !== 'spend') ?? metrics[0]!
+  const retained = selectedTrendChartMetrics.value.filter(metric => metrics.includes(metric))
+  selectedTrendChartMetrics.value = retained.length ? retained : [metrics[0]!]
+}
+const toggleTrendMetric = (metric: TrendMetric) => {
+  const selected = new Set(selectedTrendChartMetrics.value)
+  if (selected.has(metric)) {
+    if (selected.size === 1) return
+    selected.delete(metric)
+  } else {
+    selected.add(metric)
+  }
+  selectedTrendChartMetrics.value = trendMetricColumns.value.filter(item => selected.has(item))
 }
 const updateHierarchyMetrics = (metrics: TrendMetric[]) => { selectedHierarchyMetrics.value = metrics }
 const updateDailyMetrics = (metrics: TrendMetric[]) => { selectedDailyMetrics.value = metrics }
@@ -287,13 +318,11 @@ const metricValueOf = (point: DashboardMetrics, metric: TrendMetric): number | n
   return numberValue(point[metric])
 }
 watch(isSales, sales => {
-  if (!availableTrendMetrics.value.some(option => option.key === selectedTrendMetric.value)) {
-    selectedTrendMetric.value = sales ? 'conversion_value' : 'conversions'
-  }
   const defaults = defaultAnalysisMetrics(sales)
   selectedTrendMetrics.value = [...defaults]
   selectedHierarchyMetrics.value = [...defaults]
   selectedDailyMetrics.value = [...defaults]
+  selectedTrendChartMetrics.value = sales ? ['spend', 'conversion_value'] : ['spend', 'conversions']
 })
 const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
@@ -785,19 +814,19 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
 
         <section class="replay-card trend-replay-card">
-          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="趋势柱状指标"><button v-for="metric in trendMetricColumns" :key="metric" type="button" :class="{ active: selectedTrendMetric === metric }" @click="selectedTrendMetric = metric">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</button></div><MetricSelector :model-value="trendMetricColumns" :options="availableTrendMetrics" @update:model-value="updateTrendMetrics" /></div></div>
+          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="选择趋势指标（支持多选）"><button v-for="metric in trendMetricColumns" :key="metric" type="button" :class="{ active: selectedTrendChartMetrics.includes(metric) }" :aria-pressed="selectedTrendChartMetrics.includes(metric)" @click="toggleTrendMetric(metric)">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</button></div><MetricSelector :model-value="trendMetricColumns" :options="availableTrendMetrics" @update:model-value="updateTrendMetrics" /></div></div>
           <div class="trend-grid">
             <div class="chart-panel">
-              <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ trendMetricOptions.find(item => item.key === selectedTrendMetric)?.label }}</span></div>
+              <div class="chart-legend"><span v-for="metric in selectedTrendChartMetrics" :key="metric" class="legend-item"><i class="legend-dot" :style="{ backgroundColor: trendMetricOptions.find(item => item.key === metric)?.color }"></i>{{ trendMetricOptions.find(item => item.key === metric)?.label }}</span></div>
               <div v-if="!trendPoints.length" class="chart-empty">所选窗口暂无日级投放数据</div>
-              <svg v-else viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天花费与${isSales ? '收入' : 'Lead'}趋势图`">
+              <svg v-else viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天${selectedTrendChartMetrics.map(metric => trendMetricOptions.find(item => item.key === metric)?.label).join('、')}趋势图`">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
-                <g fill="#20a464" opacity=".8"><rect v-for="point in trendPoints" :key="`bar-${point.date}`" :x="point.x - 11" :y="point.barY" width="22" :height="point.barHeight" rx="3" /></g>
+                <g opacity=".78"><rect v-for="bar in trendBars" :key="`bar-${bar.date}-${bar.metric}`" :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height" :fill="bar.color" rx="2" /></g>
                 <path v-if="spendPath" :d="spendPath" fill="none" stroke="#4f8fe8" stroke-width="1.4" />
                                 <g fill="#4f8fe8" stroke="#fff" stroke-width="1"><circle v-for="point in trendPoints" v-show="point.spendY != null" :key="`spend-${point.date}`" :cx="point.x" :cy="point.spendY ?? 0" r="2.1" /></g>
                                 <g v-if="activeTrendPoint" class="chart-active-markers" aria-hidden="true">
                   <line :x1="activeTrendPoint.x" :x2="activeTrendPoint.x" y1="24" y2="155" />
-                  <rect :x="activeTrendPoint.x - 10" :y="activeTrendPoint.barY" width="20" :height="activeTrendPoint.barHeight" rx="3" />
+                  <rect v-for="bar in activeTrendPoint.bars" :key="bar.metric" :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height" :stroke="bar.color" rx="2" />
                   <circle v-if="activeTrendPoint.spendY != null" class="spend" :cx="activeTrendPoint.x" :cy="activeTrendPoint.spendY" r="3.5" />
                 </g>
                 <rect
@@ -811,7 +840,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
                   height="138"
                   role="button"
                   tabindex="0"
-                  :aria-label="`${point.date}，花费 ${point.spendText}，${point.barLabel} ${point.barText}，${point.efficiencyLabel} ${point.efficiencyText}`"
+                  :aria-label="point.ariaLabel"
                   @mouseenter="hoveredTrendIndex = index"
                   @mouseleave="hoveredTrendIndex = null"
                   @focus="hoveredTrendIndex = index"
@@ -823,9 +852,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               </svg>
               <div v-if="activeTrendPoint" class="chart-tooltip" :style="{ left: `${activeTrendPoint.tooltipLeft}%` }" role="status" aria-live="polite">
                 <strong>{{ activeTrendPoint.date }}</strong>
-                <div><span><i class="legend-dot spend"></i>花费</span><b>{{ activeTrendPoint.spendText }}</b></div>
-                <div><span><i class="legend-dot conversions"></i>{{ activeTrendPoint.barLabel }}</span><b>{{ activeTrendPoint.barText }}</b></div>
-                <div><span>{{ activeTrendPoint.efficiencyLabel }}</span><b>{{ activeTrendPoint.efficiencyText }}</b></div>
+                <div v-for="metric in activeTrendPoint.metricValues" :key="metric.metric"><span><i class="legend-dot" :style="{ backgroundColor: metric.color }"></i>{{ metric.label }}</span><b>{{ metric.text }}</b></div>
               </div>
               <div v-if="trendPoints.length" class="chart-axis-labels" aria-hidden="true">
                 <button v-for="(point, index) in trendPoints" :key="point.date" type="button" :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }" @mouseenter="hoveredTrendIndex = index" @mouseleave="hoveredTrendIndex = null" @focus="hoveredTrendIndex = index" @blur="hoveredTrendIndex = null" @click="toggleTrendSelection(index)">{{ point.label }}</button>
