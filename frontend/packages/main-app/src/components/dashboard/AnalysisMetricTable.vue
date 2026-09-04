@@ -61,6 +61,7 @@ const labelFor = (metric: TrendMetric) => ({
     <header class="analysis-table-titlebar">
       <div><h2>{{ props.title }}</h2><p>{{ props.subtitle }}</p></div>
       <div class="analysis-table-header-actions">
+        <slot name="actions" />
         <label class="analysis-table-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input v-model="query" type="search" :placeholder="props.searchPlaceholder" :aria-label="props.searchPlaceholder"></label>
         <span class="analysis-table-count">{{ props.entityLabel }} · {{ filteredRows.length }}</span>
         <button type="button" class="analysis-attention-button" :class="{ active: attentionOnly }" :aria-pressed="attentionOnly" @click="attentionOnly = !attentionOnly">{{ attentionOnly ? '查看全部' : '只看需要处理' }}</button>

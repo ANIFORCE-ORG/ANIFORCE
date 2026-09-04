@@ -4,6 +4,7 @@ import { useRouter } from 'vue-router'
 import SidebarNav from '@/components/layout/SidebarNav.vue'
 import DataSyncDialog from '@/components/dashboard/DataSyncDialog.vue'
 import AnalysisMetricTable, { type AnalysisTableRow } from '@/components/dashboard/AnalysisMetricTable.vue'
+import MetricSelector from '@/components/dashboard/MetricSelector.vue'
 import { formatTrendMetricValue, trendMetricOptions, type TrendMetric } from '@/data/trendMetrics'
 import { navItems } from '@/config/navigation'
 import { getMetaDashboardOverview, type DashboardMetrics, type MetaAdSetSyncResponse, type MetaDashboardOverview } from '@/api/dashboard'
@@ -238,6 +239,38 @@ const availableTrendMetrics = computed(() => trendMetricOptions.filter(option =>
   if (option.key === 'result_cost') return isLeads.value
   return true
 }))
+const defaultAnalysisMetrics = (sales: boolean): TrendMetric[] => sales
+  ? ['spend', 'conversion_value', 'conversions', 'roas', 'clicks', 'ctr']
+  : ['spend', 'conversions', 'result_cost', 'clicks', 'ctr']
+const selectedAnalysisMetrics = ref<TrendMetric[]>(defaultAnalysisMetrics(false))
+const analysisMetricColumns = computed<TrendMetric[]>(() => {
+  const available = new Set(availableTrendMetrics.value.map(option => option.key))
+  const selected = selectedAnalysisMetrics.value.filter(metric => available.has(metric))
+  return selected.length ? selected : defaultAnalysisMetrics(isSales.value).filter(metric => available.has(metric))
+})
+const updateAnalysisMetrics = (metrics: TrendMetric[]) => {
+  selectedAnalysisMetrics.value = metrics
+}
+const metricValueFromDerived = (metrics: ReturnType<typeof derive>, metric: TrendMetric) => ({
+  spend: metrics.spend,
+  impressions: metrics.impressions,
+  clicks: metrics.clicks,
+  conversions: metrics.results,
+  conversion_value: metrics.revenue,
+  ctr: metrics.ctr,
+  result_cost: metrics.cost,
+  roas: metrics.roas,
+}[metric])
+const formatAnalysisMetric = (metrics: ReturnType<typeof derive>, metric: TrendMetric) => formatTrendMetricValue(
+  metric,
+  metricValueFromDerived(metrics, metric),
+  overview.value?.window?.currency,
+  overview.value?.window?.mixed_currency,
+)
+const hierarchyGridStyle = computed(() => ({
+  gridTemplateColumns: `minmax(280px, 2fr) minmax(90px, .65fr) repeat(${analysisMetricColumns.value.length}, minmax(86px, .72fr))`,
+  minWidth: `${430 + analysisMetricColumns.value.length * 100}px`,
+}))
 const metricValueOf = (point: DashboardMetrics, metric: TrendMetric): number | null => {
   const metrics = derive(point)
   if (metric === 'conversion_value') return metrics.revenue
@@ -249,6 +282,7 @@ watch(isSales, sales => {
   if (!availableTrendMetrics.value.some(option => option.key === selectedTrendMetric.value)) {
     selectedTrendMetric.value = sales ? 'conversion_value' : 'conversions'
   }
+  selectedAnalysisMetrics.value = defaultAnalysisMetrics(sales)
 })
 const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
@@ -281,10 +315,6 @@ const dailyAnalysisRows = computed<AnalysisTableRow[]>(() => (overview.value?.tr
     statusTone: point.accounts_with_facts != null && point.accounts_expected != null && point.accounts_with_facts < point.accounts_expected ? 'warning' : 'normal',
   }
 }))
-const dailyAnalysisColumns = computed<TrendMetric[]>(() => isSales.value
-  ? ['spend', 'conversion_value', 'conversions', 'roas', 'clicks', 'ctr']
-  : ['spend', 'conversions', 'result_cost', 'clicks', 'ctr'])
-
 type Level = 'account' | 'campaign' | 'adset'
 const level = ref<Level>('account')
 const selectedAccountId = ref('')
@@ -744,7 +774,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
 
         <section class="replay-card trend-replay-card">
-          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="趋势柱状指标"><button v-for="metric in availableTrendMetrics" :key="metric.key" type="button" :class="{ active: selectedTrendMetric === metric.key }" @click="selectedTrendMetric = metric.key">{{ metric.label }}</button></div><span class="soft-chip">自定义指标</span></div></div>
+          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="趋势柱状指标"><button v-for="metric in availableTrendMetrics" :key="metric.key" type="button" :class="{ active: selectedTrendMetric === metric.key }" @click="selectedTrendMetric = metric.key">{{ metric.label }}</button></div><MetricSelector :model-value="analysisMetricColumns" :options="availableTrendMetrics" @update:model-value="updateAnalysisMetrics" /></div></div>
           <div class="trend-grid">
             <div class="chart-panel">
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ trendMetricOptions.find(item => item.key === selectedTrendMetric)?.label }}</span></div>
@@ -807,6 +837,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               </nav>
             </div>
             <div class="hierarchy-actions">
+              <MetricSelector :model-value="analysisMetricColumns" :options="availableTrendMetrics" @update:model-value="updateAnalysisMetrics" />
               <label class="hierarchy-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input v-model="hierarchyQuery" type="search" placeholder="搜索名称或 ID" aria-label="搜索层级名称或 ID"></label>
               <button type="button" @click="expandAllHierarchy">全部展开</button><button type="button" @click="collapseHierarchy">收起</button>
             </div>
@@ -818,12 +849,12 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           </div>
 
           <div class="hierarchy-tree-wrap">
-            <div class="hierarchy-tree-head"><span>层级 / 名称</span><span>状态</span><span>花费</span><span>{{ isSales ? 'ROAS' : 'CPL' }}</span><span>{{ isSales ? '订单' : 'Lead' }}</span><span>点击</span></div>
+            <div class="hierarchy-tree-head" :style="hierarchyGridStyle"><span>层级 / 名称</span><span>状态</span><span v-for="metric in analysisMetricColumns" :key="metric">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</span></div>
             <div v-if="!hierarchyRows.length" class="data-empty">当前窗口没有可展示的层级数据</div>
-            <div v-for="row in hierarchyRows" :key="row.key" class="hierarchy-tree-row">
+            <div v-for="row in hierarchyRows" :key="row.key" class="hierarchy-tree-row" :style="hierarchyGridStyle">
               <div class="hierarchy-tree-name" :style="{ '--depth': row.depth }"><button v-if="row.hasChildren" type="button" class="tree-expander" :class="{ open: expandedHierarchy.has(row.key) }" @click="toggleHierarchy(row.key)">›</button><span v-else class="tree-expander placeholder">›</span><span class="tree-icon" :class="row.kind">{{ row.kind === 'account' ? 'A' : row.kind === 'campaign' ? 'C' : 'U' }}</span><span><strong>{{ row.name }}</strong><small>{{ row.detail }}</small></span></div>
               <span class="tree-status" :class="{ warning: row.status !== '投放中' && row.status !== '已连接' }"><i></i>{{ row.status }}</span>
-              <span>{{ formatMoney(row.metrics.spend) }}</span><span>{{ isSales ? formatRoas(row.metrics.roas) : formatMoney(row.metrics.cost) }}</span><span>{{ formatNumber(row.metrics.results) }}</span><span>{{ formatNumber(row.metrics.clicks) }}</span>
+              <span v-for="metric in analysisMetricColumns" :key="metric">{{ formatAnalysisMetric(row.metrics, metric) }}</span>
             </div>
           </div>
           <div v-if="hierarchyFilteredGroups.length" class="hierarchy-pagination" aria-label="投放层级分页">
@@ -840,40 +871,25 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               <thead>
                 <tr>
                   <th>{{ levelLabels[level] }}</th>
-                  <th>花费</th>
-                  <th v-if="isSales">收入</th>
-                  <th>{{ isSales ? '订单' : 'Lead' }}</th>
-                  <th>{{ isSales ? 'ROAS' : 'CPL' }}</th>
+                  <th v-for="metric in analysisMetricColumns" :key="metric">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</th>
                   <th>环比</th>
-                  <th>点击</th>
-                  <th>CTR</th>
                   <th>状态</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="!visibleRows.length"><td :colspan="isSales ? 9 : 8" class="data-empty">当前窗口没有可展示的{{ levelLabels[level] }}</td></tr>
+                <tr v-if="!visibleRows.length"><td :colspan="analysisMetricColumns.length + 3" class="data-empty">当前窗口没有可展示的{{ levelLabels[level] }}</td></tr>
                 <tr v-for="row in visibleRows" :key="row.id" :class="{ drillable: level !== 'adset' }" @click="level !== 'adset' && drillInto(row)">
                   <td><strong>{{ row.name }}</strong><small>{{ row.subtitle || row.id }}</small></td>
-                  <td>{{ formatMoney(row.metrics.spend) }}</td>
-                  <td v-if="isSales">{{ formatMoney(row.metrics.revenue) }}</td>
-                  <td>{{ formatNumber(row.metrics.results) }}</td>
-                  <td>{{ isSales ? formatRoas(row.efficiency) : formatMoney(row.efficiency) }}</td>
+                  <td v-for="metric in analysisMetricColumns" :key="metric">{{ formatAnalysisMetric(row.metrics, metric) }}</td>
                   <td><span class="cell-delta" :class="row.efficiencyDelta.tone">{{ row.efficiencyDelta.text || '—' }}</span></td>
-                  <td>{{ formatNumber(row.metrics.clicks) }}</td>
-                  <td>{{ formatPercent(row.metrics.ctr) }}</td>
                   <td><span v-for="flag in row.flags" :key="flag.label" class="quiet-badge" :class="flag.tone">{{ flag.label }}</span><span v-if="!row.flags.length" class="row-dot"></span></td>
                 </tr>
               </tbody>
               <tfoot>
                 <tr>
                   <td>合计</td>
-                  <td>{{ formatMoney(current.spend) }}</td>
-                  <td v-if="isSales">{{ formatMoney(current.revenue) }}</td>
-                  <td>{{ formatNumber(current.results) }}</td>
-                  <td>{{ isSales ? formatRoas(current.roas) : formatMoney(current.cost) }}</td>
+                  <td v-for="metric in analysisMetricColumns" :key="metric">{{ formatAnalysisMetric(current, metric) }}</td>
                   <td></td>
-                  <td>{{ formatNumber(current.clicks) }}</td>
-                  <td>{{ formatPercent(current.ctr) }}</td>
                   <td></td>
                 </tr>
               </tfoot>
@@ -888,11 +904,13 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           entity-label="日期"
           search-placeholder="搜索日期"
           :rows="dailyAnalysisRows"
-          :columns="dailyAnalysisColumns"
+          :columns="analysisMetricColumns"
           :currency="overview?.window.currency"
           :mixed-currency="overview?.window.mixed_currency"
           :totals="{ spend: current.spend, conversion_value: current.revenue, conversions: current.results, roas: current.roas, clicks: current.clicks, ctr: current.ctr, impressions: current.impressions, result_cost: current.cost }"
-        />
+        >
+          <template #actions><MetricSelector :model-value="analysisMetricColumns" :options="availableTrendMetrics" @update:model-value="updateAnalysisMetrics" /></template>
+        </AnalysisMetricTable>
 
       </div>
     </main>
@@ -1106,7 +1124,8 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .table-hint { margin: 0; padding: 9px 16px; border-top: 1px solid var(--hairline-soft); color: var(--stone); font-size: 11px; }
 .legacy-crumbs,.legacy-drill-table,.hierarchy-card > .attention-bar,.hierarchy-card > .table-hint { display: none; }
 .hierarchy-actions { display: flex; align-items: center; gap: 7px; }.hierarchy-search { width: 250px; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 8px; }.hierarchy-search .material-symbols-outlined { color: var(--stone); font-size: 17px; }.hierarchy-search input { min-width: 0; flex: 1; border: 0; outline: 0; font: inherit; font-size: 12px; }.hierarchy-actions > button { height: 34px; padding: 0 10px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--slate); font: inherit; font-size: 11px; cursor: pointer; }
-.hierarchy-tree-head,.hierarchy-tree-row { display: grid; grid-template-columns: minmax(280px,2fr) minmax(90px,.65fr) repeat(4,minmax(80px,.72fr)); align-items: center; gap: 10px; padding: 0 16px; }.hierarchy-tree-head { min-height: 42px; border-bottom: 1px solid var(--hairline); background: var(--surface-soft); color: var(--steel); font-size: 11px; font-weight: 600; }.hierarchy-tree-head span:not(:first-child),.hierarchy-tree-row > span { text-align: right; }.hierarchy-tree-row { min-height: 58px; border-bottom: 1px solid var(--hairline-soft); color: var(--charcoal); font-size: 12px; font-variant-numeric: tabular-nums; }.hierarchy-tree-row:hover { background: #fafcff; }.hierarchy-tree-name { min-width: 0; display: flex; align-items: center; gap: 8px; padding-left: calc(var(--depth) * 28px); }.hierarchy-tree-name > span:last-child { min-width: 0; }.hierarchy-tree-name strong,.hierarchy-tree-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.hierarchy-tree-name small { margin-top: 3px; color: var(--stone); font-size: 10px; }.tree-expander { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--steel); font-size: 20px; cursor: pointer; transition: transform .15s ease; }.tree-expander.open { transform: rotate(90deg); }.tree-expander.placeholder { opacity: 0; }.tree-icon { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #cfe1f5; border-radius: 7px; background: #eef6ff; color: #3276cc; font-size: 10px; font-weight: 700; }.tree-icon.campaign { border-radius: 50%; background: #f6f5f4; color: #6b6862; border-color: #ddd9d3; }.tree-icon.adset { width: 22px; height: 22px; border: 0; background: transparent; }.tree-status { justify-self: end; display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 4px 8px; border-radius: 999px; background: #e8f7ee; color: #12804a; font-size: 10px; font-weight: 600; }.tree-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }.tree-status.warning { background: #fff4df; color: #a86400; }
+.hierarchy-tree-wrap { overflow-x: auto; }
+.hierarchy-tree-head,.hierarchy-tree-row { display: grid; align-items: center; gap: 10px; padding: 0 16px; }.hierarchy-tree-head { min-height: 42px; border-bottom: 1px solid var(--hairline); background: var(--surface-soft); color: var(--steel); font-size: 11px; font-weight: 600; }.hierarchy-tree-head span:not(:first-child),.hierarchy-tree-row > span { text-align: right; }.hierarchy-tree-row { min-height: 58px; border-bottom: 1px solid var(--hairline-soft); color: var(--charcoal); font-size: 12px; font-variant-numeric: tabular-nums; }.hierarchy-tree-row:hover { background: #fafcff; }.hierarchy-tree-name { min-width: 0; display: flex; align-items: center; gap: 8px; padding-left: calc(var(--depth) * 28px); }.hierarchy-tree-name > span:last-child { min-width: 0; }.hierarchy-tree-name strong,.hierarchy-tree-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.hierarchy-tree-name small { margin-top: 3px; color: var(--stone); font-size: 10px; }.tree-expander { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--steel); font-size: 20px; cursor: pointer; transition: transform .15s ease; }.tree-expander.open { transform: rotate(90deg); }.tree-expander.placeholder { opacity: 0; }.tree-icon { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #cfe1f5; border-radius: 7px; background: #eef6ff; color: #3276cc; font-size: 10px; font-weight: 700; }.tree-icon.campaign { border-radius: 50%; background: #f6f5f4; color: #6b6862; border-color: #ddd9d3; }.tree-icon.adset { width: 22px; height: 22px; border: 0; background: transparent; }.tree-status { justify-self: end; display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 4px 8px; border-radius: 999px; background: #e8f7ee; color: #12804a; font-size: 10px; font-weight: 600; }.tree-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }.tree-status.warning { background: #fff4df; color: #a86400; }
 
 .hierarchy-pagination { min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 16px; color: var(--steel); font-size: 11px; }
 .hierarchy-pagination__controls { display: flex; align-items: center; gap: 18px; }
