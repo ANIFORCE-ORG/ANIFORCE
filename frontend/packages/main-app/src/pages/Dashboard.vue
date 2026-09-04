@@ -196,29 +196,6 @@ const scaleY = (value: number | null, values: Array<number | null>, top = 48, bo
 }
 const TREND_X_START = 91
 const TREND_X_SPAN = 768
-const DAY_MS = 86400000
-const trendWindowRange = computed(() => {
-  const since = overview.value?.window?.since ?? dateStart.value
-  const until = overview.value?.window?.until ?? dateEnd.value
-  const sinceTime = Date.parse(`${since}T00:00:00Z`)
-  const untilTime = Date.parse(`${until}T00:00:00Z`)
-  const valid = Number.isFinite(sinceTime) && Number.isFinite(untilTime) && untilTime >= sinceTime
-  return {
-    sinceTime,
-    untilTime,
-    valid,
-    dayCount: valid ? Math.round((untilTime - sinceTime) / DAY_MS) + 1 : 1,
-  }
-})
-const trendXForDate = (date: string, fallbackIndex: number, rowCount: number) => {
-  const range = trendWindowRange.value
-  const pointTime = Date.parse(`${date}T00:00:00Z`)
-  if (range.valid && range.untilTime > range.sinceTime && Number.isFinite(pointTime)) {
-    const progress = Math.min(1, Math.max(0, (pointTime - range.sinceTime) / (range.untilTime - range.sinceTime)))
-    return TREND_X_START + progress * TREND_X_SPAN
-  }
-  return rowCount <= 1 ? TREND_X_START + TREND_X_SPAN / 2 : TREND_X_START + fallbackIndex * (TREND_X_SPAN / (rowCount - 1))
-}
 const trendPoints = computed(() => {
   const rows = overview.value?.trend ?? []
   const chartMetrics = selectedTrendChartMetrics.value
@@ -233,7 +210,9 @@ const trendPoints = computed(() => {
   const barGroupWidth = barMetrics.length * barWidth + Math.max(0, barMetrics.length - 1) * barGap
 
   return rows.map((row, index) => {
-    const x = trendXForDate(row.date, index, rows.length)
+    const x = rows.length <= 1
+      ? TREND_X_START + TREND_X_SPAN / 2
+      : TREND_X_START + index * (TREND_X_SPAN / (rows.length - 1))
     const metricValues = chartMetrics.map(metric => {
       const option = trendMetricOptions.find(item => item.key === metric)!
       const value = metricValueOf(row, metric)
@@ -265,8 +244,8 @@ const trendPoints = computed(() => {
       ariaLabel: [row.date, ...metricValues.map(metric => `${metric.label} ${metric.text}`)].join('，'),
       x,
       spendY: chartMetrics.includes('spend') ? scaleY(numberValue(row.spend), spendValues) : null,
-      tooltipLeft: 5 + ((x - TREND_X_START) / TREND_X_SPAN) * 90,
-      hitWidth: Math.min(128, TREND_X_SPAN / Math.max(trendWindowRange.value.dayCount, 1)),
+      tooltipLeft: rows.length <= 1 ? 50 : 5 + index * (90 / (rows.length - 1)),
+      hitWidth: Math.min(128, TREND_X_SPAN / Math.max(rows.length, 1)),
     }
   })
 })
@@ -355,21 +334,12 @@ const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrend
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
 const toggleTrendSelection = (index: number) => { selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index }
 const visibleTrendAxisPoints = computed(() => {
-  const range = trendWindowRange.value
-  if (!range.valid || !trendPoints.value.length) return []
+  const points = trendPoints.value
+  if (!points.length) return []
   const availableWidth = chartPanelWidth.value || 960
-  const maximumLabels = Math.min(12, Math.max(4, Math.floor(availableWidth / 92)))
-  const labelCount = Math.min(range.dayCount, maximumLabels)
-  return Array.from({ length: labelCount }, (_, position) => {
-    const progress = labelCount <= 1 ? 0.5 : position / (labelCount - 1)
-    const dayOffset = labelCount <= 1 ? 0 : Math.round(progress * (range.dayCount - 1))
-    const date = new Date(range.sinceTime + dayOffset * DAY_MS).toISOString().slice(0, 10)
-    return {
-      date,
-      label: formatDate(date),
-      x: TREND_X_START + progress * TREND_X_SPAN,
-    }
-  })
+  const maximumLabels = Math.max(4, Math.floor(availableWidth / 64))
+  const step = Math.max(1, Math.ceil(points.length / maximumLabels))
+  return points.filter((_, index) => index % step === 0)
 })
 const trendAxisFontSize = computed(() => {
   const availableWidth = chartPanelWidth.value || 960
