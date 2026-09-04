@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { onBeforeUnmount, onMounted, ref } from 'vue'
+
 import type { TrendMetric, TrendMetricOption } from '@/data/trendMetrics'
 
 const props = withDefaults(defineProps<{
@@ -13,6 +15,36 @@ const emit = defineEmits<{
   'update:modelValue': [metrics: TrendMetric[]]
 }>()
 
+const detailsRef = ref<HTMLDetailsElement | null>(null)
+
+function closeOnOutsidePointer(event: PointerEvent) {
+  const details = detailsRef.value
+  const target = event.target
+
+  if (details?.open && target instanceof Node && !details.contains(target)) {
+    details.open = false
+  }
+}
+
+function closeOnEscape(event: KeyboardEvent) {
+  const details = detailsRef.value
+
+  if (event.key === 'Escape' && details?.open) {
+    details.open = false
+    details.querySelector<HTMLElement>('summary')?.focus()
+  }
+}
+
+onMounted(() => {
+  document.addEventListener('pointerdown', closeOnOutsidePointer, true)
+  document.addEventListener('keydown', closeOnEscape)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('pointerdown', closeOnOutsidePointer, true)
+  document.removeEventListener('keydown', closeOnEscape)
+})
+
 const toggleMetric = (metric: TrendMetric, event: Event) => {
   const checked = (event.currentTarget as HTMLInputElement).checked
   if (!checked && props.modelValue.length === 1) return
@@ -24,7 +56,7 @@ const toggleMetric = (metric: TrendMetric, event: Event) => {
 </script>
 
 <template>
-  <details class="metric-selector">
+  <details ref="detailsRef" class="metric-selector">
     <summary>
       <span class="material-symbols-outlined" aria-hidden="true">view_column</span>
       <span>{{ props.label }}</span>
@@ -50,7 +82,7 @@ const toggleMetric = (metric: TrendMetric, event: Event) => {
 </template>
 
 <style scoped>
-.metric-selector { position: relative; z-index: 5; }
+.metric-selector { position: relative; z-index: 5; order: 999; flex: 0 0 auto; margin-left: auto; }
 .metric-selector summary { height: 32px; display: inline-flex; align-items: center; gap: 5px; padding: 0 9px; border: 1px solid #c8c4be; border-radius: 7px; background: #fff; color: #56534f; font: inherit; font-size: 11px; font-weight: 600; cursor: pointer; list-style: none; white-space: nowrap; }
 .metric-selector summary::-webkit-details-marker { display: none; }
 .metric-selector summary:hover,.metric-selector[open] summary { border-color: #a9cef8; background: #f7fbff; color: #1769aa; }
