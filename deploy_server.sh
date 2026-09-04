@@ -5,7 +5,7 @@
 #    ./deploy_server.sh [--mode local|cloud] [--nginx-port 80]
 #                       [--frontend-port 3010] [--backend-port 8010] [--agent-port 8020]
 #                       [--only all|agent|backend|frontend|nginx|phoenix] [--skip-install] [--without-agent]
-#                       [--with-nginx] [--with-phoenix] [--ssl]
+#                       [--with-nginx] [--with-phoenix]
 # ============================================================
 set -euo pipefail
 
@@ -106,7 +106,6 @@ BACKEND_PORT=8010
 AGENT_PORT=8020
 PHOENIX_PORT=${PHOENIX_PORT:-6006}
 DEMO_MODE=false
-USE_SSL=false
 
 # ---------- 日志配置 ----------
 LOG_DIR="./logs"
@@ -126,7 +125,6 @@ while [[ $# -gt 0 ]]; do
     --with-nginx) WITH_NGINX=1; shift 1 ;;
     --with-phoenix) WITH_PHOENIX=1; shift 1 ;;
     --demo) DEMO_MODE=true; shift 1 ;;
-    --ssl) USE_SSL=true; shift 1 ;;
     --log-dir) LOG_DIR="$2"; LOG_DIR_EXPLICIT=1; shift 2 ;;
     -h|--help)
       echo "用法: $0 [选项]"
@@ -143,7 +141,6 @@ while [[ $# -gt 0 ]]; do
       echo "  --with-nginx     启动 Nginx 反向代理；默认不启动"
       echo "  --with-phoenix   随默认部署启动 Phoenix tracing collector；默认不启动"
       echo "  --demo           启用 Demo 模式"
-      echo "  --ssl            启用 HTTPS (需配合 --with-nginx，使用 nginx-https.conf)"
       echo "  --log-dir        日志目录 (默认: ./logs)"
       echo ""
       echo "示例:"
@@ -161,9 +158,6 @@ while [[ $# -gt 0 ]]; do
       echo ""
       echo "  # 云端生产模式"
       echo "  $0 --mode cloud --skip-install"
-      echo ""
-      echo "  # 启用 HTTPS"
-      echo "  $0 --with-nginx --ssl"
       exit 0 ;;
     *) fail "未知参数: $1  (使用 --help 查看帮助)" ;;
   esac
@@ -182,11 +176,7 @@ fi
 if [ "$ONLY" = "nginx" ] && [ "$WITH_NGINX" -ne 1 ]; then
   fail "--only nginx 需要同时指定 --with-nginx"
 fi
-if [ "$USE_SSL" = "true" ] && [ "$WITH_NGINX" -ne 1 ]; then
-  fail "--ssl 需要同时指定 --with-nginx"
-fi
-
-info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, WITH_NGINX=$WITH_NGINX, WITH_PHOENIX=$WITH_PHOENIX, USE_SSL=$USE_SSL, WITHOUT_AGENT=$WITHOUT_AGENT"
+info "部署模式: MODE=$MODE, ONLY=$ONLY, DEMO_MODE=$DEMO_MODE, WITH_NGINX=$WITH_NGINX, WITH_PHOENIX=$WITH_PHOENIX, WITHOUT_AGENT=$WITHOUT_AGENT"
 info "端口配置: Nginx=$NGINX_PORT, 前端=$FRONTEND_PORT, 后端=$BACKEND_PORT, Agent=$AGENT_PORT, Phoenix=$PHOENIX_PORT"
 
 # ---------- 项目根目录 ----------
@@ -237,7 +227,6 @@ echo "MODE=$MODE" >> "$DEPLOY_CONFIG"
 echo "ONLY=$ONLY" >> "$DEPLOY_CONFIG"
 echo "WITH_NGINX=$WITH_NGINX" >> "$DEPLOY_CONFIG"
 echo "WITH_PHOENIX=$WITH_PHOENIX" >> "$DEPLOY_CONFIG"
-echo "USE_SSL=$USE_SSL" >> "$DEPLOY_CONFIG"
 echo "WITHOUT_AGENT=$WITHOUT_AGENT" >> "$DEPLOY_CONFIG"
 
 # ============================================================
@@ -404,22 +393,11 @@ else
   info "========== 配置 Nginx =========="
   
   # 根据 SSL 参数选择配置文件
-  if [ "$USE_SSL" = "true" ]; then
-    NGINX_CONF="$ROOT_DIR/nginx-https.conf"
-    info "使用 HTTPS 配置: $NGINX_CONF"
-    
-    # 检查 SSL 证书是否存在
-    if [ ! -f "/etc/letsencrypt/live/www.aniforce.cc/fullchain.pem" ]; then
-      warn "SSL 证书未找到, 请先运行: sudo ./scripts/ssl/setup_ssl.sh"
-      warn "或者使用不带 --ssl 参数启动开发模式"
-      fail "SSL 证书缺失"
-    fi
-  else
-    NGINX_CONF="$ROOT_DIR/nginx.conf"
-    info "使用 HTTP 配置: $NGINX_CONF"
-  fi
+  NGINX_CONF="$ROOT_DIR/nginx.conf"
+  info "使用 HTTP 配置: $NGINX_CONF"
   
   NGINX_RUNTIME_CONF="$ROOT_DIR/.nginx_runtime.conf"
+  NGINX_PID_FILE="$ROOT_DIR/.nginx.pid"
   
   # 检测 mime.types 路径
   MIME_TYPES_PATH=""
@@ -436,35 +414,19 @@ else
   fi
   
   # 根据配置类型生成运行时配置
-  if [ "$USE_SSL" = "true" ]; then
-    # HTTPS 配置 :替换端口和日志路径
-    sed "s/localhost:3010/localhost:$FRONTEND_PORT/g" "$NGINX_CONF" | \
-    sed "s/localhost:8010/localhost:$BACKEND_PORT/g" | \
-    sed "s|include /etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" | \
-    sed "s|/var/log/nginx/aniforce_access.log|$NGINX_ACCESS_LOG|g" | \
-    sed "s|/var/log/nginx/aniforce_error.log|$NGINX_ERROR_LOG|g" | \
-    sed "s|error_log /var/log/nginx/aniforce_error.log;|error_log $NGINX_ERROR_LOG;|g" | \
-    sed "s|access_log /var/log/nginx/aniforce_access.log main;|access_log $NGINX_ACCESS_LOG main;|g" > "$NGINX_RUNTIME_CONF"
-  else
-    # HTTP 配置 :替换端口配置、mime.types 路径和日志路径
-    sed "s/listen 80;/listen $NGINX_PORT;/g" "$NGINX_CONF" | \
-    sed "s/127.0.0.1:8010/127.0.0.1:$BACKEND_PORT/g" | \
-    sed "s/127.0.0.1:3010/127.0.0.1:$FRONTEND_PORT/g" | \
-    sed "s|include /opt/homebrew/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" | \
-    sed "s|/tmp/aniforce_access.log|$NGINX_ACCESS_LOG|g" | \
-    sed "s|/tmp/aniforce_error.log|$NGINX_ERROR_LOG|g" > "$NGINX_RUNTIME_CONF"
-  fi
+  sed "s/listen 80;/listen $NGINX_PORT;/g" "$NGINX_CONF" | \
+  sed "s/127.0.0.1:8010/127.0.0.1:$BACKEND_PORT/g" | \
+  sed "s/127.0.0.1:3010/127.0.0.1:$FRONTEND_PORT/g" | \
+  sed "s|pid /tmp/aniforce_nginx.pid;|pid $NGINX_PID_FILE;|g" | \
+  sed "s|include /opt/homebrew/etc/nginx/mime.types;|include $MIME_TYPES_PATH;|g" | \
+  sed "s|/tmp/aniforce_access.log|$NGINX_ACCESS_LOG|g" | \
+  sed "s|/tmp/aniforce_error.log|$NGINX_ERROR_LOG|g" > "$NGINX_RUNTIME_CONF"
   
   ok "Nginx 配置已生成: $NGINX_RUNTIME_CONF"
   
   # 测试配置
   info "测试 Nginx 配置..."
-  if [ "$USE_SSL" = "true" ]; then
-    # HTTPS 配置需要 root 权限测试
-    sudo nginx -t -c "$NGINX_RUNTIME_CONF" || fail "Nginx 配置测试失败"
-  else
-    nginx -t -c "$NGINX_RUNTIME_CONF" || fail "Nginx 配置测试失败"
-  fi
+  nginx -t -c "$NGINX_RUNTIME_CONF" || fail "Nginx 配置测试失败"
   ok "Nginx 配置测试通过"
   
   # 检查端口占用
@@ -475,13 +437,8 @@ else
   fi
   
   # 启动 Nginx
-  if [ "$USE_SSL" = "true" ]; then
-    info "启动 Nginx (HTTPS 模式, 端口: 80/443)..."
-    sudo nginx -c "$NGINX_RUNTIME_CONF" || fail "Nginx 启动失败"
-  else
-    info "启动 Nginx (HTTP 模式, 端口: $NGINX_PORT)..."
-    nginx -c "$NGINX_RUNTIME_CONF" || sudo nginx -c "$NGINX_RUNTIME_CONF" || fail "Nginx 启动失败"
-  fi
+  info "启动 Nginx (HTTP 模式, 端口: $NGINX_PORT)..."
+  nginx -c "$NGINX_RUNTIME_CONF" || sudo nginx -c "$NGINX_RUNTIME_CONF" || fail "Nginx 启动失败"
   sleep 2
   
   if check_port_in_use $NGINX_PORT; then
@@ -501,16 +458,9 @@ echo -e "${GREEN}============================================${NC}"
 echo ""
 
 if [ "$WITH_NGINX" -eq 1 ] && { [ "$ONLY" = "all" ] || [ "$ONLY" = "nginx" ]; }; then
-  if [ "$USE_SSL" = "true" ]; then
-    echo -e "  访问地址:      ${CYAN}https://www.aniforce.cc${NC}"
-    echo -e "  API 端点:      ${CYAN}https://www.aniforce.cc/api/${NC}"
-    echo -e "  健康检查:      ${CYAN}https://www.aniforce.cc/health${NC}"
-    echo -e "  HTTP 重定向:   ${CYAN}http://www.aniforce.cc${NC} → HTTPS"
-  else
-    echo -e "  访问地址:      ${CYAN}http://localhost:$NGINX_PORT${NC}"
-    echo -e "  API 文档:      ${CYAN}http://localhost:$NGINX_PORT/docs${NC}"
-    echo -e "  健康检查:      ${CYAN}http://localhost:$NGINX_PORT/health${NC}"
-  fi
+  echo -e "  访问地址:      ${CYAN}http://localhost:$NGINX_PORT${NC}"
+  echo -e "  API 文档:      ${CYAN}http://localhost:$NGINX_PORT/docs${NC}"
+  echo -e "  健康检查:      ${CYAN}http://localhost:$NGINX_PORT/health${NC}"
   echo ""
 fi
 

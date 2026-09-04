@@ -9,9 +9,6 @@ scripts/
 ├── data_migrate/     # 数据迁移相关脚本
 ├── data_mock/        # 数据 mocking 测试的创建脚本
 ├── unit_test/        # 临时测试脚本
-├── setup_ssl.sh      # SSL 证书自动配置脚本
-├── renew_ssl.sh      # SSL 证书续期脚本
-├── check_ssl.sh      # SSL 证书状态检查脚本
 └── README.md         # 本说明文件
 ```
 
@@ -50,14 +47,14 @@ scripts/
 
 ### 🔒 SSL 证书管理脚本
 
-**注意**：SSL 证书管理脚本已移至项目根目录的 `scripts/ssl/` 文件夹，与其他服务器管理脚本保持一致的组织结构。
+**注意**：SSL 证书管理脚本已移至 `../UnionGateway/ssl/aniforce/`，用于管理 ANIFORCE 站点证书、续期和网关校验。
 
 相关脚本：
-- `../../scripts/ssl/setup_ssl.sh` - SSL 证书自动配置脚本
-- `../../scripts/ssl/renew_ssl.sh` - SSL 证书续期脚本
-- `../../scripts/ssl/check_ssl.sh` - SSL 证书状态检查脚本
+- `../../../UnionGateway/ssl/aniforce/setup_ssl.sh` - SSL 证书自动配置脚本
+- `../../../UnionGateway/ssl/aniforce/renew_ssl.sh` - SSL 证书续期脚本
+- `../../../UnionGateway/ssl/aniforce/check_ssl.sh` - SSL 证书状态检查脚本
 
-**详细文档**：参见 [HTTPS 部署步骤](../../docs/HTTPS_DEPLOYMENT_STEPS.md)
+**详细文档**：参见 [HTTPS 部署步骤](../../docs/network/HTTPS_DEPLOYMENT_STEPS.md)
 
 ## 使用规范
 

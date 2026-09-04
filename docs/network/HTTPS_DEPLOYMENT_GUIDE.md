@@ -52,18 +52,17 @@ sudo yum install certbot python3-certbot-nginx
 **方式 A: 自动配置（推荐）**
 
 ```bash
-# 自动获取证书并配置 Nginx
-sudo certbot --nginx -d www.aniforce.cc -d aniforce.cc
+# 自动获取证书
+sudo certbot certonly --webroot -w /var/www/certbot -d www.aniforce.cc -d aniforce.cc
 
 # 按提示输入邮箱和同意条款
-# Certbot 会自动修改 Nginx 配置并重启
 ```
 
 **方式 B: 手动配置**
 
 ```bash
-# 仅获取证书，不修改 Nginx 配置
-sudo certbot certonly --nginx -d www.aniforce.cc -d aniforce.cc
+# 仅获取证书，不修改网关配置
+sudo certbot certonly --webroot -w /var/www/certbot -d www.aniforce.cc -d aniforce.cc
 
 # 证书位置：
 # /etc/letsencrypt/live/www.aniforce.cc/fullchain.pem
@@ -72,110 +71,16 @@ sudo certbot certonly --nginx -d www.aniforce.cc -d aniforce.cc
 
 #### 3. 配置 Nginx
 
-创建 HTTPS 配置文件：
+使用 UnionGateway 的配置模板：
 
-```nginx
-# /etc/nginx/sites-available/aniforce-https.conf
-
-# HTTP 服务器 - 重定向到 HTTPS
-server {
-    listen 80;
-    listen [::]:80;
-    server_name www.aniforce.cc aniforce.cc;
-    
-    # ACME 验证路径（Let's Encrypt 续期需要）
-    location /.well-known/acme-challenge/ {
-        root /var/www/certbot;
-    }
-    
-    # 其他请求重定向到 HTTPS
-    location / {
-        return 301 https://$server_name$request_uri;
-    }
-}
-
-# HTTPS 服务器
-server {
-    listen 443 ssl http2;
-    listen [::]:443 ssl http2;
-    server_name www.aniforce.cc aniforce.cc;
-    
-    # SSL 证书配置
-    ssl_certificate /etc/letsencrypt/live/www.aniforce.cc/fullchain.pem;
-    ssl_certificate_key /etc/letsencrypt/live/www.aniforce.cc/privkey.pem;
-    
-    # SSL 优化配置
-    ssl_protocols TLSv1.2 TLSv1.3;
-    ssl_ciphers 'ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384';
-    ssl_prefer_server_ciphers off;
-    
-    # SSL 会话缓存
-    ssl_session_cache shared:SSL:10m;
-    ssl_session_timeout 10m;
-    
-    # HSTS（强制 HTTPS）
-    add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
-    
-    # 安全头
-    add_header X-Frame-Options "SAMEORIGIN" always;
-    add_header X-Content-Type-Options "nosniff" always;
-    add_header X-XSS-Protection "1; mode=block" always;
-    
-    # 日志配置
-    access_log /var/log/nginx/aniforce_access.log;
-    error_log /var/log/nginx/aniforce_error.log;
-    
-    # 前端静态文件（如果使用 Nginx 托管）
-    location / {
-        proxy_pass http://localhost:3010;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection 'upgrade';
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        proxy_cache_bypass $http_upgrade;
-    }
-    
-    # 后端 API
-    location /api/ {
-        proxy_pass http://localhost:8010;
-        proxy_http_version 1.1;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-        
-        # WebSocket 支持
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        
-        # 超时配置
-        proxy_connect_timeout 60s;
-        proxy_send_timeout 60s;
-        proxy_read_timeout 60s;
-    }
-    
-    # 健康检查
-    location /health {
-        proxy_pass http://localhost:8010/health;
-        access_log off;
-    }
-}
-```
+`UnionGateway/nginx-https.conf` 会在运行时注入证书路径和端口。
 
 #### 4. 启用配置
 
 ```bash
-# 创建软链接
-sudo ln -s /etc/nginx/sites-available/aniforce-https.conf /etc/nginx/sites-enabled/
-
-# 测试配置
-sudo nginx -t
-
-# 重启 Nginx
-sudo systemctl restart nginx
+cd /path/to/UnionGateway
+sudo ./deploy_gateway.sh --ssl --test-only
+sudo ./deploy_gateway.sh --ssl
 ```
 
 #### 5. 配置自动续期
@@ -184,14 +89,10 @@ sudo systemctl restart nginx
 # 测试续期（不会真正续期）
 sudo certbot renew --dry-run
 
-# Certbot 会自动添加 systemd timer 或 cron 任务
-# 查看 systemd timer
-sudo systemctl list-timers | grep certbot
-
-# 或手动添加 cron（如果没有自动添加）
+# 手动添加 cron
 sudo crontab -e
 # 添加以下行（每天凌晨 2 点检查续期）
-0 2 * * * certbot renew --quiet --post-hook "systemctl reload nginx"
+0 2 * * * /path/to/UnionGateway/ssl/aniforce/renew_ssl.sh
 ```
 
 #### 6. 验证 HTTPS
@@ -299,7 +200,7 @@ server {
 
 ```bash
 # 安装 Let's Encrypt 证书（参考方案 1）
-sudo certbot --nginx -d www.aniforce.cc
+sudo certbot certonly --webroot -w /var/www/certbot -d www.aniforce.cc
 
 # Nginx 配置同方案 1
 ```

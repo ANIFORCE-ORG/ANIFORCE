@@ -6,10 +6,10 @@
 
 ```bash
 # 1. 进入 SSL 脚本目录
-cd scripts/ssl
+cd ../UnionGateway/ssl/aniforce
 
 # 2. 赋予执行权限
-chmod +x setup_ssl.sh renew_ssl.sh check_ssl.sh
+chmod +x setup_ssl.sh renew_ssl.sh check_ssl.sh test_nginx_config.sh
 
 # 3. 运行自动配置脚本
 sudo ./setup_ssl.sh
@@ -37,38 +37,40 @@ sudo ./check_ssl.sh
 - `nginx-https.conf` - Nginx HTTPS 配置
 
 ### 脚本文件
-- `scripts/ssl/setup_ssl.sh` - SSL 自动配置脚本
-- `scripts/ssl/renew_ssl.sh` - SSL 证书续期脚本
-- `scripts/ssl/check_ssl.sh` - SSL 状态检查脚本
+- `UnionGateway/ssl/aniforce/setup_ssl.sh` - SSL 自动配置脚本
+- `UnionGateway/ssl/aniforce/renew_ssl.sh` - SSL 证书续期脚本
+- `UnionGateway/ssl/aniforce/check_ssl.sh` - SSL 状态检查脚本
+- `UnionGateway/ssl/aniforce/test_nginx_config.sh` - Nginx 配置测试脚本
 
 ### 文档文件
-- `docs/HTTPS_DEPLOYMENT_STEPS.md` - 详细部署步骤
+- `HTTPS_DEPLOYMENT_STEPS.md` - 详细部署步骤
 - `HTTPS_QUICK_START.md` - 快速开始指南（本文件）
 
 ## 🔧 常用命令
 
 ### 检查证书状态
 ```bash
-sudo ./scripts/ssl/check_ssl.sh
+sudo ./check_ssl.sh
 ```
 
 ### 手动续期证书
 ```bash
-sudo ./scripts/ssl/renew_ssl.sh
+sudo ./renew_ssl.sh
 ```
 
 ### 查看 Nginx 日志
 ```bash
 # 访问日志
-sudo tail -f /var/log/nginx/aniforce_access.log
+sudo tail -f ../../logs/gateway_access_*.log
 
 # 错误日志
-sudo tail -f /var/log/nginx/aniforce_error.log
+sudo tail -f ../../logs/gateway_error_*.log
 ```
 
-### 重启 Nginx
+### 重载网关
 ```bash
-sudo systemctl restart nginx
+cd ../..
+sudo ./deploy_gateway.sh --ssl
 ```
 
 ## 🎯 部署后验证
@@ -89,8 +91,8 @@ sudo systemctl restart nginx
 
 如需了解更多细节或遇到问题，请查看：
 
-- [HTTPS 部署详细步骤](docs/HTTPS_DEPLOYMENT_STEPS.md)
-- [HTTPS 部署完整指南](docs/network/HTTPS_DEPLOYMENT_GUIDE.md)
+- [HTTPS 部署详细步骤](HTTPS_DEPLOYMENT_STEPS.md)
+- [HTTPS 部署完整指南](HTTPS_DEPLOYMENT_GUIDE.md)
 
 ## 🔒 安全特性
 
