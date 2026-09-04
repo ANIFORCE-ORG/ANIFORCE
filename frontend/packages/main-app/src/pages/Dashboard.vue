@@ -242,15 +242,23 @@ const availableTrendMetrics = computed(() => trendMetricOptions.filter(option =>
 const defaultAnalysisMetrics = (sales: boolean): TrendMetric[] => sales
   ? ['spend', 'conversion_value', 'conversions', 'roas', 'clicks', 'ctr']
   : ['spend', 'conversions', 'result_cost', 'clicks', 'ctr']
-const selectedAnalysisMetrics = ref<TrendMetric[]>(defaultAnalysisMetrics(false))
-const analysisMetricColumns = computed<TrendMetric[]>(() => {
+const selectedTrendMetrics = ref<TrendMetric[]>(defaultAnalysisMetrics(false))
+const selectedHierarchyMetrics = ref<TrendMetric[]>(defaultAnalysisMetrics(false))
+const selectedDailyMetrics = ref<TrendMetric[]>(defaultAnalysisMetrics(false))
+const availableAnalysisMetrics = (metrics: TrendMetric[]) => {
   const available = new Set(availableTrendMetrics.value.map(option => option.key))
-  const selected = selectedAnalysisMetrics.value.filter(metric => available.has(metric))
+  const selected = metrics.filter(metric => available.has(metric))
   return selected.length ? selected : defaultAnalysisMetrics(isSales.value).filter(metric => available.has(metric))
-})
-const updateAnalysisMetrics = (metrics: TrendMetric[]) => {
-  selectedAnalysisMetrics.value = metrics
 }
+const trendMetricColumns = computed<TrendMetric[]>(() => availableAnalysisMetrics(selectedTrendMetrics.value))
+const hierarchyMetricColumns = computed<TrendMetric[]>(() => availableAnalysisMetrics(selectedHierarchyMetrics.value))
+const dailyMetricColumns = computed<TrendMetric[]>(() => availableAnalysisMetrics(selectedDailyMetrics.value))
+const updateTrendMetrics = (metrics: TrendMetric[]) => {
+  selectedTrendMetrics.value = metrics
+  if (!metrics.includes(selectedTrendMetric.value)) selectedTrendMetric.value = metrics.find(metric => metric !== 'spend') ?? metrics[0]!
+}
+const updateHierarchyMetrics = (metrics: TrendMetric[]) => { selectedHierarchyMetrics.value = metrics }
+const updateDailyMetrics = (metrics: TrendMetric[]) => { selectedDailyMetrics.value = metrics }
 const metricValueFromDerived = (metrics: ReturnType<typeof derive>, metric: TrendMetric) => ({
   spend: metrics.spend,
   impressions: metrics.impressions,
@@ -268,8 +276,8 @@ const formatAnalysisMetric = (metrics: ReturnType<typeof derive>, metric: TrendM
   overview.value?.window?.mixed_currency,
 )
 const hierarchyGridStyle = computed(() => ({
-  gridTemplateColumns: `minmax(280px, 2fr) minmax(90px, .65fr) repeat(${analysisMetricColumns.value.length}, minmax(86px, .72fr))`,
-  minWidth: `${430 + analysisMetricColumns.value.length * 100}px`,
+  gridTemplateColumns: `minmax(280px, 2fr) minmax(90px, .65fr) repeat(${hierarchyMetricColumns.value.length}, minmax(86px, .72fr))`,
+  minWidth: `${430 + hierarchyMetricColumns.value.length * 100}px`,
 }))
 const metricValueOf = (point: DashboardMetrics, metric: TrendMetric): number | null => {
   const metrics = derive(point)
@@ -282,7 +290,10 @@ watch(isSales, sales => {
   if (!availableTrendMetrics.value.some(option => option.key === selectedTrendMetric.value)) {
     selectedTrendMetric.value = sales ? 'conversion_value' : 'conversions'
   }
-  selectedAnalysisMetrics.value = defaultAnalysisMetrics(sales)
+  const defaults = defaultAnalysisMetrics(sales)
+  selectedTrendMetrics.value = [...defaults]
+  selectedHierarchyMetrics.value = [...defaults]
+  selectedDailyMetrics.value = [...defaults]
 })
 const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
@@ -774,7 +785,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
         </section>
 
         <section class="replay-card trend-replay-card">
-          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="趋势柱状指标"><button v-for="metric in availableTrendMetrics" :key="metric.key" type="button" :class="{ active: selectedTrendMetric === metric.key }" @click="selectedTrendMetric = metric.key">{{ metric.label }}</button></div><MetricSelector :model-value="analysisMetricColumns" :options="availableTrendMetrics" @update:model-value="updateAnalysisMetrics" /></div></div>
+          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="趋势柱状指标"><button v-for="metric in trendMetricColumns" :key="metric" type="button" :class="{ active: selectedTrendMetric === metric }" @click="selectedTrendMetric = metric">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</button></div><MetricSelector :model-value="trendMetricColumns" :options="availableTrendMetrics" @update:model-value="updateTrendMetrics" /></div></div>
           <div class="trend-grid">
             <div class="chart-panel">
               <div class="chart-legend"><span class="legend-item"><i class="legend-dot spend"></i>花费</span><span class="legend-item"><i class="legend-dot conversions"></i>{{ trendMetricOptions.find(item => item.key === selectedTrendMetric)?.label }}</span></div>
@@ -837,9 +848,9 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               </nav>
             </div>
             <div class="hierarchy-actions">
-              <MetricSelector :model-value="analysisMetricColumns" :options="availableTrendMetrics" @update:model-value="updateAnalysisMetrics" />
               <label class="hierarchy-search"><span class="material-symbols-outlined" aria-hidden="true">search</span><input v-model="hierarchyQuery" type="search" placeholder="搜索名称或 ID" aria-label="搜索层级名称或 ID"></label>
               <button type="button" @click="expandAllHierarchy">全部展开</button><button type="button" @click="collapseHierarchy">收起</button>
+              <MetricSelector :model-value="hierarchyMetricColumns" :options="availableTrendMetrics" @update:model-value="updateHierarchyMetrics" />
             </div>
           </div>
 
@@ -849,12 +860,12 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           </div>
 
           <div class="hierarchy-tree-wrap">
-            <div class="hierarchy-tree-head" :style="hierarchyGridStyle"><span>层级 / 名称</span><span>状态</span><span v-for="metric in analysisMetricColumns" :key="metric">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</span></div>
+            <div class="hierarchy-tree-head" :style="hierarchyGridStyle"><span>层级 / 名称</span><span>状态</span><span v-for="metric in hierarchyMetricColumns" :key="metric">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</span></div>
             <div v-if="!hierarchyRows.length" class="data-empty">当前窗口没有可展示的层级数据</div>
             <div v-for="row in hierarchyRows" :key="row.key" class="hierarchy-tree-row" :style="hierarchyGridStyle">
               <div class="hierarchy-tree-name" :style="{ '--depth': row.depth }"><button v-if="row.hasChildren" type="button" class="tree-expander" :class="{ open: expandedHierarchy.has(row.key) }" @click="toggleHierarchy(row.key)">›</button><span v-else class="tree-expander placeholder">›</span><span class="tree-icon" :class="row.kind">{{ row.kind === 'account' ? 'A' : row.kind === 'campaign' ? 'C' : 'U' }}</span><span><strong>{{ row.name }}</strong><small>{{ row.detail }}</small></span></div>
               <span class="tree-status" :class="{ warning: row.status !== '投放中' && row.status !== '已连接' }"><i></i>{{ row.status }}</span>
-              <span v-for="metric in analysisMetricColumns" :key="metric">{{ formatAnalysisMetric(row.metrics, metric) }}</span>
+              <span v-for="metric in hierarchyMetricColumns" :key="metric">{{ formatAnalysisMetric(row.metrics, metric) }}</span>
             </div>
           </div>
           <div v-if="hierarchyFilteredGroups.length" class="hierarchy-pagination" aria-label="投放层级分页">
@@ -871,16 +882,16 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               <thead>
                 <tr>
                   <th>{{ levelLabels[level] }}</th>
-                  <th v-for="metric in analysisMetricColumns" :key="metric">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</th>
+                  <th v-for="metric in hierarchyMetricColumns" :key="metric">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</th>
                   <th>环比</th>
                   <th>状态</th>
                 </tr>
               </thead>
               <tbody>
-                <tr v-if="!visibleRows.length"><td :colspan="analysisMetricColumns.length + 3" class="data-empty">当前窗口没有可展示的{{ levelLabels[level] }}</td></tr>
+                <tr v-if="!visibleRows.length"><td :colspan="hierarchyMetricColumns.length + 3" class="data-empty">当前窗口没有可展示的{{ levelLabels[level] }}</td></tr>
                 <tr v-for="row in visibleRows" :key="row.id" :class="{ drillable: level !== 'adset' }" @click="level !== 'adset' && drillInto(row)">
                   <td><strong>{{ row.name }}</strong><small>{{ row.subtitle || row.id }}</small></td>
-                  <td v-for="metric in analysisMetricColumns" :key="metric">{{ formatAnalysisMetric(row.metrics, metric) }}</td>
+                  <td v-for="metric in hierarchyMetricColumns" :key="metric">{{ formatAnalysisMetric(row.metrics, metric) }}</td>
                   <td><span class="cell-delta" :class="row.efficiencyDelta.tone">{{ row.efficiencyDelta.text || '—' }}</span></td>
                   <td><span v-for="flag in row.flags" :key="flag.label" class="quiet-badge" :class="flag.tone">{{ flag.label }}</span><span v-if="!row.flags.length" class="row-dot"></span></td>
                 </tr>
@@ -888,7 +899,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               <tfoot>
                 <tr>
                   <td>合计</td>
-                  <td v-for="metric in analysisMetricColumns" :key="metric">{{ formatAnalysisMetric(current, metric) }}</td>
+                  <td v-for="metric in hierarchyMetricColumns" :key="metric">{{ formatAnalysisMetric(current, metric) }}</td>
                   <td></td>
                   <td></td>
                 </tr>
@@ -904,12 +915,12 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
           entity-label="日期"
           search-placeholder="搜索日期"
           :rows="dailyAnalysisRows"
-          :columns="analysisMetricColumns"
+          :columns="dailyMetricColumns"
           :currency="overview?.window.currency"
           :mixed-currency="overview?.window.mixed_currency"
           :totals="{ spend: current.spend, conversion_value: current.revenue, conversions: current.results, roas: current.roas, clicks: current.clicks, ctr: current.ctr, impressions: current.impressions, result_cost: current.cost }"
         >
-          <template #actions><MetricSelector :model-value="analysisMetricColumns" :options="availableTrendMetrics" @update:model-value="updateAnalysisMetrics" /></template>
+          <template #actions><MetricSelector :model-value="dailyMetricColumns" :options="availableTrendMetrics" @update:model-value="updateDailyMetrics" /></template>
         </AnalysisMetricTable>
 
       </div>
