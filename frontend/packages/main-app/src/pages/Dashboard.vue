@@ -194,6 +194,31 @@ const scaleY = (value: number | null, values: Array<number | null>, top = 48, bo
   const max = Math.max(...present, 0)
   return max === 0 ? bottom : bottom - (value / max) * (bottom - top)
 }
+const TREND_X_START = 91
+const TREND_X_SPAN = 768
+const DAY_MS = 86400000
+const trendWindowRange = computed(() => {
+  const since = overview.value?.window?.since ?? dateStart.value
+  const until = overview.value?.window?.until ?? dateEnd.value
+  const sinceTime = Date.parse(`${since}T00:00:00Z`)
+  const untilTime = Date.parse(`${until}T00:00:00Z`)
+  const valid = Number.isFinite(sinceTime) && Number.isFinite(untilTime) && untilTime >= sinceTime
+  return {
+    sinceTime,
+    untilTime,
+    valid,
+    dayCount: valid ? Math.round((untilTime - sinceTime) / DAY_MS) + 1 : 1,
+  }
+})
+const trendXForDate = (date: string, fallbackIndex: number, rowCount: number) => {
+  const range = trendWindowRange.value
+  const pointTime = Date.parse(`${date}T00:00:00Z`)
+  if (range.valid && range.untilTime > range.sinceTime && Number.isFinite(pointTime)) {
+    const progress = Math.min(1, Math.max(0, (pointTime - range.sinceTime) / (range.untilTime - range.sinceTime)))
+    return TREND_X_START + progress * TREND_X_SPAN
+  }
+  return rowCount <= 1 ? TREND_X_START + TREND_X_SPAN / 2 : TREND_X_START + fallbackIndex * (TREND_X_SPAN / (rowCount - 1))
+}
 const trendPoints = computed(() => {
   const rows = overview.value?.trend ?? []
   const chartMetrics = selectedTrendChartMetrics.value
@@ -208,7 +233,7 @@ const trendPoints = computed(() => {
   const barGroupWidth = barMetrics.length * barWidth + Math.max(0, barMetrics.length - 1) * barGap
 
   return rows.map((row, index) => {
-    const x = rows.length <= 1 ? 475 : 91 + index * (768 / (rows.length - 1))
+    const x = trendXForDate(row.date, index, rows.length)
     const metricValues = chartMetrics.map(metric => {
       const option = trendMetricOptions.find(item => item.key === metric)!
       const value = metricValueOf(row, metric)
@@ -240,8 +265,8 @@ const trendPoints = computed(() => {
       ariaLabel: [row.date, ...metricValues.map(metric => `${metric.label} ${metric.text}`)].join('，'),
       x,
       spendY: chartMetrics.includes('spend') ? scaleY(numberValue(row.spend), spendValues) : null,
-      tooltipLeft: rows.length <= 1 ? 50 : 5 + index * (90 / (rows.length - 1)),
-      hitWidth: Math.min(128, 768 / Math.max(rows.length, 1)),
+      tooltipLeft: 5 + ((x - TREND_X_START) / TREND_X_SPAN) * 90,
+      hitWidth: Math.min(128, TREND_X_SPAN / Math.max(trendWindowRange.value.dayCount, 1)),
     }
   })
 })
@@ -330,15 +355,20 @@ const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrend
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
 const toggleTrendSelection = (index: number) => { selectedTrendIndex.value = selectedTrendIndex.value === index ? null : index }
 const visibleTrendAxisPoints = computed(() => {
-  const points = trendPoints.value
-  if (!points.length) return []
+  const range = trendWindowRange.value
+  if (!range.valid || !trendPoints.value.length) return []
   const availableWidth = chartPanelWidth.value || 960
   const maximumLabels = Math.min(12, Math.max(4, Math.floor(availableWidth / 92)))
-  const labelCount = Math.min(points.length, maximumLabels)
-  if (labelCount === points.length) return points.map((point, index) => ({ point, index }))
+  const labelCount = Math.min(range.dayCount, maximumLabels)
   return Array.from({ length: labelCount }, (_, position) => {
-    const index = Math.round(position * (points.length - 1) / (labelCount - 1))
-    return { point: points[index]!, index }
+    const progress = labelCount <= 1 ? 0.5 : position / (labelCount - 1)
+    const dayOffset = labelCount <= 1 ? 0 : Math.round(progress * (range.dayCount - 1))
+    const date = new Date(range.sinceTime + dayOffset * DAY_MS).toISOString().slice(0, 10)
+    return {
+      date,
+      label: formatDate(date),
+      x: TREND_X_START + progress * TREND_X_SPAN,
+    }
   })
 })
 const trendAxisFontSize = computed(() => {
@@ -891,24 +921,13 @@ onBeforeUnmount(() => {
                 />
                 <g class="chart-axis-labels" :style="{ fontSize: `${trendAxisFontSize}px` }">
                   <text
-                    v-for="({ point, index }) in visibleTrendAxisPoints"
-                    :key="`axis-${point.date}`"
-                    :x="point.x"
+                    v-for="tick in visibleTrendAxisPoints"
+                    :key="`axis-${tick.date}`"
+                    :x="tick.x"
                     y="170"
                     text-anchor="middle"
                     dominant-baseline="middle"
-                    role="button"
-                    tabindex="0"
-                    :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }"
-                    :aria-label="`查看 ${point.date} 数据`"
-                    @mouseenter="hoveredTrendIndex = index"
-                    @mouseleave="hoveredTrendIndex = null"
-                    @focus="hoveredTrendIndex = index"
-                    @blur="hoveredTrendIndex = null"
-                    @click="toggleTrendSelection(index)"
-                    @keydown.enter.prevent="toggleTrendSelection(index)"
-                    @keydown.space.prevent="toggleTrendSelection(index)"
-                  >{{ point.label }}</text>
+                  >{{ tick.label }}</text>
                 </g>
               </svg>
               <div v-if="activeTrendPoint" class="chart-tooltip" :style="{ left: `${activeTrendPoint.tooltipLeft}%` }" role="status" aria-live="polite">
@@ -1169,9 +1188,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
 .legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }
 .chart-panel svg { display: block; width: 100%; height: 202px; margin-top: -2px; overflow: visible; }
-.chart-axis-labels text { fill: var(--stone); cursor: pointer; outline: none; }
-.chart-axis-labels text.active { fill: var(--charcoal); font-weight: 600; }
-.chart-axis-labels text.selected { fill: #3276cc; }
+.chart-axis-labels text { fill: var(--stone); }
 .chart-hit-area { fill: transparent; cursor: pointer; outline: none; }
 .chart-hit-area:focus { fill: rgb(79 143 232 / 4%); }
 .chart-active-markers { pointer-events: none; }
