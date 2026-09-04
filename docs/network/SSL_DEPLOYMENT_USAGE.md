@@ -8,7 +8,7 @@
 
 ```bash
 # 1. 进入 SSL 脚本目录
-cd scripts/ssl
+cd ../UnionGateway/ssl/aniforce
 
 # 2. 运行 SSL 配置脚本
 sudo ./setup_ssl.sh
@@ -80,9 +80,9 @@ open http://localhost
 
 ```bash
 # 1. 首次部署：配置 SSL 证书
-cd scripts/ssl
+cd ../UnionGateway/ssl/aniforce
 sudo ./setup_ssl.sh
-cd ../..
+cd ../../../ANIFORCE
 
 # 2. 启动 HTTPS 服务
 ./deploy_server.sh --ssl --mode cloud --skip-install
@@ -148,12 +148,12 @@ cd ../..
 ### 问题 1: SSL 证书未找到
 
 ```
-错误: SSL 证书未找到，请先运行: sudo ./scripts/ssl/setup_ssl.sh
+错误: SSL 证书未找到，请先运行: sudo ../UnionGateway/ssl/aniforce/setup_ssl.sh
 ```
 
 **解决方案**：
 ```bash
-cd scripts/ssl
+cd ../UnionGateway/ssl/aniforce
 sudo ./setup_ssl.sh
 ```
 
@@ -189,15 +189,15 @@ sudo lsof -ti :443 | xargs sudo kill -9
 **检查清单**：
 1. DNS 解析是否正确：`dig www.aniforce.cc`
 2. 防火墙是否开放：`sudo ufw status`
-3. Nginx 是否运行：`sudo systemctl status nginx`
-4. 证书是否有效：`sudo ./scripts/ssl/check_ssl.sh`
+3. 网关是否运行：`cd ../UnionGateway && ./check_nginx.sh --ssl`
+4. 证书是否有效：`sudo ../UnionGateway/ssl/aniforce/check_ssl.sh`
 
 ## 📚 相关文档
 
-- [HTTPS 快速部署指南](../docs/network/HTTPS_QUICK_START.md)
+- [HTTPS 快速部署指南](HTTPS_QUICK_START.md)
 - [HTTPS 详细部署步骤](HTTPS_DEPLOYMENT_STEPS.md)
-- [HTTPS 部署完整指南](network/HTTPS_DEPLOYMENT_GUIDE.md)
-- [SSL 脚本使用说明](../scripts/README.md)
+- [HTTPS 部署完整指南](HTTPS_DEPLOYMENT_GUIDE.md)
+- [SSL 脚本使用说明](../../scripts/README.md)
 
 ## 💡 最佳实践
 
@@ -213,7 +213,7 @@ sudo lsof -ti :443 | xargs sudo kill -9
 
 3. **证书续期**：定期检查证书状态
    ```bash
-   sudo ./scripts/ssl/check_ssl.sh
+   sudo ../UnionGateway/ssl/aniforce/check_ssl.sh
    ```
 
 4. **自动续期**：已配置 cron 任务，无需手动操作

@@ -20,8 +20,8 @@
 1. **赋予脚本执行权限**
 
 ```bash
-cd /path/to/ANIFORCE/scripts/ssl
-chmod +x setup_ssl.sh renew_ssl.sh check_ssl.sh
+cd /path/to/UnionGateway/ssl/aniforce
+chmod +x setup_ssl.sh renew_ssl.sh check_ssl.sh test_nginx_config.sh
 ```
 
 2. **运行 SSL 配置脚本**
@@ -31,11 +31,11 @@ sudo ./setup_ssl.sh
 ```
 
 脚本会自动完成：
-- 检测操作系统并安装 Certbot
-- 创建验证目录
-- 获取 SSL 证书
-- 配置 Nginx
-- 设置自动续期
+   - 检测操作系统并安装 Certbot
+   - 创建验证目录
+   - 获取 SSL 证书
+   - 校验并重载 UnionGateway
+   - 设置自动续期
 
 3. **验证部署**
 
@@ -78,18 +78,16 @@ sudo mkdir -p /var/www/certbot
 **选项 A: 自动配置（推荐）**
 
 ```bash
-sudo certbot --nginx -d www.aniforce.cc -d aniforce.cc \
+sudo certbot certonly --webroot -w /var/www/certbot -d www.aniforce.cc -d aniforce.cc \
   --email support@aniforce.cc \
   --agree-tos \
   --non-interactive
 ```
 
-Certbot 会自动修改 Nginx 配置并重启服务。
-
 **选项 B: 手动配置**
 
 ```bash
-sudo certbot certonly --nginx -d www.aniforce.cc -d aniforce.cc \
+sudo certbot certonly --webroot -w /var/www/certbot -d www.aniforce.cc -d aniforce.cc \
   --email support@aniforce.cc \
   --agree-tos \
   --non-interactive
@@ -99,32 +97,12 @@ sudo certbot certonly --nginx -d www.aniforce.cc -d aniforce.cc \
 - 证书: `/etc/letsencrypt/live/www.aniforce.cc/fullchain.pem`
 - 私钥: `/etc/letsencrypt/live/www.aniforce.cc/privkey.pem`
 
-### 步骤 4: 配置 Nginx（仅手动配置需要）
-
-1. **复制配置文件**
+### 步骤 4: 部署 UnionGateway Nginx
 
 ```bash
-sudo cp /path/to/ANIFORCE/nginx-https.conf \
-  /etc/nginx/sites-available/aniforce-https.conf
-```
-
-2. **创建软链接**
-
-```bash
-sudo ln -s /etc/nginx/sites-available/aniforce-https.conf \
-  /etc/nginx/sites-enabled/aniforce-https.conf
-```
-
-3. **测试配置**
-
-```bash
-sudo nginx -t
-```
-
-4. **重启 Nginx**
-
-```bash
-sudo systemctl restart nginx
+cd /path/to/UnionGateway
+sudo ./deploy_gateway.sh --ssl --test-only
+sudo ./deploy_gateway.sh --ssl
 ```
 
 ### 步骤 5: 配置自动续期
@@ -147,7 +125,7 @@ sudo crontab -e
 
 添加以下行：
 ```
-0 2 * * * certbot renew --quiet --post-hook "systemctl reload nginx"
+0 2 * * * /path/to/UnionGateway/ssl/aniforce/renew_ssl.sh
 ```
 
 **测试续期:**
@@ -186,23 +164,23 @@ curl -I https://www.aniforce.cc
 ### 检查证书状态
 
 ```bash
-sudo /path/to/ANIFORCE/scripts/ssl/check_ssl.sh
+sudo /path/to/UnionGateway/ssl/aniforce/check_ssl.sh
 ```
 
 ### 手动续期证书
 
 ```bash
-sudo /path/to/ANIFORCE/scripts/ssl/renew_ssl.sh
+sudo /path/to/UnionGateway/ssl/aniforce/renew_ssl.sh
 ```
 
 ### 查看 Nginx 日志
 
 ```bash
 # 访问日志
-sudo tail -f /var/log/nginx/aniforce_access.log
+sudo tail -f /path/to/UnionGateway/logs/gateway_access_*.log
 
 # 错误日志
-sudo tail -f /var/log/nginx/aniforce_error.log
+sudo tail -f /path/to/UnionGateway/logs/gateway_error_*.log
 ```
 
 ### 查看续期日志
@@ -232,7 +210,7 @@ sudo tail -f /var/log/aniforce-ssl-renew.log
 **解决方案**:
 - 确认域名 DNS 解析正确：`dig www.aniforce.cc`
 - 确认防火墙开放 80 端口
-- 检查 Nginx 是否正在运行
+- 检查 UnionGateway 是否正在运行
 
 ### 2. Nginx 配置测试失败
 
@@ -258,7 +236,7 @@ sudo tail -f /var/log/aniforce-ssl-renew.log
 
 **解决方案**:
 - 确认 Nginx 配置中的重定向规则
-- 重启 Nginx: `sudo systemctl restart nginx`
+- 重载网关: `cd /path/to/UnionGateway && sudo ./deploy_gateway.sh --ssl`
 - 清除浏览器缓存
 
 ## 📞 支持
