@@ -380,6 +380,8 @@ type HierarchyRow = {
 }
 const expandedHierarchy = ref<Set<string>>(new Set())
 const hierarchyQuery = ref('')
+const HIERARCHY_PAGE_SIZE = 10
+const hierarchyPage = ref(1)
 const hierarchyMetricComparator = (left: DashboardMetrics, right: DashboardMetrics) => {
   const values = (metrics: DashboardMetrics) => [metrics.spend, metrics.conversion_value, metrics.conversions, metrics.clicks, metrics.impressions]
   const leftValues = values(left).map(value => value ?? 0)
@@ -422,16 +424,54 @@ const hierarchySource = computed<HierarchyRow[]>(() => {
   }
   return result
 })
+const hierarchyGroups = computed(() => {
+  const groups: Array<{ root: HierarchyRow; rows: HierarchyRow[] }> = []
+  for (const row of hierarchySource.value) {
+    if (!row.parentKey) groups.push({ root: row, rows: [row] })
+    else groups[groups.length - 1]?.rows.push(row)
+  }
+  return groups
+})
+const hierarchyFilteredGroups = computed(() => {
+  const keyword = hierarchyQuery.value.trim().toLowerCase()
+  if (!keyword) return hierarchyGroups.value
+  return hierarchyGroups.value.filter(group => group.rows.some(row => `${row.name} ${row.id} ${row.detail}`.toLowerCase().includes(keyword)))
+})
+const hierarchyPageCount = computed(() => Math.max(1, Math.ceil(hierarchyFilteredGroups.value.length / HIERARCHY_PAGE_SIZE)))
+const hierarchyPageStart = computed(() => hierarchyFilteredGroups.value.length ? (hierarchyPage.value - 1) * HIERARCHY_PAGE_SIZE + 1 : 0)
+const hierarchyPageEnd = computed(() => Math.min(hierarchyPage.value * HIERARCHY_PAGE_SIZE, hierarchyFilteredGroups.value.length))
+const paginatedHierarchyGroups = computed(() => {
+  const start = (hierarchyPage.value - 1) * HIERARCHY_PAGE_SIZE
+  return hierarchyFilteredGroups.value.slice(start, start + HIERARCHY_PAGE_SIZE)
+})
 const hierarchyRows = computed(() => {
   const keyword = hierarchyQuery.value.trim().toLowerCase()
-  if (keyword) return hierarchySource.value.filter(row => `${row.name} ${row.id} ${row.detail}`.toLowerCase().includes(keyword))
-  return hierarchySource.value.filter(row => {
-    if (!row.parentKey) return true
-    if (!expandedHierarchy.value.has(row.parentKey)) return false
-    const parent = hierarchySource.value.find(item => item.key === row.parentKey)
-    return !parent?.parentKey || expandedHierarchy.value.has(parent.parentKey)
+  return paginatedHierarchyGroups.value.flatMap(group => {
+    if (keyword) {
+      const rowsByKey = new Map(group.rows.map(row => [row.key, row]))
+      const visibleKeys = new Set<string>()
+      for (const row of group.rows) {
+        if (!`${row.name} ${row.id} ${row.detail}`.toLowerCase().includes(keyword)) continue
+        let current: HierarchyRow | undefined = row
+        while (current) {
+          visibleKeys.add(current.key)
+          current = current.parentKey ? rowsByKey.get(current.parentKey) : undefined
+        }
+      }
+      return group.rows.filter(row => visibleKeys.has(row.key))
+    }
+    const rowsByKey = new Map(group.rows.map(row => [row.key, row]))
+    return group.rows.filter(row => {
+      if (!row.parentKey) return true
+      if (!expandedHierarchy.value.has(row.parentKey)) return false
+      const parent = rowsByKey.get(row.parentKey)
+      return !parent?.parentKey || expandedHierarchy.value.has(parent.parentKey)
+    })
   })
 })
+const goToHierarchyPage = (page: number) => {
+  hierarchyPage.value = Math.min(Math.max(page, 1), hierarchyPageCount.value)
+}
 const toggleHierarchy = (key: string) => {
   const next = new Set(expandedHierarchy.value)
   if (next.has(key)) next.delete(key)
@@ -440,6 +480,11 @@ const toggleHierarchy = (key: string) => {
 }
 const expandAllHierarchy = () => { expandedHierarchy.value = new Set(hierarchySource.value.filter(row => row.hasChildren).map(row => row.key)) }
 const collapseHierarchy = () => { expandedHierarchy.value = new Set() }
+
+watch(hierarchyQuery, () => { hierarchyPage.value = 1 })
+watch(hierarchyPageCount, pageCount => {
+  if (hierarchyPage.value > pageCount) hierarchyPage.value = pageCount
+})
 
 const showToast = (message: string) => {
   window.clearTimeout(toastTimer)
@@ -550,7 +595,7 @@ const handleSyncCompleted = async (result: MetaAdSetSyncResponse) => {
   await loadOverview()
 }
 
-watch([objective, accountId, period], () => { goToLevel('account'); search.value = '' })
+watch([objective, accountId, period], () => { goToLevel('account'); search.value = ''; hierarchyPage.value = 1 })
 
 onMounted(initialize)
 watch(() => props.workspaceOverview, value => {
@@ -754,6 +799,14 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
               <div class="hierarchy-tree-name" :style="{ '--depth': row.depth }"><button v-if="row.hasChildren" type="button" class="tree-expander" :class="{ open: expandedHierarchy.has(row.key) }" @click="toggleHierarchy(row.key)">›</button><span v-else class="tree-expander placeholder">›</span><span class="tree-icon" :class="row.kind">{{ row.kind === 'account' ? 'A' : row.kind === 'campaign' ? 'C' : 'U' }}</span><span><strong>{{ row.name }}</strong><small>{{ row.detail }}</small></span></div>
               <span class="tree-status" :class="{ warning: row.status !== '投放中' && row.status !== '已连接' }"><i></i>{{ row.status }}</span>
               <span>{{ formatMoney(row.metrics.spend) }}</span><span>{{ isSales ? formatRoas(row.metrics.roas) : formatMoney(row.metrics.cost) }}</span><span>{{ formatNumber(row.metrics.results) }}</span><span>{{ formatNumber(row.metrics.clicks) }}</span>
+            </div>
+          </div>
+          <div v-if="hierarchyFilteredGroups.length" class="hierarchy-pagination" aria-label="投放层级分页">
+            <span>第 {{ hierarchyPageStart }}–{{ hierarchyPageEnd }} 个，共 {{ hierarchyFilteredGroups.length }} 个账户 · 每页最多 {{ HIERARCHY_PAGE_SIZE }} 个</span>
+            <div class="hierarchy-pagination__controls">
+              <button type="button" :disabled="hierarchyPage === 1" aria-label="上一页" @click="goToHierarchyPage(hierarchyPage - 1)"><span class="material-symbols-outlined" aria-hidden="true">chevron_left</span></button>
+              <strong>第 {{ hierarchyPage }} / {{ hierarchyPageCount }} 页</strong>
+              <button type="button" :disabled="hierarchyPage === hierarchyPageCount" aria-label="下一页" @click="goToHierarchyPage(hierarchyPage + 1)"><span class="material-symbols-outlined" aria-hidden="true">chevron_right</span></button>
             </div>
           </div>
 
@@ -1022,6 +1075,14 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .hierarchy-actions { display: flex; align-items: center; gap: 7px; }.hierarchy-search { width: 250px; height: 34px; display: flex; align-items: center; gap: 6px; padding: 0 9px; border: 1px solid var(--hairline-strong); border-radius: 8px; }.hierarchy-search .material-symbols-outlined { color: var(--stone); font-size: 17px; }.hierarchy-search input { min-width: 0; flex: 1; border: 0; outline: 0; font: inherit; font-size: 12px; }.hierarchy-actions > button { height: 34px; padding: 0 10px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--slate); font: inherit; font-size: 11px; cursor: pointer; }
 .hierarchy-tree-head,.hierarchy-tree-row { display: grid; grid-template-columns: minmax(280px,2fr) minmax(90px,.65fr) repeat(4,minmax(80px,.72fr)); align-items: center; gap: 10px; padding: 0 16px; }.hierarchy-tree-head { min-height: 42px; border-bottom: 1px solid var(--hairline); background: var(--surface-soft); color: var(--steel); font-size: 11px; font-weight: 600; }.hierarchy-tree-head span:not(:first-child),.hierarchy-tree-row > span { text-align: right; }.hierarchy-tree-row { min-height: 58px; border-bottom: 1px solid var(--hairline-soft); color: var(--charcoal); font-size: 12px; font-variant-numeric: tabular-nums; }.hierarchy-tree-row:hover { background: #fafcff; }.hierarchy-tree-name { min-width: 0; display: flex; align-items: center; gap: 8px; padding-left: calc(var(--depth) * 28px); }.hierarchy-tree-name > span:last-child { min-width: 0; }.hierarchy-tree-name strong,.hierarchy-tree-name small { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.hierarchy-tree-name small { margin-top: 3px; color: var(--stone); font-size: 10px; }.tree-expander { width: 20px; height: 20px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--steel); font-size: 20px; cursor: pointer; transition: transform .15s ease; }.tree-expander.open { transform: rotate(90deg); }.tree-expander.placeholder { opacity: 0; }.tree-icon { width: 26px; height: 26px; display: grid; place-items: center; flex: 0 0 auto; border: 1px solid #cfe1f5; border-radius: 7px; background: #eef6ff; color: #3276cc; font-size: 10px; font-weight: 700; }.tree-icon.campaign { border-radius: 50%; background: #f6f5f4; color: #6b6862; border-color: #ddd9d3; }.tree-icon.adset { width: 22px; height: 22px; border: 0; background: transparent; }.tree-status { justify-self: end; display: inline-flex; align-items: center; gap: 5px; width: fit-content; padding: 4px 8px; border-radius: 999px; background: #e8f7ee; color: #12804a; font-size: 10px; font-weight: 600; }.tree-status i { width: 5px; height: 5px; border-radius: 50%; background: currentColor; }.tree-status.warning { background: #fff4df; color: #a86400; }
 
+.hierarchy-pagination { min-height: 50px; display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 8px 16px; color: var(--steel); font-size: 11px; }
+.hierarchy-pagination__controls { display: flex; align-items: center; gap: 18px; }
+.hierarchy-pagination__controls strong { min-width: 70px; color: var(--slate); font-size: 13px; font-weight: 650; text-align: center; }
+.hierarchy-pagination__controls button { width: 30px; height: 30px; display: grid; place-items: center; padding: 0; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--slate); cursor: pointer; }
+.hierarchy-pagination__controls button:hover:not(:disabled) { border-color: #a9cef8; background: #f7fbff; color: var(--workspace-action-primary,#137fec); }
+.hierarchy-pagination__controls button:disabled { border-color: var(--hairline); color: var(--stone); cursor: not-allowed; opacity: .55; }
+.hierarchy-pagination__controls .material-symbols-outlined { font-size: 18px; }
+
 .platform-grid { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); align-items: stretch; gap: 8px; padding: 10px; }
 .platform-card { --accent: #4f8fe8; min-width: 0; align-self: stretch; border: 1px solid var(--hairline); border-radius: 9px; overflow: hidden; background: #fff; }
 
@@ -1064,6 +1125,8 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
   .objective-tab { flex: 1 1 44%; min-width: 0; }
   .funnel-row { grid-template-columns: 56px minmax(0,1fr) 66px 52px; gap: 8px; }
   .traffic-item:not(:last-child) { margin-right: 12px; padding-right: 12px; }
+  .hierarchy-pagination { align-items: flex-start; flex-direction: column; }
+  .hierarchy-pagination__controls { width: 100%; justify-content: space-between; }
 }
 
 @media (prefers-reduced-motion: reduce) { *,*::before,*::after { transition-duration: .01ms !important; animation-duration: .01ms !important; } }

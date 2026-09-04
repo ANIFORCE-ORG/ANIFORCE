@@ -383,6 +383,19 @@ function handleComposerInput(event: Event): void {
   resizeComposer(event.currentTarget as HTMLTextAreaElement)
 }
 
+function insertMentionTrigger(): void {
+  if (!inputText.value.endsWith('@')) {
+    inputText.value = inputText.value.trimEnd()
+      ? `${inputText.value.trimEnd()} @`
+      : '@'
+  }
+  nextTick(() => {
+    resizeComposer()
+    composerInput.value?.focus()
+    composerInput.value?.setSelectionRange(inputText.value.length, inputText.value.length)
+  })
+}
+
 function handleComposerCompositionStart(): void {
   composerIsComposing.value = true
 }
@@ -798,6 +811,9 @@ watch(
               <button class="composer__icon" type="button" aria-label="添加附件">
                 <span class="material-symbols-outlined">attach_file</span>
               </button>
+              <button class="composer__icon composer__mention" type="button" aria-label="添加上下文" @click="insertMentionTrigger">
+                <span class="material-symbols-outlined" aria-hidden="true">alternate_email</span>
+              </button>
               <textarea
                 ref="composerInput"
                 v-model="inputText"
@@ -810,9 +826,6 @@ watch(
                 @compositionend="handleComposerCompositionEnd"
                 @keydown.enter="handleComposerKeydown"
               ></textarea>
-              <button class="composer__icon" type="button" aria-label="语音输入">
-                <span class="material-symbols-outlined">mic</span>
-              </button>
               <button
                 class="composer__send"
                 type="button"
@@ -911,9 +924,12 @@ watch(
             </button>
           </div>
 
-          <div class="composer conversation-composer" role="search">
+          <div class="composer conversation-composer" :class="{ 'composer--expanded': isPromptExpanded }" role="search">
             <button class="composer__icon" type="button" aria-label="添加附件">
               <span class="material-symbols-outlined">attach_file</span>
+            </button>
+            <button class="composer__icon composer__mention" type="button" aria-label="添加上下文" @click="insertMentionTrigger">
+              <span class="material-symbols-outlined" aria-hidden="true">alternate_email</span>
             </button>
             <textarea
               ref="composerInput"
@@ -927,9 +943,6 @@ watch(
               @compositionend="handleComposerCompositionEnd"
               @keydown.enter="handleComposerKeydown"
             ></textarea>
-            <button class="composer__icon" type="button" aria-label="语音输入">
-              <span class="material-symbols-outlined">mic</span>
-            </button>
             <button
               v-if="agent.agentRunning.value"
               data-agent-action="cancel"
@@ -1143,9 +1156,9 @@ watch(
   display: grid;
   width: 100%;
   min-height: 60px;
-  grid-template-columns: 36px minmax(0, 1fr) 36px 38px;
+  grid-template-columns: 28px 28px minmax(0, 1fr) 38px;
   grid-template-rows: minmax(42px, auto);
-  align-items: end;
+  align-items: center;
   padding: 8px 10px;
   border: 1px solid var(--notion-line-strong);
   border-radius: 12px;
@@ -1161,7 +1174,7 @@ watch(
 
 .composer textarea {
   grid-row: 1;
-  grid-column: 2;
+  grid-column: 3;
   width: 100%;
   min-width: 0;
   min-height: 42px;
@@ -1194,8 +1207,8 @@ watch(
 }
 
 .composer__icon {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 8px;
   background: transparent;
   color: var(--notion-steel);
@@ -1206,9 +1219,9 @@ watch(
   grid-column: 1;
 }
 
-.composer > .composer__icon[aria-label="语音输入"] {
+.composer > .composer__mention {
   grid-row: 1;
-  grid-column: 3;
+  grid-column: 2;
 }
 
 .composer__icon:hover {
@@ -1217,7 +1230,7 @@ watch(
 }
 
 .composer__icon .material-symbols-outlined {
-  font-size: 19px;
+  font-size: 18px;
 }
 
 .composer__send,
@@ -1282,7 +1295,20 @@ watch(
 }
 
 .composer.composer--expanded textarea {
+  grid-row: 1;
+  grid-column: 1 / -1;
   max-height: 180px;
+}
+
+.composer.composer--expanded {
+  grid-template-rows: minmax(42px, auto) 42px;
+}
+
+.composer.composer--expanded > .composer__icon[aria-label="添加附件"],
+.composer.composer--expanded > .composer__mention,
+.composer.composer--expanded > .composer__send,
+.composer.composer--expanded > .composer__stop {
+  grid-row: 2;
 }
 
 .composer-intent-hint {
@@ -1925,7 +1951,7 @@ watch(
 
   .composer {
     min-height: 60px;
-    grid-template-columns: 34px minmax(0, 1fr) 34px 38px;
+    grid-template-columns: 34px 34px minmax(0, 1fr) 38px;
     padding: 8px;
     border-radius: 18px;
   }
