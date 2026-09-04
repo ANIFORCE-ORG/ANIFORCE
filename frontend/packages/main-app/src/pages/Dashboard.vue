@@ -19,6 +19,8 @@ const initialSince = new Date(initialUntil)
 initialSince.setDate(initialUntil.getDate() - 6)
 const dateStart = ref(dateInput(initialSince))
 const dateEnd = ref(dateInput(initialUntil))
+const dateStartInput = ref<HTMLInputElement | null>(null)
+const dateEndInput = ref<HTMLInputElement | null>(null)
 const connectionId = ref('')
 const accountId = ref('')
 const objective = ref('')
@@ -66,6 +68,17 @@ const formatRoas = (value: number | null | undefined) => {
   return numeric == null ? '—' : `${numeric.toFixed(2)}x`
 }
 const formatDate = (value: string) => value.slice(5)
+const formatDateLabel = (value: string) => value.split('-').join('/')
+
+const openDatePicker = (input: HTMLInputElement | null) => {
+  if (!input) return
+  input.focus()
+  try {
+    input.showPicker?.()
+  } catch {
+    // Native input activation remains available when showPicker is unsupported.
+  }
+}
 
 const windowForDays = (days: number) => {
   const until = new Date()
@@ -662,7 +675,19 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
             <label class="analysis-filter-chip"><span>连接：</span><select v-model="connectionId" aria-label="分析连接" @change="changeConnection"><option v-if="!connections.length" value="">暂无 Meta 连接</option><option v-for="item in connections" :key="item.id" :value="item.id">{{ item.account_name || 'Meta 连接' }}</option></select></label>
             <label class="analysis-filter-chip"><span>账户：</span><select v-model="accountId" aria-label="分析账户" @change="changeAccount"><option value="">全部 active 账户</option><option v-if="!accounts.length" value="">暂无活跃账户</option><option v-for="item in accounts" :key="item.id" :value="item.sub_account_id.replace(/^act_/, '')">{{ item.name }}</option></select></label>
             <label class="analysis-filter-chip"><span>目标：</span><select v-model="objective" aria-label="分析目标" @change="() => loadOverview()"><option value="">自动选择</option><option v-for="item in objectives.filter(item => item.supported)" :key="item.objective ?? 'supported'" :value="item.objective ?? ''">{{ item.label }}</option></select></label>
-            <div class="analysis-filter-chip time-filter-chip"><span class="material-symbols-outlined" aria-hidden="true">calendar_today</span><input v-model="dateStart" type="date" :max="dateEnd" aria-label="分析开始日期" @change="changeDateRange"><span>至</span><input v-model="dateEnd" type="date" :min="dateStart" :max="dateInput(new Date())" aria-label="分析结束日期" @change="changeDateRange"></div>
+            <div class="analysis-filter-chip time-filter-chip">
+              <div class="date-picker-hitbox">
+                <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                <span class="date-picker-value" aria-hidden="true">{{ formatDateLabel(dateStart) }}</span>
+                <input ref="dateStartInput" v-model="dateStart" type="date" :max="dateEnd" aria-label="分析开始日期" @click="openDatePicker(dateStartInput)" @change="changeDateRange">
+              </div>
+              <div class="date-picker-hitbox date-picker-end">
+                <span aria-hidden="true">至</span>
+                <span class="date-picker-value" aria-hidden="true">{{ formatDateLabel(dateEnd) }}</span>
+                <span class="material-symbols-outlined" aria-hidden="true">calendar_today</span>
+                <input ref="dateEndInput" v-model="dateEnd" type="date" :min="dateStart" :max="dateInput(new Date())" aria-label="分析结束日期" @click="openDatePicker(dateEndInput)" @change="changeDateRange">
+              </div>
+            </div>
           </div>
         </section>
 
@@ -947,7 +972,15 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
 .analysis-filter-tab .material-symbols-outlined { color: #3276cc; font-size: 17px; }.analysis-filter-count { color: var(--steel); font-size: 11px; }
 .analysis-filter-controls { display: grid; grid-template-columns: repeat(3, minmax(150px, 1fr)) minmax(260px, 1.5fr); gap: 7px; padding: 9px 14px; }
 .analysis-filter-chip { min-width: 0; height: 34px; display: flex; align-items: center; gap: 4px; padding: 0 10px; border-radius: 8px; background: var(--surface); color: var(--steel); font-size: 11px; white-space: nowrap; }
-.analysis-filter-chip select,.analysis-filter-chip input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--charcoal); font: inherit; font-size: 12px; font-weight: 600; }.analysis-filter-chip input { width: 0; }.time-filter-chip { background: #fff; box-shadow: inset 0 0 0 1px var(--hairline); }.time-filter-chip .material-symbols-outlined { font-size: 15px; }
+.analysis-filter-chip select,.analysis-filter-chip input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--charcoal); font: inherit; font-size: 12px; font-weight: 600; }.analysis-filter-chip input { width: 0; }
+.time-filter-chip { gap: 0; padding: 0; overflow: hidden; background: #fff; box-shadow: inset 0 0 0 1px var(--hairline); }
+.date-picker-hitbox { position: relative; min-width: 0; height: 100%; flex: 1; display: flex; align-items: center; gap: 7px; padding: 0 10px; color: var(--steel); cursor: pointer; transition: background-color .16s ease; }
+.date-picker-hitbox:hover,.date-picker-hitbox:focus-within { background: var(--surface); }
+.date-picker-hitbox input { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; opacity: 0; cursor: pointer; }
+.date-picker-hitbox .material-symbols-outlined { flex: 0 0 auto; font-size: 15px; }
+.date-picker-value { min-width: 0; flex: 1; color: var(--charcoal); font-size: 12px; font-weight: 600; }
+.date-picker-end { padding-left: 4px; }
+.date-picker-end .date-picker-value { text-align: left; }
 .quiet-badge { display: inline-flex; align-items: center; min-height: 22px; margin-left: 4px; padding: 2px 8px; border: 1px solid var(--hairline); border-radius: 999px; background: #fff; color: var(--steel); font-size: 10px; font-weight: 600; white-space: nowrap; }
 .quiet-badge:first-child { margin-left: 0; }
 .quiet-badge.warn { border-color: #f0d8a8; background: #fff6e4; color: #9a6700; }
