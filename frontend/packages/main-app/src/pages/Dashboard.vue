@@ -819,7 +819,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
             <div class="chart-panel">
               <div class="chart-legend"><span v-for="metric in selectedTrendChartMetrics" :key="metric" class="legend-item"><i class="legend-dot" :style="{ backgroundColor: trendMetricOptions.find(item => item.key === metric)?.color }"></i>{{ trendMetricOptions.find(item => item.key === metric)?.label }}</span></div>
               <div v-if="!trendPoints.length" class="chart-empty">所选窗口暂无日级投放数据</div>
-              <svg v-else viewBox="60 24 830 138" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天${selectedTrendChartMetrics.map(metric => trendMetricOptions.find(item => item.key === metric)?.label).join('、')}趋势图`">
+              <svg v-else viewBox="60 24 830 161" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天${selectedTrendChartMetrics.map(metric => trendMetricOptions.find(item => item.key === metric)?.label).join('、')}趋势图`">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
                 <g opacity=".78"><rect v-for="bar in trendBars" :key="`bar-${bar.date}-${bar.metric}`" :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height" :fill="bar.color" rx="2" /></g>
                 <path v-if="spendPath" :d="spendPath" fill="none" stroke="#4f8fe8" stroke-width="1.4" />
@@ -837,7 +837,7 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
                   :x="point.x - point.hitWidth / 2"
                   y="24"
                   :width="point.hitWidth"
-                  height="138"
+                  height="131"
                   role="button"
                   tabindex="0"
                   :aria-label="point.ariaLabel"
@@ -849,13 +849,31 @@ onBeforeUnmount(() => window.clearTimeout(toastTimer))
                   @keydown.enter.prevent="toggleTrendSelection(index)"
                   @keydown.space.prevent="toggleTrendSelection(index)"
                 />
+                <g class="chart-axis-labels">
+                  <text
+                    v-for="(point, index) in trendPoints"
+                    :key="`axis-${point.date}`"
+                    :x="point.x"
+                    y="170"
+                    text-anchor="middle"
+                    dominant-baseline="middle"
+                    role="button"
+                    tabindex="0"
+                    :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }"
+                    :aria-label="`查看 ${point.date} 数据`"
+                    @mouseenter="hoveredTrendIndex = index"
+                    @mouseleave="hoveredTrendIndex = null"
+                    @focus="hoveredTrendIndex = index"
+                    @blur="hoveredTrendIndex = null"
+                    @click="toggleTrendSelection(index)"
+                    @keydown.enter.prevent="toggleTrendSelection(index)"
+                    @keydown.space.prevent="toggleTrendSelection(index)"
+                  >{{ point.label }}</text>
+                </g>
               </svg>
               <div v-if="activeTrendPoint" class="chart-tooltip" :style="{ left: `${activeTrendPoint.tooltipLeft}%` }" role="status" aria-live="polite">
                 <strong>{{ activeTrendPoint.date }}</strong>
                 <div v-for="metric in activeTrendPoint.metricValues" :key="metric.metric"><span><i class="legend-dot" :style="{ backgroundColor: metric.color }"></i>{{ metric.label }}</span><b>{{ metric.text }}</b></div>
-              </div>
-              <div v-if="trendPoints.length" class="chart-axis-labels" aria-hidden="true">
-                <button v-for="(point, index) in trendPoints" :key="point.date" type="button" :class="{ active: activeTrendIndex === index, selected: selectedTrendIndex === index }" @mouseenter="hoveredTrendIndex = index" @mouseleave="hoveredTrendIndex = null" @focus="hoveredTrendIndex = index" @blur="hoveredTrendIndex = null" @click="toggleTrendSelection(index)">{{ point.label }}</button>
               </div>
             </div>
           </div>
@@ -1067,7 +1085,7 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .diagnostic-grid > .trend-replay-card { margin-top: 20px; }
 .diagnostic-grid > .replay-card:not(.trend-replay-card) { display: none; }
 .diagnostic-grid .replay-card-head { min-height: 62px; }
-.diagnostic-grid .chart-panel { height: 300px; }
+.diagnostic-grid .chart-panel { height: 274px; }
 .diagnostic-grid .chart-panel svg { height: 246px; }
 .replay-card-head h2 { margin: 0; color: var(--ink); font-size: 15px; font-weight: 600; }
 .replay-card-head p { margin: 3px 0 0; color: var(--steel); font-size: 12px; }
@@ -1111,10 +1129,9 @@ button.quiet-badge { cursor: pointer; font-family: inherit; }
 .legend-dot { width: 5px; height: 5px; border-radius: 50%; }
 .legend-dot.spend { background: #4f8fe8; }.legend-dot.conversions { background: #20a464; }
 .chart-panel svg { display: block; width: 100%; height: 202px; margin-top: -2px; overflow: visible; }
-.chart-axis-labels { display: flex; align-items: center; justify-content: space-between; height: 24px; padding: 0 3.7%; color: var(--stone); font-size: 11px; line-height: 1; }
-.chart-axis-labels button { padding: 3px 2px; border: 0; background: transparent; color: inherit; cursor: pointer; font: inherit; line-height: inherit; }
-.chart-axis-labels button.active { color: var(--charcoal); font-weight: 600; }
-.chart-axis-labels button.selected { color: #3276cc; }
+.chart-axis-labels text { fill: var(--stone); font-size: 10.5px; cursor: pointer; outline: none; }
+.chart-axis-labels text.active { fill: var(--charcoal); font-weight: 600; }
+.chart-axis-labels text.selected { fill: #3276cc; }
 .chart-hit-area { fill: transparent; cursor: pointer; outline: none; }
 .chart-hit-area:focus { fill: rgb(79 143 232 / 4%); }
 .chart-active-markers { pointer-events: none; }
