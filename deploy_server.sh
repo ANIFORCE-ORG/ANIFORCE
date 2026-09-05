@@ -108,6 +108,12 @@ PHOENIX_PORT=${PHOENIX_PORT:-6006}
 DEMO_MODE=false
 USE_SSL=false
 
+# Keep component supervisors alive after the deployment shell exits.
+DETACH_CMD=(nohup)
+if command -v setsid >/dev/null 2>&1; then
+  DETACH_CMD=(setsid nohup)
+fi
+
 # ---------- 日志配置 ----------
 LOG_DIR="./logs"
 LOG_DIR_EXPLICIT=0
@@ -288,13 +294,13 @@ else
     sleep 1
   fi
 
-  AGENT_ARGS="--mode $MODE --backend-port $BACKEND_PORT --agent-port $AGENT_PORT --only agent --log-dir $LOG_DIR --host 127.0.0.1 --without-phoenix"
+  AGENT_ARGS=(--mode "$MODE" --backend-port "$BACKEND_PORT" --agent-port "$AGENT_PORT" --only agent --log-dir "$LOG_DIR" --host 127.0.0.1 --without-phoenix)
   if [ "$SKIP_INSTALL" -eq 1 ]; then
-    AGENT_ARGS="$AGENT_ARGS --skip-install"
+    AGENT_ARGS+=(--skip-install)
   fi
 
-  info "执行: ./run_server.sh $AGENT_ARGS"
-  bash "$ROOT_DIR/run_server.sh" $AGENT_ARGS &
+  info "执行: ./run_server.sh ${AGENT_ARGS[*]}"
+  "${DETACH_CMD[@]}" bash "$ROOT_DIR/run_server.sh" "${AGENT_ARGS[@]}" > "$LOG_DIR/${MODE}.agent.startup.log" 2>&1 < /dev/null &
   AGENT_SCRIPT_PID=$!
 
   wait_for_service_port "$AGENT_PORT" "Agent 服务"
@@ -336,16 +342,16 @@ else
   fi
   
   # 调用原有的 run_server.sh 启动后端
-  BACKEND_ARGS="--mode $MODE --backend-port $BACKEND_PORT --agent-port $AGENT_PORT --only backend --log-dir $LOG_DIR --host 127.0.0.1"
+  BACKEND_ARGS=(--mode "$MODE" --backend-port "$BACKEND_PORT" --agent-port "$AGENT_PORT" --only backend --log-dir "$LOG_DIR" --host 127.0.0.1)
   if [ "$SKIP_INSTALL" -eq 1 ]; then
-    BACKEND_ARGS="$BACKEND_ARGS --skip-install"
+    BACKEND_ARGS+=(--skip-install)
   fi
   if [ "$DEMO_MODE" = "true" ]; then
-    BACKEND_ARGS="$BACKEND_ARGS --demo"
+    BACKEND_ARGS+=(--demo)
   fi
   
-  info "执行: ./run_server.sh $BACKEND_ARGS"
-  bash "$ROOT_DIR/run_server.sh" $BACKEND_ARGS &
+  info "执行: ./run_server.sh ${BACKEND_ARGS[*]}"
+  "${DETACH_CMD[@]}" bash "$ROOT_DIR/run_server.sh" "${BACKEND_ARGS[@]}" > "$LOG_DIR/${MODE}.backend.startup.log" 2>&1 < /dev/null &
   BACKEND_SCRIPT_PID=$!
   
   wait_for_service_port "$BACKEND_PORT" "后端服务"
@@ -374,13 +380,13 @@ else
   fi
   
   # 调用原有的 run_server.sh 启动前端
-  FRONTEND_ARGS="--mode $MODE --frontend-port $FRONTEND_PORT --backend-port $BACKEND_PORT --agent-port $AGENT_PORT --only frontend --log-dir $LOG_DIR"
+  FRONTEND_ARGS=(--mode "$MODE" --frontend-port "$FRONTEND_PORT" --backend-port "$BACKEND_PORT" --agent-port "$AGENT_PORT" --only frontend --log-dir "$LOG_DIR")
   if [ "$SKIP_INSTALL" -eq 1 ]; then
-    FRONTEND_ARGS="$FRONTEND_ARGS --skip-install"
+    FRONTEND_ARGS+=(--skip-install)
   fi
   
-  info "执行: ./run_server.sh $FRONTEND_ARGS"
-  bash "$ROOT_DIR/run_server.sh" $FRONTEND_ARGS &
+  info "执行: ./run_server.sh ${FRONTEND_ARGS[*]}"
+  "${DETACH_CMD[@]}" bash "$ROOT_DIR/run_server.sh" "${FRONTEND_ARGS[@]}" > "$LOG_DIR/${MODE}.frontend.startup.log" 2>&1 < /dev/null &
   FRONTEND_SCRIPT_PID=$!
   
   wait_for_service_port "$FRONTEND_PORT" "前端服务"
