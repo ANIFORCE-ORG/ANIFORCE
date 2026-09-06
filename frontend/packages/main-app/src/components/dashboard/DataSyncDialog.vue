@@ -131,7 +131,39 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
             </div>
           </div>
         </div>
-        <div v-else class="settings-modal-body data-sync-body" aria-live="polite"><div class="data-sync-result" :class="{ partial: failed.length }"><span class="material-symbols-outlined">{{ failed.length ? 'warning' : 'check_circle' }}</span><div><strong>{{ failed.length ? '部分完成' : '同步完成' }}</strong><p>成功 {{ succeeded.length }} 个，失败 {{ failed.length }} 个，写入 {{ rows }} 条日级事实</p></div></div><div class="data-sync-result-list"><div v-for="item in result?.accounts" :key="item.account_id"><span class="material-symbols-outlined">{{ item.status === 'succeeded' ? 'check_circle' : 'error' }}</span><span><strong>{{ item.account_name || item.account_id }}</strong><small>{{ item.account_id }}</small></span><em>{{ item.status === 'succeeded' ? `${item.rows_written} 条` : item.message || '同步失败' }}</em></div></div></div>
+        <div v-else class="settings-modal-body data-sync-result-body" aria-live="polite">
+          <div class="data-sync-result" :class="{ partial: failed.length }">
+            <span class="material-symbols-outlined">{{ failed.length ? 'warning' : 'check_circle' }}</span>
+            <div><strong>{{ failed.length ? '部分完成' : '同步完成' }}</strong><p>成功 {{ succeeded.length }} 个，失败 {{ failed.length }} 个，写入 {{ rows }} 条日级事实</p></div>
+          </div>
+          <div class="data-sync-result-list">
+            <div v-for="item in result?.accounts" :key="item.account_id">
+              <span class="material-symbols-outlined">{{ item.status === 'succeeded' ? 'check_circle' : 'error' }}</span>
+              <span><strong>{{ item.account_name || item.account_id }}</strong><small>{{ item.account_id }}</small></span>
+              <em>{{ item.status === 'succeeded' ? `${item.rows_written} 条` : item.message || '同步失败' }}</em>
+            </div>
+          </div>
+          <div v-if="!failed.length" class="data-sync-success-scene">
+            <div class="data-sync-success-visual" aria-hidden="true">
+              <span class="data-sync-success-card"><i></i><i></i><i></i></span>
+              <span class="data-sync-success-route">
+                <i class="success-packet packet-a"></i>
+                <i class="success-packet packet-b"></i>
+              </span>
+              <span class="data-sync-success-mark">
+                <svg viewBox="0 0 52 52">
+                  <circle cx="26" cy="26" r="20"></circle>
+                  <path d="M17 26.5 23 32l12-13"></path>
+                </svg>
+              </span>
+              <i class="success-spark spark-a"></i>
+              <i class="success-spark spark-b"></i>
+              <i class="success-spark spark-c"></i>
+            </div>
+            <strong>本次数据已同步</strong>
+            <small>{{ rows }} 条 AdSet 日级事实已写入数据概览</small>
+          </div>
+        </div>
         <footer class="settings-modal-actions" :class="{ 'data-sync-actions-running': stage === 'syncing' }"><template v-if="stage === 'form'"><button class="sn-button" type="button" @click="close">取消</button><button class="sn-button primary" type="button" :disabled="!canSubmit" @click="run"><span class="material-symbols-outlined">cloud_sync</span>开始同步</button></template><template v-else-if="stage === 'result'"><button v-if="failed.length" class="sn-button" type="button" @click="retry">重试失败账号</button><button class="sn-button primary" type="button" @click="finish">查看更新数据</button></template><template v-else><button class="sn-button danger data-sync-stop" type="button" @click="cancel">停止同步</button><small class="data-sync-running">可以安全停止，已完成账户不会丢失</small></template></footer>
       </section>
     </div>
@@ -525,6 +557,7 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
 .data-sync-result.partial { background: var(--sn-warning-bg); color: var(--sn-warning); }
 .data-sync-result strong { font-size: 12px; }
 .data-sync-result p { margin: 4px 0 0; color: var(--sn-slate); font-size: 10px; }
+.data-sync-result-body { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 18px; }
 .data-sync-result-list { border: 1px solid var(--sn-line); border-radius: 8px; overflow: hidden; }
 .data-sync-result-list > div { min-height: 52px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 11px; border-bottom: 1px solid var(--sn-line-soft); }
 .data-sync-result-list > div:last-child { border-bottom: 0; }
@@ -534,6 +567,141 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
 .data-sync-result-list strong { color: var(--sn-charcoal); font-size: 10px; }
 .data-sync-result-list small { margin-top: 2px; color: var(--sn-stone); font-size: 8px; }
 .data-sync-result-list em { color: var(--sn-steel); font-size: 9px; font-style: normal; }
+
+.data-sync-success-scene {
+  position: relative;
+  min-height: 170px;
+  flex: 1;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  padding: 24px;
+  border: 1px solid var(--sn-line-soft);
+  border-radius: 12px;
+  background:
+    radial-gradient(circle at 1px 1px, rgba(55, 53, 47, .055) 1px, transparent 0) 0 0 / 16px 16px,
+    linear-gradient(180deg, #fff 0%, #fafcf9 100%);
+  overflow: hidden;
+  text-align: center;
+}
+
+.data-sync-success-scene > strong {
+  margin-top: 8px;
+  color: var(--sn-charcoal);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.data-sync-success-scene > small {
+  margin-top: 4px;
+  color: var(--sn-stone);
+  font-size: 9px;
+}
+
+.data-sync-success-visual {
+  position: relative;
+  width: min(270px, 70vw);
+  height: 92px;
+}
+
+.data-sync-success-card {
+  position: absolute;
+  top: 18px;
+  left: 10px;
+  width: 70px;
+  height: 54px;
+  display: grid;
+  align-content: center;
+  gap: 6px;
+  padding: 12px;
+  border: 1px solid var(--sn-line);
+  border-radius: 8px;
+  background: #fff;
+  box-shadow: 0 4px 12px rgba(55, 53, 47, .06);
+  animation: data-sync-success-card-in .45s cubic-bezier(.2, .8, .3, 1) both;
+}
+
+.data-sync-success-card::before {
+  position: absolute;
+  top: 7px;
+  left: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 2px;
+  background: #57a37b;
+  content: '';
+}
+
+.data-sync-success-card i {
+  height: 3px;
+  border-radius: 2px;
+  background: #dedcd7;
+}
+
+.data-sync-success-card i:nth-child(1) { width: 100%; }
+.data-sync-success-card i:nth-child(2) { width: 72%; }
+.data-sync-success-card i:nth-child(3) { width: 86%; }
+
+.data-sync-success-route {
+  position: absolute;
+  top: 45px;
+  right: 56px;
+  left: 78px;
+  height: 2px;
+  background: repeating-linear-gradient(90deg, #cad7ce 0 5px, transparent 5px 10px);
+}
+
+.success-packet {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  width: 8px;
+  height: 8px;
+  border: 2px solid #fff;
+  border-radius: 2px;
+  background: #57a37b;
+  box-shadow: 0 0 0 1px rgba(49, 120, 75, .22);
+  opacity: 0;
+  transform: translate(-50%, -50%);
+  animation: data-sync-success-packet 2.8s ease-in-out infinite;
+}
+
+.success-packet.packet-b { animation-delay: -1.4s; }
+
+.data-sync-success-mark {
+  position: absolute;
+  top: 12px;
+  right: 4px;
+  width: 66px;
+  height: 66px;
+  display: grid;
+  place-items: center;
+  border-radius: 50%;
+  background: #edf7f0;
+  box-shadow: 0 0 0 8px rgba(87, 163, 123, .08);
+  animation: data-sync-success-mark-in .55s .45s cubic-bezier(.2, .9, .3, 1.25) both;
+}
+
+.data-sync-success-mark svg { width: 52px; height: 52px; overflow: visible; }
+.data-sync-success-mark circle,
+.data-sync-success-mark path { fill: none; stroke: #31784b; stroke-linecap: round; stroke-linejoin: round; }
+.data-sync-success-mark circle { stroke-width: 2; stroke-dasharray: 126; stroke-dashoffset: 126; animation: data-sync-success-ring .7s .55s ease-out forwards; }
+.data-sync-success-mark path { stroke-width: 2.6; stroke-dasharray: 24; stroke-dashoffset: 24; animation: data-sync-success-check .35s 1.1s ease-out forwards; }
+
+.success-spark {
+  position: absolute;
+  width: 5px;
+  height: 5px;
+  border-radius: 2px;
+  background: #8abb9d;
+  opacity: .35;
+  animation: data-sync-success-spark 2.4s ease-in-out infinite;
+}
+
+.success-spark.spark-a { top: 6px; right: 82px; }
+.success-spark.spark-b { right: 78px; bottom: 8px; width: 4px; height: 4px; animation-delay: -.8s; }
+.success-spark.spark-c { top: 10px; left: 92px; width: 4px; height: 4px; animation-delay: -1.6s; }
+
 .data-sync-actions-running {
   min-height: 78px;
   flex-direction: column;
@@ -604,6 +772,31 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
   50% { transform: translateY(9px) rotate(8deg); }
 }
 
+@keyframes data-sync-success-card-in {
+  from { opacity: 0; transform: translateX(-10px) scale(.96); }
+  to { opacity: 1; transform: translateX(0) scale(1); }
+}
+
+@keyframes data-sync-success-packet {
+  0% { left: 0; opacity: 0; transform: translate(-50%, -50%) scale(.7); }
+  14% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  78% { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  92%, 100% { left: 100%; opacity: 0; transform: translate(-50%, -50%) scale(.7); }
+}
+
+@keyframes data-sync-success-mark-in {
+  from { opacity: 0; transform: scale(.72); }
+  to { opacity: 1; transform: scale(1); }
+}
+
+@keyframes data-sync-success-ring { to { stroke-dashoffset: 0; } }
+@keyframes data-sync-success-check { to { stroke-dashoffset: 0; } }
+
+@keyframes data-sync-success-spark {
+  0%, 100% { opacity: .22; transform: translateY(2px) rotate(0); }
+  50% { opacity: .7; transform: translateY(-3px) rotate(45deg); }
+}
+
 @media (max-width: 620px) {
   .data-sync-progress { padding-right: 20px; padding-left: 20px; }
   .data-sync-journey { grid-template-columns: 112px minmax(90px, 1fr) 112px; gap: 10px; padding-right: 14px; padding-left: 14px; }
@@ -628,12 +821,22 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
   .data-sync-orbit,
   .data-sync-node > i,
   .data-sync-route::after,
-  .data-sync-pipeline-status i { animation: none; }
+  .data-sync-pipeline-status i,
+  .data-sync-success-card,
+  .data-sync-success-mark,
+  .data-sync-success-mark circle,
+  .data-sync-success-mark path,
+  .success-spark { animation: none; }
   .data-sync-packet { animation: none; opacity: 1; }
+  .success-packet { animation: none; opacity: 1; }
+  .success-packet.packet-a { left: 38%; }
+  .success-packet.packet-b { left: 72%; }
   .packet-one { left: 12%; }
   .packet-two { left: 38%; }
   .packet-three { left: 64%; }
   .packet-four { left: 90%; }
+  .data-sync-success-mark circle,
+  .data-sync-success-mark path { stroke-dashoffset: 0; }
   .runner-frame-one { opacity: 1; }
   .runner-frame-two { opacity: 0; }
 }
