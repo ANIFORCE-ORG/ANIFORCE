@@ -11,6 +11,37 @@ interface RequestOptions {
   signal?: AbortSignal
 }
 
+function errorMessageFromPayload(value: unknown): string | null {
+  if (typeof value === 'string') return value.trim() || null
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+
+  if (Array.isArray(value)) {
+    const messages = value
+      .map(item => errorMessageFromPayload(item))
+      .filter((item): item is string => Boolean(item))
+    return messages.length ? messages.join('；') : null
+  }
+
+  if (value && typeof value === 'object') {
+    const record = value as Record<string, unknown>
+    const message = errorMessageFromPayload(record.message)
+      || errorMessageFromPayload(record.error)
+      || errorMessageFromPayload(record.detail)
+    const accountIds = Array.isArray(record.account_ids)
+      ? record.account_ids.filter((item): item is string => typeof item === 'string')
+      : []
+    if (message) return accountIds.length ? `${message}（${accountIds.length} 个账号）` : message
+
+    try {
+      return JSON.stringify(value)
+    } catch {
+      return null
+    }
+  }
+
+  return null
+}
+
 class HttpClient {
   private baseURL: string
   private defaultHeaders: Record<string, string>
@@ -113,7 +144,10 @@ class HttpClient {
         }
 
         const errorData = await response.json().catch(() => ({ detail: response.statusText }))
-        const error: any = new Error(errorData.detail || errorData.message || `HTTP ${response.status}`)
+        const message = errorMessageFromPayload(errorData.detail)
+          || errorMessageFromPayload(errorData.message)
+          || `HTTP ${response.status}`
+        const error: any = new Error(message)
         error.response = {
           status: response.status,
           data: errorData

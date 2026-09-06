@@ -33,7 +33,30 @@ const canSubmit = computed(() => selected.value.length > 0 && !dateError.value)
 const succeeded = computed(() => result.value?.accounts.filter(item => item.status === 'succeeded') ?? [])
 const failed = computed(() => result.value?.accounts.filter(item => item.status === 'failed') ?? [])
 const rows = computed(() => succeeded.value.reduce((sum, item) => sum + item.rows_written, 0))
-const run = async () => { if (!canSubmit.value) return; stage.value = 'syncing'; error.value = ''; const request = { connection_id: props.connectionId, account_ids: [...selected.value], since: since.value, until: until.value }; const controller = new AbortController(); activeController = controller; progress.value = { total: selected.value.length, completed: 0, succeeded: 0, failed: 0, running: selected.value.length, rows_written: 0, percent: 0 }; const poll = async () => { try { progress.value = await getMetaAdSetSyncProgress(request) } catch { /* Main sync response owns error reporting. */ } }; const timer = window.setInterval(() => void poll(), 1000); try { result.value = await syncMetaAdSetFacts(request, controller.signal); await poll(); stage.value = 'result' } catch (e) { if (!controller.signal.aborted) error.value = e instanceof Error ? e.message : '数据同步失败，请稍后重试'; stage.value = 'form' } finally { window.clearInterval(timer); if (activeController === controller) activeController = null } }
+const syncErrorMessage = (cause: unknown) => {
+  const response = (cause as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response
+  const detail = response?.data?.detail
+  const accountIds = detail && typeof detail === 'object' && Array.isArray((detail as { account_ids?: unknown }).account_ids)
+    ? (detail as { account_ids: unknown[] }).account_ids
+    : []
+
+  if (response?.status === 409) {
+    return accountIds.length
+      ? `检测到 ${accountIds.length} 个账号正在同步，请等待当前任务完成后再试。`
+      : '所选账号中有账号正在同步，请等待当前任务完成后再试。'
+  }
+
+  if (detail && typeof detail === 'object' && (detail as { message?: unknown }).message === 'Accounts are not active bindings') {
+    return accountIds.length
+      ? `有 ${accountIds.length} 个账号已停用或无同步权限，请刷新账号列表后重试。`
+      : '所选账号已停用或无同步权限，请刷新账号列表后重试。'
+  }
+
+  return cause instanceof Error && cause.message !== '[object Object]'
+    ? cause.message
+    : '数据同步失败，请稍后重试。'
+}
+const run = async () => { if (!canSubmit.value) return; stage.value = 'syncing'; error.value = ''; const request = { connection_id: props.connectionId, account_ids: [...selected.value], since: since.value, until: until.value }; const controller = new AbortController(); activeController = controller; progress.value = { total: selected.value.length, completed: 0, succeeded: 0, failed: 0, running: selected.value.length, rows_written: 0, percent: 0 }; const poll = async () => { try { progress.value = await getMetaAdSetSyncProgress(request) } catch { /* Main sync response owns error reporting. */ } }; const timer = window.setInterval(() => void poll(), 1000); try { result.value = await syncMetaAdSetFacts(request, controller.signal); await poll(); stage.value = 'result' } catch (e) { if (!controller.signal.aborted) error.value = syncErrorMessage(e); stage.value = 'form' } finally { window.clearInterval(timer); if (activeController === controller) activeController = null } }
 const cancel = async () => { if (!activeController || stage.value !== 'syncing') return; const controller = activeController; const request = { connection_id: props.connectionId, account_ids: [...selected.value], since: since.value, until: until.value }; try { await cancelMetaAdSetSync(request) } finally { controller.abort(); activeController = null; stage.value = 'form'; error.value = '本次同步已停止，可以重新选择账号后再次同步' } }
 const retry = () => { selected.value = failed.value.map(item => item.account_id); result.value = null; stage.value = 'form' }
 const finish = () => { if (result.value) emit('completed', result.value); emit('close') }
