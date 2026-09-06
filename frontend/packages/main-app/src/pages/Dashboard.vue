@@ -198,7 +198,7 @@ const TREND_X_START = 91
 const TREND_X_SPAN = 768
 const trendPoints = computed(() => {
   const rows = overview.value?.trend ?? []
-  const chartMetrics = selectedTrendChartMetrics.value
+  const chartMetrics = trendMetricColumns.value
   const barMetrics = chartMetrics.filter(metric => metric !== 'spend')
   const spendValues = rows.map(row => numberValue(row.spend))
   const barMaxByMetric = new Map<TrendMetric, number>(barMetrics.map(metric => {
@@ -259,7 +259,6 @@ const hoveredTrendIndex = ref<number | null>(null)
 const selectedTrendIndex = ref<number | null>(null)
 const chartPanelRef = ref<HTMLElement | null>(null)
 const chartPanelWidth = ref(0)
-const selectedTrendChartMetrics = ref<TrendMetric[]>(['spend', 'conversions'])
 const availableTrendMetrics = computed(() => trendMetricOptions.filter(option => {
   if (option.key === 'conversion_value' || option.key === 'roas') return isSales.value
   if (option.key === 'result_cost') return isLeads.value
@@ -279,21 +278,7 @@ const availableAnalysisMetrics = (metrics: TrendMetric[]) => {
 const trendMetricColumns = computed<TrendMetric[]>(() => availableAnalysisMetrics(selectedTrendMetrics.value))
 const hierarchyMetricColumns = computed<TrendMetric[]>(() => availableAnalysisMetrics(selectedHierarchyMetrics.value))
 const dailyMetricColumns = computed<TrendMetric[]>(() => availableAnalysisMetrics(selectedDailyMetrics.value))
-const updateTrendMetrics = (metrics: TrendMetric[]) => {
-  selectedTrendMetrics.value = metrics
-  const retained = selectedTrendChartMetrics.value.filter(metric => metrics.includes(metric))
-  selectedTrendChartMetrics.value = retained.length ? retained : [metrics[0]!]
-}
-const toggleTrendMetric = (metric: TrendMetric) => {
-  const selected = new Set(selectedTrendChartMetrics.value)
-  if (selected.has(metric)) {
-    if (selected.size === 1) return
-    selected.delete(metric)
-  } else {
-    selected.add(metric)
-  }
-  selectedTrendChartMetrics.value = trendMetricColumns.value.filter(item => selected.has(item))
-}
+const updateTrendMetrics = (metrics: TrendMetric[]) => { selectedTrendMetrics.value = metrics }
 const updateHierarchyMetrics = (metrics: TrendMetric[]) => { selectedHierarchyMetrics.value = metrics }
 const updateDailyMetrics = (metrics: TrendMetric[]) => { selectedDailyMetrics.value = metrics }
 const metricValueFromDerived = (metrics: ReturnType<typeof derive>, metric: TrendMetric) => ({
@@ -328,7 +313,6 @@ watch(isSales, sales => {
   selectedTrendMetrics.value = [...defaults]
   selectedHierarchyMetrics.value = [...defaults]
   selectedDailyMetrics.value = [...defaults]
-  selectedTrendChartMetrics.value = sales ? ['spend', 'conversion_value'] : ['spend', 'conversions']
 })
 const activeTrendIndex = computed(() => hoveredTrendIndex.value ?? selectedTrendIndex.value)
 const activeTrendPoint = computed(() => activeTrendIndex.value == null ? null : trendPoints.value[activeTrendIndex.value] ?? null)
@@ -854,12 +838,12 @@ onBeforeUnmount(() => {
         </section>
 
         <section class="replay-card trend-replay-card">
-          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><div class="trend-metric-pills" role="group" aria-label="选择趋势指标（支持多选）"><button v-for="metric in trendMetricColumns" :key="metric" type="button" :class="{ active: selectedTrendChartMetrics.includes(metric) }" :aria-pressed="selectedTrendChartMetrics.includes(metric)" @click="toggleTrendMetric(metric)">{{ trendMetricOptions.find(option => option.key === metric)?.label }}</button></div><MetricSelector :model-value="trendMetricColumns" :options="availableTrendMetrics" @update:model-value="updateTrendMetrics" /></div></div>
+          <div class="replay-card-head trend-card-head"><div><h2>趋势监控</h2><p>自定义指标随时间变化 · {{ dateRangeDays }} 天</p></div><div class="trend-head-actions"><MetricSelector :model-value="trendMetricColumns" :options="availableTrendMetrics" description="所选指标将显示在下方图表" @update:model-value="updateTrendMetrics" /></div></div>
           <div class="trend-grid">
             <div ref="chartPanelRef" class="chart-panel">
-              <div class="chart-legend"><span v-for="metric in selectedTrendChartMetrics" :key="metric" class="legend-item"><i class="legend-dot" :style="{ backgroundColor: trendMetricOptions.find(item => item.key === metric)?.color }"></i>{{ trendMetricOptions.find(item => item.key === metric)?.label }}</span></div>
+              <div class="chart-legend"><span v-for="metric in trendMetricColumns" :key="metric" class="legend-item"><i class="legend-dot" :style="{ backgroundColor: trendMetricOptions.find(item => item.key === metric)?.color }"></i>{{ trendMetricOptions.find(item => item.key === metric)?.label }}</span></div>
               <div v-if="!trendPoints.length" class="chart-empty">所选窗口暂无日级投放数据</div>
-              <svg v-else viewBox="60 24 830 161" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天${selectedTrendChartMetrics.map(metric => trendMetricOptions.find(item => item.key === metric)?.label).join('、')}趋势图`">
+              <svg v-else viewBox="60 24 830 161" preserveAspectRatio="xMidYMid meet" role="img" :aria-label="`近 ${period} 天${trendMetricColumns.map(metric => trendMetricOptions.find(item => item.key === metric)?.label).join('、')}趋势图`">
                 <g stroke="#ecebea" stroke-width="1"><path d="M52 32H892M52 73H892M52 114H892M52 155H892" /></g>
                 <g opacity=".78"><rect v-for="bar in trendBars" :key="`bar-${bar.date}-${bar.metric}`" :x="bar.x" :y="bar.y" :width="bar.width" :height="bar.height" :fill="bar.color" rx="2" /></g>
                 <path v-if="spendPath" :d="spendPath" fill="none" stroke="#4f8fe8" stroke-width="1.4" />
@@ -1045,7 +1029,6 @@ onBeforeUnmount(() => {
 .date-range-filter .material-symbols-outlined { font-size: 15px; }
 .date-range-filter input { width: 112px; border: 0; outline: 0; background: transparent; color: var(--slate); font: inherit; font-size: 11px; }
 .trend-head-actions { display: flex; align-items: center; gap: 8px; }
-.trend-metric-pills { display: flex; align-items: center; gap: 5px; flex-wrap: wrap; justify-content: flex-end; }.trend-metric-pills button { height: 30px; padding: 0 10px; border: 1px solid var(--hairline); border-radius: 7px; background: #fff; color: var(--slate); font: inherit; font-size: 11px; cursor: pointer; }.trend-metric-pills button.active { border-color: #a9cef8; background: #eff7ff; color: #1769aa; font-weight: 650; }
 .trend-metric-select { display: inline-flex; align-items: center; gap: 6px; color: var(--steel); font-size: 11px; white-space: nowrap; }
 .trend-metric-select select { height: 30px; padding: 0 24px 0 8px; border: 1px solid var(--hairline-strong); border-radius: 7px; background: #fff; color: var(--charcoal); font: inherit; font-size: 11px; }
 .filter-field { display: flex; align-items: center; min-width: 0; white-space: nowrap; }

@@ -7,8 +7,10 @@ const props = withDefaults(defineProps<{
   modelValue: TrendMetric[]
   options: TrendMetricOption[]
   label?: string
+  description?: string
 }>(), {
   label: '自定义指标',
+  description: '所选指标将显示在下方表格',
 })
 
 const emit = defineEmits<{
@@ -64,7 +66,7 @@ const toggleMetric = (metric: TrendMetric, event: Event) => {
       <span class="material-symbols-outlined chevron" aria-hidden="true">expand_more</span>
     </summary>
     <div class="metric-selector-menu">
-      <header><strong>选择展示指标</strong><small>所选指标将显示在下方表格</small></header>
+      <header><strong>选择展示指标</strong><small>{{ props.description }}</small></header>
       <div class="metric-selector-options" role="group" aria-label="选择展示指标">
         <label v-for="option in props.options" :key="option.key">
           <input
