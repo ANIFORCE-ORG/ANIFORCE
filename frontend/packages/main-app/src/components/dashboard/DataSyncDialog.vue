@@ -136,11 +136,7 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
           </div>
         </div>
         <div v-else class="settings-modal-body data-sync-result-body" aria-live="polite">
-          <div class="data-sync-result" :class="{ partial: failed.length }">
-            <span class="material-symbols-outlined">{{ failed.length ? 'warning' : 'check_circle' }}</span>
-            <div><strong>{{ failed.length ? '部分完成' : '同步完成' }}</strong><p>成功 {{ succeeded.length }} 个，失败 {{ failed.length }} 个，写入 {{ rows }} 条日级事实</p></div>
-          </div>
-          <section class="data-sync-result-panel" :class="{ 'is-expanded': !showSuccessScene }">
+          <section class="data-sync-result-panel">
             <div class="data-sync-result-toolbar">
               <strong>账号明细</strong>
               <div class="data-sync-result-filters" role="tablist" aria-label="同步结果筛选">
@@ -562,21 +558,8 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
 .data-sync-pipeline-status span:nth-child(2) i { animation-delay: -.6s; }
 .data-sync-pipeline-status span:nth-child(3) i { animation-delay: -1.2s; }
 
-.data-sync-result {
-  display: flex;
-  gap: 10px;
-  padding: 13px;
-  border-radius: 8px;
-  background: var(--sn-success-bg);
-  color: var(--sn-success);
-}
-
-.data-sync-result.partial { background: var(--sn-warning-bg); color: var(--sn-warning); }
-.data-sync-result strong { font-size: 12px; }
-.data-sync-result p { margin: 4px 0 0; color: var(--sn-slate); font-size: 10px; }
 .data-sync-result-body { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 18px; overflow: hidden; }
-.data-sync-result-panel { min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--sn-line); border-radius: 8px; overflow: hidden; background: #fff; }
-.data-sync-result-panel.is-expanded { flex: 1; }
+.data-sync-result-panel { min-height: 0; flex: 1; display: flex; flex-direction: column; border: 1px solid var(--sn-line); border-radius: 8px; overflow: hidden; background: #fff; }
 .data-sync-result-toolbar { min-height: 42px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px 7px 12px; border-bottom: 1px solid var(--sn-line-soft); background: var(--sn-surface-soft); }
 .data-sync-result-toolbar > strong { color: var(--sn-charcoal); font-size: 10px; font-weight: 600; }
 .data-sync-result-filters { display: flex; align-items: center; gap: 4px; }
@@ -586,8 +569,7 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
 .data-sync-result-filters button:nth-child(2).active { border-color: rgba(49, 120, 75, 0.24); background: #f7fbf8; color: var(--sn-success); }
 .data-sync-result-filters button:nth-child(3).active { border-color: rgba(224, 49, 49, 0.2); background: #fff8f8; color: var(--sn-error); }
 .data-sync-result-filters button:disabled { opacity: 0.42; cursor: not-allowed; }
-.data-sync-result-list { min-height: 0; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
-.data-sync-result-panel.is-expanded .data-sync-result-list { flex: 1; max-height: none; }
+.data-sync-result-list { min-height: 0; flex: 1; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
 .data-sync-result-list > div { min-height: 52px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 11px; border-bottom: 1px solid var(--sn-line-soft); }
 .data-sync-result-list > div:last-child { border-bottom: 0; }
 .data-sync-result-list .material-symbols-outlined { color: var(--sn-success); font-size: 18px; }
