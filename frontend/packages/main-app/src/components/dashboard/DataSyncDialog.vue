@@ -12,6 +12,7 @@ const selected = ref<string[]>([])
 const since = ref('')
 const until = ref('')
 const stage = ref<'form' | 'syncing' | 'result'>('form')
+const resultFilter = ref<'all' | 'succeeded' | 'failed'>('all')
 const error = ref('')
 const result = ref<MetaAdSetSyncResponse | null>(null)
 const progress = ref<MetaAdSetSyncProgress>({ total: 0, completed: 0, succeeded: 0, failed: 0, running: 0, rows_written: 0, percent: 0 })
@@ -23,7 +24,7 @@ const activeAccountIds = computed(() => activeAccounts.value.map(item => item.su
 const allSelected = computed(() => activeAccountIds.value.length > 0 && activeAccountIds.value.every(id => selected.value.includes(id)))
 const filtered = computed(() => { const q = search.value.trim().toLowerCase(); return activeAccounts.value.filter(item => !q || item.name.toLowerCase().includes(q) || item.sub_account_id.toLowerCase().includes(q)) })
 const today = () => new Date().toISOString().slice(0, 10)
-const reset = async () => { const end = new Date(); const start = new Date(end); start.setDate(start.getDate() - 29); since.value = start.toISOString().slice(0, 10); until.value = end.toISOString().slice(0, 10); selected.value = activeAccounts.value.map(item => item.sub_account_id.replace(/^act_/, '')); search.value = ''; stage.value = 'form'; error.value = ''; result.value = null; progress.value = { total: 0, completed: 0, succeeded: 0, failed: 0, running: 0, rows_written: 0, percent: 0 }; await nextTick(); searchInput.value?.focus() }
+const reset = async () => { const end = new Date(); const start = new Date(end); start.setDate(start.getDate() - 29); since.value = start.toISOString().slice(0, 10); until.value = end.toISOString().slice(0, 10); selected.value = activeAccounts.value.map(item => item.sub_account_id.replace(/^act_/, '')); search.value = ''; stage.value = 'form'; resultFilter.value = 'all'; error.value = ''; result.value = null; progress.value = { total: 0, completed: 0, succeeded: 0, failed: 0, running: 0, rows_written: 0, percent: 0 }; await nextTick(); searchInput.value?.focus() }
 watch(() => props.show, value => { if (value) void reset() })
 const toggle = (id: string) => { const index = selected.value.indexOf(id); if (index >= 0) selected.value.splice(index, 1); else selected.value.push(id) }
 const selectAll = () => { selected.value = [...activeAccountIds.value] }
@@ -32,6 +33,9 @@ const dateError = computed(() => { if (!since.value || !until.value) return '请
 const canSubmit = computed(() => selected.value.length > 0 && !dateError.value)
 const succeeded = computed(() => result.value?.accounts.filter(item => item.status === 'succeeded') ?? [])
 const failed = computed(() => result.value?.accounts.filter(item => item.status === 'failed') ?? [])
+const resultAccounts = computed(() => result.value?.accounts ?? [])
+const visibleResults = computed(() => resultFilter.value === 'succeeded' ? succeeded.value : resultFilter.value === 'failed' ? failed.value : resultAccounts.value)
+const showSuccessScene = computed(() => !failed.value.length && resultAccounts.value.length <= 5)
 const rows = computed(() => succeeded.value.reduce((sum, item) => sum + item.rows_written, 0))
 const syncErrorMessage = (cause: unknown) => {
   const response = (cause as { response?: { status?: number; data?: { detail?: unknown } } } | null)?.response
@@ -136,14 +140,27 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
             <span class="material-symbols-outlined">{{ failed.length ? 'warning' : 'check_circle' }}</span>
             <div><strong>{{ failed.length ? '部分完成' : '同步完成' }}</strong><p>成功 {{ succeeded.length }} 个，失败 {{ failed.length }} 个，写入 {{ rows }} 条日级事实</p></div>
           </div>
-          <div class="data-sync-result-list">
-            <div v-for="item in result?.accounts" :key="item.account_id">
-              <span class="material-symbols-outlined">{{ item.status === 'succeeded' ? 'check_circle' : 'error' }}</span>
-              <span><strong>{{ item.account_name || item.account_id }}</strong><small>{{ item.account_id }}</small></span>
-              <em>{{ item.status === 'succeeded' ? `${item.rows_written} 条` : item.message || '同步失败' }}</em>
+          <section class="data-sync-result-panel" :class="{ 'is-expanded': !showSuccessScene }">
+            <div class="data-sync-result-toolbar">
+              <strong>账号明细</strong>
+              <div class="data-sync-result-filters" role="tablist" aria-label="同步结果筛选">
+                <button type="button" role="tab" :aria-selected="resultFilter === 'all'" :class="{ active: resultFilter === 'all' }" @click="resultFilter = 'all'">全部 {{ resultAccounts.length }}</button>
+                <button type="button" role="tab" :aria-selected="resultFilter === 'succeeded'" :class="{ active: resultFilter === 'succeeded' }" :disabled="!succeeded.length" @click="resultFilter = 'succeeded'">成功 {{ succeeded.length }}</button>
+                <button type="button" role="tab" :aria-selected="resultFilter === 'failed'" :class="{ active: resultFilter === 'failed' }" :disabled="!failed.length" @click="resultFilter = 'failed'">失败 {{ failed.length }}</button>
+              </div>
             </div>
-          </div>
-          <div v-if="!failed.length" class="data-sync-success-scene">
+            <div class="data-sync-result-list" role="tabpanel" tabindex="0">
+              <div v-for="item in visibleResults" :key="item.account_id">
+                <span
+                  class="material-symbols-outlined"
+                  :class="{ failed: item.status !== 'succeeded' }"
+                >{{ item.status === 'succeeded' ? 'check_circle' : 'error' }}</span>
+                <span><strong>{{ item.account_name || item.account_id }}</strong><small>{{ item.account_id }}</small></span>
+                <em>{{ item.status === 'succeeded' ? `${item.rows_written} 条` : item.message || '同步失败' }}</em>
+              </div>
+            </div>
+          </section>
+          <div v-if="showSuccessScene" class="data-sync-success-scene">
             <div class="data-sync-success-visual" aria-hidden="true">
               <span class="data-sync-success-card"><i></i><i></i><i></i></span>
               <span class="data-sync-success-route">
@@ -557,11 +574,27 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
 .data-sync-result.partial { background: var(--sn-warning-bg); color: var(--sn-warning); }
 .data-sync-result strong { font-size: 12px; }
 .data-sync-result p { margin: 4px 0 0; color: var(--sn-slate); font-size: 10px; }
-.data-sync-result-body { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 18px; }
-.data-sync-result-list { border: 1px solid var(--sn-line); border-radius: 8px; overflow: hidden; }
+.data-sync-result-body { min-height: 0; flex: 1; display: flex; flex-direction: column; gap: 18px; overflow: hidden; }
+.data-sync-result-panel { min-height: 0; display: flex; flex-direction: column; border: 1px solid var(--sn-line); border-radius: 8px; overflow: hidden; background: #fff; }
+.data-sync-result-panel.is-expanded { flex: 1; }
+.data-sync-result-toolbar { min-height: 42px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 7px 10px 7px 12px; border-bottom: 1px solid var(--sn-line-soft); background: var(--sn-surface-soft); }
+.data-sync-result-toolbar > strong { color: var(--sn-charcoal); font-size: 10px; font-weight: 600; }
+.data-sync-result-filters { display: flex; align-items: center; gap: 4px; }
+.data-sync-result-filters button { min-height: 26px; padding: 4px 9px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: var(--sn-steel); font: inherit; font-size: 9px; cursor: pointer; }
+.data-sync-result-filters button:hover:not(:disabled) { border-color: var(--sn-line); background: #fff; color: var(--sn-charcoal); }
+.data-sync-result-filters button.active { border-color: var(--sn-line); background: #fff; color: var(--sn-charcoal); box-shadow: 0 1px 2px rgba(15, 15, 15, 0.04); }
+.data-sync-result-filters button:nth-child(2).active { border-color: rgba(49, 120, 75, 0.24); background: #f7fbf8; color: var(--sn-success); }
+.data-sync-result-filters button:nth-child(3).active { border-color: rgba(224, 49, 49, 0.2); background: #fff8f8; color: var(--sn-error); }
+.data-sync-result-filters button:disabled { opacity: 0.42; cursor: not-allowed; }
+.data-sync-result-list { min-height: 0; max-height: 340px; overflow-y: auto; overscroll-behavior: contain; scrollbar-gutter: stable; }
+.data-sync-result-panel.is-expanded .data-sync-result-list { flex: 1; max-height: none; }
 .data-sync-result-list > div { min-height: 52px; display: grid; grid-template-columns: 20px minmax(0, 1fr) auto; align-items: center; gap: 9px; padding: 8px 11px; border-bottom: 1px solid var(--sn-line-soft); }
 .data-sync-result-list > div:last-child { border-bottom: 0; }
 .data-sync-result-list .material-symbols-outlined { color: var(--sn-success); font-size: 18px; }
+.data-sync-result-list .material-symbols-outlined.failed { color: var(--sn-error); }
+.data-sync-result-list::-webkit-scrollbar { width: 10px; }
+.data-sync-result-list::-webkit-scrollbar-track { background: transparent; }
+.data-sync-result-list::-webkit-scrollbar-thumb { border: 3px solid #fff; border-radius: 999px; background: #c8c4be; }
 .data-sync-result-list strong,
 .data-sync-result-list small { display: block; }
 .data-sync-result-list strong { color: var(--sn-charcoal); font-size: 10px; }
@@ -812,6 +845,9 @@ const close = () => { if (stage.value !== 'syncing') emit('close') }
   .data-sync-node { display: grid; justify-items: center; gap: 5px; text-align: center; }
   .data-sync-node small { display: none; }
   .data-sync-pipeline-status { gap: 10px; }
+  .data-sync-result-toolbar { align-items: flex-start; flex-direction: column; }
+  .data-sync-result-filters { width: 100%; }
+  .data-sync-result-filters button { flex: 1; }
 }
 
 @media (prefers-reduced-motion: reduce) {
